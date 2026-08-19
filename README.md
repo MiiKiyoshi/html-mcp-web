@@ -96,7 +96,7 @@ The build reruns on every content save. This repo ships [`templates/neutral-slid
 
 ## Export
 
-The topbar exports each artifact as a file. **PDF** prints every page at the layout's fixed size through headless Firefox. **PPTX** (slides only) builds an editable deck: text stays editable text, tables stay tables, inline SVG stays vector, and math becomes an image. A skin can embed the deck font and supply a PowerPoint template; see [`templates/README.md`](templates/README.md#writing-a-skin).
+The topbar exports each artifact as a file. **PDF** prints every page at the layout's fixed size through headless Firefox. **PPTX** (slides only) builds an editable deck: text stays editable text, tables stay tables, inline SVG stays vector, and math becomes an image. A skin can name TrueType files to embed the deck font; see [`templates/README.md`](templates/README.md#writing-a-skin).
 
 ## Configuration
 

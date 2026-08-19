@@ -161,32 +161,22 @@ reader's own fonts, a line that fits on one machine folds on another. Subset the
 to the characters decks use (`fontTools.subset` writes woff2) so two weights stay near
 1 MB rather than 10.
 
-A skin may also carry the deck's pptx face. `skin.json` takes a `pptx` block:
+The pptx export rebuilds every deck the same way from its rendered HTML, so a skin needs
+no pptx of its own; its look already lives in `skin.css`. The one thing `skin.json` can
+add for pptx is the deck font, so the file renders the same on a machine that lacks it:
 
 ```json
 "pptx": {
-  "template": "deck.pptx",
-  "layout": "Title and Content",
-  "keep_slides": 2,
-  "cover": {"title": "Cover Title:0", "sub": "Cover Title:1", "who": "Cover Who:0"},
   "fonts": {"family": "Noto Sans KR", "regular": "fonts/NotoSansKR-Regular.ttf", "bold": "fonts/NotoSansKR-Bold.ttf"}
 }
 ```
 
-`template` is a pptx beside `skin.json` whose layouts carry the chrome (title bar, footer,
-logos), so exported body pages get a slide on `layout` with only the title placeholder
-filled and the layout's slide number copied onto the slide; a layout text reading
-`/ 22` is rewritten to the deck's page count. `keep_slides` template slides are kept in
-place of the deck's first pages (cover, contents); `cover` names, as
-`shape name:paragraph index` on the first kept slide, the paragraphs that receive the
-deck's title, subtitle, and author. `fonts` names static TrueType files beside
-`skin.json` (`regular`, `bold`, `italic`, `boldItalic`, any subset) that the export
-subsets, embeds, and sets every run in as `family`; the browser-side `.woff2` under
-`fonts/` cannot serve here because PowerPoint reads only TrueType outlines (glyf) from
-a static file, so a skin keeps the `.ttf` next to its `.woff2`. Without `fonts`, runs
-are set in `font` (default Arial) and nothing is embedded. Without the block at all, the
-export rebuilds the chrome from the page's DOM. `html-mcp-web` documents the export
-itself under "PPTX export" in the repository README.
+`fonts` names static TrueType files beside `skin.json` (`regular`, `bold`, `italic`,
+`boldItalic`, any subset) that the export subsets, embeds, and sets every run in as
+`family`. The browser-side `.woff2` under `fonts/` cannot serve here because PowerPoint
+reads only TrueType outlines (glyf) from a static file, so a skin keeps the `.ttf` next
+to its `.woff2`. Without `fonts`, runs are set in Arial and nothing is embedded.
+`html-mcp-web` documents the export under "PPTX export" in the repository README.
 
 The neutral skins in this directory carry no organization identity, and the repository
 test `tests/test_repository_is_neutral.py` keeps it that way: a private skin lives
