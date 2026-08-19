@@ -4,7 +4,7 @@ Review an AI agent's HTML slides or report in your browser, point at the exact p
 
 ![The review page: a slide on the left with a highlighted sentence, and the comment thread on the right where a reviewer's question is answered by the agent. The topbar shows the layout check flagging problems it can fix, and PDF and PPTX export.](docs/hero.png)
 
-The agent writes a self-contained HTML artifact. You open it in a local review page, select rendered text, and attach a comment. The agent reads the anchored quote and its surrounding context through MCP, edits the artifact, and replies in the same thread. Saving a file refreshes only the artifact frame, so your scroll position, draft comment, and sidebar stay put.
+The agent writes one paged HTML file that opens on its own in a browser. You open it in a local review page, select rendered text, and attach a comment. The agent reads the anchored quote and its surrounding context through MCP, edits the artifact, and replies in the same thread. Saving a file refreshes only the artifact frame, so your scroll position, draft comment, and sidebar stay put.
 
 This follows the [HTML-artifact workflow described by Thariq Shihipar](https://claude.com/blog/using-claude-code-the-unreasonable-effectiveness-of-html) and adds a persistent pointing channel: highlights and comment threads go straight to the agent instead of being copied back into a prompt.
 
