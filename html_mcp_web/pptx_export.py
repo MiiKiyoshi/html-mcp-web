@@ -474,6 +474,23 @@ def _add_picture(slide, data: bytes, rect: list[float]):
     return slide.shapes.add_picture(io.BytesIO(data), _px(x), _px(y), _px(w), _px(h))
 
 
+def _set_slide_background(slide, png: bytes) -> None:
+    """Put a full-page screenshot in as the slide's background fill, not a floating picture,
+    so it fills the slide and the mouse cannot grab or move it."""
+    from lxml import etree
+    from pptx.oxml.ns import qn
+
+    _, rid = slide.part.get_or_add_image_part(io.BytesIO(png))
+    c_sld = slide._element.find(qn("p:cSld"))
+    bg = c_sld.makeelement(qn("p:bg"), {})
+    bg_pr = etree.SubElement(bg, qn("p:bgPr"))
+    blip_fill = etree.SubElement(bg_pr, qn("a:blipFill"))
+    etree.SubElement(blip_fill, qn("a:blip")).set(qn("r:embed"), rid)
+    etree.SubElement(etree.SubElement(blip_fill, qn("a:stretch")), qn("a:fillRect"))
+    etree.SubElement(bg_pr, qn("a:effectLst"))
+    c_sld.insert(0, bg)
+
+
 # PowerPoint 2016+ keeps a picture vector when the blip references an SVG through this
 # extension; the blip's own r:embed stays the raster fallback for older viewers.
 SVG_EXT_URI = "{96DAC541-7B7A-43D3-8B79-37D633B846F1}"
@@ -737,8 +754,8 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
                 shot = client.screenshot(element=client.execute_script(
                     "const p = document.querySelectorAll('section.page')[arguments[0]]; p.scrollIntoView(); return p;",
                     script_args=[index]), format="base64")
-                _add_picture(slide, base64.b64decode(shot), [0, 0, PAGE_WIDTH_PX, PAGE_HEIGHT_PX])
-                report.append({"page": index + 1, "title": info["title"], "shapes": 1, "screenshot": True})
+                _set_slide_background(slide, base64.b64decode(shot))
+                report.append({"page": index + 1, "title": info["title"], "shapes": 0, "screenshot": True})
                 continue
             slide = _blank_slide(prs)
             for item in info["items"]:

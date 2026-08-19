@@ -60,10 +60,13 @@ def test_export_without_template_rebuilds_chrome_and_keeps_text_editable(tmp_pat
     assert result["slides"] == 3
     prs = pptx.Presentation(str(out))
     assert (prs.slide_width, prs.slide_height) == (12192000, 6858000)
-    # Cover and contents have no body box: one full-page picture each.
+    # Cover and contents have no body box: the screenshot is the slide background (a locked
+    # fill the mouse cannot grab), not a floating picture, so the slide carries no shapes.
+    from pptx.oxml.ns import qn as _qn
     for slide in list(prs.slides)[:2]:
-        kinds = shapes_by_kind(slide)
-        assert list(kinds) == ["PICTURE"] and len(kinds["PICTURE"]) == 1
+        assert shapes_by_kind(slide) == {}
+        blip = slide._element.find(_qn("p:cSld")).find(_qn("p:bg"))
+        assert blip is not None and blip.find(f".//{_qn('a:blip')}") is not None
     body = prs.slides[2]
     kinds = shapes_by_kind(body)
     texts = [shape.text_frame.text for shape in kinds["TEXT_BOX"]]
