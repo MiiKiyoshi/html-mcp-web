@@ -9,18 +9,11 @@ Every block of a body page becomes its own shape at the position it has in the h
   - a div that paints a background or border                            -> a rounded panel, then its content
   - inline <svg> (self-contained)                                       -> real vector, with a screenshot fallback
   - KaTeX, canvas, anything else                                        -> a 3x screenshot of that element
-Pages without a body box (cover, contents, divider) are full-page screenshots, unless
-the skin's pptx template supplies them.
+The title bar, footer, and page numbers are rebuilt from each page's own DOM, and a page
+without a body box (cover, contents, divider) is a full-page screenshot. Every skin is
+handled the same way; its look comes through the HTML it styles, so no skin carries a pptx.
 
 Skin configuration lives in skin.json under "pptx":
-  template     pptx file beside skin.json whose layouts carry the chrome (title bar, footer,
-               logos); without it, the chrome is rebuilt from the page's own DOM
-  layout       name of the template layout that body pages use; default is the first
-               layout with a title placeholder
-  keep_slides  how many leading template slides stand in for the deck's first pages
-               (typically cover and contents); default 0
-  cover        which paragraph of which shape on the template's first slide receives the
-               deck's title, subtitle, and author: {"title": "Shape name:0", ...}
   fonts        the deck face, embedded so the pptx renders the same on a machine that
                lacks it: {"family": "Noto Sans KR", "regular": "fonts/X-Regular.ttf",
                "bold": ..., "italic": ..., "boldItalic": ...}, paths beside skin.json.
@@ -31,7 +24,6 @@ Skin configuration lives in skin.json under "pptx":
 Requires firefox, marionette_driver, python-pptx, and fontTools when fonts are embedded.
 """
 import base64
-import copy
 import io
 import json
 import re
@@ -64,13 +56,6 @@ JS_READY = ("return document.readyState === 'complete' && "
             "Array.from(document.images).every(im => im.complete)")
 
 JS_PAGES = "return document.querySelectorAll('section.page').length;"
-
-JS_COVER = """
-const cover = document.querySelector('section.page.cover');
-if (!cover) return null;
-const text = (sel) => { const e = cover.querySelector(sel); return e ? e.textContent.trim() : ''; };
-return {title: text('h1'), sub: text('.sub'), who: text('.who')};
-"""
 
 # Walk a page's DOM into a flat list of shapes. Containers descend; a container that
 # paints something becomes a panel first so its content sits on it.
@@ -552,82 +537,8 @@ def _add_svg_picture(slide, png: bytes, svg: bytes, rect: list[float]) -> None:
     svg_blip.set(f"{{{R_NS}}}embed", rid)
 
 
-def _drop_slides_after(prs, keep: int) -> None:
-    from pptx.oxml.ns import qn
-    sldIdLst = prs.slides._sldIdLst
-    for index, sldId in enumerate(list(sldIdLst)):
-        if index < keep:
-            continue
-        prs.part.drop_rel(sldId.get(qn("r:id")))
-        sldIdLst.remove(sldId)
-
-
-def _set_cover_texts(slide, mapping: dict[str, str], texts: dict[str, str]) -> None:
-    """mapping: {"title": "Shape name:paragraph index", ...}; the paragraph keeps its first
-    run's formatting and loses the rest. A mapped field the deck leaves empty (a deck with
-    no subtitle) clears its paragraph, so the template's placeholder text does not show."""
-    for key, target in mapping.items():
-        if key not in texts:
-            continue
-        name, _, index_text = target.rpartition(":")
-        index = int(index_text)
-        shape = next((s for s in slide.shapes if s.name == name), None)
-        if shape is None or not shape.has_text_frame:
-            raise ValueError(f"pptx cover shape {name!r} was not found on the template's first slide")
-        paragraphs = shape.text_frame.paragraphs
-        if index >= len(paragraphs):
-            continue
-        paragraph = paragraphs[index]
-        if not paragraph.runs:
-            paragraph.add_run()
-        paragraph.runs[0].text = texts[key]
-        for run in paragraph.runs[1:]:
-            run.text = ""
-
-
-def _unify_typeface(element_tree, font: str) -> None:
-    from pptx.oxml.ns import qn
-    for element in element_tree.iter():
-        if element.tag in (qn("a:latin"), qn("a:ea"), qn("a:cs")) and element.get("typeface") not in (None, "+mj-lt", "+mn-lt", "+mj-ea", "+mn-ea"):
-            element.set("typeface", font)
-
-
-def _replace_total_count(prs, total: int) -> None:
-    for layout in prs.slide_layouts:
-        for shape in layout.shapes:
-            if shape.has_text_frame and re.fullmatch(r"/\s*\d+", shape.text_frame.text.strip()):
-                for paragraph in shape.text_frame.paragraphs:
-                    for run in paragraph.runs:
-                        run.text = re.sub(r"\d+", str(total), run.text)
-
-
-def _body_layout(prs, name: str | None):
-    if name is not None:
-        layout = next((layout for layout in prs.slide_layouts if layout.name == name), None)
-        if layout is None:
-            raise ValueError(f"pptx layout {name!r} is not in the template; layouts: {[l.name for l in prs.slide_layouts]}")
-        return layout
-    for layout in prs.slide_layouts:
-        if any(ph.placeholder_format.type == 1 for ph in layout.placeholders):
-            return layout
-    return prs.slide_layouts[0]
-
-
-def _new_slide(prs, layout, title: str | None, with_number: bool):
-    """A slide on the layout with only its title (when given) and, when the layout's chrome
-    is used, its slide number placeholder, which PowerPoint shows only when copied onto the slide."""
-    slide = prs.slides.add_slide(layout)
-    for placeholder in list(slide.placeholders):
-        kind = placeholder.placeholder_format.type
-        if kind == 1 and title is not None:
-            placeholder.text = title
-            continue
-        placeholder._element.getparent().remove(placeholder._element)
-    if with_number:
-        for placeholder in layout.placeholders:
-            if placeholder.placeholder_format.type == 13:
-                slide.shapes._spTree.append(copy.deepcopy(placeholder._element))
-    return slide
+def _blank_slide(prs):
+    return prs.slides.add_slide(prs.slide_layouts[6])
 
 
 REL_FONT = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/font"
@@ -790,10 +701,6 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
         font = config["fonts"]["family"]
     else:
         font = config.get("font", DEFAULT_FONT)
-    keep = int(config.get("keep_slides", 0))
-    template = (skin_dir / config["template"]) if "template" in config else None
-    if template is not None and not template.is_file():
-        raise FileNotFoundError(f"pptx template {template} does not exist")
 
     profile = tempfile.mkdtemp(prefix="html_mcp_pptx_")
     Path(profile, "user.js").write_text(
@@ -817,37 +724,23 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
         if page_count == 0:
             raise ValueError("the artifact has no section.page")
 
-        if template is not None:
-            prs = Presentation(str(template))
-            _drop_slides_after(prs, keep)
-            if keep > 0 and "cover" in config:
-                cover = client.execute_script(JS_COVER)
-                if cover is not None:
-                    _set_cover_texts(prs.slides[0], config["cover"], cover)
-            for slide in list(prs.slides)[:keep]:
-                _unify_typeface(slide._element, font)
-            _replace_total_count(prs, page_count)
-            layout = _body_layout(prs, config.get("layout"))
-        else:
-            prs = Presentation()
-            prs.slide_width = _px(PAGE_WIDTH_PX)
-            prs.slide_height = _px(PAGE_HEIGHT_PX)
-            keep = 0
-            layout = prs.slide_layouts[6]  # blank
-
-        with_chrome = template is None
+        # Every skin renders the same way: the deck's own pages become the slides, so the
+        # skin's look comes through its HTML and no skin carries a pptx of its own.
+        prs = Presentation()
+        prs.slide_width = _px(PAGE_WIDTH_PX)
+        prs.slide_height = _px(PAGE_HEIGHT_PX)
         report = []
-        for index in range(keep, page_count):
-            info = client.execute_script(JS_EXTRACT, script_args=[index, with_chrome])
+        for index in range(page_count):
+            info = client.execute_script(JS_EXTRACT, script_args=[index, True])
             if not info["hasBody"]:
-                slide = _new_slide(prs, layout, None, template is not None)
+                slide = _blank_slide(prs)
                 shot = client.screenshot(element=client.execute_script(
                     "const p = document.querySelectorAll('section.page')[arguments[0]]; p.scrollIntoView(); return p;",
                     script_args=[index]), format="base64")
                 _add_picture(slide, base64.b64decode(shot), [0, 0, PAGE_WIDTH_PX, PAGE_HEIGHT_PX])
                 report.append({"page": index + 1, "title": info["title"], "shapes": 1, "screenshot": True})
                 continue
-            slide = _new_slide(prs, layout, None if with_chrome else info["title"], template is not None)
+            slide = _blank_slide(prs)
             for item in info["items"]:
                 if item["kind"] == "text":
                     _add_text(slide, item, font)

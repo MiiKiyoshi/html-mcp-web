@@ -104,44 +104,6 @@ def test_export_without_template_rebuilds_chrome_and_keeps_text_editable(tmp_pat
     assert kinds["AUTO_SHAPE"]  # title bar, footer, card rule
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
-def test_export_with_skin_template_fills_cover_and_uses_layout(tmp_path: Path) -> None:
-    import json
-
-    html = deck(tmp_path)
-    skin = tmp_path / "skin"
-    skin.mkdir()
-    template = pptx.Presentation()
-    template.slide_width, template.slide_height = 12192000, 6858000
-    cover = template.slides.add_slide(template.slide_layouts[0])
-    cover.shapes.title.text = "old title"
-    cover.placeholders[1].text = "old author"
-    template.save(str(skin / "deck.pptx"))
-    (skin / "skin.css").write_text("", encoding="utf-8")
-    (skin / "skin.json").write_text(json.dumps({"pptx": {
-        "template": "deck.pptx", "layout": "Title and Content", "keep_slides": 1, "font": "Calibri",
-        "cover": {"title": "Title 1:0", "who": "Subtitle 2:0"},
-    }}), encoding="utf-8")
-    out = tmp_path / "deck.pptx"
-    result = export_pptx(html.as_uri(), out, tmp_path, skin)
-    assert result["slides"] == 3
-    prs = pptx.Presentation(str(out))
-    assert prs.slides[0].shapes.title.text == "Export Deck"
-    assert prs.slides[0].placeholders[1].text == "Export Author"
-    # Contents page carries no body box: full-page picture on the body layout, plus the
-    # layout's slide number placeholder copied onto the slide.
-    contents = shapes_by_kind(prs.slides[1])
-    assert set(contents) == {"PICTURE", "PLACEHOLDER"}
-    assert [ph.placeholder_format.type for ph in contents["PLACEHOLDER"]] == [13]
-    body = prs.slides[2]
-    assert body.slide_layout.name == "Title and Content"
-    assert body.shapes.title.text == "Numbers"
-    texts = [shape.text_frame.text for shape in shapes_by_kind(body)["TEXT_BOX"]]
-    assert "Numbers" not in texts and "3 / 3" not in texts  # chrome comes from the layout
-    lead = next(shape for shape in shapes_by_kind(body)["TEXT_BOX"] if shape.text_frame.text.startswith("Lead"))
-    assert lead.text_frame.paragraphs[0].runs[0].font.name == "Calibri"
-
-
 DEJAVU = Path("/usr/share/fonts/truetype/dejavu")
 
 
