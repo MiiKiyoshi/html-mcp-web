@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>html-web</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <h1>html-web</h1>
+      <div class="artifact-meta" aria-label="Current artifact">
+        <span id="main-file" class="main-file">loading</span>
+        <span id="artifact-status" class="artifact-status">connecting</span>
+      </div>
+      <nav id="artifact-tabs" class="artifact-tabs" aria-label="Artifacts"></nav>
+      <div class="topbar-actions">
+        <button id="print-btn" type="button">Print</button>
+        <a id="download-html-btn" class="download-btn" download>HTML</a>
+        <a id="download-pdf-btn" class="download-btn" download>PDF</a>
+        <button id="download-pptx-btn" class="download-btn" type="button" title="Export the deck as an editable pptx">PPTX</button>
+        <button id="fullscreen-btn" type="button">Full screen</button>
+        <button id="artifact-comment-btn" type="button">+ Note</button>
+        <button id="scripts-btn" type="button" title="Show or hide speaker scripts" aria-label="Show or hide speaker scripts">
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+            <path d="M2.5 1.5h8l3 3v10h-11z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+            <path d="M10.5 1.5v3h3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+            <path d="M4.5 7.5h7M4.5 10h7M4.5 12.5h4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button id="sidebar-toggle-btn" type="button" title="Toggle comments (\)">⇥</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section id="artifact-pane">
+        <iframe id="artifact-frame" title="Agent-generated HTML artifact" tabindex="-1"></iframe>
+        <button id="selection-comment-btn" class="selection-comment hidden" type="button">Comment</button>
+        <div id="presentation-controls" class="presentation-controls" aria-label="Slide show controls">
+          <button id="presentation-prev-btn" type="button" aria-label="Previous slide">←</button>
+          <span id="presentation-page" aria-live="polite"></span>
+          <button id="presentation-next-btn" type="button" aria-label="Next slide">→</button>
+          <button id="presentation-exit-btn" type="button">Exit</button>
+        </div>
+      </section>
+
+      <aside id="sidebar">
+        <div class="sidebar-tabs">
+          <button class="tab-btn" data-tab="pages" type="button">Pages</button>
+          <button class="tab-btn active" data-tab="comments" type="button">Comments<span id="open-count" class="tab-count hidden"></span></button>
+          <button class="tab-btn" data-tab="problems" type="button">Problems<span id="problems-count" class="tab-count hidden"></span></button>
+        </div>
+
+        <div id="tab-pages" class="tab-pane">
+          <nav id="pages-list" aria-label="Artifact pages"></nav>
+        </div>
+
+        <div id="tab-problems" class="tab-pane">
+          <div id="problems-list" class="problems-list"></div>
+        </div>
+
+        <div id="tab-comments" class="tab-pane active">
+          <div class="filter-row">
+            <select id="comment-filter" aria-label="Comment status">
+              <option value="open" selected>open</option>
+              <option value="resolved">resolved</option>
+              <option value="dismissed">dismissed</option>
+              <option value="all">all</option>
+            </select>
+          </div>
+          <div id="comments-list" class="comments-list"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <dialog id="compose-dialog">
+    <form id="compose-form">
+      <h3>New comment</h3>
+      <blockquote id="compose-anchor"></blockquote>
+      <textarea id="compose-text" rows="5" required placeholder="Leave feedback for the agent"></textarea>
+      <!-- The action that finishes the comment comes first, so Tab out of the text lands
+           on it and Enter posts. -->
+      <div class="dialog-actions">
+        <button id="compose-submit" type="submit">Post</button>
+        <button id="compose-cancel" type="button">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="/static/viewer.js"></script>
+</body>
+</html>

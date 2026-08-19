@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.coverage
+htmlcov/
+.pytest_cache/
+.venv/
+.vscode/
+.idea/
+.claude/
+
+examples/neutral-slides/.html-mcp-web/
+examples/neutral-report/.html-mcp-web/
+examples/.html-mcp-web/

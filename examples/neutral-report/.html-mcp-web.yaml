@@ -1,0 +1,19 @@
+artifacts:
+  report:
+    label: Report
+    layout: report
+    main: report.html
+    template: neutral-report
+    content: content.html
+watch:
+- '*.html'
+- '*.css'
+- '*.js'
+- '*.svg'
+- '*.png'
+- '*.jpg'
+- '*.jpeg'
+- '*.gif'
+- '*.webp'
+ignore: []
+port: 8877

@@ -1,0 +1,25 @@
+artifacts:
+  slides:
+    label: Slides
+    layout: slides
+    main: neutral-slides/slides.html
+    template: neutral-slides
+    content: neutral-slides/content.html
+  report:
+    label: Report
+    layout: report
+    main: neutral-report/report.html
+    template: neutral-report
+    content: neutral-report/content.html
+watch:
+- '*.html'
+- '*.css'
+- '*.js'
+- '*.svg'
+- '*.png'
+- '*.jpg'
+- '*.jpeg'
+- '*.gif'
+- '*.webp'
+ignore: []
+port: 8766
