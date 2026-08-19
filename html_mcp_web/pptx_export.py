@@ -204,7 +204,10 @@ const emit = (el) => {
   }
   if (container) { for (const ch of el.children) emit(ch); return; }
   const para = paraOf(el, 0, 0);
-  if (para.runs.length) items.push({kind: 'text', rect, paras: [para], list: null, pseudo: hasPseudo(el), i: mark(el)});
+  // plain: pure text on this element (no border/background/list, reached without a paint),
+  // so it can be hidden for the background pass and re-added as an editable box with nothing
+  // of its own lost. Painted or listed text (the other pushes) stays baked into the picture.
+  if (para.runs.length) items.push({kind: 'text', rect, paras: [para], list: null, pseudo: hasPseudo(el), plain: true, i: mark(el)});
 };
 
 const body = page.querySelector('.body');
@@ -770,7 +773,8 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
                 # A full-bleed page's plain text becomes editable text boxes; the rest (CSS
                 # decorations, background art, and text carrying a ::before mark) stays in the
                 # picture. Hiding the plain text before the shot keeps it from showing twice.
-                overlaid = [item for item in info["items"] if item["kind"] == "text" and not item.get("pseudo")]
+                overlaid = [item for item in info["items"]
+                            if item["kind"] == "text" and item.get("plain") and not item.get("pseudo")]
                 client.execute_script(JS_HIDE, script_args=[index, [item["i"] for item in overlaid]])
                 shot = client.screenshot(element=client.execute_script(
                     "const p = document.querySelectorAll('section.page')[arguments[0]]; p.scrollIntoView(); return p;",
