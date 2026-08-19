@@ -115,4 +115,4 @@ An agent-generated artifact runs JavaScript with the local page's privileges, so
 
 ## Acknowledgements
 
-MIT licensed; see [`LICENSE`](LICENSE). Full-screen wheel navigation adapts the intent-detection strategy from [Swiper's Mousewheel module](https://github.com/nolimits4web/swiper/blob/master/src/modules/mousewheel/mousewheel.mjs) by Vladimir Kharlampidi and the Swiper contributors, under the MIT license.
+MIT licensed; see [`LICENSE`](LICENSE). Full-screen wheel navigation adapts the intent-detection strategy from [Swiper's Mousewheel module](https://github.com/nolimits4web/swiper/tree/master/src/modules/mousewheel) by Vladimir Kharlampidi and the Swiper contributors, under the MIT license.
