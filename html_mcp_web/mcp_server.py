@@ -29,8 +29,7 @@ except ImportError:
 
 if HAS_MCP:
     class Reply(BaseModel):
-        """A message written for one thread. Pairing the two in the schema is what keeps
-        one message from being posted to several threads."""
+        """A message written for one thread."""
 
         model_config = ConfigDict(extra="forbid")
 
@@ -50,18 +49,20 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     mcp = FastMCP(
         "html-mcp-web",
         instructions=(
-            "Call inspect() first. Read only the artifact, comments, and pages needed, and reuse results while revision is "
-            "unchanged. New comments are found with list_comments(unanswered=True) or since=<the largest last_human_at "
-            "already handled>, not by reading the whole open list again. Completion requires checked_revision == revision and no layout errors, which inspect(artifact) "
-            "reports. Fit is settled by numbers: inspect(artifact) says pass or fail, and measure_space(target=<block ref>) "
-            "gives line_count, last_line_right_space, and a table's min_no_wrap_width, which are the pixels to trim or add. "
-            "render_page carries what numbers do not (figure placement, a crop, colour); it runs once per page when that "
-            "changes and once before hand-off, not after each edit. Resolve only alongside the edit the comment asked for; a comment answered "
-            "with words alone stays open for its owner to close. A resolve message is unnecessary when replies or "
-            "edited_files already record the outcome. A tab is an artifact entry in the config file. edit_file is the "
-            "source; for a templated artifact main_file is build output and is not edited. The content format and "
-            "component vocabulary are documented once in templates/README.md beside the package (a skin's own README "
-            "covers only what that skin changes); read it before content is written."
+            "Call inspect() first, then read only the artifact, comments, and pages needed, reusing results while "
+            "revision is unchanged. Find new comments with list_comments(unanswered=True) or since=<the largest "
+            "last_human_at already handled>, not by re-reading the open list. inspect(artifact) reports the "
+            "layout_check: completion requires checked_revision == revision and no errors, and those errors are the "
+            "fit failures. Fit is settled by numbers, so measure_space(target=<block ref>) gives line_count, "
+            "last_line_right_space, and a table's min_no_wrap_width, the pixels to trim or add. render_page carries "
+            "what numbers do not (figure placement, a crop, colour); run it once per page when that changes and once "
+            "before hand-off, not after each edit. Resolve only alongside the edit the comment asked for; a comment "
+            "answered with words alone stays open for its owner to close, and a resolve message is unnecessary when "
+            "replies or edited_files already record the outcome. edit_file is the source; for a templated artifact "
+            "main_file is build output and is not edited. Link images with a relative src into a project folder; do "
+            "not embed them as base64, so content stays small and editable. The content format and component "
+            "vocabulary are in templates/README.md beside the package (a skin's own README covers only what that skin "
+            "changes); read it before writing content."
         ),
     )
 
@@ -135,9 +136,9 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     async def reply_comments(
         artifact: str,
         replies: Annotated[list[Reply], Field(min_length=1, description="One entry per thread: the comment and the message written for it.")],
-        edited_files: Annotated[list[str] | None, Field(description="Project-relative paths edited for these comments; recorded on each thread entry so the reader sees what changed.")] = None,
+        edited_files: Annotated[list[str] | None, Field(description="Project-relative paths edited for these comments; recorded on each thread entry.")] = None,
     ) -> dict[str, Any]:
-        """Reply to comments without changing their status. Each reply carries its own message for its own thread."""
+        """Reply to comments without changing their status."""
         ids = [reply.comment_id for reply in replies]
         if len(set(ids)) != len(ids):
             raise ValueError("each comment appears at most once in replies")
@@ -158,9 +159,9 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         comment_ids: list[str],
         status: Literal["open", "resolved", "dismissed"],
         message: str = "",
-        edited_files: Annotated[list[str] | None, Field(description="Project-relative paths edited for these comments; recorded on the thread entry so the reader sees what changed.")] = None,
+        edited_files: Annotated[list[str] | None, Field(description="Project-relative paths edited for these comments; recorded on the thread entry.")] = None,
     ) -> dict[str, Any]:
-        """Change status after verification; omit message when replies or edited_files already record the outcome. A message posts to every id, so batch with one only when it fits each thread. Resolve alongside the edit the comment asked for; a comment answered with words alone stays open for its owner to close."""
+        """Change status after verification. A message posts to every id, so batch with one only when it fits each thread."""
         if not comment_ids:
             raise ValueError("comment_ids must not be empty")
         client = binding.require_client()
@@ -178,7 +179,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         dpi: Annotated[int, Field(ge=36, le=300, description="Render resolution; 96 reads text, 150 or more shows fine detail at a higher token cost.")] = 96,
         grayscale: Annotated[bool, Field(description="Grayscale is smaller and enough for layout; set false when colour itself is being checked.")] = True,
     ) -> "Image":
-        """Render one page of a named artifact as a PNG for visual inspection."""
+        """Render one page for visual inspection."""
         client = binding.require_client()
         params = f"?page={page}&dpi={dpi}&gray={'1' if grayscale else '0'}"
         data = await client.get_bytes(

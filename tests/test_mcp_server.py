@@ -116,7 +116,8 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        assert "reuse results while revision is unchanged" in mcp.instructions
+        assert "reusing results while revision is unchanged" in mcp.instructions
+        assert "do not embed them as base64" in mcp.instructions
         tools = asyncio.run(mcp.list_tools())
         schemas = {tool.name: tool.inputSchema for tool in tools}
         assert list(schemas) == [

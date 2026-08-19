@@ -30,8 +30,11 @@ def test_tracked_files_carry_no_private_identity() -> None:
         # names the markers it looks for.
         if not path.is_file() or path == Path(__file__).resolve():
             continue
+        # docs/ holds curated, manually reviewed product screenshots for the README; every
+        # other raster image is refused so a private skin's assets cannot slip in.
         if path.suffix.lower() in IMAGE_SUFFIXES:
-            hits.append(f"{path.relative_to(ROOT)}: raster image tracked")
+            if Path("docs") not in path.relative_to(ROOT).parents:
+                hits.append(f"{path.relative_to(ROOT)}: raster image tracked")
             continue
         try:
             text = path.read_text(encoding="utf-8")
