@@ -1,0 +1,155 @@
+from pathlib import Path
+
+import pytest
+
+from html_mcp_web.template_content import parse_template_content
+
+REPO = Path(__file__).resolve().parents[1]
+# The template shims import the engine from this checkout, whichever package is installed.
+BUILD_ENV = {"PYTHONPATH": str(REPO), "PATH": "/usr/bin:/bin"}
+
+
+
+def test_nested_section_markup_stays_inside_page_body(tmp_path: Path) -> None:
+    content_file = tmp_path / "content.html"
+    content_file.write_text('''<!doctype html>
+<title>Nested content</title>
+<body data-author="Researcher" data-meta="Lab|Date">
+  <aside class="script"><p>Cover script.</p></aside>
+  <section data-title="Page">
+    <div><section class="card"><p>Nested section.</p></section></div>
+    <aside class="script"><p>Page script.</p></aside>
+  </section>
+</body>
+''', encoding="utf-8")
+
+    content = parse_template_content(content_file)
+
+    assert content.author == "Researcher"
+    assert content.metadata == ["Lab", "Date"]
+    assert content.cover_script_html == "<p>Cover script.</p>"
+    assert content.sections[0].title == "Page"
+    assert '<section class="card"><p>Nested section.</p></section>' in content.sections[0].body_html
+    assert "Page script" not in content.sections[0].body_html
+    assert content.sections[0].script_html == "<p>Page script.</p>"
+
+
+def test_page_kinds_carry_their_own_attributes(tmp_path: Path) -> None:
+    content_file = tmp_path / "content.html"
+    content_file.write_text('''<!doctype html>
+<title>Deck</title>
+<body data-author="Researcher" data-meta="Lab" data-sub="Second cover line">
+  <section data-layout="contents" data-title="Contents"><ol><li>One</li></ol></section>
+  <section data-layout="divider" data-no="01"><p class="label">Part</p></section>
+  <section data-title="Body"><p>Text.</p></section>
+</body>
+''', encoding="utf-8")
+
+    content = parse_template_content(content_file)
+
+    assert content.subtitle == "Second cover line"
+    assert [section.layout for section in content.sections] == ["contents", "divider", "body"]
+    assert content.sections[1].title == ""
+    assert content.sections[1].attributes["data-no"] == "01"
+    assert content.sections[2].layout == "body"
+
+
+def test_a_titled_page_still_requires_its_title(tmp_path: Path) -> None:
+    content_file = tmp_path / "content.html"
+    content_file.write_text(
+        '<title>Deck</title><body data-author="R" data-meta="Lab"><section><p>Text.</p></section></body>',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="data-title"):
+        parse_template_content(content_file)
+
+
+def test_shipped_slide_template_builds_every_page_kind(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+
+    template = Path(__file__).resolve().parent.parent / "templates" / "neutral-slides"
+    output = tmp_path / "slides.html"
+    subprocess.run(
+        [sys.executable, str(template / "build.py"), str(template / "content.html"), str(output)],
+        check=True, capture_output=True, env=BUILD_ENV,
+    )
+
+    built = output.read_text(encoding="utf-8")
+    assert '<div class="sub">' in built
+    assert 'class="page contents"' in built
+    assert 'class="page divider"' in built
+    # The opening summary stays under the title; the blocks that share the remaining
+    # height sit inside .rest.
+    body = built.split('<div class="body" data-layout-guard>')[1].split("</div>\n      <footer")[0]
+    assert body.index('<p class="lead">') < body.index('<div class="rest">')
+    assert '<div class="grid3">' in body.split('<div class="rest">')[1]
+    assert built.count("data-layout-guard") == len(
+        parse_template_content(template / "content.html").sections
+    )
+    # No math in the sample deck, so the KaTeX bundle stays out and the file stays small.
+    assert "katex" not in built
+    assert output.stat().st_size < 100_000
+
+
+def test_math_deck_carries_katex_offline(tmp_path: Path) -> None:
+    from html_mcp_web.slides import build
+
+    content = tmp_path / "content.html"
+    content.write_text('''<!doctype html>
+<title>Math</title>
+<body data-author="R" data-meta="Lab">
+<section data-title="Formula"><p>Ratio $\\frac{a}{b}$ and $$\\sum_i x_i$$</p></section>
+</body>
+''', encoding="utf-8")
+    output = tmp_path / "slides.html"
+    build(content, output, Path(__file__).resolve().parent.parent / "templates" / "neutral-slides")
+
+    built = output.read_text(encoding="utf-8")
+    assert "renderMathInElement(document.body" in built
+    # Every font the stylesheet names is embedded; nothing points outside the file.
+    assert built.count("data:font/woff2;base64,") == 20
+    assert "url(fonts/" not in built
+    assert "https://" not in built.split("<style>", 1)[1].split("</style>", 1)[0]
+    # The renderer runs at the end of the body, so it has finished before load fires
+    # and a print snapshot sees rendered math.
+    assert built.index("renderMathInElement") > built.index("</main>")
+
+
+def test_skin_fonts_are_embedded_like_katex_fonts(tmp_path: Path) -> None:
+    from html_mcp_web.slides import build
+
+    skin = tmp_path / "skin"
+    (skin / "fonts").mkdir(parents=True)
+    # Any bytes will do for the embedding rule; the browser is not asked to read them here.
+    (skin / "fonts" / "Body-Regular.woff2").write_bytes(b"wOF2fake-regular")
+    (skin / "fonts" / "Body-Bold.woff2").write_bytes(b"wOF2fake-bold")
+    (skin / "skin.css").write_text('''
+@font-face { font-family: "Body"; font-weight: 400; src: url(fonts/Body-Regular.woff2) format("woff2"); }
+@font-face { font-family: "Body"; font-weight: 700; src: url("fonts/Body-Bold.woff2") format("woff2"), url(fonts/Body-Bold.ttf) format("truetype"); }
+:root { --font: "Body", sans-serif; }
+''', encoding="utf-8")
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<title>Deck</title><body data-author="R" data-meta="Lab"><section data-title="A"><p>Text.</p></section></body>',
+        encoding="utf-8",
+    )
+    output = tmp_path / "slides.html"
+    build(content, output, skin)
+
+    built = output.read_text(encoding="utf-8")
+    assert built.count("data:font/woff2;base64,") == 2
+    assert "url(fonts/" not in built and 'url("fonts/' not in built
+    assert "truetype" not in built
+
+
+def test_shared_metadata_is_required(tmp_path: Path) -> None:
+    content_file = tmp_path / "content.html"
+    content_file.write_text(
+        '<title>Missing metadata</title><body><section data-title="Page"></section></body>',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="data-author and data-meta"):
+        parse_template_content(content_file)

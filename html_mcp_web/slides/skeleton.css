@@ -1,0 +1,269 @@
+/* Slide engine skeleton: where things sit on a 1280x720 page. A skin sets the variables
+   below and supplies chrome images through the slots the builder emits; it does not
+   restate this file. Values here are the neutral defaults; a skin overrides only what it
+   changes. */
+
+:root {
+  font-family: var(--font, Inter, "Noto Sans KR", system-ui, sans-serif);
+  color: var(--ink);
+
+  --ink: #22282c;
+  --ink-soft: #4f5a60;
+  --muted: #6d777c;
+  --primary: #243943;
+  --accent: #6d928d;
+  --line: #d9dfdf;
+  --paper: #fffefd;
+  --panel: #f4f6f8;
+  --good: #2f756a;
+  --bad: #a24b47;
+  --mono: ui-monospace, monospace;
+
+  --tbar-height: 64px;
+  --tbar-padding: 0 42px;
+  --body-height: 610px;
+  --body-padding: 0 42px;
+  --bbar-height: 24px;
+  --bbar-color: var(--accent);
+  --bbar-ink: white;
+  --full-height: 660px;
+  --full-padding: 0 92px;
+  --full-ink: #eef3f2;
+  --cover-band-height: 319px;
+  --cover-padding: 0 92px;
+  --cover-right: 120px;
+  --lead-gap: 8px;
+}
+
+* { box-sizing: border-box; }
+.page { position: relative; padding: 0; background: var(--paper); }
+
+/* ---- Body page: title bar, body box, footer bar ---- */
+.tbar {
+  display: flex;
+  align-items: center;
+  position: relative;
+  height: var(--tbar-height);
+  padding: var(--tbar-padding);
+  background: var(--primary);
+}
+.tbar h2 { flex: 1; margin: 0; color: white; font-size: 30px; font-weight: 650; letter-spacing: -0.015em; }
+
+/* Blocks spread down the box instead of stacking at the top, so a page with little on it
+   does not leave a dead band above the footer. The opening one-line summary stays with
+   the title: distributing it too would leave it floating. */
+.body {
+  height: var(--body-height);
+  margin-top: 10px;
+  padding: var(--body-padding);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.body > .rest { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; }
+.body > .lead:first-child { margin-top: var(--lead-gap); }
+
+.bbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--bbar-height);
+  background: var(--bbar-color);
+}
+.bbar .pageno {
+  position: absolute;
+  left: 50%;
+  top: 5px;
+  transform: translateX(-50%);
+  color: var(--bbar-ink);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.bbar .bbar-label { position: absolute; right: 26px; top: 7px; color: var(--bbar-ink); font-size: 14px; }
+
+/* ---- Cover ---- */
+.cover .band { position: relative; height: var(--cover-band-height); padding: var(--cover-padding); background: var(--primary); }
+.cover .band::after {
+  content: "";
+  position: absolute;
+  left: 92px;
+  bottom: 0;
+  width: 72px;
+  height: 5px;
+  background: var(--accent);
+}
+.cover .band h1 {
+  position: absolute;
+  left: 92px;
+  right: 92px;
+  bottom: 78px;
+  margin: 0;
+  color: white;
+  font-size: 48px;
+  font-weight: 620;
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+}
+/* Optional second line under the cover title, for the reviewed work's own name. */
+.cover .band .sub {
+  position: absolute;
+  left: 92px;
+  right: 92px;
+  bottom: 40px;
+  color: #cbd6d4;
+  font-size: 22px;
+  line-height: 1.3;
+}
+.cover.has-sub .band h1 { bottom: 108px; }
+.cover .who { margin: 76px var(--cover-right) 0 0; color: var(--ink); font-size: 29px; text-align: right; }
+.cover .aff { margin: 22px var(--cover-right) 0 0; color: var(--muted); font-size: 18px; line-height: 1.6; text-align: right; }
+
+/* ---- Full-bleed pages: contents and divider ----
+   No title bar; the guard covers the area above the footer bar. A skin that colours
+   the whole page paints .page-ground, because the viewer paints section.page itself
+   through a stronger selector. */
+.page-ground { display: none; position: absolute; inset: 0; background: var(--primary); }
+.contents .page-ground, .divider .page-ground { display: block; }
+.wide {
+  position: relative;
+  height: var(--full-height);
+  margin: 18px 0 0;
+  padding: var(--full-padding);
+  overflow: hidden;
+  color: var(--full-ink);
+}
+.contents h2 { margin: 0; color: white; font-size: 34px; font-weight: 620; letter-spacing: -0.02em; }
+.contents .rule { width: 72px; height: 5px; margin: 14px 0 30px; background: var(--accent); }
+.contents ol { margin: 0; padding: 0; list-style: none; counter-reset: item; }
+.contents li {
+  position: relative;
+  margin-bottom: 18px;
+  padding-left: 62px;
+  font-size: 25px;
+  line-height: 42px;
+}
+.contents li::before {
+  counter-increment: item;
+  content: counter(item, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
+  font-size: 17px;
+  font-weight: 650;
+  text-align: center;
+}
+.contents .venue, .divider .venue { margin-right: 10px; color: var(--accent); font-size: 17px; }
+.contents .by, .divider .by { margin-left: 10px; color: #9fb1ae; font-size: 17px; }
+
+/* The capsule follows its own text and stops at 620px, so a short label stays compact. */
+.divider .cap {
+  position: relative;
+  display: inline-block;
+  max-width: 620px;
+  margin-top: 210px;
+  padding: 26px 34px 26px 96px;
+  border-left: 5px solid var(--accent);
+  background: rgba(255, 255, 255, .06);
+}
+.divider .cap .no {
+  position: absolute;
+  left: 30px;
+  top: 24px;
+  color: var(--accent);
+  font-size: 34px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.divider .cap .label { margin: 0; color: white; font-size: 28px; line-height: 1.3; }
+.divider .shot {
+  position: absolute;
+  right: 92px;
+  top: 120px;
+  max-width: 420px;
+  max-height: 420px;
+  border: 1px solid rgba(255, 255, 255, .25);
+}
+
+/* ---- Body components ---- */
+p { margin: 0 0 12px; font-size: 19px; line-height: 1.5; }
+.lead { max-width: 1120px; color: var(--ink-soft); font-size: 20px; }
+.note { margin-top: 12px; color: var(--muted); font-size: 15px; line-height: 1.5; }
+ul.notes { margin: 12px 0 0; padding-left: 20px; color: var(--muted); font-size: 15px; line-height: 1.55; }
+ul.notes li { margin-bottom: 3px; }
+.units { margin: 0 0 4px; color: var(--muted); font-size: 13px; text-align: right; }
+.feedback { margin-top: 16px; padding: 10px 0 10px 16px; border-left: 3px solid var(--accent); color: var(--ink-soft); font-size: 17px; }
+.feedback b { margin-right: 8px; }
+
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+/* Text right below a table hugs the last row line without this gap. */
+table + p, table + table { margin-top: 16px; }
+/* keep-all so a cell breaks between words: CJK text otherwise wraps mid-word. */
+th, td { padding: 8px 13px; border-bottom: 1px solid var(--line); font-size: 17px; text-align: right; word-break: keep-all; }
+th:first-child, td:first-child { text-align: left; }
+th { border-bottom: 2px solid var(--accent); color: var(--primary); font-size: 14px; font-weight: 650; letter-spacing: .025em; }
+th.sep, td.sep { border-left: 1px solid var(--line); }
+.nw { white-space: nowrap; }
+tfoot td { border-top: 2px solid var(--accent); border-bottom: 0; font-weight: 700; }
+.dense th, .dense td { padding: 4px 10px; font-size: 15px; line-height: 1.25; }
+.dense th { font-size: 13px; }
+.tight th, .tight td { padding: 4px 7px; font-size: 14px; white-space: nowrap; }
+.tight th { font-size: 12.5px; }
+.pos { color: var(--good); font-weight: 650; }
+.neg { color: var(--bad); font-weight: 650; }
+
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 34px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.metric { min-height: 150px; padding: 25px 25px 22px; }
+.metric strong { display: block; margin-bottom: 8px; color: var(--primary); font-size: 40px; font-weight: 650; letter-spacing: -0.025em; }
+.metric span { display: block; max-width: 300px; color: var(--ink-soft); font-size: 17px; line-height: 1.4; }
+.win strong { color: var(--good); }
+.lose strong { color: var(--bad); }
+
+.two { display: grid; grid-template-columns: 1.15fr 1fr; gap: 36px; align-items: start; }
+.card { padding: 4px 0 4px 22px; border-left: 2px solid var(--accent); }
+.card h3 { margin: 0 0 9px; color: var(--primary); font-size: 21px; }
+.card p { margin: 0 0 8px; color: var(--ink-soft); font-size: 16px; }
+code { padding: 1px 6px; border-radius: 3px; background: #ecefef; font-family: var(--mono); font-size: .92em; }
+
+.flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; position: relative; margin: 34px 0 28px; counter-reset: step; }
+.flow::before { content: ""; position: absolute; left: 22px; right: 22px; top: 14px; height: 1px; background: var(--line); }
+.step { position: relative; min-height: 122px; padding: 44px 0 0; color: var(--ink-soft); font-size: 17px; }
+.step::before {
+  counter-increment: step;
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 29px;
+  height: 29px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--primary);
+  font: 650 14px/27px Inter, sans-serif;
+  text-align: center;
+}
+.step b, .step strong { display: block; margin-bottom: 5px; color: var(--primary); font-size: 19px; }
+/* A cycle returns from the last step to the first, drawn under the row so the boxes keep
+   their places. */
+.flow.cycle { margin-bottom: 34px; }
+.flow.cycle::after { content: ""; position: absolute; left: 12%; right: 12%; top: calc(100% + 12px); height: 1px; background: var(--line); }
+
+/* ---- Speaker script: follows its page in the flow ---- */
+.script-block { width: 1280px; height: 164px; padding: 10px 16px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; background: #f8f9f8; }
+.script-text { color: #2c3439; font-size: 16px; line-height: 24px; }
+.script-text p { margin: 0; font-size: 16px; line-height: 24px; }
+
+@media screen {
+  main.pages section.page { border-radius: 10px; box-shadow: 0 2px 14px rgba(25, 35, 42, .09); }
+}
+@media print {
+  .script-block { display: none; }
+  main.pages section.page { margin-bottom: 0 !important; border-radius: 0; box-shadow: none; }
+}

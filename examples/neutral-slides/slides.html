@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Evaluation Review</title>
+  <style>
+:root {
+  font-family: Inter, "Noto Sans KR", system-ui, sans-serif;
+  color: #22282c;
+  --ink: #22282c;
+  --ink-soft: #4f5a60;
+  --navy: #243943;
+  --accent: #6d928d;
+  --accent-soft: #edf2f1;
+  --paper: #fffefd;
+  --line: #d9dfdf;
+  --muted: #6d777c;
+}
+
+* { box-sizing: border-box; }
+.page { position: relative; padding: 0; background: var(--paper); }
+
+/* A fixed header and footer keep the content area stable across slides. */
+.tbar {
+  display: flex;
+  align-items: center;
+  height: 64px;
+  padding: 0 42px;
+  background: var(--navy);
+}
+
+.tbar h2 {
+  max-width: 1120px;
+  margin: 0;
+  color: white;
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.body {
+  height: 610px;
+  margin-top: 10px;
+  padding: 0 42px;
+  overflow: hidden;
+}
+
+.bbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 24px;
+  background: var(--accent);
+}
+
+.bbar .pageno {
+  position: absolute;
+  left: 50%;
+  top: 5px;
+  transform: translateX(-50%);
+  color: white;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The cover uses the same strong band as content slides without organization-specific marks. */
+.cover .band {
+  position: relative;
+  height: 319px;
+  padding: 0 92px;
+  background: var(--navy);
+}
+
+.cover .band::after {
+  content: "";
+  position: absolute;
+  left: 92px;
+  bottom: 0;
+  width: 72px;
+  height: 5px;
+  background: var(--accent);
+}
+
+.cover .band h1 {
+  position: absolute;
+  left: 92px;
+  right: 92px;
+  bottom: 78px;
+  margin: 0;
+  color: white;
+  font-size: 48px;
+  font-weight: 620;
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+}
+
+.cover .who {
+  margin: 76px 120px 0 0;
+  color: var(--ink);
+  font-size: 29px;
+  text-align: right;
+}
+
+.cover .aff {
+  margin: 22px 120px 0 0;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.6;
+  text-align: right;
+}
+
+/* Text hierarchy is shared by prose, tables, and composed layouts. */
+p { margin: 0 0 12px; font-size: 19px; line-height: 1.5; }
+.lead { max-width: 1120px; color: var(--ink-soft); font-size: 20px; }
+.note { margin-top: 12px; color: var(--muted); font-size: 15px; line-height: 1.5; }
+ul.notes { margin: 12px 0 0; padding-left: 20px; color: var(--muted); font-size: 15px; line-height: 1.55; }
+ul.notes li { margin-bottom: 3px; }
+.units { margin: 0 0 4px; color: var(--muted); font-size: 13px; text-align: right; }
+.feedback { margin-top: 16px; padding: 10px 0 10px 16px; border-left: 3px solid var(--accent); color: var(--ink-soft); font-size: 17px; }
+
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { padding: 8px 13px; border-bottom: 1px solid var(--line); font-size: 17px; text-align: right; }
+th:first-child, td:first-child { text-align: left; }
+th { border-bottom: 2px solid var(--accent); color: var(--navy); font-size: 14px; font-weight: 650; letter-spacing: .025em; }
+th.sep, td.sep { border-left: 1px solid var(--line); }
+.nw { white-space: nowrap; }
+tfoot td { border-top: 2px solid var(--accent); border-bottom: 0; font-weight: 700; }
+.dense th, .dense td { padding: 4px 10px; font-size: 15px; line-height: 1.25; }
+.dense th { font-size: 13px; }
+.tight th, .tight td { padding: 4px 7px; font-size: 14px; white-space: nowrap; }
+.tight th { font-size: 12.5px; }
+.pos { color: #2f756a; font-weight: 650; }
+.neg { color: #a24b47; font-weight: 650; }
+
+/* Metrics are grouped by alignment and rules rather than card chrome. */
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  margin-top: 34px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.metric {
+  min-height: 150px;
+  padding: 25px 25px 22px;
+}
+
+.metric strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--navy);
+  font-size: 40px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+.metric span { display: block; max-width: 300px; color: var(--ink-soft); font-size: 17px; line-height: 1.4; }
+.win strong { color: #2f756a; }
+.lose strong { color: #a24b47; }
+
+.two { display: grid; grid-template-columns: 1.15fr 1fr; gap: 36px; align-items: start; }
+.card { padding: 4px 0 4px 22px; border-left: 2px solid var(--accent); }
+.card h3 { margin: 0 0 9px; color: var(--navy); font-size: 21px; }
+.card p { margin: 0 0 8px; color: var(--ink-soft); font-size: 16px; }
+code { padding: 1px 6px; border-radius: 3px; background: #ecefef; font-family: ui-monospace, monospace; font-size: .92em; }
+
+/* Sequence is expressed through numbering, alignment, and a single connecting rule. */
+.flow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 28px;
+  position: relative;
+  margin: 34px 0 28px;
+  counter-reset: step;
+}
+
+.flow::before {
+  content: "";
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  top: 14px;
+  height: 1px;
+  background: var(--line);
+}
+
+.step {
+  position: relative;
+  min-height: 122px;
+  padding: 44px 0 0;
+  color: var(--ink-soft);
+  font-size: 17px;
+}
+
+.step::before {
+  counter-increment: step;
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 29px;
+  height: 29px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--navy);
+  font: 650 14px/27px Inter, sans-serif;
+  text-align: center;
+}
+
+.step b { display: block; margin-bottom: 5px; color: var(--navy); font-size: 19px; }
+
+/* Speaker scripts sit outside printed page geometry. */
+#scripts { position: absolute; top: 0; left: 0; }
+#scripts .script-block { position: absolute; z-index: 5; height: 164px; padding: 10px 16px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; background: #f8f9f8; }
+#scripts .script-text { color: #2c3439; font-size: 16px; line-height: 24px; }
+#scripts .script-text p { margin: 0; font-size: 16px; line-height: 24px; }
+.pages section.page.has-script { margin-bottom: 182px; }
+html[data-html-mcp-layout][data-html-mcp-layout] body > main.pages > section.page.has-script { margin-bottom: 182px !important; }
+
+@media screen {
+  main.pages section.page { border-radius: 10px; box-shadow: 0 2px 14px rgba(25, 35, 42, .09); }
+}
+
+@media print {
+  #scripts { display: none; }
+  main.pages section.page { margin-bottom: 0 !important; border-radius: 0; box-shadow: none; }
+}
+  </style>
+</head>
+<body>
+  <main class="pages">
+
+    <section class="page cover has-script">
+      <div class="band"><h1>Evaluation Review</h1></div>
+      <div class="who">Systems Research Group</div>
+      <div class="aff">Internal evaluation<br>
+        13 August 2026</div>
+      <footer class="bbar"><span class="pageno">1 / 3</span></footer>
+    </section>
+    <section class="page has-script">
+      <header class="tbar"><h2>Decision</h2></header>
+      <div class="body" data-layout-guard>
+<p class="lead">Keep the current method while the remaining input cases are verified.</p>
+  <div class="grid3">
+    <div class="metric"><strong>18.4%</strong><span>runtime reduction</span></div>
+    <div class="metric"><strong>0.7%</strong><span>score change</span></div>
+    <div class="metric"><strong>3</strong><span>unverified cases</span></div>
+  </div>
+      </div>
+      <footer class="bbar"><span class="pageno">2 / 3</span></footer>
+    </section>
+    <section class="page has-script">
+      <header class="tbar"><h2>Next Evaluation</h2></header>
+      <div class="body" data-layout-guard>
+<div class="two">
+    <div>
+      <h3>Run now</h3>
+      <ul class="notes">
+        <li>Inspect the unresolved inputs.</li>
+        <li>Repeat the comparison.</li>
+        <li>Record runtime and score together.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Decision condition</h3>
+      <p>Keep the method when corrected inputs preserve the runtime reduction without lowering the score.</p>
+    </div>
+  </div>
+      </div>
+      <footer class="bbar"><span class="pageno">3 / 3</span></footer>
+    </section>
+
+  </main>
+  <div id="scripts" aria-hidden="false">
+    <div class="script-block" data-page="1">
+      <div class="script-text"><p>Welcome. This review covers the current evaluation result and the remaining verification.</p></div>
+    </div>
+    <div class="script-block" data-page="2">
+      <div class="script-text"><p>The measured runtime fell while the score stayed nearly unchanged. Three input cases still need verification before the decision is closed.</p></div>
+    </div>
+    <div class="script-block" data-page="3">
+      <div class="script-text"><p>The next run checks the unresolved inputs first, then repeats the same comparison and records runtime and score together.</p></div>
+    </div>
+  </div>
+  <script>
+  (() => {
+    function place() {
+      const pages = document.querySelectorAll("main.pages section.page");
+      document.querySelectorAll("#scripts .script-block").forEach(block => {
+        const page = pages[Number(block.dataset.page) - 1];
+        if (!page) return;
+        const rect = page.getBoundingClientRect();
+        const scale = rect.width / page.offsetWidth;
+        block.style.top = window.scrollY + rect.bottom + 10 * scale + "px";
+        block.style.left = window.scrollX + rect.left + "px";
+        block.style.width = page.offsetWidth + "px";
+        block.style.transform = `scale(${scale})`;
+        block.style.transformOrigin = "top left";
+      });
+    }
+
+    let lastSignature = "";
+    setInterval(() => {
+      const firstPage = document.querySelector("main.pages section.page");
+      if (!firstPage) return;
+      const rect = firstPage.getBoundingClientRect();
+      const signature = Math.round(window.scrollY + rect.bottom) + ":" + Math.round(rect.width);
+      if (signature !== lastSignature) {
+        lastSignature = signature;
+        place();
+      }
+    }, 700);
+
+    place();
+    window.addEventListener("resize", place);
+    setTimeout(place, 300);
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Evaluation Review</title>
+<body data-author="Systems Research Group" data-meta="Internal evaluation|13 August 2026">
+<section data-title="Executive Summary">
+  <p class="lead">The current evaluation supports keeping the existing method while the remaining input cases are verified.</p>
+  <div class="metrics">
+    <div class="metric"><strong>18.4%</strong><span>runtime reduction</span></div>
+    <div class="metric"><strong>0.7%</strong><span>score change</span></div>
+    <div class="metric"><strong>3</strong><span>unverified cases</span></div>
+  </div>
+  <div class="callout">The measured bottleneck is input validation, not model capacity.</div>
+  <h3>Recommended decision</h3>
+  <p>Keep the current model. Verify unresolved inputs before the next evaluation.</p>
+  <p class="note">All values on this page come from the current evaluation set.</p>
+</section>
+
+<section data-title="Measured Results">
+  <p class="lead">The comparison separates runtime, score, and validation state so one improvement does not conceal a regression elsewhere.</p>
+  <table>
+    <thead>
+      <tr><th>Measure</th><th>Baseline</th><th>Current</th><th>Change</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Runtime</td><td>42.9 min</td><td>35.0 min</td><td class="pos">-18.4%</td></tr>
+      <tr><td>Score</td><td>0.812</td><td>0.818</td><td class="pos">+0.7%</td></tr>
+      <tr><td>Verified cases</td><td>21 / 24</td><td>21 / 24</td><td>unchanged</td></tr>
+    </tbody>
+  </table>
+  <h3>Interpretation</h3>
+  <p>The runtime improvement is visible without a measured score loss. The three unverified cases prevent a broader conclusion.</p>
+</section>
+
+<section data-title="Next Evaluation">
+  <p class="lead">The next run verifies unresolved inputs before the method changes.</p>
+  <div class="two">
+    <div>
+      <h3>Run now</h3>
+      <ul class="notes">
+        <li>Inspect the three unresolved inputs.</li>
+        <li>Repeat the comparison on corrected data.</li>
+        <li>Record runtime and score together.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Decision condition</h3>
+      <p>Keep the method when the corrected cases preserve the runtime reduction without lowering the score.</p>
+    </div>
+  </div>
+</section>
+</body>

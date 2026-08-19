@@ -1,0 +1,19 @@
+artifacts:
+  slides:
+    label: Slides
+    layout: slides
+    main: slides.html
+    template: neutral-slides
+    content: content.html
+watch:
+- '*.html'
+- '*.css'
+- '*.js'
+- '*.svg'
+- '*.png'
+- '*.jpg'
+- '*.jpeg'
+- '*.gif'
+- '*.webp'
+ignore: []
+port: 8766

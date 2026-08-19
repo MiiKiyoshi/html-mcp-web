@@ -1,0 +1,239 @@
+"""MCP tools for reviewing project HTML artifacts."""
+
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Annotated, Any, Literal
+from urllib.parse import urlencode
+
+from .mcp_contract import (
+    agent_artifact,
+    agent_artifact_summary,
+    agent_comment,
+    agent_comment_summary,
+    is_after,
+    is_unanswered,
+)
+
+
+try:
+    from mcp.server.fastmcp import FastMCP, Image
+    from pydantic import BaseModel, ConfigDict, Field
+
+    from .mcp_client import ProjectBinding, ProjectSetupError
+
+    HAS_MCP = True
+except ImportError:
+    HAS_MCP = False
+
+
+if HAS_MCP:
+    class Reply(BaseModel):
+        """A message written for one thread. Pairing the two in the schema is what keeps
+        one message from being posted to several threads."""
+
+        model_config = ConfigDict(extra="forbid")
+
+        comment_id: Annotated[str, Field(min_length=1)]
+        message: Annotated[str, Field(min_length=1)]
+
+
+def _check_dependencies() -> None:
+    if HAS_MCP:
+        return
+    print("html-mcp requires the mcp and httpx packages. Install html-mcp-web[mcp].", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def create_server(binding: "ProjectBinding") -> "FastMCP":
+    _check_dependencies()
+    mcp = FastMCP(
+        "html-mcp-web",
+        instructions=(
+            "Call inspect() first. Read only the artifact, comments, and pages needed, and reuse results while revision is "
+            "unchanged. New comments are found with list_comments(unanswered=True) or since=<the largest last_human_at "
+            "already handled>, not by reading the whole open list again. Completion requires checked_revision == revision and no layout errors, which inspect(artifact) "
+            "reports. Fit is settled by numbers: inspect(artifact) says pass or fail, and measure_space(target=<block ref>) "
+            "gives line_count, last_line_right_space, and a table's min_no_wrap_width, which are the pixels to trim or add. "
+            "render_page carries what numbers do not (figure placement, a crop, colour); it runs once per page when that "
+            "changes and once before hand-off, not after each edit. Resolve only alongside the edit the comment asked for; a comment answered "
+            "with words alone stays open for its owner to close. A resolve message is unnecessary when replies or "
+            "edited_files already record the outcome. A tab is an artifact entry in the config file. edit_file is the "
+            "source; for a templated artifact main_file is build output and is not edited. The content format and "
+            "component vocabulary are documented once in templates/README.md beside the package (a skin's own README "
+            "covers only what that skin changes); read it before content is written."
+        ),
+    )
+
+    @mcp.tool()
+    async def inspect(
+        artifact: str | None = None,
+    ) -> dict[str, Any]:
+        """Discover compact project state, or inspect one artifact without comment threads."""
+        try:
+            client = binding.connect()
+        except ProjectSetupError as error:
+            return binding.setup_error_state(error)
+        if client is None:
+            return binding.setup_state()
+        state = await client.request_json("GET", "/state")
+        artifacts = state["artifacts"]
+        if artifact is not None and artifact not in artifacts:
+            raise RuntimeError(f"unknown artifact: {artifact}; available artifacts: {', '.join(artifacts)}")
+        project_dir = Path(state["project_dir"])
+        result = (
+            {artifact: agent_artifact(artifact, artifacts[artifact], project_dir)}
+            if artifact is not None
+            else {artifact_id: agent_artifact_summary(artifact_id, value) for artifact_id, value in artifacts.items()}
+        )
+        return {
+            "config_path": state["config_path"],
+            "project_dir": state["project_dir"],
+            "review_url": f"http://127.0.0.1:{state['port']}",
+            "artifacts": result,
+        }
+
+    @mcp.tool()
+    async def list_comments(
+        artifact: str,
+        status: Literal["open", "resolved", "dismissed", "all"] = "open",
+        unanswered: Annotated[bool, Field(description="Only comments whose latest thread entry is the human's: not yet answered, or written to again after the agent's reply.")] = False,
+        since: Annotated[str | None, Field(description="ISO 8601 time; only comments whose latest human entry is after it. Pass the largest last_human_at seen so far.")] = None,
+    ) -> dict[str, Any]:
+        """List compact comment requests without anchors or thread history."""
+        client = binding.require_client()
+        query = "" if status == "all" else f"?status={status}"
+        payload = await client.request_json("GET", f"/artifacts/{artifact}/comments{query}")
+        comments = payload["comments"]
+        if unanswered:
+            comments = [comment for comment in comments if is_unanswered(comment)]
+        if since is not None:
+            cutoff = datetime.fromisoformat(since)
+            if cutoff.tzinfo is None:
+                cutoff = cutoff.replace(tzinfo=timezone.utc)
+            comments = [comment for comment in comments if is_after(comment, cutoff)]
+        return {
+            "artifact": artifact,
+            "comments": [agent_comment_summary(comment) for comment in comments],
+        }
+
+    @mcp.tool()
+    async def read_comments(artifact: str, comment_ids: list[str]) -> dict[str, Any]:
+        """Read full anchors and threads for explicitly selected comment IDs."""
+        if not comment_ids:
+            raise ValueError("comment_ids must not be empty")
+        if len(set(comment_ids)) != len(comment_ids):
+            raise ValueError("comment_ids must be unique")
+        client = binding.require_client()
+        comments = []
+        for comment_id in comment_ids:
+            comment = await client.request_json("GET", f"/artifacts/{artifact}/comments/{comment_id}")
+            comments.append(agent_comment(comment))
+        return {"artifact": artifact, "comments": comments}
+
+    @mcp.tool()
+    async def reply_comments(
+        artifact: str,
+        replies: Annotated[list[Reply], Field(min_length=1, description="One entry per thread: the comment and the message written for it.")],
+        edited_files: Annotated[list[str] | None, Field(description="Project-relative paths edited for these comments; recorded on each thread entry so the reader sees what changed.")] = None,
+    ) -> dict[str, Any]:
+        """Reply to comments without changing their status. Each reply carries its own message for its own thread."""
+        ids = [reply.comment_id for reply in replies]
+        if len(set(ids)) != len(ids):
+            raise ValueError("each comment appears at most once in replies")
+        client = binding.require_client()
+        updated: list[dict[str, Any]] = []
+        for reply in replies:
+            result = await client.request_json("POST", f"/artifacts/{artifact}/comments/update", {
+                "comment_ids": [reply.comment_id],
+                "message": reply.message,
+                **({"edited_files": edited_files} if edited_files is not None else {}),
+            })
+            updated.extend(result["updated"])
+        return {"updated": updated}
+
+    @mcp.tool()
+    async def set_comment_status(
+        artifact: str,
+        comment_ids: list[str],
+        status: Literal["open", "resolved", "dismissed"],
+        message: str = "",
+        edited_files: Annotated[list[str] | None, Field(description="Project-relative paths edited for these comments; recorded on the thread entry so the reader sees what changed.")] = None,
+    ) -> dict[str, Any]:
+        """Change status after verification; omit message when replies or edited_files already record the outcome. A message posts to every id, so batch with one only when it fits each thread. Resolve alongside the edit the comment asked for; a comment answered with words alone stays open for its owner to close."""
+        if not comment_ids:
+            raise ValueError("comment_ids must not be empty")
+        client = binding.require_client()
+        return await client.request_json("POST", f"/artifacts/{artifact}/comments/update", {
+            "comment_ids": comment_ids,
+            "status": status,
+            "message": message,
+            **({"edited_files": edited_files} if edited_files is not None else {}),
+        })
+
+    @mcp.tool()
+    async def render_page(
+        artifact: str,
+        page: Annotated[int, Field(ge=1)],
+        dpi: Annotated[int, Field(ge=36, le=300, description="Render resolution; 96 reads text, 150 or more shows fine detail at a higher token cost.")] = 96,
+        grayscale: Annotated[bool, Field(description="Grayscale is smaller and enough for layout; set false when colour itself is being checked.")] = True,
+    ) -> "Image":
+        """Render one page of a named artifact as a PNG for visual inspection."""
+        client = binding.require_client()
+        params = f"?page={page}&dpi={dpi}&gray={'1' if grayscale else '0'}"
+        data = await client.get_bytes(
+            f"/artifacts/{artifact}/render/page{params}",
+            timeout=120.0,
+        )
+        return Image(data=data, format="png")
+
+    @mcp.tool()
+    async def export_pptx(
+        artifact: str,
+        out: Annotated[str | None, Field(description="Project-relative path of the pptx to write; default export/<artifact>.pptx.")] = None,
+    ) -> dict[str, Any]:
+        """Write the slides artifact as an editable pptx: text blocks become text boxes, tables become tables, images stay images, KaTeX and SVG become 3x screenshots. The skin's pptx block in skin.json chooses the template, layout, and font."""
+        client = binding.require_client()
+        return await client.request_json(
+            "POST", f"/artifacts/{artifact}/export/pptx", {"out": out} if out is not None else {}, timeout=300.0)
+
+    @mcp.tool()
+    async def measure_space(
+        artifact: str,
+        page: Annotated[int, Field(ge=1)],
+        revision: Annotated[int, Field(ge=1, description="Current revision from inspect(); space is ready when space_revision equals it.")],
+        clearance: Annotated[float, Field(ge=0, description="Page pixels kept clear around existing content when free regions are computed; 0 to measure exactly.")],
+        target: Annotated[str | None, Field(description="A block ref from a previous result's children (e.g. p1:0.2), including a table cell ref, to measure inside that block instead of the page.")] = None,
+        min_width: Annotated[float | None, Field(ge=0, description="Keep only free regions at least this wide, in page pixels.")] = None,
+        min_height: Annotated[float | None, Field(ge=0, description="Keep only free regions at least this tall, in page pixels.")] = None,
+    ) -> dict[str, Any]:
+        """Measure where the space is, in page pixels. Without target: page bounds, top-level block refs, and the largest free rectangles. With target: that block's content bounds, how far its content sits from each edge, its children, and its text lines; a table adds no-wrap width constraints, an SVG reports the area its shapes cover. Drill down by passing a child's ref as the next target."""
+        client = binding.require_client()
+        query: dict[str, Any] = {
+            "page": page,
+            "revision": revision,
+            "clearance": clearance,
+        }
+        if target is not None:
+            query["target"] = target
+        if min_width is not None:
+            query["min_width"] = min_width
+        if min_height is not None:
+            query["min_height"] = min_height
+        return await client.request_json("GET", f"/artifacts/{artifact}/space?{urlencode(query)}")
+
+    return mcp
+
+
+def main(start_dir: Path) -> None:
+    _check_dependencies()
+    binding = ProjectBinding(start_dir)
+    try:
+        binding.connect()
+    except ProjectSetupError as error:
+        print(f"html-mcp project is not ready: {error}", file=sys.stderr)
+    server = create_server(binding)
+    try:
+        server.run(transport="stdio")
+    finally:
+        binding.stop()

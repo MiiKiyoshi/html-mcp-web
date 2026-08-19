@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "html-mcp-web"
+version = "0.1.0"
+description = "Review agent-generated paged HTML artifacts with anchored comments over MCP"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+keywords = ["html", "review", "annotation", "agent", "mcp"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "aiohttp>=3.9.0",
+    "pyyaml>=6.0",
+    "watchdog>=3.0.0",
+]
+
+[project.optional-dependencies]
+mcp = [
+    "httpx>=0.27",
+    "mcp>=1.0",
+    "pydantic>=2.0",
+    "marionette_driver>=3.0",
+    "PyMuPDF>=1.24",
+    "Pillow>=10.0",
+    "python-pptx>=1.0",
+    "fonttools>=4.40",
+    "lxml>=4.9",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "marionette_driver>=3.0",
+    "python-pptx>=1.0",
+    "fonttools>=4.40",
+    "lxml>=4.9",
+]
+
+[project.scripts]
+html-mcp-web = "html_mcp_web.cli:main"
+html-mcp = "html_mcp_web.cli:main_mcp"
+
+[tool.hatch.build.targets.wheel]
+packages = ["html_mcp_web"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

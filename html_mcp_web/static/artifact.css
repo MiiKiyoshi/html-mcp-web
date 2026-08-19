@@ -1,0 +1,158 @@
+html[data-html-mcp-layout="slides"] {
+  --html-mcp-page-width: 1280px;
+  --html-mcp-page-height: 720px;
+  --html-mcp-print-width: 13.333in;
+  --html-mcp-print-height: 7.5in;
+}
+
+html[data-html-mcp-layout="report"] {
+  --html-mcp-page-width: 210mm;
+  --html-mcp-page-height: 297mm;
+  --html-mcp-print-width: 210mm;
+  --html-mcp-print-height: 297mm;
+}
+
+html[data-html-mcp-layout] { background: #faf8f2 !important; }
+
+html[data-html-mcp-layout] body {
+  min-width: 0 !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 24px !important;
+  background: #faf8f2 !important;
+}
+
+html[data-html-mcp-layout] body > main.pages {
+  display: flex !important;
+  width: 100% !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 24px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+html[data-html-mcp-layout] body > main.pages > section.page {
+  position: relative !important;
+  flex: none !important;
+  box-sizing: border-box !important;
+  width: var(--html-mcp-page-width) !important;
+  min-width: var(--html-mcp-page-width) !important;
+  max-width: var(--html-mcp-page-width) !important;
+  height: var(--html-mcp-page-height) !important;
+  min-height: var(--html-mcp-page-height) !important;
+  max-height: var(--html-mcp-page-height) !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  background-color: white;
+  zoom: var(--html-mcp-page-scale, 1);
+}
+
+html[data-html-mcp-presentation="slides"],
+html[data-html-mcp-presentation="slides"] body {
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  background: #111 !important;
+}
+
+html[data-html-mcp-presentation="slides"] body > main.pages {
+  display: grid !important;
+  place-items: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  gap: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+}
+
+html[data-html-mcp-presentation="slides"] body > main.pages > section.page {
+  grid-area: 1 / 1 !important;
+  display: block !important;
+  margin: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+html[data-html-mcp-presentation="slides"] body > main.pages > section.page.html-mcp-current-page {
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+html[data-html-mcp-layout][data-html-mcp-layout][data-html-mcp-presentation="slides"] body > main.pages > section.page.has-script {
+  margin: 0 !important;
+}
+
+/* A speaker-script block a template places after its page shares the page's zoom, so the
+   normal flow keeps it under that page at every window size. Deriving its position from
+   measured rectangles instead put it elsewhere on engines that keep zoom out of them. */
+html[data-html-mcp-layout] body > main.pages > .script-block {
+  zoom: var(--html-mcp-page-scale, 1);
+  /* The gap between pages is fixed while a zoomed element's own margin shrinks with it,
+     so dividing by the scale first leaves the same pull-up at every window size: the
+     script stays nearer its own page than the next one. */
+  margin-top: calc(-14px / var(--html-mcp-page-scale, 1)) !important;
+}
+
+html[data-html-mcp-presentation="slides"] body > main.pages > .script-block,
+html[data-html-mcp-scripts-hidden] body > main.pages > .script-block {
+  display: none !important;
+}
+
+html[data-html-mcp-presentation="slides"] body > *:not(main.pages) {
+  display: none !important;
+}
+
+html[data-html-mcp-fullscreen] .html-mcp-highlight-layer {
+  display: none !important;
+}
+
+@media print {
+  html[data-html-mcp-layout],
+  html[data-html-mcp-layout] body {
+    width: auto !important;
+    height: auto !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  html[data-html-mcp-layout] body > main.pages {
+    display: block !important;
+  }
+
+  /* Scripts are for the presenter's screen, not the printed deck. */
+  html[data-html-mcp-layout] body > main.pages > .script-block {
+    display: none !important;
+  }
+
+  /* Drop elements browser extensions inject into body, so they cannot push the page flow when printing */
+  html[data-html-mcp-layout] body > *:not(main.pages) {
+    display: none !important;
+  }
+
+  html[data-html-mcp-layout] body > main.pages > section.page {
+    width: var(--html-mcp-print-width) !important;
+    min-width: var(--html-mcp-print-width) !important;
+    max-width: var(--html-mcp-print-width) !important;
+    height: var(--html-mcp-print-height) !important;
+    min-height: var(--html-mcp-print-height) !important;
+    max-height: var(--html-mcp-print-height) !important;
+    box-shadow: none !important;
+    break-after: page;
+    print-color-adjust: exact;
+    zoom: 1 !important;
+  }
+
+  /* Backgrounds inside a page print too: print-color-adjust does not inherit, and a
+     template's own colour layers, bars, and cards would otherwise come out white. */
+  html[data-html-mcp-layout] body > main.pages > section.page * {
+    print-color-adjust: exact;
+  }
+
+  html[data-html-mcp-layout] body > main.pages > section.page:last-child {
+    break-after: auto;
+  }
+
+  .html-mcp-highlight-layer { display: none !important; }
+}
