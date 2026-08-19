@@ -57,6 +57,13 @@ JS_READY = ("return document.readyState === 'complete' && "
 
 JS_PAGES = "return document.querySelectorAll('section.page').length;"
 
+# Hide the marked elements on one page so the background screenshot leaves their place empty
+# for an editable text box; a ::before decoration on the element would go with it, so only
+# plain text (no pseudo-content) is hidden.
+JS_HIDE = ("const page = document.querySelectorAll('section.page')[arguments[0]];"
+           "for (const i of arguments[1]) { const el = page.querySelector('[data-pptx-index=\"' + i + '\"]');"
+           "if (el) el.style.visibility = 'hidden'; }")
+
 # Walk a page's DOM into a flat list of shapes. Containers descend; a container that
 # paints something becomes a panel first so its content sits on it.
 JS_EXTRACT = r"""
@@ -132,6 +139,12 @@ const listParas = (list, level, out) => {
 const hasBlockChild = (el) => Array.from(el.children).some((ch) => {
   const c = cs(ch); return BLOCKISH.test(c.display) || c.position === 'absolute' || c.position === 'fixed';
 });
+// A ::before/::after that draws something (a contents ring number). Text carrying such a
+// decoration cannot be hidden for the background pass without losing it, so it stays baked.
+const pseudoContent = (n) => ['::before', '::after'].some((p) => {
+  const c = cs(n, p).content; return c && c !== 'none' && c !== 'normal' && c !== '""' && c !== "''";
+});
+const hasPseudo = (el) => pseudoContent(el) || Array.from(el.querySelectorAll('*')).some(pseudoContent);
 
 const emit = (el) => {
   const tag = el.tagName.toLowerCase();
@@ -174,7 +187,7 @@ const emit = (el) => {
   if (tag === 'ul' || tag === 'ol') {
     const paras = [];
     listParas(el, 0, paras);
-    items.push({kind: 'text', rect, paras, list: tag, padLeft: parseFloat(s.paddingLeft) || 0, i: mark(el)});
+    items.push({kind: 'text', rect, paras, list: tag, padLeft: parseFloat(s.paddingLeft) || 0, pseudo: hasPseudo(el), i: mark(el)});
     return;
   }
   if (painted(s)) {
@@ -185,13 +198,13 @@ const emit = (el) => {
       const para = paraOf(el, 0, 0);
       if (para.runs.length) items.push({kind: 'text', rect: [rect[0] + (parseFloat(s.paddingLeft) || 0), rect[1] + (parseFloat(s.paddingTop) || 0),
         rect[2] - (parseFloat(s.paddingLeft) || 0) - (parseFloat(s.paddingRight) || 0), rect[3] - (parseFloat(s.paddingTop) || 0) - (parseFloat(s.paddingBottom) || 0)],
-        paras: [para], list: null, i: mark(el)});
+        paras: [para], list: null, pseudo: hasPseudo(el), i: mark(el)});
       return;
     }
   }
   if (container) { for (const ch of el.children) emit(ch); return; }
   const para = paraOf(el, 0, 0);
-  if (para.runs.length) items.push({kind: 'text', rect, paras: [para], list: null, i: mark(el)});
+  if (para.runs.length) items.push({kind: 'text', rect, paras: [para], list: null, pseudo: hasPseudo(el), i: mark(el)});
 };
 
 const body = page.querySelector('.body');
@@ -754,11 +767,18 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
             info = client.execute_script(JS_EXTRACT, script_args=[index, True])
             if not info["hasBody"]:
                 slide = _blank_slide(prs)
+                # A full-bleed page's plain text becomes editable text boxes; the rest (CSS
+                # decorations, background art, and text carrying a ::before mark) stays in the
+                # picture. Hiding the plain text before the shot keeps it from showing twice.
+                overlaid = [item for item in info["items"] if item["kind"] == "text" and not item.get("pseudo")]
+                client.execute_script(JS_HIDE, script_args=[index, [item["i"] for item in overlaid]])
                 shot = client.screenshot(element=client.execute_script(
                     "const p = document.querySelectorAll('section.page')[arguments[0]]; p.scrollIntoView(); return p;",
                     script_args=[index]), format="base64")
                 _set_slide_background(slide, base64.b64decode(shot))
-                report.append({"page": index + 1, "title": info["title"], "shapes": 0, "screenshot": True})
+                for item in overlaid:
+                    _add_text(slide, item, font)
+                report.append({"page": index + 1, "title": info["title"], "shapes": len(overlaid), "screenshot": True})
                 continue
             slide = _blank_slide(prs)
             for item in info["items"]:

@@ -60,13 +60,16 @@ def test_export_without_template_rebuilds_chrome_and_keeps_text_editable(tmp_pat
     assert result["slides"] == 3
     prs = pptx.Presentation(str(out))
     assert (prs.slide_width, prs.slide_height) == (12192000, 6858000)
-    # Cover and contents have no body box: the screenshot is the slide background (a locked
-    # fill the mouse cannot grab), not a floating picture, so the slide carries no shapes.
+    # A full-bleed page (cover, contents) is a locked background screenshot the mouse cannot
+    # grab, with its words overlaid as editable text boxes so decorations stay in the picture
+    # while the text stays real.
     from pptx.oxml.ns import qn as _qn
     for slide in list(prs.slides)[:2]:
-        assert shapes_by_kind(slide) == {}
         blip = slide._element.find(_qn("p:cSld")).find(_qn("p:bg"))
         assert blip is not None and blip.find(f".//{_qn('a:blip')}") is not None
+        assert list(shapes_by_kind(slide)) == ["TEXT_BOX"]
+    cover_texts = [s.text_frame.text for s in prs.slides[0].shapes]
+    assert "Export Deck" in cover_texts and "Export Author" in cover_texts
     body = prs.slides[2]
     kinds = shapes_by_kind(body)
     texts = [shape.text_frame.text for shape in kinds["TEXT_BOX"]]
