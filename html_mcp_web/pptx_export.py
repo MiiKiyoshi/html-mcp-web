@@ -343,7 +343,10 @@ def _add_text(slide, item: dict[str, Any], font: str) -> None:
     frame = box.text_frame
     frame.word_wrap = True
     frame.margin_left = frame.margin_right = frame.margin_top = frame.margin_bottom = 0
-    frame.vertical_anchor = MSO_ANCHOR.TOP
+    # Centre the text in its box: a multi-line block fills its box so this is a no-op, while
+    # a single line in a line-height-taller box (a bar title) is centred instead of riding
+    # its top with empty space below.
+    frame.vertical_anchor = MSO_ANCHOR.MIDDLE
     bodyPr = frame._txBody.find(qn("a:bodyPr"))
     for element in list(bodyPr):
         if element.tag in (qn("a:spAutoFit"), qn("a:normAutofit")):
