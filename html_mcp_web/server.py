@@ -250,19 +250,6 @@ class HtmlReviewServer:
         return web.Response(text=self._artifact_html(self.runtime(request), for_print), content_type="text/html",
                             charset="utf-8", headers={"Cache-Control": "no-store"})
 
-    async def download_html(self, request: web.Request) -> web.Response:
-        runtime = self.runtime(request)
-        page_size = PRINT_PAGE_SIZES[runtime.config.layout]
-        geometry = (self.static_dir / "artifact.css").read_text(encoding="utf-8")
-        head_content = f"<style>{geometry}</style><style>@page {{ size: {page_size}; margin: 0; }}</style>"
-        source = runtime.main_file.read_text(encoding="utf-8")
-        source = re.sub(r"(<html\b)([^>]*>)", rf'\1 data-html-mcp-layout="{runtime.config.layout}"\2',
-                        source, count=1, flags=re.IGNORECASE)
-        source = (re.sub(r"(<head\b[^>]*>)", rf"\1{head_content}", source, count=1, flags=re.IGNORECASE)
-                  if re.search(r"<head\b", source, flags=re.IGNORECASE) else f"{head_content}{source}")
-        return web.Response(text=source, content_type="text/html", charset="utf-8",
-                            headers={"Content-Disposition": f'attachment; filename="{runtime.main_file.name}"'})
-
     async def _pdf(self, runtime: ArtifactRuntime) -> bytes:
         url = f"http://127.0.0.1:{self.config.port}/artifacts/{runtime.artifact_id}/artifact?print=1"
         async with self.pdf_lock:
@@ -663,7 +650,6 @@ class HtmlReviewServer:
         app.router.add_get("/state", self.get_state)
         base = "/artifacts/{artifact_id}"
         app.router.add_get(f"{base}/artifact", self.artifact)
-        app.router.add_get(f"{base}/download/html", self.download_html)
         app.router.add_get(f"{base}/download/pdf", self.download_pdf)
         app.router.add_post(f"{base}/export/pptx", self.export_pptx)
         app.router.add_get(f"{base}/download/pptx", self.download_pptx)

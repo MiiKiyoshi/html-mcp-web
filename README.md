@@ -2,6 +2,8 @@
 
 Review an AI agent's HTML slides or report in your browser, point at the exact passage you mean, and let the agent read your comment and fix it over MCP.
 
+![The review page: a slide on the left with a highlighted sentence, and the comment thread on the right where a reviewer's question is answered by the agent. The topbar shows the layout check flagging problems it can fix, and PDF and PPTX export.](docs/hero.png)
+
 The agent writes a self-contained HTML artifact. You open it in a local review page, select rendered text, and attach a comment. The agent reads the anchored quote and its surrounding context through MCP, edits the artifact, and replies in the same thread. Saving a file refreshes only the artifact frame, so your scroll position, draft comment, and sidebar stay put.
 
 This follows the [HTML-artifact workflow described by Thariq Shihipar](https://claude.com/blog/using-claude-code-the-unreasonable-effectiveness-of-html) and adds a persistent pointing channel: highlights and comment threads go straight to the agent instead of being copied back into a prompt.
@@ -11,7 +13,7 @@ This follows the [HTML-artifact workflow described by Thariq Shihipar](https://c
 - A browser review page for paged HTML: 16:9 **slides** or A4 **report**, one `section.page` per printed page.
 - **Anchored comments** that survive edits by reattaching to the quote and its context.
 - A **layout check** that flags content spilling off a page, clipped SVG drawings, and overlapping labels, all at the artifact's own scale.
-- Export to **HTML**, **PDF** (headless Firefox), and an **editable PPTX** for slides.
+- Export to **PDF** (headless Firefox) and an **editable PPTX** for slides.
 - **Templates**: write a small content file and let a template supply the cover, bars, and page numbers.
 
 ## Requirements
@@ -115,7 +117,7 @@ html-mcp rebuilds on every content save; build failures show up as `build_error`
 
 ## Export
 
-The review page's topbar offers each artifact as a file. **HTML** serves the main file as-is. **PDF** prints every page at the layout's fixed size through headless Firefox. **PPTX** (slides only) builds an editable deck and downloads it, also leaving a copy at `export/<artifact>.pptx`.
+The review page's topbar exports each artifact as a file. **PDF** prints every page at the layout's fixed size through headless Firefox. **PPTX** (slides only) builds an editable deck and downloads it, also leaving a copy at `export/<artifact>.pptx`.
 
 The pptx keeps each block where the html placed it: text becomes text boxes (with weight, colour, size, links, sub/superscripts, and `<code>` chips), `ul`/`ol` become bulleted and numbered lists, tables become pptx tables, images stay images, and a self-contained inline `<svg>` is embedded as real vector (crisp in PowerPoint 2016+ and Mac 2019+) with a screenshot fallback; KaTeX math stays a screenshot. A skin can name TrueType files to embed the deck font, and its `skin.json` `pptx` block can supply a template whose layouts carry the chrome; see [`templates/README.md`](templates/README.md#writing-a-skin).
 

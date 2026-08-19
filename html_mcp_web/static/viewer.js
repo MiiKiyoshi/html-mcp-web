@@ -73,7 +73,6 @@ function updateArtifactLinks() {
   // The tab carries the file being reviewed, so several projects open at once stay
   // apart in the browser's tab strip.
   document.title = state.artifact.main_file.split("/").pop();
-  $("#download-html-btn").href = `${artifactBase()}/download/html`;
   $("#download-pdf-btn").href = `${artifactBase()}/download/pdf`;
   $("#download-pptx-btn").hidden = state.artifact.layout !== "slides";
 }
