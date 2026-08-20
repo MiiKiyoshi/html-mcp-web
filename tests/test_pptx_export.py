@@ -272,3 +272,31 @@ def test_inline_svg_is_embedded_as_vector_math_stays_raster(tmp_path: Path) -> N
         # both slides still carry a raster fallback picture
         assert "<p:pic>" in diagram_xml and "<p:pic>" in formula_xml
     pptx.Presentation(str(out))  # the package still opens
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_inline_flow_images_each_become_a_picture(tmp_path: Path) -> None:
+    """A row of <img> in inline flow (no block wrapper) reads as a text-only leaf; each image
+    must still export as its own picture instead of being dropped with the empty text."""
+    from html_mcp_web.slides import build
+    from PIL import Image
+
+    (tmp_path / "fig").mkdir()
+    for name in ("a", "b", "c", "d"):
+        Image.new("RGB", (80, 80), "#3366aa").save(tmp_path / "fig" / f"{name}.png")
+    content = tmp_path / "content.html"
+    content.write_text('''<!doctype html>
+<meta charset="utf-8">
+<title>Inline Images</title>
+<body data-author="A" data-meta="B">
+<section data-title="Row">
+  <div><img src="fig/a.png" style="width:20%"><img src="fig/b.png" style="width:20%"><img src="fig/c.png" style="width:20%"><img src="fig/d.png" style="width:20%"></div>
+</section>
+</body>
+''', encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, NEUTRAL)
+    out = tmp_path / "deck.pptx"
+    export_pptx(html.as_uri(), out, tmp_path, None)
+    prs = pptx.Presentation(str(out))
+    assert len(shapes_by_kind(prs.slides[1]).get("PICTURE", [])) == 4
