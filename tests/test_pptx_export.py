@@ -52,7 +52,7 @@ def shapes_by_kind(slide) -> dict[str, list]:
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
-def test_export_without_template_rebuilds_chrome_and_keeps_text_editable(tmp_path: Path) -> None:
+def test_export_bakes_chrome_into_background_and_keeps_body_editable(tmp_path: Path) -> None:
     html = deck(tmp_path)
     out = tmp_path / "out" / "deck.pptx"
     result = export_pptx(html.as_uri(), out, tmp_path, None)
@@ -71,10 +71,14 @@ def test_export_without_template_rebuilds_chrome_and_keeps_text_editable(tmp_pat
     cover_texts = [s.text_frame.text for s in prs.slides[0].shapes]
     assert "Export Deck" in cover_texts and "Export Author" in cover_texts
     body = prs.slides[2]
+    # The chrome (title bar, footer, page number, corner logos) bakes into a locked
+    # background the mouse cannot grab; only the body's own blocks stay editable over it.
+    body_bg = body._element.find(_qn("p:cSld")).find(_qn("p:bg"))
+    assert body_bg is not None and body_bg.find(f".//{_qn('a:blip')}") is not None
     kinds = shapes_by_kind(body)
     texts = [shape.text_frame.text for shape in kinds["TEXT_BOX"]]
-    assert "Numbers" in texts  # title bar text rebuilt from the DOM
-    assert "3 / 3" in texts
+    assert "Numbers" not in texts  # the title bar baked into the background, not a text box
+    assert "3 / 3" not in texts    # the footer page number baked in too
     lead = next(shape for shape in kinds["TEXT_BOX"] if shape.text_frame.text.startswith("Lead sentence"))
     runs = lead.text_frame.paragraphs[0].runs
     assert [run.text for run in runs] == ["Lead sentence with ", "bold", " and ", "code", "."]
@@ -107,7 +111,7 @@ def test_export_without_template_rebuilds_chrome_and_keeps_text_editable(tmp_pat
     # The card is a panel (its accent rule) followed by its own text; math and the image are pictures.
     assert "Card title" in texts and "Card body text." in texts
     assert len(kinds["PICTURE"]) == 2
-    assert kinds["AUTO_SHAPE"]  # title bar, footer, card rule
+    assert kinds["AUTO_SHAPE"]  # the card's accent rule; the chrome bars are baked, not shapes
 
 
 DEJAVU = Path("/usr/share/fonts/truetype/dejavu")
@@ -180,7 +184,7 @@ def test_export_route_writes_inside_the_project(tmp_path: Path) -> None:
         result = post({"out": "export/deck.pptx"})
         assert result["path"] == str(tmp_path / "export" / "deck.pptx")
         assert (tmp_path / "export" / "deck.pptx").is_file()
-        assert [page["screenshot"] for page in result["pages"]] == [True, True, False]
+        assert [page["screenshot"] for page in result["pages"]] == [True, True, True]
         with pytest.raises(urllib.error.HTTPError) as error:
             post({"out": "../outside.pptx"})
         assert error.value.code == 400

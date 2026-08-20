@@ -1,7 +1,7 @@
 """Turn a built slide deck into an editable pptx with firefox marionette and python-pptx.
 
-Every block of a body page becomes its own shape at the position it has in the html
-(a 1280x720 px page is 12192000x6858000 EMU, 9525 EMU per px):
+Each block inside a body page's content becomes its own shape at the position it has in
+the html (a 1280x720 px page is 12192000x6858000 EMU, 9525 EMU per px):
   - text blocks without KaTeX (p, headings, li, table-free inline text) -> text boxes
   - ul / ol                                                             -> bulleted / numbered text boxes
   - <img>                                                               -> the image file
@@ -9,9 +9,11 @@ Every block of a body page becomes its own shape at the position it has in the h
   - a div that paints a background or border                            -> a rounded panel, then its content
   - inline <svg> (self-contained)                                       -> real vector, with a screenshot fallback
   - KaTeX, canvas, anything else                                        -> a 3x screenshot of that element
-The title bar, footer, and page numbers are rebuilt from each page's own DOM, and a page
-without a body box (cover, contents, divider) is a full-page screenshot. Every skin is
-handled the same way; its look comes through the HTML it styles, so no skin carries a pptx.
+The title bar, footer, corner logos, and page number bake into the slide background so
+they cannot be grabbed; only the content stays editable over them. A page without a body
+box (cover, contents, divider) bakes the whole page and overlays only its plain text.
+Every skin is handled the same way; its look comes through the HTML it styles, so no skin
+carries a pptx.
 
 Skin configuration lives in skin.json under "pptx":
   fonts        the deck face, embedded so the pptx renders the same on a machine that
@@ -58,8 +60,8 @@ JS_READY = ("return document.readyState === 'complete' && "
 JS_PAGES = "return document.querySelectorAll('section.page').length;"
 
 # Hide the marked elements on one page so the background screenshot leaves their place empty
-# for an editable text box; a ::before decoration on the element would go with it, so only
-# plain text (no pseudo-content) is hidden.
+# for the editable shapes laid over it. A ::before decoration would go with the element, so
+# the full-bleed pass hides only plain text; a body page hides its own content blocks.
 JS_HIDE = ("const page = document.querySelectorAll('section.page')[arguments[0]];"
            "for (const i of arguments[1]) { const el = page.querySelector('[data-pptx-index=\"' + i + '\"]');"
            "if (el) el.style.visibility = 'hidden'; }")
@@ -68,7 +70,6 @@ JS_HIDE = ("const page = document.querySelectorAll('section.page')[arguments[0]]
 # paints something becomes a panel first so its content sits on it.
 JS_EXTRACT = r"""
 const idx = arguments[0];
-const withChrome = arguments[1];
 const page = document.querySelectorAll('section.page')[idx];
 const pr = page.getBoundingClientRect();
 const cs = (el) => getComputedStyle(el);
@@ -212,13 +213,16 @@ const emit = (el) => {
 
 const body = page.querySelector('.body');
 const title = (page.querySelector('.tbar h2') || {}).textContent || '';
-if (withChrome) {
-  for (const ch of page.children) {
-    if (ch === body || ch.classList.contains('script-block')) continue;
-    emit(ch);
-  }
+// The chrome (title bar, footer, corner logos, page number) bakes into the slide
+// background so it cannot be grabbed; only the body's own blocks, tagged here, stay
+// as editable shapes laid over it.
+for (const ch of page.children) {
+  if (ch === body || ch.classList.contains('script-block')) continue;
+  emit(ch);
 }
+const chromeCount = items.length;
 if (body) for (const ch of body.children) emit(ch);
+for (let k = chromeCount; k < items.length; k++) items[k].body = true;
 return {title: title.trim(), hasBody: !!body, items};
 """
 
@@ -767,7 +771,7 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
         prs.slide_height = _px(PAGE_HEIGHT_PX)
         report = []
         for index in range(page_count):
-            info = client.execute_script(JS_EXTRACT, script_args=[index, True])
+            info = client.execute_script(JS_EXTRACT, script_args=[index])
             if not info["hasBody"]:
                 slide = _blank_slide(prs)
                 # A full-bleed page's plain text becomes editable text boxes; the rest (CSS
@@ -785,7 +789,20 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
                 report.append({"page": index + 1, "title": info["title"], "shapes": len(overlaid), "screenshot": True})
                 continue
             slide = _blank_slide(prs)
-            for item in info["items"]:
+            overlay = [item for item in info["items"] if item.get("body")]
+            # An element screenshot (an svg, a KaTeX block) is taken while the element is
+            # still visible; the body is then hidden so the chrome-only background does not
+            # carry a second copy of what is about to become an editable shape over it.
+            for item in overlay:
+                if item["kind"] == "shot":
+                    element = client.execute_script(JS_ELEMENT, script_args=[index, item["i"]])
+                    item["_shot"] = client.screenshot(element=element, format="base64")
+            client.execute_script(JS_HIDE, script_args=[index, [item["i"] for item in overlay]])
+            shot = client.screenshot(element=client.execute_script(
+                "const p = document.querySelectorAll('section.page')[arguments[0]]; p.scrollIntoView(); return p;",
+                script_args=[index]), format="base64")
+            _set_slide_background(slide, base64.b64decode(shot))
+            for item in overlay:
                 if item["kind"] == "text":
                     _add_text(slide, item, font)
                 elif item["kind"] == "table":
@@ -803,15 +820,14 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
                         data = source.read_bytes()
                     _add_picture(slide, data, item["rect"])
                 else:
-                    element = client.execute_script(JS_ELEMENT, script_args=[index, item["i"]])
-                    shot = base64.b64decode(client.screenshot(element=element, format="base64"))
+                    shot_bytes = base64.b64decode(item["_shot"])
                     if "svg" in item:
                         svg = _normalize_svg(item["svg"].encode("utf-8"), item["rect"][2], item["rect"][3], font)
-                        _add_svg_picture(slide, shot, svg, item["rect"])
+                        _add_svg_picture(slide, shot_bytes, svg, item["rect"])
                     else:
-                        _add_picture(slide, shot, item["rect"])
-            report.append({"page": index + 1, "title": info["title"], "shapes": len(info["items"]),
-                           "screenshot": False, "vector_svgs": sum(1 for item in info["items"] if "svg" in item)})
+                        _add_picture(slide, shot_bytes, item["rect"])
+            report.append({"page": index + 1, "title": info["title"], "shapes": len(overlay),
+                           "screenshot": True, "vector_svgs": sum(1 for item in overlay if "svg" in item)})
         client.delete_session()
         out_path.parent.mkdir(parents=True, exist_ok=True)
         prs.save(str(out_path))
