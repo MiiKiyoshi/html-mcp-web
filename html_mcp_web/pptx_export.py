@@ -147,6 +147,17 @@ const pseudoContent = (n) => ['::before', '::after'].some((p) => {
 });
 const hasPseudo = (el) => pseudoContent(el) || Array.from(el.querySelectorAll('*')).some(pseudoContent);
 
+// Images in inline flow (a row of <img> in a div, default display:inline) are not block
+// children, so their container reads as a leaf whose text is taken while the images are
+// dropped. Each such image still needs its own picture frame.
+const inlineImages = (el) => {
+  for (const im of el.querySelectorAll('img')) {
+    const ir = im.getBoundingClientRect();
+    if (ir.width === 0 || ir.height === 0) continue;
+    items.push({kind: 'img', rect: rel(ir), src: im.getAttribute('src'), i: mark(im)});
+  }
+};
+
 const emit = (el) => {
   const tag = el.tagName.toLowerCase();
   if (tag === 'aside' || tag === 'script' || tag === 'style') return;
@@ -196,6 +207,7 @@ const emit = (el) => {
     items.push({kind: 'panel', rect, bg: s.backgroundColor, radius: parseFloat(s.borderTopLeftRadius) || 0,
                 borders: {top: side('Top'), right: side('Right'), bottom: side('Bottom'), left: side('Left')}, i: mark(el)});
     if (!container) {
+      inlineImages(el);
       const para = paraOf(el, 0, 0);
       if (para.runs.length) items.push({kind: 'text', rect: [rect[0] + (parseFloat(s.paddingLeft) || 0), rect[1] + (parseFloat(s.paddingTop) || 0),
         rect[2] - (parseFloat(s.paddingLeft) || 0) - (parseFloat(s.paddingRight) || 0), rect[3] - (parseFloat(s.paddingTop) || 0) - (parseFloat(s.paddingBottom) || 0)],
@@ -204,6 +216,7 @@ const emit = (el) => {
     }
   }
   if (container) { for (const ch of el.children) emit(ch); return; }
+  inlineImages(el);
   const para = paraOf(el, 0, 0);
   // plain: pure text on this element (no border/background/list, reached without a paint),
   // so it can be hidden for the background pass and re-added as an editable box with nothing
