@@ -91,10 +91,16 @@ class SharedProjectServer:
         self.start_error = None
         self.thread = threading.Thread(target=self._serve, name="html-mcp-web", daemon=True)
         self.thread.start()
+        # A failed start must release the lock (and stop the thread), or every later ensure()
+        # blocks on the lock this process still holds and reports the port as unreachable, even
+        # after the cause (a missing main file, say) is fixed.
         if not self.ready.wait(timeout=10):
+            self.stop()
             raise RuntimeError("project server did not start within 10 seconds")
         if self.start_error is not None:
-            raise RuntimeError(f"project server failed to start: {self.start_error}")
+            error = self.start_error
+            self.stop()
+            raise RuntimeError(f"project server failed to start: {error}")
 
     def stop(self) -> None:
         if self.loop is not None and self.loop.is_running():
