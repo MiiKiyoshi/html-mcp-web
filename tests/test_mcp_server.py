@@ -1,5 +1,6 @@
 import asyncio
 import json
+import shutil
 import socket
 import sys
 import urllib.request
@@ -138,6 +139,7 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         assert schemas["render_page"]["properties"]["page"]["minimum"] == 1
         assert schemas["render_page"]["properties"]["dpi"]["minimum"] == 36
         assert schemas["render_page"]["properties"]["dpi"]["maximum"] == 300
+        assert set(schemas["render_page"]["properties"]) >= {"save", "out"}
         assert schemas["measure_space"]["required"] == ["artifact", "page", "revision", "clearance"]
 
         _, setup = asyncio.run(mcp.call_tool("inspect", {}))
@@ -367,3 +369,25 @@ def test_failed_start_releases_the_lock_so_a_retry_can_serve(tmp_path: Path) -> 
             assert response.status == 200
     finally:
         shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_render_page_save_writes_a_png_and_returns_its_path(tmp_path: Path) -> None:
+    # save exists so a page can be handed to the user without the image entering the
+    # transcript; the tool returns a path, not pixels.
+    project(tmp_path)
+    binding = ProjectBinding(tmp_path)
+    try:
+        mcp = create_server(binding)
+        content = asyncio.run(mcp.call_tool(
+            "render_page", {"artifact": "slides", "page": 1, "save": True}))
+        saved = json.loads(content[0].text)
+        target = Path(saved["path"])
+        assert target == tmp_path / ".html-mcp-web" / "renders" / "slides-p1.png"
+        assert target.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+        assert saved["bytes"] == target.stat().st_size
+        with pytest.raises(Exception, match="inside the project"):
+            asyncio.run(mcp.call_tool(
+                "render_page", {"artifact": "slides", "page": 1, "save": True, "out": "../escape.png"}))
+    finally:
+        binding.stop()

@@ -56,7 +56,9 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "fit failures. Fit is settled by numbers, so measure_space(target=<block ref>) gives line_count, "
             "last_line_right_space, and a table's min_no_wrap_width, the pixels to trim or add. render_page carries "
             "what numbers do not (figure placement, a crop, colour); run it once per page when that changes and once "
-            "before hand-off, not after each edit. Resolve only alongside the edit the comment asked for; a comment "
+            "before hand-off, not after each edit. When the page is for the user to look at rather than for you, "
+            "render_page(save=True) writes the png and returns its path, which costs none of the tokens the image "
+            "itself would. Resolve only alongside the edit the comment asked for; a comment "
             "answered with words alone stays open for its owner to close, and a resolve message is unnecessary when "
             "replies or edited_files already record the outcome. edit_file is the source; for a templated artifact "
             "main_file is build output and is not edited. Link images with a relative src into a project folder; do "
@@ -178,15 +180,26 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         page: Annotated[int, Field(ge=1)],
         dpi: Annotated[int, Field(ge=36, le=300, description="Render resolution; 96 reads text, 150 or more shows fine detail at a higher token cost.")] = 96,
         grayscale: Annotated[bool, Field(description="Grayscale is smaller and enough for layout; set false when colour itself is being checked.")] = True,
+        save: Annotated[bool, Field(description="Write the png and return its path instead of the image, for showing a page to the user without spending the tokens an image costs.")] = False,
+        out: Annotated[str | None, Field(description="Project-relative png path used when save is set; default .html-mcp-web/renders/<artifact>-p<page>.png.")] = None,
     ) -> "Image":
-        """Render one page for visual inspection."""
+        """Render one page for visual inspection, or with save, to a png file to hand to the user."""
         client = binding.require_client()
         params = f"?page={page}&dpi={dpi}&gray={'1' if grayscale else '0'}"
         data = await client.get_bytes(
             f"/artifacts/{artifact}/render/page{params}",
             timeout=120.0,
         )
-        return Image(data=data, format="png")
+        if not save:
+            return Image(data=data, format="png")
+        project_dir = Path((await client.request_json("GET", "/state"))["project_dir"])
+        target = ((project_dir / out) if out is not None
+                  else project_dir / ".html-mcp-web" / "renders" / f"{artifact}-p{page}.png").resolve()
+        if not target.is_relative_to(project_dir.resolve()):
+            raise ValueError("out must stay inside the project directory")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        return {"path": str(target), "bytes": len(data), "page": page, "dpi": dpi}
 
     @mcp.tool()
     async def export_pptx(
