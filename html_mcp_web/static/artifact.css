@@ -80,10 +80,6 @@ html[data-html-mcp-presentation="slides"] body > main.pages > section.page.html-
   pointer-events: auto !important;
 }
 
-html[data-html-mcp-layout][data-html-mcp-layout][data-html-mcp-presentation="slides"] body > main.pages > section.page.has-script {
-  margin: 0 !important;
-}
-
 /* A speaker-script block a template places after its page shares the page's zoom, so the
    normal flow keeps it under that page at every window size. Deriving its position from
    measured rectangles instead put it elsewhere on engines that keep zoom out of them. */

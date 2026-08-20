@@ -4,75 +4,94 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Evaluation Review</title>
+  
   <style>
+/* Slide engine skeleton: where things sit on a 1280x720 page. A skin sets the variables
+   below and supplies chrome images through the slots the builder emits; it does not
+   restate this file. Values here are the neutral defaults; a skin overrides only what it
+   changes. */
+
 :root {
-  font-family: Inter, "Noto Sans KR", system-ui, sans-serif;
-  color: #22282c;
+  font-family: var(--font, Inter, "Noto Sans KR", system-ui, sans-serif);
+  color: var(--ink);
+
   --ink: #22282c;
   --ink-soft: #4f5a60;
-  --navy: #243943;
-  --accent: #6d928d;
-  --accent-soft: #edf2f1;
-  --paper: #fffefd;
-  --line: #d9dfdf;
   --muted: #6d777c;
+  --primary: #243943;
+  --accent: #6d928d;
+  --line: #d9dfdf;
+  --paper: #fffefd;
+  --panel: #f4f6f8;
+  --good: #2f756a;
+  --bad: #a24b47;
+  --mono: ui-monospace, monospace;
+
+  --tbar-height: 64px;
+  --tbar-padding: 0 42px;
+  --body-height: 610px;
+  --body-padding: 0 42px;
+  --bbar-height: 24px;
+  --bbar-color: var(--accent);
+  --bbar-ink: white;
+  --full-height: 660px;
+  --full-padding: 0 92px;
+  --full-ink: #eef3f2;
+  --cover-band-height: 319px;
+  --cover-padding: 0 92px;
+  --cover-right: 120px;
+  --lead-gap: 8px;
 }
 
 * { box-sizing: border-box; }
 .page { position: relative; padding: 0; background: var(--paper); }
 
-/* A fixed header and footer keep the content area stable across slides. */
+/* ---- Body page: title bar, body box, footer bar ---- */
 .tbar {
   display: flex;
   align-items: center;
-  height: 64px;
-  padding: 0 42px;
-  background: var(--navy);
+  position: relative;
+  height: var(--tbar-height);
+  padding: var(--tbar-padding);
+  background: var(--primary);
 }
+.tbar h2 { flex: 1; margin: 0; color: white; font-size: 30px; font-weight: 650; letter-spacing: -0.015em; }
 
-.tbar h2 {
-  max-width: 1120px;
-  margin: 0;
-  color: white;
-  font-size: 30px;
-  font-weight: 650;
-  letter-spacing: -0.015em;
-}
-
+/* Blocks spread down the box instead of stacking at the top, so a page with little on it
+   does not leave a dead band above the footer. The opening one-line summary stays with
+   the title: distributing it too would leave it floating. */
 .body {
-  height: 610px;
+  height: var(--body-height);
   margin-top: 10px;
-  padding: 0 42px;
+  padding: var(--body-padding);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
+.body > .rest { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; }
+.body > .lead:first-child { margin-top: var(--lead-gap); }
 
 .bbar {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  height: 24px;
-  background: var(--accent);
+  height: var(--bbar-height);
+  background: var(--bbar-color);
 }
-
 .bbar .pageno {
   position: absolute;
   left: 50%;
   top: 5px;
   transform: translateX(-50%);
-  color: white;
+  color: var(--bbar-ink);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
+.bbar .bbar-label { position: absolute; right: 26px; top: 7px; color: var(--bbar-ink); font-size: 14px; }
 
-/* The cover uses the same strong band as content slides without organization-specific marks. */
-.cover .band {
-  position: relative;
-  height: 319px;
-  padding: 0 92px;
-  background: var(--navy);
-}
-
+/* ---- Cover ---- */
+.cover .band { position: relative; height: var(--cover-band-height); padding: var(--cover-padding); background: var(--primary); }
 .cover .band::after {
   content: "";
   position: absolute;
@@ -82,7 +101,6 @@
   height: 5px;
   background: var(--accent);
 }
-
 .cover .band h1 {
   position: absolute;
   left: 92px;
@@ -95,23 +113,93 @@
   line-height: 1.12;
   letter-spacing: -0.025em;
 }
+/* Optional second line under the cover title, for the reviewed work's own name. */
+.cover .band .sub {
+  position: absolute;
+  left: 92px;
+  right: 92px;
+  bottom: 40px;
+  color: #cbd6d4;
+  font-size: 22px;
+  line-height: 1.3;
+}
+.cover.has-sub .band h1 { bottom: 108px; }
+.cover .who { margin: 76px var(--cover-right) 0 0; color: var(--ink); font-size: 29px; text-align: right; }
+.cover .aff { margin: 22px var(--cover-right) 0 0; color: var(--muted); font-size: 18px; line-height: 1.6; text-align: right; }
 
-.cover .who {
-  margin: 76px 120px 0 0;
-  color: var(--ink);
-  font-size: 29px;
-  text-align: right;
+/* ---- Full-bleed pages: contents and divider ----
+   No title bar; the guard covers the area above the footer bar. A skin that colours
+   the whole page paints .page-ground, because the viewer paints section.page itself
+   through a stronger selector. */
+.page-ground { display: none; position: absolute; inset: 0; background: var(--primary); }
+.contents .page-ground, .divider .page-ground { display: block; }
+.wide {
+  position: relative;
+  height: var(--full-height);
+  margin: 18px 0 0;
+  padding: var(--full-padding);
+  overflow: hidden;
+  color: var(--full-ink);
+}
+.contents h2 { margin: 0; color: white; font-size: 34px; font-weight: 620; letter-spacing: -0.02em; }
+.contents .rule { width: 72px; height: 5px; margin: 14px 0 30px; background: var(--accent); }
+.contents ol { margin: 0; padding: 0; list-style: none; counter-reset: item; }
+.contents li {
+  position: relative;
+  margin-bottom: 18px;
+  padding-left: 62px;
+  font-size: 25px;
+  line-height: 42px;
+}
+.contents li::before {
+  counter-increment: item;
+  content: counter(item, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
+  font-size: 17px;
+  font-weight: 650;
+  text-align: center;
+}
+.contents .venue, .divider .venue { margin-right: 10px; color: var(--accent); font-size: 17px; }
+.contents .by, .divider .by { margin-left: 10px; color: #9fb1ae; font-size: 17px; }
+
+/* The capsule follows its own text and stops at 620px, so a short label stays compact. */
+.divider .cap {
+  position: relative;
+  display: inline-block;
+  max-width: 620px;
+  margin-top: 210px;
+  padding: 26px 34px 26px 96px;
+  border-left: 5px solid var(--accent);
+  background: rgba(255, 255, 255, .06);
+}
+.divider .cap .no {
+  position: absolute;
+  left: 30px;
+  top: 24px;
+  color: var(--accent);
+  font-size: 34px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.divider .cap .label { margin: 0; color: white; font-size: 28px; line-height: 1.3; }
+.divider .shot {
+  position: absolute;
+  right: 92px;
+  top: 120px;
+  max-width: 420px;
+  max-height: 420px;
+  border: 1px solid rgba(255, 255, 255, .25);
 }
 
-.cover .aff {
-  margin: 22px 120px 0 0;
-  color: var(--muted);
-  font-size: 18px;
-  line-height: 1.6;
-  text-align: right;
-}
-
-/* Text hierarchy is shared by prose, tables, and composed layouts. */
+/* ---- Body components ---- */
 p { margin: 0 0 12px; font-size: 19px; line-height: 1.5; }
 .lead { max-width: 1120px; color: var(--ink-soft); font-size: 20px; }
 .note { margin-top: 12px; color: var(--muted); font-size: 15px; line-height: 1.5; }
@@ -119,11 +207,15 @@ ul.notes { margin: 12px 0 0; padding-left: 20px; color: var(--muted); font-size:
 ul.notes li { margin-bottom: 3px; }
 .units { margin: 0 0 4px; color: var(--muted); font-size: 13px; text-align: right; }
 .feedback { margin-top: 16px; padding: 10px 0 10px 16px; border-left: 3px solid var(--accent); color: var(--ink-soft); font-size: 17px; }
+.feedback b { margin-right: 8px; }
 
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-th, td { padding: 8px 13px; border-bottom: 1px solid var(--line); font-size: 17px; text-align: right; }
+/* Text right below a table hugs the last row line without this gap. */
+table + p, table + table { margin-top: 16px; }
+/* keep-all so a cell breaks between words: CJK text otherwise wraps mid-word. */
+th, td { padding: 8px 13px; border-bottom: 1px solid var(--line); font-size: 17px; text-align: right; word-break: keep-all; }
 th:first-child, td:first-child { text-align: left; }
-th { border-bottom: 2px solid var(--accent); color: var(--navy); font-size: 14px; font-weight: 650; letter-spacing: .025em; }
+th { border-bottom: 2px solid var(--accent); color: var(--primary); font-size: 14px; font-weight: 650; letter-spacing: .025em; }
 th.sep, td.sep { border-left: 1px solid var(--line); }
 .nw { white-space: nowrap; }
 tfoot td { border-top: 2px solid var(--accent); border-bottom: 0; font-weight: 700; }
@@ -131,70 +223,25 @@ tfoot td { border-top: 2px solid var(--accent); border-bottom: 0; font-weight: 7
 .dense th { font-size: 13px; }
 .tight th, .tight td { padding: 4px 7px; font-size: 14px; white-space: nowrap; }
 .tight th { font-size: 12.5px; }
-.pos { color: #2f756a; font-weight: 650; }
-.neg { color: #a24b47; font-weight: 650; }
+.pos { color: var(--good); font-weight: 650; }
+.neg { color: var(--bad); font-weight: 650; }
 
-/* Metrics are grouped by alignment and rules rather than card chrome. */
-.grid3 {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0;
-  margin-top: 34px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-
-.metric {
-  min-height: 150px;
-  padding: 25px 25px 22px;
-}
-
-.metric strong {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--navy);
-  font-size: 40px;
-  font-weight: 650;
-  letter-spacing: -0.025em;
-}
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 34px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.metric { min-height: 150px; padding: 25px 25px 22px; }
+.metric strong { display: block; margin-bottom: 8px; color: var(--primary); font-size: 40px; font-weight: 650; letter-spacing: -0.025em; }
 .metric span { display: block; max-width: 300px; color: var(--ink-soft); font-size: 17px; line-height: 1.4; }
-.win strong { color: #2f756a; }
-.lose strong { color: #a24b47; }
+.win strong { color: var(--good); }
+.lose strong { color: var(--bad); }
 
 .two { display: grid; grid-template-columns: 1.15fr 1fr; gap: 36px; align-items: start; }
 .card { padding: 4px 0 4px 22px; border-left: 2px solid var(--accent); }
-.card h3 { margin: 0 0 9px; color: var(--navy); font-size: 21px; }
+.card h3 { margin: 0 0 9px; color: var(--primary); font-size: 21px; }
 .card p { margin: 0 0 8px; color: var(--ink-soft); font-size: 16px; }
-code { padding: 1px 6px; border-radius: 3px; background: #ecefef; font-family: ui-monospace, monospace; font-size: .92em; }
+code { padding: 1px 6px; border-radius: 3px; background: #ecefef; font-family: var(--mono); font-size: .92em; }
 
-/* Sequence is expressed through numbering, alignment, and a single connecting rule. */
-.flow {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 28px;
-  position: relative;
-  margin: 34px 0 28px;
-  counter-reset: step;
-}
-
-.flow::before {
-  content: "";
-  position: absolute;
-  left: 22px;
-  right: 22px;
-  top: 14px;
-  height: 1px;
-  background: var(--line);
-}
-
-.step {
-  position: relative;
-  min-height: 122px;
-  padding: 44px 0 0;
-  color: var(--ink-soft);
-  font-size: 17px;
-}
-
+.flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; position: relative; margin: 34px 0 28px; counter-reset: step; }
+.flow::before { content: ""; position: absolute; left: 22px; right: 22px; top: 14px; height: 1px; background: var(--line); }
+.step { position: relative; min-height: 122px; padding: 44px 0 0; color: var(--ink-soft); font-size: 17px; }
 .step::before {
   counter-increment: step;
   content: counter(step);
@@ -206,56 +253,76 @@ code { padding: 1px 6px; border-radius: 3px; background: #ecefef; font-family: u
   border: 1px solid var(--accent);
   border-radius: 50%;
   background: var(--paper);
-  color: var(--navy);
+  color: var(--primary);
   font: 650 14px/27px Inter, sans-serif;
   text-align: center;
 }
+.step b, .step strong { display: block; margin-bottom: 5px; color: var(--primary); font-size: 19px; }
+/* A cycle returns from the last step to the first, drawn under the row so the boxes keep
+   their places. */
+.flow.cycle { margin-bottom: 34px; }
+.flow.cycle::after { content: ""; position: absolute; left: 12%; right: 12%; top: calc(100% + 12px); height: 1px; background: var(--line); }
 
-.step b { display: block; margin-bottom: 5px; color: var(--navy); font-size: 19px; }
-
-/* Speaker scripts sit outside printed page geometry. */
-#scripts { position: absolute; top: 0; left: 0; }
-#scripts .script-block { position: absolute; z-index: 5; height: 164px; padding: 10px 16px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; background: #f8f9f8; }
-#scripts .script-text { color: #2c3439; font-size: 16px; line-height: 24px; }
-#scripts .script-text p { margin: 0; font-size: 16px; line-height: 24px; }
-.pages section.page.has-script { margin-bottom: 182px; }
-html[data-html-mcp-layout][data-html-mcp-layout] body > main.pages > section.page.has-script { margin-bottom: 182px !important; }
+/* ---- Speaker script: follows its page in the flow ---- */
+.script-block { width: 1280px; height: 164px; padding: 10px 16px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; background: #f8f9f8; }
+.script-text { color: #2c3439; font-size: 16px; line-height: 24px; }
+.script-text p { margin: 0; font-size: 16px; line-height: 24px; }
 
 @media screen {
   main.pages section.page { border-radius: 10px; box-shadow: 0 2px 14px rgba(25, 35, 42, .09); }
 }
-
 @media print {
-  #scripts { display: none; }
+  .script-block { display: none; }
   main.pages section.page { margin-bottom: 0 !important; border-radius: 0; box-shadow: none; }
 }
+
+/* ---- skin: neutral-slides ---- */
+/* Neutral skin: the engine's skeleton defaults are this look, so nothing is overridden
+   here. A skin that changes colours, chrome, or geometry sets the variables listed at
+   the top of html_mcp_web/slides/skeleton.css and styles the chrome slots it fills. */
+
   </style>
 </head>
 <body>
   <main class="pages">
 
-    <section class="page cover has-script">
-      <div class="band"><h1>Evaluation Review</h1></div>
+    <section class="page cover">
+      <div class="band">
+        <h1>Evaluation Review</h1>
+        
+      </div>
       <div class="who">Systems Research Group</div>
       <div class="aff">Internal evaluation<br>
         13 August 2026</div>
+      
       <footer class="bbar"><span class="pageno">1 / 3</span></footer>
     </section>
-    <section class="page has-script">
+    <div class="script-block">
+      <div class="script-text"><p>Welcome. This review covers the current evaluation result and the remaining verification.</p></div>
+    </div>
+    <section class="page">
       <header class="tbar"><h2>Decision</h2></header>
       <div class="body" data-layout-guard>
 <p class="lead">Keep the current method while the remaining input cases are verified.</p>
-  <div class="grid3">
+        <div class="rest">
+<div class="grid3">
     <div class="metric"><strong>18.4%</strong><span>runtime reduction</span></div>
     <div class="metric"><strong>0.7%</strong><span>score change</span></div>
     <div class="metric"><strong>3</strong><span>unverified cases</span></div>
   </div>
+        </div>
       </div>
+      
       <footer class="bbar"><span class="pageno">2 / 3</span></footer>
     </section>
-    <section class="page has-script">
+    <div class="script-block">
+      <div class="script-text"><p>The measured runtime fell while the score stayed nearly unchanged. Three input cases still need verification before the decision is closed.</p></div>
+    </div>
+    <section class="page">
       <header class="tbar"><h2>Next Evaluation</h2></header>
       <div class="body" data-layout-guard>
+
+        <div class="rest">
 <div class="two">
     <div>
       <h3>Run now</h3>
@@ -270,55 +337,15 @@ html[data-html-mcp-layout][data-html-mcp-layout] body > main.pages > section.pag
       <p>Keep the method when corrected inputs preserve the runtime reduction without lowering the score.</p>
     </div>
   </div>
+        </div>
       </div>
+      
       <footer class="bbar"><span class="pageno">3 / 3</span></footer>
     </section>
-
-  </main>
-  <div id="scripts" aria-hidden="false">
-    <div class="script-block" data-page="1">
-      <div class="script-text"><p>Welcome. This review covers the current evaluation result and the remaining verification.</p></div>
-    </div>
-    <div class="script-block" data-page="2">
-      <div class="script-text"><p>The measured runtime fell while the score stayed nearly unchanged. Three input cases still need verification before the decision is closed.</p></div>
-    </div>
-    <div class="script-block" data-page="3">
+    <div class="script-block">
       <div class="script-text"><p>The next run checks the unresolved inputs first, then repeats the same comparison and records runtime and score together.</p></div>
     </div>
-  </div>
-  <script>
-  (() => {
-    function place() {
-      const pages = document.querySelectorAll("main.pages section.page");
-      document.querySelectorAll("#scripts .script-block").forEach(block => {
-        const page = pages[Number(block.dataset.page) - 1];
-        if (!page) return;
-        const rect = page.getBoundingClientRect();
-        const scale = rect.width / page.offsetWidth;
-        block.style.top = window.scrollY + rect.bottom + 10 * scale + "px";
-        block.style.left = window.scrollX + rect.left + "px";
-        block.style.width = page.offsetWidth + "px";
-        block.style.transform = `scale(${scale})`;
-        block.style.transformOrigin = "top left";
-      });
-    }
 
-    let lastSignature = "";
-    setInterval(() => {
-      const firstPage = document.querySelector("main.pages section.page");
-      if (!firstPage) return;
-      const rect = firstPage.getBoundingClientRect();
-      const signature = Math.round(window.scrollY + rect.bottom) + ":" + Math.round(rect.width);
-      if (signature !== lastSignature) {
-        lastSignature = signature;
-        place();
-      }
-    }, 700);
-
-    place();
-    window.addEventListener("resize", place);
-    setTimeout(place, 300);
-  })();
-  </script>
+  </main>
 </body>
 </html>

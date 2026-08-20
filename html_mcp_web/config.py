@@ -162,12 +162,6 @@ def create_config(
     return target
 
 
-def write_config(config: Config) -> None:
-    if config.config_path is None:
-        raise ValueError("configuration has no file path")
-    config.config_path.write_text(yaml.safe_dump(config.to_dict(), sort_keys=False), encoding="utf-8")
-
-
 def get_project_dir(config: Config) -> Path:
     if config.config_path is None:
         raise ValueError("configuration has no file path")

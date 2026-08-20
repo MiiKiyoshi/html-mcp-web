@@ -13,7 +13,6 @@ import shutil
 import subprocess
 import tempfile
 import time
-from pathlib import Path
 
 PRINT_PAGE_CM = {
     "slides": (33.867, 19.05),

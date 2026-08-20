@@ -7,7 +7,7 @@ import json
 import os
 import tempfile
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Literal
@@ -135,10 +135,6 @@ class Comment:
     status: Status
     created: str
     updated: str
-
-    @property
-    def text(self) -> str:
-        return self.thread[0].text
 
     def to_dict(self) -> dict[str, Any]:
         return {

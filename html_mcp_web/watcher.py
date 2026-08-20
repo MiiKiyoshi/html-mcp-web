@@ -147,7 +147,3 @@ class Watcher:
         if self.handler is not None:
             self.handler.watch_patterns = watch_patterns
             self.handler.ignore_patterns = ignore_patterns
-
-    @property
-    def is_running(self) -> bool:
-        return self.observer is not None and self.observer.is_alive()

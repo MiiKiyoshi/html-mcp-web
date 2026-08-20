@@ -596,14 +596,6 @@ async function handleSocketMessage(message) {
     if (changed) loadArtifact(true);
     return;
   }
-  if (message.type === "artifact_changed" && message.artifact === state.artifactId) {
-    if (state.revision === message.revision) return;
-    state.artifact = message;
-    state.revision = message.revision;
-    updateLayoutUi();
-    loadArtifact(true);
-    return;
-  }
   if (["comment_added", "comment_updated", "comments_updated", "comment_deleted"].includes(message.type)
       && message.artifact === state.artifactId) {
     await refreshComments();
