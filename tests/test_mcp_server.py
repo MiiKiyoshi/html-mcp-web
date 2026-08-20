@@ -343,3 +343,27 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
         binding.stop()
         first.stop()
         second.stop()
+
+
+
+def test_failed_start_releases_the_lock_so_a_retry_can_serve(tmp_path: Path) -> None:
+    # main file is absent, so the first start fails; the lock must be freed so that fixing the
+    # cause and retrying serves the project instead of blocking forever on this process's lock.
+    port = available_port()
+    (tmp_path / ".html-mcp-web.yaml").write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(tmp_path / ".html-mcp-web.yaml"))
+    try:
+        with pytest.raises(RuntimeError, match="failed to start"):
+            shared.ensure()
+        assert shared.lock_handle is None  # the lock was released, not leaked
+        (tmp_path / "slides.html").write_text(
+            '<!doctype html><html><body><main class="pages"><section class="page"></section></main></body></html>',
+            encoding="utf-8")
+        shared.ensure()  # would raise "lock is held but port is not reachable" before the fix
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/state", timeout=3) as response:
+            assert response.status == 200
+    finally:
+        shared.stop()
