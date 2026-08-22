@@ -106,7 +106,12 @@ takes no part in that spread; everything after it shares the remaining height.
 - `two` containing normal content and `card`
 - `flow` containing four `step` blocks, `flow.cycle` when the last step feeds the first
 - `p.feedback` for received feedback
+- `div.concerns` for points raised about the work: a `<b>` label on its own line, then the
+  points as a list or a paragraph
 - `code` for identifiers
+- `pre` for a code or file excerpt of several lines; it draws one box and keeps the line
+  breaks, and a `code` inside it drops the inline chip so the block reads as one piece.
+  A long line overflows rather than wraps, so the layout check reports it
 - inline `<svg>` for a figure the components above do not carry: its labels stay exact
   and stay sharp in print, so prefer it over a picture of a drawing
 - `<img>` for a raster figure; give it a `max-height` so the body stays inside its box
