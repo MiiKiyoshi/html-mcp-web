@@ -18,6 +18,8 @@
   --good: #2f756a;
   --bad: #a24b47;
   --mono: ui-monospace, monospace;
+  --code-bg: #ecefef;
+  --code-block-bg: #f4f6f8;
 
   --tbar-height: 64px;
   --tbar-padding: 0 42px;
@@ -200,6 +202,13 @@ ul.notes li { margin-bottom: 3px; }
 .units { margin: 0 0 4px; color: var(--muted); font-size: 13px; text-align: right; }
 .feedback { margin-top: 16px; padding: 10px 0 10px 16px; border-left: 3px solid var(--accent); color: var(--ink-soft); font-size: 17px; }
 .feedback b { margin-right: 8px; }
+/* A labelled block of points raised about the work: the label on its own line, then the
+   points as a list or a paragraph. */
+.concerns { margin-top: 16px; padding: 10px 0 10px 16px; border-left: 3px solid var(--accent); color: var(--ink-soft); }
+.concerns > b { display: block; margin-bottom: 5px; color: var(--primary); font-size: 14.5px; letter-spacing: .05em; }
+.concerns p { margin: 0; font-size: 17px; }
+.concerns ul { margin: 0; padding-left: 20px; font-size: 17px; line-height: 1.5; }
+.concerns ul li { margin-bottom: 2px; }
 
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 /* Text right below a table hugs the last row line without this gap. */
@@ -229,7 +238,14 @@ tfoot td { border-top: 2px solid var(--accent); border-bottom: 0; font-weight: 7
 .card { padding: 4px 0 4px 22px; border-left: 2px solid var(--accent); }
 .card h3 { margin: 0 0 9px; color: var(--primary); font-size: 21px; }
 .card p { margin: 0 0 8px; color: var(--ink-soft); font-size: 16px; }
-code { padding: 1px 6px; border-radius: 3px; background: #ecefef; font-family: var(--mono); font-size: .92em; }
+code { padding: 1px 6px; border-radius: 3px; background: var(--code-bg); font-family: var(--mono); font-size: .92em; }
+/* A code block is one box: the chip padding and background belong to inline code, so a
+   code inside a pre gives them up. Long lines are left to overflow the box rather than
+   scroll or wrap, so the layout check reports them the way it reports any other overflow. */
+pre { margin: 12px 0; padding: 14px 18px; border-radius: 6px; background: var(--code-block-bg);
+      font-family: var(--mono); font-size: 16px; line-height: 1.5; color: var(--ink);
+      white-space: pre; }
+pre code { padding: 0; border-radius: 0; background: none; font-family: inherit; font-size: inherit; }
 
 .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; position: relative; margin: 34px 0 28px; counter-reset: step; }
 .flow::before { content: ""; position: absolute; left: 22px; right: 22px; top: 14px; height: 1px; background: var(--line); }
