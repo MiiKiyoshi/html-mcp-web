@@ -225,13 +225,22 @@ const emit = (el) => {
 };
 
 const body = page.querySelector('.body');
-const title = (page.querySelector('.tbar h2') || {}).textContent || '';
+const titleEl = page.querySelector('.tbar h2');
+const title = (titleEl || {}).textContent || '';
 // The chrome (title bar, footer, corner logos, page number) bakes into the slide
 // background so it cannot be grabbed; only the body's own blocks, tagged here, stay
-// as editable shapes laid over it.
+// as editable shapes laid over it. The bar's title is the exception: the deck is edited
+// per page by its title, so the words come back as a text box while the bar stays baked.
 for (const ch of page.children) {
   if (ch === body || ch.classList.contains('script-block')) continue;
   emit(ch);
+}
+if (titleEl) {
+  const marked = titleEl.getAttribute('data-pptx-index');
+  if (marked !== null) {
+    const item = items.find((it) => String(it.i) === marked && it.kind === 'text');
+    if (item) item.body = true;
+  }
 }
 const chromeCount = items.length;
 if (body) for (const ch of body.children) emit(ch);

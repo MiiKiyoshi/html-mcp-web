@@ -77,8 +77,8 @@ def test_export_bakes_chrome_into_background_and_keeps_body_editable(tmp_path: P
     assert body_bg is not None and body_bg.find(f".//{_qn('a:blip')}") is not None
     kinds = shapes_by_kind(body)
     texts = [shape.text_frame.text for shape in kinds["TEXT_BOX"]]
-    assert "Numbers" not in texts  # the title bar baked into the background, not a text box
-    assert "3 / 3" not in texts    # the footer page number baked in too
+    assert "Numbers" in texts   # the bar's title stays editable: decks are retitled per page
+    assert "3 / 3" not in texts  # the bar itself and the footer page number baked in
     lead = next(shape for shape in kinds["TEXT_BOX"] if shape.text_frame.text.startswith("Lead sentence"))
     runs = lead.text_frame.paragraphs[0].runs
     assert [run.text for run in runs] == ["Lead sentence with ", "bold", " and ", "code", "."]
@@ -112,6 +112,11 @@ def test_export_bakes_chrome_into_background_and_keeps_body_editable(tmp_path: P
     assert "Card title" in texts and "Card body text." in texts
     assert len(kinds["PICTURE"]) == 2
     assert kinds["AUTO_SHAPE"]  # the card's accent rule; the chrome bars are baked, not shapes
+    # The editable title did not drag its bar back out as a grabbable shape: every panel on
+    # the slide belongs to the body, none spans the page width at the top or bottom edge.
+    for panel in kinds["AUTO_SHAPE"]:
+        spans_page = panel.width >= prs.slide_width - 9525
+        assert not spans_page, "a full-width bar came back as a shape"
 
 
 DEJAVU = Path("/usr/share/fonts/truetype/dejavu")
