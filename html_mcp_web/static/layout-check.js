@@ -18,6 +18,16 @@ export function createLayoutChecks(dependencies) {
     return style.display !== "none" && style.position !== "fixed" && style.position !== "absolute";
   }
   
+  // The words as the slide shows them. KaTeX keeps a MathML copy of every formula for
+  // screen readers, holding the TeX source, and textContent runs the two together: a
+  // bullet opening with a formula was named "iceff‾\overline{i_{c_{\m…", which does not
+  // match anything the writer can find in the source.
+  function readableText(element) {
+    const copy = element.cloneNode(true);
+    for (const hidden of copy.querySelectorAll(".katex-mathml")) hidden.remove();
+    return copy.textContent.trim().replace(/\s+/g, " ");
+  }
+
   function describeElement(element) {
     const name = element.tagName.toLowerCase();
     const id = element.id === "" ? "" : `#${element.id}`;
@@ -127,7 +137,7 @@ export function createLayoutChecks(dependencies) {
         // or tiny relative to the block's own line width (a wide block whose
         // last line carries a fraction of what the lines above carry).
         if (last <= Math.max(fontSize * 6, widest * 0.25)) {
-          const label = block.textContent.trim().replace(/\s+/g, " ").slice(0, 24);
+          const label = readableText(block).slice(0, 24);
           addError(`page ${index + 1} ${block.tagName.toLowerCase()} "${label}…" wastes its last line on a few characters`, block);
         }
       }

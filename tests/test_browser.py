@@ -64,7 +64,11 @@ def problem_html() -> str:
 <html><head><meta charset="utf-8"><title>Problems</title></head><body>
 <main class="pages"><section class="page">
   <div data-layout-guard style="width: 900px; height: 180px; overflow: hidden">
-    <p style="font-size: 20px; width: 600px">A deliberately long first line for the layout checker.<br>x</p>
+    <!-- The formula carries the shape KaTeX emits: a MathML copy holding the TeX source,
+         hidden the way KaTeX hides it, beside the glyphs the reader sees. -->
+    <p style="font-size: 20px; width: 600px"><span class="katex"><span class="katex-mathml"
+      style="position:absolute;clip:rect(1px,1px,1px,1px);width:1px;height:1px;overflow:hidden"
+      >\\overline{x}</span><span class="katex-html">x&#8254;</span></span> A deliberately long first line for the layout checker.<br>x</p>
     <div><div style="height: 50px">first sibling</div><div style="height: 50px; margin-top: -20px">second sibling</div></div>
     <!-- Borderline cases: both verdicts flip when measured geometry is read at the
          pane's zoom instead of in page pixels. -->
@@ -408,7 +412,11 @@ def test_browser_review_contract(tmp_path: Path) -> None:
             else None
         ))
         assert any("overflows its content area" in error for error in errors)
-        assert any("wastes its last line" in error for error in errors)
+        # The block is named by what the slide shows. KaTeX's hidden MathML copy holds the
+        # TeX source, and taking it along named a bullet after markup its writer cannot find.
+        tail_error = next(error for error in errors if "wastes its last line" in error)
+        assert "overline" not in tail_error
+        assert "A deliberately long" in tail_error
         assert any("overlaps its sibling" in error for error in errors)
         assert any("div#near-second" in error for error in errors)
         assert not any("This second paragraph" in error for error in errors)
