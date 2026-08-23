@@ -538,3 +538,59 @@ def test_browser_review_contract(tmp_path: Path) -> None:
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_display_math_matches_its_paragraph(tmp_path: Path) -> None:
+    """KaTeX enlarges maths to 1.21em. That suits inline maths in a line of text, but a
+    display equation standing alone then overpowers the body, so it takes the paragraph's
+    size. KaTeX's own stylesheet is written after the skeleton, so the rule only holds if
+    the skeleton's selector outweighs it."""
+    from html_mcp_web.slides import build
+
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<!doctype html>\n<meta charset="utf-8">\n<title>Math</title>\n'
+        '<body data-author="A" data-meta="B">\n'
+        '<section data-title="Math"><p>Inline $a^2$ here.</p><p>$$b^2 + c^2$$</p></section>\n'
+        "</body>\n", encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, Path(__file__).resolve().parents[1] / "templates" / "neutral-slides")
+
+    profile = tempfile.mkdtemp(prefix="html_mcp_math_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(html.as_uri())
+        wait_until(lambda: browser.execute_script(
+            "return !!document.querySelector('.katex-display > .katex')"))
+        sizes = browser.execute_script("""
+const page = document.querySelectorAll('section.page')[1];
+const size = (el) => parseFloat(getComputedStyle(el).fontSize);
+return {paragraph: size(page.querySelector('p')),
+        inline: size(page.querySelector('p .katex')),
+        display: size(page.querySelector('.katex-display > .katex'))};
+""")
+        assert abs(sizes["display"] - sizes["paragraph"]) < 0.5
+        assert sizes["inline"] > sizes["paragraph"] + 1  # inline keeps KaTeX's enlargement
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
