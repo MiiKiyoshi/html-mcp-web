@@ -247,6 +247,13 @@ pre { margin: 12px 0; padding: 14px 18px; border-radius: 6px; background: var(--
       white-space: pre; }
 pre code { padding: 0; border-radius: 0; background: none; font-family: inherit; font-size: inherit; }
 
+/* KaTeX sets .katex to 1.21em. Next to a line of text that reads right, because the maths
+   glyphs are optically smaller, but a display equation stands alone and the enlargement
+   makes it overpower the body. A display equation takes the size of the paragraph it sits
+   in. The selector carries a class more than KaTeX's own, whose stylesheet is written
+   after this file and would otherwise win. */
+.pages .katex-display > .katex { font-size: 1em; }
+
 .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; position: relative; margin: 34px 0 28px; counter-reset: step; }
 .flow::before { content: ""; position: absolute; left: 22px; right: 22px; top: 14px; height: 1px; background: var(--line); }
 .step { position: relative; min-height: 122px; padding: 44px 0 0; color: var(--ink-soft); font-size: 17px; }

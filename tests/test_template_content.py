@@ -89,7 +89,10 @@ def test_shipped_slide_template_builds_every_page_kind(tmp_path: Path) -> None:
         parse_template_content(template / "content.html").sections
     )
     # No math in the sample deck, so the KaTeX bundle stays out and the file stays small.
-    assert "katex" not in built
+    # The skeleton names .katex-display to size display equations, so the bundle's own
+    # markers are what tell it apart from that one selector.
+    assert "renderMathInElement" not in built
+    assert "KaTeX_Main" not in built
     assert output.stat().st_size < 100_000
 
 
