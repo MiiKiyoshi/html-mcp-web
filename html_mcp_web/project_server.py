@@ -52,6 +52,11 @@ class SharedProjectServer:
                 await web.TCPSite(self.runner, "127.0.0.1", self.port).start()
             except BaseException as error:
                 self.start_error = error
+                if self.runner is not None:
+                    # Startup hooks that ran (the file watcher among them) hold inotify
+                    # watches; drop them here or a failed start leaks them.
+                    await self.runner.cleanup()
+                    self.runner = None
             finally:
                 self.ready.set()
 

@@ -64,7 +64,11 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "main_file is build output and is not edited. Link images with a relative src into a project folder; do "
             "not embed them as base64, so content stays small and editable. The content format and component "
             "vocabulary are in templates/README.md beside the package (a skin's own README covers only what that skin "
-            "changes); read it before writing content."
+            "changes); read it before writing content. The project is watched with inotify, one watch per "
+            "directory under it, and the per-user watch limit is shared by every session on the host; a large tree "
+            "that holds no artifact content (checkpoints, a baseline dump, a dataset) goes in the config's ignore "
+            "list by its top-level directory name, or the project server fails to start with 'inotify watch limit "
+            "reached' for this session and every other one."
         ),
     )
 

@@ -1,3 +1,4 @@
+import asyncio
 import re
 from pathlib import Path
 
@@ -418,3 +419,32 @@ async def test_artifact_content_change_does_not_invalidate_sibling(tmp_path: Pat
     review.generated_paths.add((tmp_path / "report.html").resolve())
     await review.on_project_change(str(tmp_path / "report.html"))
     assert review.artifacts["report"].revision == 2
+
+
+def test_watcher_skips_ignored_top_level_directories(tmp_path):
+    from html_mcp_web.watcher import Watcher
+
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "baselines" / "run1").mkdir(parents=True)
+    (tmp_path / ".html-mcp-web").mkdir()
+    scheduled = []
+
+    class FakeObserver:
+        def schedule(self, handler, path, recursive):
+            scheduled.append((Path(path).name, recursive))
+
+        def start(self):
+            pass
+
+    async def on_change(path):
+        pass
+
+    watcher = Watcher(tmp_path, ["*.html"], ["baselines"], on_change)
+    import html_mcp_web.watcher as module
+    original = module.Observer
+    module.Observer = FakeObserver
+    try:
+        watcher.start(asyncio.new_event_loop())
+    finally:
+        module.Observer = original
+    assert scheduled == [(tmp_path.name, False), ("docs", True)]

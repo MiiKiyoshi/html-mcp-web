@@ -130,8 +130,27 @@ class Watcher:
             self.debounce_seconds,
         )
         self.observer = Observer()
-        self.observer.schedule(self.handler, str(self.watch_dir), recursive=True)
-        self.observer.start()
+        # One recursive watch on the project root costs an inotify watch per directory
+        # underneath it, ignored trees included; a large ignored tree (checkpoints, a
+        # baseline dump) exhausts the per-user limit. The root is watched flat and each
+        # top-level entry that is not ignored is watched on its own, so ignoring a top-level
+        # directory removes its whole tree from inotify.
+        try:
+            self.observer.schedule(self.handler, str(self.watch_dir), recursive=False)
+            for entry in sorted(self.watch_dir.iterdir()):
+                if not entry.is_dir() or entry.name == ".html-mcp-web":
+                    continue
+                if self.handler._matches(str(entry), self.ignore_patterns):
+                    continue
+                self.observer.schedule(self.handler, str(entry), recursive=True)
+            self.observer.start()
+        except BaseException:
+            # A partially scheduled observer keeps its inotify descriptor, and its
+            # watches, until it is stopped; leaking it on every failed start is how a
+            # process reaches the limit on its own.
+            self.observer.stop()
+            self.observer = None
+            raise
 
     def stop(self) -> None:
         if self.handler is not None and self.handler.pending_task is not None:
