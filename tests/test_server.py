@@ -427,6 +427,9 @@ def test_watcher_skips_ignored_top_level_directories(tmp_path):
     (tmp_path / "docs").mkdir()
     (tmp_path / "baselines" / "run1").mkdir(parents=True)
     (tmp_path / ".html-mcp-web").mkdir()
+    outside = tmp_path.parent / (tmp_path.name + "-outside")
+    outside.mkdir()
+    (tmp_path / "engine").symlink_to(outside)
     scheduled = []
 
     class FakeObserver:
@@ -439,7 +442,7 @@ def test_watcher_skips_ignored_top_level_directories(tmp_path):
     async def on_change(path):
         pass
 
-    watcher = Watcher(tmp_path, ["*.html"], ["baselines"], on_change)
+    watcher = Watcher(tmp_path, ["*.html"], ["baselines", "engine"], on_change)
     import html_mcp_web.watcher as module
     original = module.Observer
     module.Observer = FakeObserver

@@ -140,7 +140,9 @@ class Watcher:
             for entry in sorted(self.watch_dir.iterdir()):
                 if not entry.is_dir() or entry.name == ".html-mcp-web":
                     continue
-                if self.handler._matches(str(entry), self.ignore_patterns):
+                # Match on the entry name, not the resolved path: a symlink into another
+                # repository resolves outside the project and has no relative form.
+                if self.handler._matches(entry.name, self.ignore_patterns):
                     continue
                 self.observer.schedule(self.handler, str(entry), recursive=True)
             self.observer.start()
