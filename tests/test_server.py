@@ -127,7 +127,8 @@ async def test_state_includes_layout_and_pending_check(client) -> None:
     state = await (await test_client.get("/state")).json()
     assert state["config_path"] == str(review.config.config_path)
     assert state["artifacts"]["slides"]["layout"] == "slides"
-    assert state["artifacts"]["slides"]["layout_check"] == {"checked_revision": None, "errors": []}
+    assert state["artifacts"]["slides"]["layout_check"] == {
+        "checked_revision": None, "errors": [], "room": {}}
 
 
 async def test_layout_result_tracks_current_revision(client) -> None:
@@ -142,10 +143,10 @@ async def test_layout_result_tracks_current_revision(client) -> None:
     )
     assert response.status == 200
     state = await response.json()
-    assert state["layout_check"] == {
-        "checked_revision": review.artifacts["slides"].revision,
-        "errors": ["page 1 exceeds the slides height"],
-    }
+    assert state["layout_check"]["checked_revision"] == review.artifacts["slides"].revision
+    assert state["layout_check"]["errors"] == ["page 1 exceeds the slides height"]
+    # The error is about fit, so the page's free rectangles come with it.
+    assert [region["bbox"] for region in state["layout_check"]["room"]["1"]]
     assert state["space_revision"] == review.artifacts["slides"].revision
     stale = await test_client.post("/artifacts/slides/layout", json={
         "revision": review.artifacts["slides"].revision - 1,
@@ -419,6 +420,35 @@ async def test_artifact_content_change_does_not_invalidate_sibling(tmp_path: Pat
     review.generated_paths.add((tmp_path / "report.html").resolve())
     await review.on_project_change(str(tmp_path / "report.html"))
     assert review.artifacts["report"].revision == 2
+
+
+def test_fit_errors_report_where_the_page_still_has_room():
+    """The block that spills is not always the block to change: a column 10px over may sit
+    beside 400px going spare, and an error that names only the spill hides that."""
+    from html_mcp_web.server import room_for_errors
+
+    def column(name: str, bbox: list[float]) -> dict:
+        return {"kind": "group", "element": name, "bbox": bbox, "padding": [0, 0, 0, 0],
+                "children": [], "lines": [], "overflow": False}
+
+    pages = [{
+        "number": 1,
+        "bbox": [0, 0, 1200, 600],
+        "children": ["p1:0", "p1:1"],
+        "nodes": {
+            "p1:0": column("div.left", [0, 0, 622, 600]),
+            "p1:1": column("div.right", [658, 0, 542, 200]),
+        },
+    }]
+    room = room_for_errors(["page 1 content overflows its content area (height by 10px)"], pages)
+    assert list(room) == ["1"]
+    first = room["1"][0]
+    assert first["below"] == "p1:1"          # the short column, which is where the room is
+    assert first["bbox"][0] >= 600           # to the right of the column that spilled
+    assert first["bbox"][3] >= 300           # and tall enough to take what was going to be cut
+
+    # A page nobody complained about is not measured, and neither is an error of another kind.
+    assert room_for_errors(["page 1 two labels print over each other"], pages) == {}
 
 
 def started_watcher(root: Path, ignore: list[str]):
