@@ -30,6 +30,7 @@ import io
 import json
 import re
 import shutil
+import socket
 import struct
 import subprocess
 import tempfile
@@ -747,7 +748,6 @@ def load_pptx_config(skin_dir: Path | None) -> dict[str, Any]:
 
 
 def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path | None) -> dict[str, Any]:
-    """Callers must not run two of these at once: firefox is driven on the default marionette port."""
     from marionette_driver.marionette import Marionette
     from pptx import Presentation
 
@@ -764,9 +764,16 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
     else:
         font = config.get("font", DEFAULT_FONT)
 
+    # A port of its own for this firefox. On the default one, an export attached to whatever
+    # browser already held 2828: a second export, or one whose predecessor had not finished
+    # exiting, drove the wrong session and read another deck's pages.
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        marionette_port = int(probe.getsockname()[1])
     profile = tempfile.mkdtemp(prefix="html_mcp_pptx_")
     Path(profile, "user.js").write_text(
         f'user_pref("layout.css.devPixelsPerPx", "{DPR}");\n'
+        f'user_pref("marionette.port", {marionette_port});\n'
         'user_pref("browser.shell.checkDefaultBrowser", false);\n', encoding="utf-8")
     proc = subprocess.Popen(
         ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
@@ -774,7 +781,7 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     try:
-        client = Marionette(host="127.0.0.1", port=2828, startup_timeout=60)
+        client = Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=60)
         client.start_session()
         client.navigate(html_url)
         client.execute_script(JS_SETUP)
