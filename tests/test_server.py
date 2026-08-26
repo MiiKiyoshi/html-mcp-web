@@ -421,16 +421,12 @@ async def test_artifact_content_change_does_not_invalidate_sibling(tmp_path: Pat
     assert review.artifacts["report"].revision == 2
 
 
-def test_watcher_skips_ignored_top_level_directories(tmp_path):
+def started_watcher(root: Path, ignore: list[str]):
+    """A watcher started against a stand-in observer, with the paths it asked to watch."""
+    import html_mcp_web.watcher as module
     from html_mcp_web.watcher import Watcher
 
-    (tmp_path / "docs").mkdir()
-    (tmp_path / "baselines" / "run1").mkdir(parents=True)
-    (tmp_path / ".html-mcp-web").mkdir()
-    outside = tmp_path.parent / (tmp_path.name + "-outside")
-    outside.mkdir()
-    (tmp_path / "engine").symlink_to(outside)
-    scheduled = []
+    scheduled: list[tuple[str, bool]] = []
 
     class FakeObserver:
         def schedule(self, handler, path, recursive):
@@ -442,12 +438,86 @@ def test_watcher_skips_ignored_top_level_directories(tmp_path):
     async def on_change(path):
         pass
 
-    watcher = Watcher(tmp_path, ["*.html"], ["baselines", "engine"], on_change)
-    import html_mcp_web.watcher as module
+    watcher = Watcher(root, ["*.html"], ignore, on_change)
     original = module.Observer
     module.Observer = FakeObserver
     try:
         watcher.start(asyncio.new_event_loop())
     finally:
         module.Observer = original
+    return watcher, scheduled
+
+
+def test_watcher_skips_ignored_top_level_directories(tmp_path):
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "baselines" / "run1").mkdir(parents=True)
+    (tmp_path / ".html-mcp-web").mkdir()
+    outside = tmp_path.parent / (tmp_path.name + "-outside")
+    outside.mkdir()
+    # Not in the ignore list: an event under a link resolves outside the project and the
+    # handler drops it, so watching through one spends the limit for nothing.
+    (tmp_path / "engine").symlink_to(outside)
+    watcher, scheduled = started_watcher(tmp_path, ["baselines"])
     assert scheduled == [(tmp_path.name, False), ("docs", True)]
+
+
+def test_watcher_names_the_costly_directories_when_the_limit_is_used_up(tmp_path):
+    """errno ENOSPC on an inotify watch reads as no space left on device, which sends the
+    reader to look at the disk. The message says what is actually spent and by what."""
+    import errno
+    import html_mcp_web.watcher as module
+    from html_mcp_web.watcher import Watcher
+
+    for index in range(4):
+        (tmp_path / "baselines" / f"run{index}").mkdir(parents=True)
+    (tmp_path / "docs").mkdir()
+
+    class FullObserver:
+        def schedule(self, handler, path, recursive):
+            if recursive:
+                raise OSError(errno.ENOSPC, "No space left on device")
+
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+    async def on_change(path):
+        pass
+
+    watcher = Watcher(tmp_path, ["*.html"], [], on_change)
+    original = module.Observer
+    module.Observer = FullObserver
+    try:
+        with pytest.raises(RuntimeError) as failure:
+            watcher.start(asyncio.new_event_loop())
+    finally:
+        module.Observer = original
+    message = str(failure.value)
+    assert "inotify watch limit is used up" in message
+    assert "baselines 5" in message  # the tree that costs the most, counted
+    assert "ignore" in message and "max_user_watches" in message
+    assert watcher.observer is None  # the partly scheduled observer was dropped
+
+
+def test_watcher_follows_a_directory_created_after_it_started(tmp_path):
+    """The root is watched flat so that ignoring a top-level directory frees its tree, and
+    that leaves a directory made later without a watch of its own."""
+    from watchdog.events import DirCreatedEvent
+
+    (tmp_path / "docs").mkdir()
+    watcher, scheduled = started_watcher(tmp_path, ["baselines"])
+    assert scheduled == [(tmp_path.name, False), ("docs", True)]
+
+    (tmp_path / "figs").mkdir()
+    watcher.handler.on_created(DirCreatedEvent(str(tmp_path / "figs")))
+    assert scheduled[-1] == ("figs", True)
+
+    # A directory the config leaves out stays out, however it arrives.
+    (tmp_path / "baselines").mkdir()
+    watcher.handler.on_created(DirCreatedEvent(str(tmp_path / "baselines")))
+    # A directory deeper in the tree is already covered by its parent's recursive watch.
+    (tmp_path / "docs" / "figures").mkdir()
+    watcher.handler.on_created(DirCreatedEvent(str(tmp_path / "docs" / "figures")))
+    assert scheduled[-1] == ("figs", True)
