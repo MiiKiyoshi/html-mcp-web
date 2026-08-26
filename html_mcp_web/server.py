@@ -48,6 +48,96 @@ def strip_script_blocks(source: str) -> str:
     return re.sub(r'\s*<div class="script-block">.*?</div>\s*</div>', "", source, flags=re.S)
 
 
+# A fit error names the block that spills; these are the ones a reader answers either by
+# trimming that block or by moving something to where the page still has room.
+FIT_ERROR = re.compile(r"^page (\d+) .*?(?:overflows its content area|wastes its last line|exceeds the)")
+# Room worth naming: tall enough to take a line of text and wide enough to hold one.
+ROOM_CLEARANCE = 8.0
+ROOM_MIN_WIDTH = 80.0
+ROOM_MIN_HEIGHT = 20.0
+
+
+def room_for_errors(errors: list[str], space_pages: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """The free rectangles on each page a fit error names, largest first.
+
+    Reported beside the errors because the block that spills is not always the block to
+    change: a page whose left column is 10px over may have 100px going spare under the
+    right one.
+    """
+    pages = {page["number"]: page for page in space_pages}
+    room: dict[str, list[dict[str, Any]]] = {}
+    for error in errors:
+        match = FIT_ERROR.match(error)
+        if match is None:
+            continue
+        number = int(match.group(1))
+        if str(number) in room or number not in pages:
+            continue
+        page = pages[number]
+        scope_ref, scope = content_area(page)
+        drawn = leaf_boxes(page, scope_ref)
+        regions = maximal_free_regions(
+            scope, [box for _, box in drawn], ROOM_CLEARANCE, ROOM_MIN_WIDTH, ROOM_MIN_HEIGHT)
+        regions.sort(key=lambda box: box[2] * box[3], reverse=True)
+        room[str(number)] = [
+            {"bbox": [round(value, 2) for value in box],
+             **({"below": ref} if (ref := block_above(box, drawn)) else {})}
+            for box in regions[:3]
+        ]
+    return room
+
+
+def content_area(page: dict[str, Any]) -> tuple[str | None, list[float]]:
+    """The box on the page that content is written into.
+
+    Measured against the whole page, the title bar and the body box fill it between them
+    and nothing reads as free, while the room the writer can use is inside the body. The
+    body is the largest top-level block that holds other blocks.
+    """
+    best: tuple[float, str] | None = None
+    for ref in page["children"]:
+        node = page["nodes"][ref]
+        if not node["children"]:
+            continue
+        area = node["bbox"][2] * node["bbox"][3]
+        if best is None or area > best[0]:
+            best = (area, ref)
+    if best is None:
+        return None, page["bbox"]
+    return best[1], page["nodes"][best[1]]["bbox"]
+
+
+def leaf_boxes(page: dict[str, Any], scope_ref: str | None) -> list[tuple[str, list[float]]]:
+    """What actually occupies the content area. A container is not an obstacle: its own
+    box would cover the space its children leave between them."""
+    start = page["children"] if scope_ref is None else page["nodes"][scope_ref]["children"]
+    found: list[tuple[str, list[float]]] = []
+    stack = list(start)
+    while stack:
+        ref = stack.pop()
+        node = page["nodes"][ref]
+        if node["children"]:
+            stack.extend(node["children"])
+        else:
+            found.append((ref, node["bbox"]))
+    return found
+
+
+def block_above(box: list[float], drawn: list[tuple[str, list[float]]]) -> str | None:
+    """The block sitting directly over a free rectangle, which is what makes the rectangle
+    findable on the page: "under the right column" rather than a pair of numbers."""
+    left, top, width, _ = box
+    best: tuple[float, str] | None = None
+    for ref, (cx, cy, cw, ch) in drawn:
+        overlap = min(left + width, cx + cw) - max(left, cx)
+        gap = top - (cy + ch)
+        if overlap < width / 2 or gap < 0 or gap > 40:
+            continue
+        if best is None or gap < best[0]:
+            best = (gap, ref)
+    return None if best is None else best[1]
+
+
 def artifact_text(path: Path) -> str:
     """The artifact's readable text on one line, for comparing against anchor quotes."""
     source = path.read_text(encoding="utf-8")
@@ -67,6 +157,7 @@ class ArtifactRuntime:
     revision: int = 1
     layout_revision: int | None = None
     layout_errors: list[str] = field(default_factory=list)
+    layout_room: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     space_revision: int | None = None
     space_pages: list[dict[str, Any]] = field(default_factory=list)
 
@@ -89,6 +180,10 @@ class ArtifactRuntime:
             "layout_check": {
                 "checked_revision": self.layout_revision,
                 "errors": list(self.layout_errors),
+                # Where the page still has room, for the pages the errors name. A fit error
+                # says which block spills, and a reader who only has that trims it; the
+                # room may be in the other column.
+                "room": {page: list(regions) for page, regions in self.layout_room.items()},
             },
             "space_revision": self.space_revision,
             "comment_counts": comment_counts,
@@ -103,6 +198,7 @@ class ArtifactRuntime:
     def reset_layout(self) -> None:
         self.layout_revision = None
         self.layout_errors = []
+        self.layout_room = {}
         self.space_revision = None
         self.space_pages = []
 
@@ -367,6 +463,7 @@ class HtmlReviewServer:
         runtime.layout_errors = list(errors)
         runtime.space_revision = revision
         runtime.space_pages = space_pages
+        runtime.layout_room = room_for_errors(errors, space_pages)
         return web.json_response(runtime.state())
 
     async def measure_space(self, request: web.Request) -> web.Response:

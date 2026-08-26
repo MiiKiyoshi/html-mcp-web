@@ -186,6 +186,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert slides_state["layout_check"] == {
             "checked_revision": slides_state["revision"],
             "errors": [],
+            "room": {},  # nothing to answer, so no page is measured for room
         }
         assert slides_state["space_revision"] == slides_state["revision"]
         measured_page = get_json(
@@ -420,6 +421,9 @@ def test_browser_review_contract(tmp_path: Path) -> None:
             else None
         ))
         assert any("overflows its content area" in error for error in errors)
+        # The page that spills is measured for room, so the answer to an overflow can be a
+        # move rather than a cut.
+        assert "1" in get_json(f"{base}/state")["artifacts"]["slides"]["layout_check"]["room"]
         # The block is named by what the slide shows. KaTeX's hidden MathML copy holds the
         # TeX source, and taking it along named a bullet after markup its writer cannot find.
         tail_error = next(error for error in errors if "wastes its last line" in error)
