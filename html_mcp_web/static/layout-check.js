@@ -146,14 +146,19 @@ export function createLayoutChecks(dependencies) {
       // that directly contains text because a tag whitelist missed styled divs.
       // Container elements hold only child elements, so they filter out here.
       for (const block of page.querySelectorAll("[data-layout-guard] *")) {
-        const display = doc.defaultView.getComputedStyle(block).display;
-        if (!/^(block|list-item|table-cell)$/.test(display)) continue;
+        const style = doc.defaultView.getComputedStyle(block);
+        if (!/^(block|list-item|table-cell)$/.test(style.display)) continue;
         const hasDirectText = Array.from(block.childNodes).some(
           (node) => node.nodeType === Node.TEXT_NODE && node.nodeValue.trim() !== "");
         if (!hasDirectText) continue;
+        const fontSize = parseFloat(style.fontSize) || 16;
+        // A block one line tall has no last line to waste. Its rects can still fall into
+        // two groups when an inline box sits well below the baseline, which a subscript or
+        // one of KaTeX's own boxes does, and that reported one-line bullets as wasteful.
+        const lineHeight = parseFloat(style.lineHeight) || fontSize * 1.2;
+        if (Math.round(block.getBoundingClientRect().height / lineHeight) < 2) continue;
         const range = doc.createRange();
         range.selectNodeContents(block);
-        const fontSize = parseFloat(doc.defaultView.getComputedStyle(block).fontSize) || 16;
         const lines = groupLines(Array.from(range.getClientRects()), fontSize);
         if (lines.length < 2) continue;
         const widths = lines.map((l) => l.right - l.left);
