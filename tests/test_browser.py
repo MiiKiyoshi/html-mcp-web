@@ -99,6 +99,10 @@ def problem_html() -> str:
     </svg>
     <p id="ordinary" style="font-size: 20px; width: 900px">This second paragraph wraps onto
       two lines as well, and its final line carries a perfectly ordinary amount of text.</p>
+    <!-- One line tall, but the box set low at the end sits too far under the text for the
+         rects to group as one line. Nothing here wastes a line: the block is one line. -->
+    <p id="dipped" style="font-size: 15px; line-height: 1.55; width: 900px">A line that ends
+      with a small box set low<span style="position: relative; top: 19px; font-size: 12px">k</span></p>
     <div id="near-pair"><div style="height: 40px">third sibling</div>
       <div id="near-second" style="height: 40px; margin-top: -6px">fourth sibling</div></div>
     <div style="height: 300px">overflow</div>
@@ -424,6 +428,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert any("overlaps its sibling" in error for error in errors)
         assert any("div#near-second" in error for error in errors)
         assert not any("This second paragraph" in error for error in errors)
+        assert not any("p#dipped" in error or "A line that ends" in error for error in errors)
         assert any("svg#cut> draws outside its viewBox and is cut off (bottom by 10)" in error
                    for error in errors)
         assert not any("svg#quiet" in error for error in errors)
