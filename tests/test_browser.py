@@ -76,6 +76,10 @@ def problem_html() -> str:
     <svg id="cut" viewBox="0 -14 400 60" width="400" height="60"><rect x="10" y="0" width="380" height="56"/></svg>
     <!-- Declares a box twice the width of what it draws, so half the strip is held idle. -->
     <svg id="idle" viewBox="0 0 800 80" width="800" height="80"><rect x="10" y="10" width="380" height="60"/></svg>
+    <!-- The drawing fills its viewBox, but the element box is a different shape, so the
+         rendering keeps the viewBox's proportions and leaves a band at each side. Nothing
+         inside the viewBox is idle, which is why measuring the viewBox alone misses it. -->
+    <svg id="banded" viewBox="0 0 100 200" width="400" height="100"><rect x="0" y="0" width="100" height="200"/></svg>
     <!-- One label grew into the next one's place; the pair below it is merely adjacent. -->
     <svg id="collide" viewBox="0 0 800 120" width="800" height="120">
       <text x="20" y="30" font-size="16">after routing with a commercial tool</text>
@@ -425,6 +429,9 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert not any("svg#quiet" in error for error in errors)
         assert any("svg#idle> reserves space it does not draw in (right 51%" in error
                    for error in errors)
+        banded = next(error for error in errors if "svg#banded" in error)
+        assert "reserves space it does not draw in" in banded
+        assert "left 44%" in banded and "right 44%" in banded
         assert not any("svg#cut> reserves" in error for error in errors)
         collisions = [error for error in errors if "prints two labels over each other" in error]
         assert len(collisions) == 1

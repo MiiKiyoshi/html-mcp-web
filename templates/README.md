@@ -113,7 +113,12 @@ takes no part in that spread; everything after it shares the remaining height.
   breaks, and a `code` inside it drops the inline chip so the block reads as one piece.
   A long line overflows rather than wraps, so the layout check reports it
 - inline `<svg>` for a figure the components above do not carry: its labels stay exact
-  and stay sharp in print, so prefer it over a picture of a drawing
+  and stay sharp in print, so prefer it over a picture of a drawing. Settle the box the
+  figure is to fill first (the column width by the height left on the page; `two` splits a
+  1200px body into 622px and 541px), give the `viewBox` those proportions, and draw inside
+  it. The element takes the width it is given and stops at its `max-height`, and the
+  drawing keeps the `viewBox` proportions inside that, so a `viewBox` of another shape
+  leaves a band down both sides or across the top and bottom that nothing can use
 - `<img>` for a raster figure; give it a `max-height` so the body stays inside its box
 
 Math is written as TeX between `$…$` (inline) or `$$…$$` (display); `\(…\)` and

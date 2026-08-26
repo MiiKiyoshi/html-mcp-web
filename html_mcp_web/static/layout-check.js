@@ -28,6 +28,32 @@ export function createLayoutChecks(dependencies) {
     return copy.textContent.trim().replace(/\s+/g, " ");
   }
 
+  // Where the viewBox lands inside the element box, and at what scale. An element box of a
+  // different shape from the viewBox does not stretch the drawing: the rendering keeps the
+  // viewBox's proportions and sits in the box according to preserveAspectRatio, leaving a
+  // band on the two sides that are over-long.
+  function placeViewBox(element, view, room) {
+    const ratio = element.preserveAspectRatio?.baseVal;
+    const align = ratio ? ratio.align : 6;  // xMidYMid, the default
+    const slice = ratio ? ratio.meetOrSlice === 2 : false;
+    if (align === 1) {  // none: the drawing is stretched, so no band is left
+      return { x: 0, y: 0, scale: 1, scaleX: room.width / view.width, scaleY: room.height / view.height };
+    }
+    const scale = slice
+      ? Math.max(room.width / view.width, room.height / view.height)
+      : Math.min(room.width / view.width, room.height / view.height);
+    const fraction = [0, 0.5, 1];
+    const across = fraction[(align - 2) % 3];
+    const down = fraction[Math.floor((align - 2) / 3)];
+    return {
+      x: (room.width - view.width * scale) * across,
+      y: (room.height - view.height * scale) * down,
+      scale,
+      scaleX: scale,
+      scaleY: scale,
+    };
+  }
+
   function describeElement(element) {
     const name = element.tagName.toLowerCase();
     const id = element.id === "" ? "" : `#${element.id}`;
@@ -183,27 +209,30 @@ export function createLayoutChecks(dependencies) {
             `page ${index + 1} ${describeElement(svg.element)} draws outside its viewBox and is cut off (${sides.join(", ")})`,
             svg.element);
         }
-        // The opposite mistake: a viewBox wider than the drawing holds page space that
-        // nothing can use, and the drawing shrinks to fit what is left. Measured against
-        // the drawing's own box, one side has to be both a large share of it and a strip
-        // wide enough to carry content before it is worth saying anything.
+        // The opposite mistake: page space the drawing does not use. It comes from two
+        // places at once. A viewBox roomier than the drawing leaves space inside, and an
+        // element box of a different shape from the viewBox leaves a band above and below
+        // or at both sides, because the rendering keeps the viewBox's proportions. The page
+        // pays for the element box either way, so the strips are measured from it to the
+        // drawing, in the pixels the strip actually occupies.
         const room = svg.element.getBoundingClientRect();
+        const placed = placeViewBox(svg.element, view, room);
         const empty = {
-          left: (box.x - view.x) / view.width,
-          right: ((view.x + view.width) - (box.x + box.width)) / view.width,
-          top: (box.y - view.y) / view.height,
-          bottom: ((view.y + view.height) - (box.y + box.height)) / view.height,
+          left: placed.x + (box.x - view.x) * placed.scaleX,
+          top: placed.y + (box.y - view.y) * placed.scaleY,
+          right: room.width - (placed.x + (box.x + box.width - view.x) * placed.scaleX),
+          bottom: room.height - (placed.y + (box.y + box.height - view.y) * placed.scaleY),
         };
         const idle = Object.entries(empty)
-          .filter(([side, share]) => {
+          .filter(([side, pixels]) => {
             const across = side === "top" || side === "bottom";
-            const pixels = share * (across ? room.height : room.width);
+            const share = pixels / (across ? room.height : room.width);
             return share >= 0.25 && pixels >= 100;
           })
-          .map(([side, share]) => {
+          .map(([side, pixels]) => {
             const across = side === "top" || side === "bottom";
-            const units = share * (across ? view.height : view.width);
-            return `${side} ${Math.round(share * 100)}%, ${Math.round(units)} of ${Math.round(across ? view.height : view.width)}`;
+            const whole = across ? room.height : room.width;
+            return `${side} ${Math.round((pixels / whole) * 100)}%, ${Math.round(pixels)}px of ${Math.round(whole)}`;
           });
         if (idle.length > 0) {
           addError(
