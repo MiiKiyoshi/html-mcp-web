@@ -24,6 +24,7 @@ const state = {
   ws: null,
   renderFrame: null,
   layoutFrame: null,
+  layoutCheckError: null,
   pageFrame: null,
   currentPage: null,
   slideShow: false,

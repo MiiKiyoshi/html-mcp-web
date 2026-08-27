@@ -1,4 +1,5 @@
 import asyncio
+import json
 import re
 from pathlib import Path
 
@@ -129,6 +130,35 @@ async def test_state_includes_layout_and_pending_check(client) -> None:
     assert state["artifacts"]["slides"]["layout"] == "slides"
     assert state["artifacts"]["slides"]["layout_check"] == {
         "checked_revision": None, "errors": [], "room": {}}
+
+
+async def test_layout_result_is_accepted_when_the_deck_measures_past_a_megabyte(client) -> None:
+    """The measurement grows with the deck. At aiohttp's default ceiling of 1MB a deck of
+    a couple of dozen pages stopped being checked at all, and the page said only that it
+    had not been checked yet."""
+    test_client, review = client
+    pages = []
+    for number in range(1, 61):
+        nodes = {
+            f"p{number}:0.{index}": {
+                "kind": "text", "element": "p", "bbox": [40, 40 + index, 900, 24],
+                "padding": [0, 0, 0, 0], "children": [], "overflow": False,
+                "lines": [[40, 40 + index, 880, 22]],
+            }
+            for index in range(120)
+        }
+        nodes[f"p{number}:0"] = {
+            "kind": "group", "element": "div.body", "bbox": [0, 0, 1280, 720],
+            "padding": [0, 0, 0, 0], "children": list(nodes), "lines": [], "overflow": False,
+        }
+        pages.append({"number": number, "bbox": [0, 0, 1280, 720],
+                      "children": [f"p{number}:0"], "nodes": nodes})
+    payload = {"revision": review.artifacts["slides"].revision, "errors": [], "space": pages}
+    assert len(json.dumps(payload)) > 1024 * 1024
+    response = await test_client.post("/artifacts/slides/layout", json=payload)
+    assert response.status == 200
+    state = await response.json()
+    assert state["layout_check"]["checked_revision"] == review.artifacts["slides"].revision
 
 
 async def test_layout_result_tracks_current_revision(client) -> None:

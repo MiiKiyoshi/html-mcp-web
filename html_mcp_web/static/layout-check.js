@@ -326,8 +326,11 @@ export function createLayoutChecks(dependencies) {
     clear(list);
     const problems = [];
     if (state.artifact.build_error) problems.push({ kind: "build", text: state.artifact.build_error });
+    // A check that cannot be reported is worse than one that finds something: the tab said
+    // only that nothing had been checked yet, which reads as "wait a moment" forever.
+    if (state.layoutCheckError) problems.push({ kind: "check", text: state.layoutCheckError });
     for (const error of errors) problems.push({ kind: "layout", text: error });
-    if (!checked && !state.artifact.build_error) {
+    if (!checked && !state.artifact.build_error && problems.length === 0) {
       list.appendChild(h("p", { class: "placeholder", text: "Layout not checked yet for the current revision." }));
     } else if (problems.length === 0) {
       list.appendChild(h("p", { class: "placeholder", text: "No problems." }));
@@ -370,16 +373,27 @@ export function createLayoutChecks(dependencies) {
   async function checkArtifactLayout() {
     if (state.slideShow) return;
     const revision = state.revision;
-    const payload = await fetchJson(`${artifactBase()}/layout`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        revision,
-        errors: artifactLayoutErrors(),
-        // Space is reported in page pixels, so it is read at the page's own scale too.
-        space: unzoomed(() => measureArtifactSpace(frameDocument())),
-      }),
+    const body = JSON.stringify({
+      revision,
+      errors: artifactLayoutErrors(),
+      // Space is reported in page pixels, so it is read at the page's own scale too.
+      space: unzoomed(() => measureArtifactSpace(frameDocument())),
     });
+    let payload;
+    try {
+      payload = await fetchJson(`${artifactBase()}/layout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+    } catch (error) {
+      state.layoutCheckError =
+        `the layout check ran but could not be reported (${String(error.message || error)}); `
+        + `the measurement was ${Math.round(body.length / 1024)}KB`;
+      updateLayoutUi();
+      throw error;
+    }
+    state.layoutCheckError = null;
     if (state.revision !== revision) return;
     state.artifact = payload;
     updateLayoutUi();
