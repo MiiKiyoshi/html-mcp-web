@@ -48,20 +48,51 @@ export function createAnchors(dependencies) {
     return snapshot.starts[index] + offset;
   }
   
+  // A drag does not always stop inside a text node. Released on the edge between two
+  // inline boxes, which a rendered formula is full of, the boundary is the element and the
+  // offset counts its children: the anchor then has no text node to measure from, and the
+  // comment button vanished on a selection the reader could see highlighted. The boundary
+  // moves to the nearest text in the direction the reader was dragging.
+  function textPoint(snapshot, container, offset, edge) {
+    if (container.nodeType === Node.TEXT_NODE) return { node: container, offset };
+    const point = frameDocument().createRange();
+    point.setStart(container, offset);
+    let low = 0;
+    let high = snapshot.nodes.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (point.comparePoint(snapshot.nodes[middle], 0) < 0) low = middle + 1;
+      else high = middle;
+    }
+    if (edge === "start") {
+      const node = snapshot.nodes[low] ?? snapshot.nodes[snapshot.nodes.length - 1];
+      if (node === undefined) throw new Error("selection boundary is not artifact text");
+      return { node, offset: node === snapshot.nodes[low] ? 0 : node.nodeValue.length };
+    }
+    const node = snapshot.nodes[low - 1] ?? snapshot.nodes[0];
+    if (node === undefined) throw new Error("selection boundary is not artifact text");
+    return { node, offset: node === snapshot.nodes[0] && low === 0 ? 0 : node.nodeValue.length };
+  }
+
   function captureTextAnchor(range) {
     const doc = frameDocument();
-    const quote = range.toString();
-    if (!quote.trim()) throw new Error("Select artifact text before commenting")
     const snapshot = textSnapshot(doc);
-    const startOffset = absoluteTextOffset(snapshot, range.startContainer, range.startOffset);
-    const endOffset = absoluteTextOffset(snapshot, range.endContainer, range.endOffset);
+    const start = textPoint(snapshot, range.startContainer, range.startOffset, "start");
+    const end = textPoint(snapshot, range.endContainer, range.endOffset, "end");
+    const measured = doc.createRange();
+    measured.setStart(start.node, start.offset);
+    measured.setEnd(end.node, end.offset);
+    const quote = measured.toString();
+    if (!quote.trim()) throw new Error("Select artifact text before commenting")
+    const startOffset = absoluteTextOffset(snapshot, start.node, start.offset);
+    const endOffset = absoluteTextOffset(snapshot, end.node, end.offset);
     return {
       kind: "text",
       quote,
       prefix: snapshot.text.slice(Math.max(0, startOffset - 120), startOffset),
       suffix: snapshot.text.slice(endOffset, endOffset + 120),
-      start: { path: nodePath(range.startContainer, doc.body), offset: range.startOffset },
-      end: { path: nodePath(range.endContainer, doc.body), offset: range.endOffset },
+      start: { path: nodePath(start.node, doc.body), offset: start.offset },
+      end: { path: nodePath(end.node, doc.body), offset: end.offset },
       artifact_digest: state.artifact.artifact_digest,
     };
   }

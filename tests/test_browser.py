@@ -360,6 +360,31 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert split_selection == 2  # Gecko keeps both, which is what a cell drag leaves
         wait_until(lambda: browser.execute_script(
             'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+
+        # Released on the edge between two inline boxes, which a rendered formula is full
+        # of, the drag leaves the element as the boundary and the offset counting its
+        # children. The reader sees the selection highlighted either way.
+        element_boundary = browser.execute_script('''
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const line = doc.querySelector("#subscript");
+          const selection = view.getSelection();
+          selection.removeAllRanges();
+          const range = doc.createRange();
+          range.setStart(line, 0);           // the element, not a text node
+          range.setEnd(line.lastChild, 4);
+          selection.addRange(range);
+          doc.dispatchEvent(new view.MouseEvent("mouseup", {bubbles: true}));
+          const found = selection.getRangeAt(0);
+          return {start: found.startContainer.nodeName, quote: selection.toString().slice(0, 20)};
+        ''')
+        assert element_boundary["start"] == "P"  # an element boundary, as the drag leaves it
+        assert element_boundary["quote"].strip()
+        wait_until(lambda: browser.execute_script(
+            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+        wait_until(lambda: browser.execute_script(
+            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
         browser.execute_script(
             'document.querySelector("#artifact-frame").contentWindow.getSelection().removeAllRanges();')
 
