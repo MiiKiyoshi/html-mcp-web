@@ -55,6 +55,7 @@ FIT_ERROR = re.compile(r"^page (\d+) .*?(?:overflows its content area|wastes its
 ROOM_CLEARANCE = 8.0
 ROOM_MIN_WIDTH = 80.0
 ROOM_MIN_HEIGHT = 20.0
+ROOM_MAX_BOXES = 120
 
 
 def room_for_errors(errors: list[str], space_pages: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -76,6 +77,13 @@ def room_for_errors(errors: list[str], space_pages: list[dict[str, Any]]) -> dic
         page = pages[number]
         scope_ref, scope = content_area(page)
         drawn = leaf_boxes(page, scope_ref)
+        # The search over free rectangles grows steeply with the number of boxes, and this
+        # runs inside the request that carries the whole measurement: a page that somehow
+        # still arrives with hundreds of them is answered with the blocks one level down
+        # rather than left to hold the server.
+        if len(drawn) > ROOM_MAX_BOXES:
+            children = page["children"] if scope_ref is None else page["nodes"][scope_ref]["children"]
+            drawn = [(ref, page["nodes"][ref]["bbox"]) for ref in children]
         regions = maximal_free_regions(
             scope, [box for _, box in drawn], ROOM_CLEARANCE, ROOM_MIN_WIDTH, ROOM_MIN_HEIGHT)
         regions.sort(key=lambda box: box[2] * box[3], reverse=True)
@@ -108,15 +116,22 @@ def content_area(page: dict[str, Any]) -> tuple[str | None, list[float]]:
 
 
 def leaf_boxes(page: dict[str, Any], scope_ref: str | None) -> list[tuple[str, list[float]]]:
-    """What actually occupies the content area. A container is not an obstacle: its own
-    box would cover the space its children leave between them."""
+    """What actually occupies the content area. A container is not an obstacle: its own box
+    would cover the space its children leave between them.
+
+    A figure, a table and a rendered formula are where the descent stops. Their insides are
+    not places a block could be moved to, and a formula is built from hundreds of little
+    spans: one page came to 719 boxes, and the free-region search, whose cost climbs steeply
+    with them, held the server for minutes while no other request was served.
+    """
     start = page["children"] if scope_ref is None else page["nodes"][scope_ref]["children"]
     found: list[tuple[str, list[float]]] = []
     stack = list(start)
     while stack:
         ref = stack.pop()
         node = page["nodes"][ref]
-        if node["children"]:
+        whole = node["kind"] in ("object", "table") or "katex" in node["element"]
+        if node["children"] and not whole:
             stack.extend(node["children"])
         else:
             found.append((ref, node["bbox"]))

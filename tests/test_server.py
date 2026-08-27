@@ -481,6 +481,36 @@ def test_fit_errors_report_where_the_page_still_has_room():
     assert room_for_errors(["page 1 two labels print over each other"], pages) == {}
 
 
+def test_a_formula_counts_as_one_obstacle_when_room_is_measured():
+    """The free-region search costs more the more boxes it is given, and a rendered formula
+    is hundreds of little spans. Counting each of them put 719 boxes on one page and the
+    search held the server for minutes with every other request waiting behind it."""
+    from html_mcp_web.server import content_area, leaf_boxes, room_for_errors
+
+    spans = {
+        f"p1:0.1.{index}": {"kind": "text", "element": "span.mord.mathnormal",
+                            "bbox": [60 + index, 200, 8, 18], "padding": [0, 0, 0, 0],
+                            "children": [], "lines": [], "overflow": False}
+        for index in range(300)
+    }
+    nodes = dict(spans)
+    nodes["p1:0.1"] = {"kind": "group", "element": "span.katex", "bbox": [60, 200, 400, 24],
+                       "padding": [0, 0, 0, 0], "children": list(spans), "lines": [], "overflow": False}
+    nodes["p1:0.0"] = {"kind": "text", "element": "p", "bbox": [40, 60, 1200, 30],
+                       "padding": [0, 0, 0, 0], "children": [], "lines": [], "overflow": False}
+    nodes["p1:0"] = {"kind": "group", "element": "div.body", "bbox": [40, 40, 1200, 600],
+                     "padding": [0, 0, 0, 0], "children": ["p1:0.0", "p1:0.1"],
+                     "lines": [], "overflow": False}
+    page = {"number": 1, "bbox": [0, 0, 1280, 720], "children": ["p1:0"], "nodes": nodes}
+
+    scope_ref, _ = content_area(page)
+    boxes = leaf_boxes(page, scope_ref)
+    assert [ref for ref, _ in boxes] == ["p1:0.1", "p1:0.0"]  # the formula whole, not its spans
+
+    room = room_for_errors(["page 1 content overflows its content area (height by 4px)"], [page])
+    assert room["1"]  # and the room under them is still reported
+
+
 def started_watcher(root: Path, ignore: list[str]):
     """A watcher started against a stand-in observer, with the paths it asked to watch."""
     import html_mcp_web.watcher as module
