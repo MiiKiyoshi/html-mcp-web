@@ -287,6 +287,25 @@ const anchors = createAnchors({ frameDocument, state });
 const captureTextAnchor = anchors.captureTextAnchor;
 const resolveAnchor = anchors.resolveAnchor;
 
+// The whole of what the reader dragged over, as one range. A drag usually leaves one, but
+// KaTeX draws a fraction or a subscript as an inline table (.vlist is a table-cell), and a
+// drag that crosses those cells puts Firefox into cell selection, which leaves one range
+// per cell. Taking the outermost boundaries reads that back as the span it looked like.
+function selectionSpan(selection) {
+  const Range = frameWindow().Range;
+  const span = selection.getRangeAt(0).cloneRange();
+  for (let index = 1; index < selection.rangeCount; index += 1) {
+    const other = selection.getRangeAt(index);
+    if (span.compareBoundaryPoints(Range.START_TO_START, other) > 0) {
+      span.setStart(other.startContainer, other.startOffset);
+    }
+    if (span.compareBoundaryPoints(Range.END_TO_END, other) < 0) {
+      span.setEnd(other.endContainer, other.endOffset);
+    }
+  }
+  return span;
+}
+
 function showSelectionButton() {
   const selection = frameWindow().getSelection();
   const button = $("#selection-comment-btn");
@@ -295,12 +314,17 @@ function showSelectionButton() {
     button.classList.add("hidden");
     return;
   }
-  if (selection === null || selection.rangeCount !== 1 || selection.isCollapsed) {
+  if (selection === null || selection.rangeCount === 0) {
     state.selectionAnchor = null;
     button.classList.add("hidden");
     return;
   }
-  const range = selection.getRangeAt(0);
+  const range = selectionSpan(selection);
+  if (range.collapsed) {
+    state.selectionAnchor = null;
+    button.classList.add("hidden");
+    return;
+  }
   try {
     state.selectionAnchor = captureTextAnchor(range);
   } catch (error) {
