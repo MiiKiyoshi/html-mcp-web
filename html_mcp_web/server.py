@@ -739,7 +739,12 @@ class HtmlReviewServer:
         self.watcher.stop()
 
     def create_app(self) -> web.Application:
-        app = web.Application()
+        # The layout check posts a measurement of every block on every page, which grows
+        # with the deck: a 26-page deck measured 1.2MB and aiohttp's default ceiling of 1MB
+        # turned the check off with nothing on screen to say why. The body comes from the
+        # page this server itself serves, over the loopback, so the ceiling only has to be
+        # out of the way.
+        app = web.Application(client_max_size=64 * 1024 * 1024)
         app["review_server"] = self
         app.router.add_get("/", self.index)
         app.router.add_get("/static/{name:.*}", self.static)
