@@ -338,6 +338,31 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         browser.find_element("css selector", "#scripts-btn").click()
         wait_until(lambda: browser.execute_script(script_visible))
 
+        # A drag across a formula leaves Firefox in cell selection, one range per cell,
+        # because KaTeX draws stacked parts as an inline table. The button used to want
+        # exactly one range and stayed hidden; the reader had selected something either way.
+        split_selection = browser.execute_script('''
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const words = doc.querySelector("#target").firstChild;
+          const selection = view.getSelection();
+          selection.removeAllRanges();
+          for (const [from, to] of [[0, 3], [5, 8]]) {
+            const piece = doc.createRange();
+            piece.setStart(words, from);
+            piece.setEnd(words, to);
+            selection.addRange(piece);
+          }
+          doc.dispatchEvent(new view.MouseEvent("mouseup", {bubbles: true}));
+          return selection.rangeCount;
+        ''')
+        assert split_selection == 2  # Gecko keeps both, which is what a cell drag leaves
+        wait_until(lambda: browser.execute_script(
+            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+        browser.execute_script(
+            'document.querySelector("#artifact-frame").contentWindow.getSelection().removeAllRanges();')
+
         anchor = browser.execute_script('''
           const frame = document.querySelector("#artifact-frame");
           const doc = frame.contentDocument;
