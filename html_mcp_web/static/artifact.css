@@ -42,10 +42,18 @@ html[data-html-mcp-layout] body > main.pages > section.page {
   height: var(--html-mcp-page-height) !important;
   min-height: var(--html-mcp-page-height) !important;
   max-height: var(--html-mcp-page-height) !important;
-  margin: 0 !important;
   overflow: hidden !important;
   background-color: white;
-  zoom: var(--html-mcp-page-scale, 1);
+  /* Drawn smaller, not laid out smaller. zoom lowers the font sizes the browser computes,
+     and a reader that enforces a minimum font size, as a phone does, then holds the text at
+     that floor while the boxes go on shrinking: the words grew out of their blocks and the
+     fixed line pitch of a script closed up around them. A transform leaves every size as
+     the page wrote it and only paints it smaller. The negative margins give back the room
+     the untransformed box would still take up, so the column stays as wide as what shows. */
+  transform: scale(var(--html-mcp-page-scale, 1));
+  transform-origin: top left;
+  margin: 0 calc(var(--html-mcp-page-width) * (var(--html-mcp-page-scale, 1) - 1))
+          calc(var(--html-mcp-page-height) * (var(--html-mcp-page-scale, 1) - 1)) 0 !important;
 }
 
 html[data-html-mcp-presentation="slides"],
@@ -70,6 +78,9 @@ html[data-html-mcp-presentation="slides"] body > main.pages {
 html[data-html-mcp-presentation="slides"] body > main.pages > section.page {
   grid-area: 1 / 1 !important;
   display: block !important;
+  /* One page fills the screen here and the cell centres it, so it scales about its middle
+     and needs none of the room given back. */
+  transform-origin: center center !important;
   margin: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
@@ -80,15 +91,15 @@ html[data-html-mcp-presentation="slides"] body > main.pages > section.page.html-
   pointer-events: auto !important;
 }
 
-/* A speaker-script block a template places after its page shares the page's zoom, so the
-   normal flow keeps it under that page at every window size. Deriving its position from
-   measured rectangles instead put it elsewhere on engines that keep zoom out of them. */
+/* A speaker-script block a template places after its page is drawn at the page's scale, so
+   the normal flow keeps it under that page at every window size. Deriving its position from
+   measured rectangles instead put it elsewhere on engines that keep the scaling out of them.
+   Its own height is measured and handed over, because only the page's is known here. */
 html[data-html-mcp-layout] body > main.pages > .script-block {
-  zoom: var(--html-mcp-page-scale, 1);
-  /* The gap between pages is fixed while a zoomed element's own margin shrinks with it,
-     so dividing by the scale first leaves the same pull-up at every window size: the
-     script stays nearer its own page than the next one. */
-  margin-top: calc(-14px / var(--html-mcp-page-scale, 1)) !important;
+  transform: scale(var(--html-mcp-page-scale, 1));
+  transform-origin: top left;
+  margin: -14px calc(var(--html-mcp-page-width) * (var(--html-mcp-page-scale, 1) - 1))
+          calc(var(--html-mcp-script-height, 164px) * (var(--html-mcp-page-scale, 1) - 1)) 0 !important;
 }
 
 html[data-html-mcp-presentation="slides"] body > main.pages > .script-block,
@@ -137,7 +148,8 @@ html[data-html-mcp-fullscreen] .html-mcp-highlight-layer {
     box-shadow: none !important;
     break-after: page;
     print-color-adjust: exact;
-    zoom: 1 !important;
+    transform: none !important;
+    margin: 0 !important;
   }
 
   /* Backgrounds inside a page print too: print-color-adjust does not inherit, and a

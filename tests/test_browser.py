@@ -747,6 +747,25 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
         assert opened["sideHeight"] > 50                        # the comments are on screen
         assert opened["sideTop"] >= opened["paneBottom"] - 2    # under the artifact, not over it
         assert opened["paneWidth"] >= measured["width"] - 2     # which keeps the whole width
+
+        # The bar along the top of the comments drags the split, so either side can be given
+        # the screen without the other going away.
+        grip = browser.find_element("css selector", "#sidebar-grip")
+        box = browser.execute_script(
+            'const r = document.querySelector("#sidebar-grip").getBoundingClientRect();'
+            'return {x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2)};')
+        drag = browser.actions.sequence("pointer", "mouse", {"pointerType": "mouse"})
+        drag.pointer_move(box["x"], box["y"]).pointer_down()
+        for step in range(1, 5):
+            drag.pointer_move(box["x"], box["y"] - 30 * step, duration=30)
+        drag.pointer_up().perform()
+        dragged = browser.execute_script('''
+          const pane = document.querySelector("#artifact-pane").getBoundingClientRect();
+          const side = document.querySelector("#sidebar").getBoundingClientRect();
+          return {paneHeight: pane.height, sideHeight: side.height};
+        ''')
+        assert dragged["sideHeight"] > opened["sideHeight"] + 40   # dragged up, so it grew
+        assert dragged["paneHeight"] > 80                          # and the artifact is still there
     finally:
         if browser is not None:
             try:
