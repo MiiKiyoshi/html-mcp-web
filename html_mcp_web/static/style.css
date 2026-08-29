@@ -35,6 +35,10 @@ button:disabled { cursor: default; opacity: .6; }
   display: flex;
   align-items: center;
   flex: 0 0 auto;
+  /* The row moves to a second line rather than squeezing: on a screen between a phone's and
+     a desktop's, the labels were pressed until each broke across two lines inside its own
+     button. */
+  flex-wrap: wrap;
   gap: 1rem;
   padding: .2rem .8rem;
   border-bottom: 1px solid var(--line);
@@ -49,7 +53,8 @@ button:disabled { cursor: default; opacity: .6; }
 .main-file { padding-right: .75rem; color: var(--muted); font-family: ui-monospace, monospace; font-size: .82rem; }
 .artifact-status { align-self: stretch; display: flex; align-items: center; padding-left: .75rem; border-left: 1px solid var(--line); color: var(--muted); font-size: .82rem; }
 .artifact-status.error { color: #a23f34; }
-.topbar-actions { display: flex; gap: .5rem; margin-left: auto; align-items: center; }
+.topbar-actions { display: flex; flex: 0 0 auto; gap: .5rem; margin-left: auto; align-items: center; }
+.topbar h1, .topbar-actions button, .download-btn { white-space: nowrap; }
 .topbar-actions button { padding: .1rem .55rem; border-radius: 3px; font-size: .82rem; }
 /* The scripts button is an icon that reads as a switch: lit while scripts show, plain
    while they hide. */
@@ -292,25 +297,27 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   background: var(--line);
 }
 
-/* A phone is not wide enough to put the comments beside the artifact: side by side left the
-   artifact 150px of a 450px screen, the slide shrank into it, and the row of buttons ran off
-   the right edge, taking the control that hides the sidebar with it. A phone is long instead
-   of wide, so the comments go under the artifact, which keeps the whole width, and the row
-   of controls wraps rather than running past the edge. */
-@media (max-width: 560px) {
-  .topbar { flex-wrap: wrap; gap: .4rem .6rem; padding: .3rem .5rem; }
-  .topbar h1, .artifact-meta { display: none; }
-  .artifact-tabs { padding-left: 0; border-left: 0; }
-  .topbar-actions { margin-left: auto; flex-wrap: wrap; }
+/* Beside the artifact or under it is decided by the shape of the screen rather than its
+   width: a tablet held upright has room to spare across and still reads better with the
+   comments below, where the height is. The split is dragged by the bar along the top of
+   the comments, so either side can be given the screen without the other going away. */
+@media (max-width: 560px), (orientation: portrait) {
   .layout {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) minmax(0, var(--html-mcp-panel-height, 45vh));
   }
   .layout.sidebar-collapsed { grid-template-rows: minmax(0, 1fr) 0; }
   #sidebar { border-left: 0; border-top: 1px solid var(--line); }
-  /* The split between the artifact and the comments is dragged by the bar along the top of
-     the comments, so either can be given the screen without hiding the other. */
   .sidebar-grip { display: block; }
+}
+
+/* A narrow screen also has no room for the row of controls, which ran off the right edge
+   and took the control that hides the comments with it. */
+@media (max-width: 560px) {
+  .topbar { flex-wrap: wrap; gap: .4rem .6rem; padding: .3rem .5rem; }
+  .topbar h1, .artifact-meta { display: none; }
+  .artifact-tabs { padding-left: 0; border-left: 0; }
+  .topbar-actions { margin-left: auto; flex-wrap: wrap; }
 }
 
 

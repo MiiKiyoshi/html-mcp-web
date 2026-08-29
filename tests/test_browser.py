@@ -766,6 +766,19 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
         ''')
         assert dragged["sideHeight"] > opened["sideHeight"] + 40   # dragged up, so it grew
         assert dragged["paneHeight"] > 80                          # and the artifact is still there
+
+        # A tablet held upright has width to spare and still reads better with the comments
+        # below, so the split follows the shape of the screen rather than its width.
+        browser.set_window_rect(width=820, height=1200)
+        wait_until(lambda: browser.execute_script("return window.innerWidth > 700"))
+        upright = browser.execute_script('''
+          const pane = document.querySelector("#artifact-pane").getBoundingClientRect();
+          const side = document.querySelector("#sidebar").getBoundingClientRect();
+          return {width: window.innerWidth, paneWidth: pane.width, paneBottom: pane.bottom,
+                  sideTop: side.top, sideWidth: side.width};
+        ''')
+        assert upright["paneWidth"] >= upright["width"] - 2
+        assert upright["sideTop"] >= upright["paneBottom"] - 2
     finally:
         if browser is not None:
             try:
