@@ -338,6 +338,21 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         browser.find_element("css selector", "#scripts-btn").click()
         wait_until(lambda: browser.execute_script(script_visible))
 
+        # Where the button that starts a comment came out: against the words it belongs to,
+        # and against the pane that has to hold all of it.
+        measure_selection_button = '''
+          const pane = document.querySelector("#artifact-pane").getBoundingClientRect();
+          const frame = document.querySelector("#artifact-frame").getBoundingClientRect();
+          const words = document.querySelector("#artifact-frame").contentWindow
+            .getSelection().getRangeAt(0).getBoundingClientRect();
+          const button = document.querySelector("#selection-comment-btn").getBoundingClientRect();
+          return {fromLeft: button.left - (frame.left + words.left),
+                  belowWords: button.top - (frame.top + words.bottom),
+                  wouldOverflow: frame.top + words.bottom + 8 + button.height > pane.bottom - 8,
+                  inside: button.left >= pane.left && button.right <= pane.right
+                          && button.top >= pane.top && button.bottom <= pane.bottom};
+        '''
+
         # A phone holds a word to select it and sends no mouseup, so the selection alone
         # has to bring the button out; the words were highlighted and nothing appeared.
         browser.execute_script('''
@@ -354,6 +369,36 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         ''')
         wait_until(lambda: browser.execute_script(
             'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+        # It comes out under the words, against their left edge, where the hand that made the
+        # selection already is.
+        placed = browser.execute_script(measure_selection_button)
+        assert abs(placed["fromLeft"]) <= 2
+        assert 0 <= placed["belowWords"] <= 12
+        assert placed["inside"]
+
+        # At the bottom edge the same placement would hang the button off the pane, so it
+        # goes above the words instead and stays whole.
+        browser.execute_script('''
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const cell = doc.querySelector("#hidden td").firstChild;
+          cell.parentElement.scrollIntoView({block: "end"});
+          const selection = view.getSelection();
+          selection.removeAllRanges();
+          const range = doc.createRange();
+          range.setStart(cell, 0);
+          range.setEnd(cell, 5);
+          selection.addRange(range);
+          doc.dispatchEvent(new view.MouseEvent("mouseup", {bubbles: true}));
+        ''')
+        wait_until(lambda: browser.execute_script(
+            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+        edge = browser.execute_script(measure_selection_button)
+        assert edge["wouldOverflow"]        # the words really are at the bottom of the pane
+        assert edge["inside"]               # and the whole button is still on it
+        assert edge["belowWords"] < 0       # because it went above them
+
         browser.execute_script(
             'document.querySelector("#artifact-frame").contentWindow.getSelection().removeAllRanges();')
 
