@@ -272,4 +272,23 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   .topbar h1 { display: none; }
 }
 
+/* A phone is not wide enough to put the comments beside the artifact: side by side left the
+   artifact 150px of a 450px screen, the slide shrank into it, and the row of buttons ran off
+   the right edge, taking the control that hides the sidebar with it. A phone is long instead
+   of wide, so the comments go under the artifact, which keeps the whole width, and the row
+   of controls wraps rather than running past the edge. */
+@media (max-width: 560px) {
+  .topbar { flex-wrap: wrap; gap: .4rem .6rem; padding: .3rem .5rem; }
+  .topbar h1, .artifact-meta { display: none; }
+  .artifact-tabs { padding-left: 0; border-left: 0; }
+  .topbar-actions { margin-left: auto; flex-wrap: wrap; }
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 45vh);
+  }
+  .layout.sidebar-collapsed { grid-template-rows: minmax(0, 1fr) 0; }
+  #sidebar { border-left: 0; border-top: 1px solid var(--line); }
+}
+
+
 .stale-pill { color: #bd6d58; font-weight: 700; font-size: 11px; }
