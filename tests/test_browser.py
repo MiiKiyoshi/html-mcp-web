@@ -338,6 +338,25 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         browser.find_element("css selector", "#scripts-btn").click()
         wait_until(lambda: browser.execute_script(script_visible))
 
+        # A phone holds a word to select it and sends no mouseup, so the selection alone
+        # has to bring the button out; the words were highlighted and nothing appeared.
+        browser.execute_script('''
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const words = doc.querySelector("#target").firstChild;
+          const selection = view.getSelection();
+          selection.removeAllRanges();
+          const range = doc.createRange();
+          range.setStart(words, 0);
+          range.setEnd(words, 8);
+          selection.addRange(range);          // no mouseup follows, as on a touch screen
+        ''')
+        wait_until(lambda: browser.execute_script(
+            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+        browser.execute_script(
+            'document.querySelector("#artifact-frame").contentWindow.getSelection().removeAllRanges();')
+
         # A drag across a formula leaves Firefox in cell selection, one range per cell,
         # because KaTeX draws stacked parts as an inline table. The button used to want
         # exactly one range and stayed hidden; the reader had selected something either way.
