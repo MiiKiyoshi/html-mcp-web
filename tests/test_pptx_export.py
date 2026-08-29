@@ -330,6 +330,7 @@ def test_the_page_is_carried_over_as_it_is_laid_out(tmp_path: Path) -> None:
   <ul class="notes"><li>one</li><li>two</li><li>three</li></ul>
   <img src="fig/wide.png" style="width:300px;height:100px;object-fit:contain">
   <div><svg viewBox="0 0 200 100" width="200" height="100"><rect x="5" y="5" width="190" height="90" fill="none" stroke="#333"/><text x="10" y="60" font-size="12">axis label</text></svg></div>
+  <p>step <span style="display:inline-block;min-width:1.25em;height:1.25em;text-align:center;border-radius:50%;background:#243943;color:#fff;font-size:13px">2</span> then <code>chip</code></p>
 </section>
 </body>
 ''', encoding="utf-8")
@@ -358,3 +359,15 @@ def test_the_page_is_carried_over_as_it_is_laid_out(tmp_path: Path) -> None:
     drawing = [shape for shape in kinds["PICTURE"] if shape.image.size != (120, 60)]
     assert drawing, "the inline svg is a picture of its own"
     assert not any("axis label" in shape.text_frame.text for shape in kinds["TEXT_BOX"])
+
+    # A numbered marker is a disc with a pale digit on it. A run carries no shape, and a
+    # highlight is a rectangle that some readers carry past a line break, so the character
+    # that means this is used: it sits in the line and cannot drift from it.
+    from pptx.oxml.ns import qn
+    line = next(shape for shape in kinds["TEXT_BOX"] if shape.text_frame.text.startswith("step"))
+    runs = line.text_frame.paragraphs[0].runs
+    badge = next(run for run in runs if run.text == "\u2777")  # the disc for 2
+    assert str(badge.font.color.rgb) == "243943"
+    assert badge._r.find(qn("a:rPr")).find(qn("a:highlight")) is None
+    chip = next(run for run in runs if run.text == "chip")
+    assert chip._r.find(qn("a:rPr")).find(qn("a:highlight")) is not None  # a code chip still is one

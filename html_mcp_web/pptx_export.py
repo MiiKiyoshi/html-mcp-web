@@ -86,6 +86,34 @@ let counter = 0;
 for (const stale of page.querySelectorAll('[data-pptx-index]')) stale.removeAttribute('data-pptx-index');
 const mark = (el) => { el.setAttribute('data-pptx-index', String(counter)); return counter++; };
 
+// A numbered marker: a round fill with a digit on it. A run carries no shape of its own,
+// and both ways round it fail. A highlight is a rectangle that some readers carry on past
+// a line break, and a shape placed at the marker's own coordinates drifts from the digit,
+// because the text is laid out again in the deck's own metrics. The character that already
+// means this is used instead: it sits in the line, so it cannot drift.
+const luminance = (colour) => {
+  const parts = (colour.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+  return parts.length < 3 ? 1 : (0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2]) / 255;
+};
+const badgeRun = (el, s, base) => {
+  const rects = el.getClientRects();
+  if (rects.length !== 1) return null;
+  const radius = /%$/.test(s.borderTopLeftRadius)
+    ? parseFloat(s.borderTopLeftRadius) / 100
+    : (parseFloat(s.borderTopLeftRadius) || 0) / Math.max(1, Math.min(rects[0].width, rects[0].height));
+  if (radius < 0.4) return null;
+  const number = Number(el.textContent.trim());
+  if (!Number.isInteger(number) || number < 1 || number > 10) return null;
+  // Filled when the disc is darker than what is written on it, hollow when it is not; the
+  // glyph is one colour and the numeral is left open, which is how the page draws it too.
+  const filled = luminance(s.backgroundColor) < luminance(s.color);
+  return Object.assign({}, base, {
+    text: String.fromCodePoint((filled ? 0x2776 : 0x2460) + number - 1),
+    color: filled ? s.backgroundColor : s.color,
+    size: parseFloat(s.fontSize), mono: false, chip: null,
+  });
+};
+
 // A code block keeps its line breaks and its indentation: the text is the layout there,
 // and collapsing it ran a listing together into one line.
 const keepsBreaks = (el) => el !== null && /^(pre|pre-wrap|break-spaces)/.test(cs(el).whiteSpace);
@@ -111,8 +139,10 @@ const runsOf = (node, out, base) => {
       const s = cs(n);
       if (s.display === 'none') continue;
       const mono = /mono/i.test(s.fontFamily) || tg === 'code' || base.mono;
-      const chipBg = (tg === 'code' && s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.backgroundColor !== 'transparent')
-        ? s.backgroundColor : base.chip;
+      const painted = s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.backgroundColor !== 'transparent';
+      const marker = painted ? badgeRun(n, s, base) : null;
+      if (marker) { out.push(marker); continue; }
+      const chipBg = (painted && tg === 'code') ? s.backgroundColor : base.chip;
       const b = Object.assign({}, base, {
         bold: (parseInt(s.fontWeight) >= 600) || base.bold,
         italic: s.fontStyle === 'italic' || base.italic,
