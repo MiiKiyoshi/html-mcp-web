@@ -687,3 +687,77 @@ return {paragraph: size(page.querySelector('p')),
             except subprocess.TimeoutExpired:
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) -> None:
+    """Side by side, a phone left the artifact 150px of a 450px screen and pushed the row of
+    controls past the right edge, the control that hides the comments among them. A phone is
+    long rather than wide, so the comments belong under the artifact."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_phone_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "420", "-height", "800", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=420, height=800)
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        measured = browser.execute_script('''
+          const pane = document.querySelector("#artifact-pane").getBoundingClientRect();
+          const toggle = document.querySelector("#sidebar-toggle-btn").getBoundingClientRect();
+          const bar = document.querySelector(".topbar");
+          return {width: window.innerWidth, height: window.innerHeight,
+                  paneWidth: pane.width, paneBottom: pane.bottom,
+                  toggleRight: toggle.right, barOverflow: bar.scrollWidth - bar.clientWidth,
+                  collapsed: document.querySelector(".layout").classList.contains("sidebar-collapsed")};
+        ''')
+        assert measured["paneWidth"] >= measured["width"] - 2   # the artifact has the screen
+        assert measured["toggleRight"] <= measured["width"]     # and the control is reachable
+        assert measured["barOverflow"] <= 1                     # nothing runs off the row
+        assert measured["collapsed"]                            # comments wait to be asked for
+
+        browser.find_element("css selector", "#sidebar-toggle-btn").click()
+        opened = browser.execute_script('''
+          const pane = document.querySelector("#artifact-pane").getBoundingClientRect();
+          const side = document.querySelector("#sidebar").getBoundingClientRect();
+          return {paneWidth: pane.width, paneBottom: pane.bottom,
+                  sideTop: side.top, sideWidth: side.width, sideHeight: side.height};
+        ''')
+        assert opened["sideHeight"] > 50                        # the comments are on screen
+        assert opened["sideTop"] >= opened["paneBottom"] - 2    # under the artifact, not over it
+        assert opened["paneWidth"] >= measured["width"] - 2     # which keeps the whole width
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()

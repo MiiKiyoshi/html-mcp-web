@@ -240,7 +240,10 @@ function updatePageScale() {
     ? doc.querySelector("body > main.pages > section.page.html-mcp-current-page")
     : doc.querySelector("body > main.pages > section.page");
   if (page === null) return;
-  const availableWidth = frameWindow().innerWidth - (state.slideShow ? 0 : 48);
+  // The margin is there so a page does not touch the pane's edges; on a phone it is a
+  // tenth of the width and the page cannot afford it.
+  const margin = state.slideShow ? 0 : (frameWindow().innerWidth < 560 ? 8 : 48);
+  const availableWidth = frameWindow().innerWidth - margin;
   const widthScale = availableWidth / page.offsetWidth;
   const scale = state.slideShow
     ? Math.min(widthScale, frameWindow().innerHeight / page.offsetHeight)
@@ -710,7 +713,11 @@ function attachControls() {
     $("#sidebar-toggle-btn").click();
   });
   $("#fullscreen-btn").disabled = !document.fullscreenEnabled;
-  if (localStorage.getItem("htmlMcpSidebarCollapsed") === "1") $(".layout").classList.add("sidebar-collapsed");
+  // On a phone the comments cover the artifact, so they start out of the way until asked
+  // for; a wide screen shows both and keeps whatever was chosen last.
+  const stored = localStorage.getItem("htmlMcpSidebarCollapsed");
+  const collapsed = stored === null ? window.innerWidth <= 560 : stored === "1";
+  if (collapsed) $(".layout").classList.add("sidebar-collapsed");
 }
 
 async function init() {
