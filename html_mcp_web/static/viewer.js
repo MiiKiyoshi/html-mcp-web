@@ -34,6 +34,7 @@ const state = {
   presentationWheelEvents: [],
   presentationLastWheelStep: 0,
   suppressPresentationClick: false,
+  draggingPanel: false,
 };
 
 function artifactBase() {
@@ -547,6 +548,10 @@ function attachArtifactEvents() {
   }, { passive: true });
   win.addEventListener("resize", () => {
     updatePageScale();
+    // Dragging the split resizes the artifact on every frame. Measuring the fit of all pages
+    // and redrawing the highlight boxes that often is the work that made the bar lag behind
+    // the finger; the drag ends with one of each.
+    if (state.draggingPanel) return;
     scheduleHighlights();
     scheduleLayoutCheck();
     scheduleCurrentPage();
@@ -722,23 +727,44 @@ function attachControls() {
   const grip = $("#sidebar-grip");
   const layout = $(".layout");
   const setPanelHeight = (pixels) => {
-    const limited = Math.max(90, Math.min(pixels, window.innerHeight - 140));
-    layout.style.setProperty("--html-mcp-panel-height", `${Math.round(limited)}px`);
-    localStorage.setItem("htmlMcpPanelHeight", String(Math.round(limited)));
+    const limited = Math.round(Math.max(90, Math.min(pixels, window.innerHeight - 140)));
+    layout.style.setProperty("--html-mcp-panel-height", `${limited}px`);
+    return limited;
   };
   const savedHeight = Number(localStorage.getItem("htmlMcpPanelHeight"));
   if (savedHeight > 0) layout.style.setProperty("--html-mcp-panel-height", `${savedHeight}px`);
   grip.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     grip.setPointerCapture(event.pointerId);
-    const move = (moved) => setPanelHeight(layout.getBoundingClientRect().bottom - moved.clientY);
+    // A finger sends more moves than the screen draws, and each one resized the artifact and
+    // wrote the new height to storage, so the bar answered late and the drag read as stuck.
+    // One height per frame is all a drag can show, and the height is kept once, on release.
+    // The edge the height is measured from cannot move during the drag, so it is read once.
+    const bottom = layout.getBoundingClientRect().bottom;
+    let pointerY = null;
+    let frame = null;
+    let height = null;
+    const apply = () => {
+      frame = null;
+      height = setPanelHeight(bottom - pointerY);
+    };
+    const move = (moved) => {
+      pointerY = moved.clientY;
+      if (frame === null) frame = requestAnimationFrame(apply);
+    };
     const done = () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      if (pointerY !== null) height = setPanelHeight(bottom - pointerY);
+      state.draggingPanel = false;
       grip.removeEventListener("pointermove", move);
       grip.removeEventListener("pointerup", done);
       grip.removeEventListener("pointercancel", done);
+      if (height !== null) localStorage.setItem("htmlMcpPanelHeight", String(height));
       updatePageScale();
       scheduleHighlights();
+      scheduleLayoutCheck();
     };
+    state.draggingPanel = true;
     grip.addEventListener("pointermove", move);
     grip.addEventListener("pointerup", done);
     grip.addEventListener("pointercancel", done);
