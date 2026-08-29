@@ -305,3 +305,56 @@ def test_inline_flow_images_each_become_a_picture(tmp_path: Path) -> None:
     export_pptx(html.as_uri(), out, tmp_path, None)
     prs = pptx.Presentation(str(out))
     assert len(shapes_by_kind(prs.slides[1]).get("PICTURE", [])) == 4
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_the_page_is_carried_over_as_it_is_laid_out(tmp_path: Path) -> None:
+    """Four things the export used to lose: the line breaks of a code block, the gap under
+    a bullet, the proportions of a picture fitted in a box of another shape, and a drawing
+    whose only fault was sitting inline, which came out as a line of its own labels."""
+    from html_mcp_web.slides import build
+    from PIL import Image
+
+    (tmp_path / "fig").mkdir()
+    Image.new("RGB", (120, 60), "#3366aa").save(tmp_path / "fig" / "wide.png")
+    content = tmp_path / "content.html"
+    content.write_text('''<!doctype html>
+<meta charset="utf-8">
+<title>Fidelity</title>
+<body data-author="A" data-meta="B">
+<section data-title="Carried Over">
+  <pre><code>first (line) {
+  second : 50;
+  third  : 90;
+}</code></pre>
+  <ul class="notes"><li>one</li><li>two</li><li>three</li></ul>
+  <img src="fig/wide.png" style="width:300px;height:100px;object-fit:contain">
+  <div><svg viewBox="0 0 200 100" width="200" height="100"><rect x="5" y="5" width="190" height="90" fill="none" stroke="#333"/><text x="10" y="60" font-size="12">axis label</text></svg></div>
+</section>
+</body>
+''', encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, NEUTRAL)
+    out = tmp_path / "deck.pptx"
+    export_pptx(html.as_uri(), out, tmp_path, None)
+    slide = pptx.Presentation(str(out)).slides[1]
+    kinds = shapes_by_kind(slide)
+
+    listing = next(shape for shape in kinds["TEXT_BOX"] if shape.text_frame.text.startswith("first (line)"))
+    assert listing.text_frame.text.count("\v") == 3  # four lines, so three breaks
+    assert "  second : 50;" in listing.text_frame.text  # and the indentation with them
+
+    bullets = next(shape for shape in kinds["TEXT_BOX"] if shape.text_frame.text.startswith("one"))
+    gaps = [para.space_before for para in bullets.text_frame.paragraphs]
+    assert gaps[0].pt == 0
+    assert all(gap.pt > 0 for gap in gaps[1:])  # ul.notes spaces its items with margin-bottom
+
+    # The image is 2:1 in a 3:1 box, so the page draws it 200x100 and leaves a band at each
+    # side; the picture carries the drawn size, not the box.
+    picture = next(shape for shape in kinds["PICTURE"]
+                   if shape.image.blob[:4] == b"\x89PNG" and shape.image.size == (120, 60))
+    assert round(picture.width / 9525) == 200 and round(picture.height / 9525) == 100
+
+    drawing = [shape for shape in kinds["PICTURE"] if shape.image.size != (120, 60)]
+    assert drawing, "the inline svg is a picture of its own"
+    assert not any("axis label" in shape.text_frame.text for shape in kinds["TEXT_BOX"])
