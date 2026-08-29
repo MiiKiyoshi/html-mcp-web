@@ -308,7 +308,10 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   }
   .layout.sidebar-collapsed { grid-template-rows: minmax(0, 1fr) 0; }
   #sidebar { border-left: 0; border-top: 1px solid var(--line); }
-  .sidebar-grip { display: block; }
+  /* A pointer lands where it is aimed and a finger does not, so the band to grab is wider
+     here than the bar drawn inside it. */
+  .sidebar-grip { display: block; height: 36px; }
+  .sidebar-grip::before { margin: 16px auto; }
 }
 
 /* A narrow screen also has no room for the row of controls, which ran off the right edge
