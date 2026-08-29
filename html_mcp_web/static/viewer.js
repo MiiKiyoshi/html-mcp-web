@@ -25,6 +25,8 @@ const state = {
   renderFrame: null,
   layoutFrame: null,
   layoutCheckError: null,
+  selectionPointerDown: false,
+  selectionSettle: null,
   pageFrame: null,
   currentPage: null,
   slideShow: false,
@@ -500,14 +502,37 @@ function attachArtifactEvents() {
   renderPages();
   doc.addEventListener("mouseup", () => setTimeout(showSelectionButton, 0), true);
   doc.addEventListener("keyup", () => setTimeout(showSelectionButton, 0), true);
+  // A phone selects by holding a word and dragging the handles, and sends no mouseup for
+  // any of it: the words were highlighted and no button ever came. The selection itself is
+  // watched as well, held back while a pointer is down so that a drag on a desktop still
+  // settles before the button appears.
+  // A phone selects by holding a word and dragging the handles, and sends no mouseup for
+  // any of it: the words were highlighted and no button ever came. The selection itself is
+  // watched as well, held back while a pointer is down so that a drag on a desktop still
+  // settles before the button appears.
+  doc.addEventListener("touchend", () => setTimeout(showSelectionButton, 60), true);
+  doc.addEventListener("selectionchange", () => {
+    if (state.selectionPointerDown) return;
+    if (state.selectionSettle !== null) clearTimeout(state.selectionSettle);
+    state.selectionSettle = setTimeout(() => {
+      state.selectionSettle = null;
+      showSelectionButton();
+    }, 250);
+  });
   doc.addEventListener("keydown", handlePresentationKeydown, true);
   doc.addEventListener("click", handlePresentationClick, true);
   doc.addEventListener("pointerdown", handlePresentationPointerDown, true);
   doc.addEventListener("pointerup", handlePresentationPointerUp, true);
   doc.addEventListener("wheel", handlePresentationWheel, { passive: false });
   doc.addEventListener("pointerdown", (event) => {
+    state.selectionPointerDown = true;
     if (!event.target.closest(".html-mcp-highlight-layer")) hideSelectionButton();
   }, true);
+  doc.addEventListener("pointerup", () => {
+    state.selectionPointerDown = false;
+    setTimeout(showSelectionButton, 60);
+  }, true);
+  doc.addEventListener("pointercancel", () => { state.selectionPointerDown = false; }, true);
   win.addEventListener("scroll", () => {
     hideSelectionButton();
     scheduleCurrentPage();
