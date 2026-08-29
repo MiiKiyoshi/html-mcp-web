@@ -272,6 +272,26 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   .topbar h1 { display: none; }
 }
 
+.sidebar-grip {
+  display: none;
+  flex: 0 0 auto;
+  height: 20px;
+  cursor: row-resize;
+  touch-action: none;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.sidebar-grip::before {
+  content: "";
+  display: block;
+  width: 42px;
+  height: 4px;
+  margin: 8px auto;
+  border-radius: 2px;
+  background: var(--line);
+}
+
 /* A phone is not wide enough to put the comments beside the artifact: side by side left the
    artifact 150px of a 450px screen, the slide shrank into it, and the row of buttons ran off
    the right edge, taking the control that hides the sidebar with it. A phone is long instead
@@ -284,11 +304,15 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   .topbar-actions { margin-left: auto; flex-wrap: wrap; }
   .layout {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) minmax(0, 45vh);
+    grid-template-rows: minmax(0, 1fr) minmax(0, var(--html-mcp-panel-height, 45vh));
   }
   .layout.sidebar-collapsed { grid-template-rows: minmax(0, 1fr) 0; }
   #sidebar { border-left: 0; border-top: 1px solid var(--line); }
+  /* The split between the artifact and the comments is dragged by the bar along the top of
+     the comments, so either can be given the screen without hiding the other. */
+  .sidebar-grip { display: block; }
 }
+
 
 
 .stale-pill { color: #bd6d58; font-weight: 700; font-size: 11px; }

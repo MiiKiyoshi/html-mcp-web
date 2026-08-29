@@ -248,7 +248,12 @@ function updatePageScale() {
   const scale = state.slideShow
     ? Math.min(widthScale, frameWindow().innerHeight / page.offsetHeight)
     : Math.min(1, widthScale);
-  frameDocument().documentElement.style.setProperty("--html-mcp-page-scale", String(scale));
+  const root = frameDocument().documentElement;
+  root.style.setProperty("--html-mcp-page-scale", String(scale));
+  // The room a drawn-smaller block gives back depends on its own height, and only the
+  // template knows how tall a script block is.
+  const script = doc.querySelector("body > main.pages > .script-block");
+  if (script !== null) root.style.setProperty("--html-mcp-script-height", `${script.offsetHeight}px`);
 }
 
 let scheduleLayoutCheck = () => {};
@@ -711,6 +716,32 @@ function attachControls() {
     if (["TEXTAREA", "INPUT", "SELECT"].includes(event.target.tagName)) return;
     event.preventDefault();
     $("#sidebar-toggle-btn").click();
+  });
+  // On a phone the comments sit under the artifact, and the bar along their top drags the
+  // split so either can be given the screen without the other going away.
+  const grip = $("#sidebar-grip");
+  const layout = $(".layout");
+  const setPanelHeight = (pixels) => {
+    const limited = Math.max(90, Math.min(pixels, window.innerHeight - 140));
+    layout.style.setProperty("--html-mcp-panel-height", `${Math.round(limited)}px`);
+    localStorage.setItem("htmlMcpPanelHeight", String(Math.round(limited)));
+  };
+  const savedHeight = Number(localStorage.getItem("htmlMcpPanelHeight"));
+  if (savedHeight > 0) layout.style.setProperty("--html-mcp-panel-height", `${savedHeight}px`);
+  grip.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    grip.setPointerCapture(event.pointerId);
+    const move = (moved) => setPanelHeight(layout.getBoundingClientRect().bottom - moved.clientY);
+    const done = () => {
+      grip.removeEventListener("pointermove", move);
+      grip.removeEventListener("pointerup", done);
+      grip.removeEventListener("pointercancel", done);
+      updatePageScale();
+      scheduleHighlights();
+    };
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener("pointerup", done);
+    grip.addEventListener("pointercancel", done);
   });
   $("#fullscreen-btn").disabled = !document.fullscreenEnabled;
   // On a phone the comments cover the artifact, so they start out of the way until asked
