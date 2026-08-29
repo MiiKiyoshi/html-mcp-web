@@ -347,11 +347,19 @@ function showSelectionButton() {
   const rect = range.getBoundingClientRect();
   const iframe = $("#artifact-frame");
   const pane = $("#artifact-pane");
-  const left = Math.min(pane.clientWidth - 92, Math.max(8, iframe.offsetLeft + rect.right + 8));
-  const top = Math.min(pane.clientHeight - 38, Math.max(8, iframe.offsetTop + rect.top - 36));
-  button.style.left = `${left}px`;
-  button.style.top = `${top}px`;
   button.classList.remove("hidden");
+  // Under the selection and lined up with its left edge. The button's own size is read
+  // rather than assumed, so the pane's edges can hold it: a selection near the bottom puts
+  // it above instead, and one near a side slides it along until the whole button fits.
+  const gap = 8;
+  const width = button.offsetWidth;
+  const height = button.offsetHeight;
+  const under = iframe.offsetTop + rect.bottom + gap;
+  const above = iframe.offsetTop + rect.top - height - gap;
+  const wanted = under + height > pane.clientHeight - gap && above >= gap ? above : under;
+  const left = iframe.offsetLeft + rect.left;
+  button.style.left = `${Math.max(gap, Math.min(left, pane.clientWidth - width - gap))}px`;
+  button.style.top = `${Math.max(gap, Math.min(wanted, pane.clientHeight - height - gap))}px`;
 }
 
 function hideSelectionButton() {
