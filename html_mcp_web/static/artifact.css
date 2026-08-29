@@ -14,6 +14,15 @@ html[data-html-mcp-layout="report"] {
 
 html[data-html-mcp-layout] { background: #faf8f2 !important; }
 
+/* The page is laid out at one fixed size and only then drawn smaller, so a reader that
+   enlarges text by itself has nothing to gain here. On a phone it left the drawings at
+   their proportions and doubled every label inside them, which put the numbers off the
+   wires they name. The page keeps the sizes it wrote. */
+html[data-html-mcp-layout] {
+  -webkit-text-size-adjust: none !important;
+  text-size-adjust: none !important;
+}
+
 html[data-html-mcp-layout] body {
   min-width: 0 !important;
   max-width: none !important;

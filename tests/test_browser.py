@@ -766,6 +766,11 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
         ''')
         assert dragged["sideHeight"] > opened["sideHeight"] + 40   # dragged up, so it grew
         assert dragged["paneHeight"] > 80                          # and the artifact is still there
+        # The height is written once the drag ends, not on every move it passes through.
+        kept = browser.execute_script(
+            'return {stored: Number(localStorage.getItem("htmlMcpPanelHeight")),'
+            ' height: document.querySelector("#sidebar").getBoundingClientRect().height};')
+        assert abs(kept["stored"] - kept["height"]) <= 2
 
         # A tablet held upright has width to spare and still reads better with the comments
         # below, so the split follows the shape of the screen rather than its width.
@@ -779,6 +784,18 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
         ''')
         assert upright["paneWidth"] >= upright["width"] - 2
         assert upright["sideTop"] >= upright["paneBottom"] - 2
+
+        # A phone that enlarges text on its own doubled the labels inside the drawings while
+        # the drawings kept their size, which put the numbers off the wires they name. The
+        # page is drawn at one size and asks to keep it, down to the text in an svg.
+        adjust = browser.execute_script('''
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const label = doc.querySelector("svg#chart text");
+          const read = (el) => getComputedStyle(el).getPropertyValue("-webkit-text-size-adjust");
+          return {root: read(doc.documentElement), label: label ? read(label) : null};
+        ''')
+        assert adjust["root"] == "none"
+        assert adjust["label"] == "none"
     finally:
         if browser is not None:
             try:
