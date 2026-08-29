@@ -86,9 +86,21 @@ let counter = 0;
 for (const stale of page.querySelectorAll('[data-pptx-index]')) stale.removeAttribute('data-pptx-index');
 const mark = (el) => { el.setAttribute('data-pptx-index', String(counter)); return counter++; };
 
+// A code block keeps its line breaks and its indentation: the text is the layout there,
+// and collapsing it ran a listing together into one line.
+const keepsBreaks = (el) => el !== null && /^(pre|pre-wrap|break-spaces)/.test(cs(el).whiteSpace);
+
 const runsOf = (node, out, base) => {
   for (const n of node.childNodes) {
     if (n.nodeType === 3) {
+      if (keepsBreaks(n.parentElement)) {
+        const lines = n.textContent.split('\n');
+        for (let index = 0; index < lines.length; index++) {
+          if (index > 0 && out.length > 0) out.push(Object.assign({}, base, {text: '\v'}));
+          if (lines[index] !== '') out.push(Object.assign({}, base, {text: lines[index]}));
+        }
+        continue;
+      }
       const t = n.textContent.replace(/\s+/g, ' ');
       if (t.trim() === '' && out.length === 0) continue;
       if (t !== '') out.push(Object.assign({}, base, {text: t}));
@@ -125,7 +137,10 @@ const paraOf = (el, level, marginTop) => {
   while (runs.length && runs[runs.length - 1].text.trim() === '' && runs[runs.length - 1].text !== '\v') runs.pop();
   return {level, runs, size: parseFloat(s.fontSize),
           lh: parseFloat(s.lineHeight) / parseFloat(s.fontSize) || 1.2,
-          align: s.textAlign, marginTop: marginTop || 0};
+          align: s.textAlign, marginTop: marginTop || 0,
+          // The gap under a paragraph is as much a part of the page as the gap over it, and
+          // bullets are usually spaced with this one alone.
+          marginBottom: parseFloat(s.marginBottom) || 0};
 };
 const listParas = (list, level, out) => {
   for (const li of list.children) {
@@ -137,9 +152,14 @@ const listParas = (list, level, out) => {
     }
   }
 };
-// Positioned children (a footer's page number and label) keep their own boxes too.
+// Positioned children (a footer's page number and label) keep their own boxes too, and so
+// does a figure: an inline <svg> is not a block, so a box holding one read as a leaf and
+// the whole drawing came out as a line of text made of its own labels.
+const FIGURE = /^(svg|canvas|video|img)$/;
 const hasBlockChild = (el) => Array.from(el.children).some((ch) => {
-  const c = cs(ch); return BLOCKISH.test(c.display) || c.position === 'absolute' || c.position === 'fixed';
+  const c = cs(ch);
+  return BLOCKISH.test(c.display) || c.position === 'absolute' || c.position === 'fixed'
+    || FIGURE.test(ch.tagName.toLowerCase());
 });
 // A ::before/::after that draws something (a contents ring number). Text carrying such a
 // decoration cannot be hidden for the background pass without losing it, so it stays baked.
@@ -169,7 +189,13 @@ const emit = (el) => {
   const rect = rel(r);
   const hasKatex = !!el.querySelector('.katex') || el.classList.contains('katex');
   const container = hasBlockChild(el);
-  if (tag === 'img') { items.push({kind: 'img', rect, src: el.getAttribute('src'), i: mark(el)}); return; }
+  if (tag === 'img') {
+    // Where the picture is actually painted: object-fit decides how it sits in a box of
+    // another shape, and taking the box alone stretched a tall figure across a wide one.
+    items.push({kind: 'img', rect, src: el.getAttribute('src'), fit: s.objectFit,
+                natural: [el.naturalWidth, el.naturalHeight], i: mark(el)});
+    return;
+  }
   // A block that holds math (a paragraph, a list, a table) is shot whole; a container
   // that merely has math somewhere inside descends so the rest stays editable.
   const leafBlock = !container || tag === 'table' || tag === 'ul' || tag === 'ol';
@@ -332,13 +358,15 @@ def _set_run_highlight(run, color) -> None:
         rPr.insert(0, highlight)
 
 
-def _fill_paragraph(p, para: dict[str, Any], font: str, bold_all: bool = False) -> None:
+def _fill_paragraph(p, para: dict[str, Any], font: str, bold_all: bool = False,
+                    space_before: float | None = None) -> None:
     from pptx.enum.text import PP_ALIGN
     from pptx.util import Pt
     # Fixed line pitch in points: a percentage is taken against PowerPoint's own single
     # spacing, which is not the browser's, and the lines drift apart.
     p.line_spacing = Pt(para["lh"] * para["size"] * PT_PER_PX)
-    p.space_before = Pt(para["marginTop"] * PT_PER_PX) if para["marginTop"] else Pt(0)
+    gap = para["marginTop"] if space_before is None else space_before
+    p.space_before = Pt(gap * PT_PER_PX) if gap else Pt(0)
     p.space_after = Pt(0)
     p.alignment = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT}.get(para["align"], PP_ALIGN.LEFT)
     if not para["runs"]:
@@ -394,13 +422,20 @@ def _add_text(slide, item: dict[str, Any], font: str) -> None:
     for element in list(bodyPr):
         if element.tag in (qn("a:spAutoFit"), qn("a:normAutofit")):
             bodyPr.remove(element)
+    previous_bottom = 0.0
     for index, para in enumerate(item["paras"]):
         p = frame.paragraphs[0] if index == 0 else frame.add_paragraph()
         if item["list"]:
             _set_list_marker(p._p, para["level"], item["padLeft"], item["list"] == "ol", font)
         else:
             _no_marker(p._p)
-        _fill_paragraph(p, para, font)
+        # Neighbouring margins collapse on the page, where the gap is the larger of the two;
+        # in a text box they would add, so the collapse is done here and carried above the
+        # paragraph. Spacing bullets with margin-bottom alone is the common case, and taking
+        # only margin-top closed every gap in the list.
+        gap = para["marginTop"] if index == 0 else max(previous_bottom, para["marginTop"])
+        _fill_paragraph(p, para, font, space_before=gap)
+        previous_bottom = para.get("marginBottom", 0)
 
 
 def _set_cell_borders(cell, top, bottom) -> None:
@@ -518,6 +553,45 @@ def _add_panel(slide, item: dict[str, Any]) -> None:
 def _add_picture(slide, data: bytes, rect: list[float]):
     x, y, w, h = rect
     return slide.shapes.add_picture(io.BytesIO(data), _px(x), _px(y), _px(w), _px(h))
+
+
+def _painted_rect(rect: list[float], natural: list[float] | None, fit: str | None) -> list[float]:
+    """Where inside its box the picture is actually painted.
+
+    A box of another shape than the picture does not stretch it unless the page says so:
+    contain fits it inside and centres it, leaving a band on two sides. Reading the box
+    alone put a tall figure across a wide one.
+    """
+    x, y, w, h = rect
+    if not natural or fit not in ("contain", "scale-down") or w <= 0 or h <= 0:
+        return rect
+    natural_width, natural_height = natural
+    if not natural_width or not natural_height:
+        return rect
+    scale = min(w / natural_width, h / natural_height)
+    if fit == "scale-down":
+        scale = min(scale, 1.0)
+    width = natural_width * scale
+    height = natural_height * scale
+    # object-position defaults to the centre, which is what every figure in the templates uses.
+    return [x + (w - width) / 2, y + (h - height) / 2, width, height]
+
+
+def _crop_to_cover(picture, rect: list[float], natural: list[float] | None) -> None:
+    """cover fills the box and the rest is cut off, so the picture carries the same crop."""
+    if not natural:
+        return
+    natural_width, natural_height = natural
+    if not natural_width or not natural_height:
+        return
+    _, _, w, h = rect
+    scale = max(w / natural_width, h / natural_height)
+    width = natural_width * scale
+    height = natural_height * scale
+    if width > w:
+        picture.crop_left = picture.crop_right = (width - w) / width / 2
+    if height > h:
+        picture.crop_top = picture.crop_bottom = (height - h) / height / 2
 
 
 def _set_slide_background(slide, png: bytes) -> None:
@@ -847,7 +921,11 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
                         if not source.is_relative_to(project_dir.resolve()) or not source.is_file():
                             raise FileNotFoundError(f"image {src!r} is not a file inside the project")
                         data = source.read_bytes()
-                    _add_picture(slide, data, item["rect"])
+                    fit = item.get("fit")
+                    natural = item.get("natural")
+                    picture = _add_picture(slide, data, _painted_rect(item["rect"], natural, fit))
+                    if fit == "cover":
+                        _crop_to_cover(picture, item["rect"], natural)
                 else:
                     shot_bytes = base64.b64decode(item["_shot"])
                     if "svg" in item:
