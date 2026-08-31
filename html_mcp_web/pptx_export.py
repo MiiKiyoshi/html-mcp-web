@@ -473,6 +473,15 @@ def _add_text(slide, item: dict[str, Any], font: str) -> None:
         previous_bottom = para.get("marginBottom", 0)
 
 
+def _wider(current, other):
+    """Of the two lines a pair of cells asks for along their shared edge, the one drawn."""
+    if other is None or other[1] <= 0 or other[2] == "none":
+        return current
+    if current is None or other[1] > current[1]:
+        return other
+    return current
+
+
 def _set_cell_borders(cell, top, bottom, left=None, right=None) -> None:
     """Each side: (css color, width px, style) from the DOM, or None for no line."""
     from pptx.oxml.ns import qn
@@ -517,6 +526,7 @@ def _add_table(slide, item: dict[str, Any], font: str) -> None:
     # the row empty. Each slot records the cell it belongs to and whether it starts there.
     owner = [[None] * n_cols for _ in range(n_rows)]
     widths = [None] * n_cols
+    placed = []
     for row_index, row in enumerate(rows):
         col = 0
         for source in row["cells"]:
@@ -524,46 +534,69 @@ def _add_table(slide, item: dict[str, Any], font: str) -> None:
                 col += 1
             if col >= n_cols:
                 break
-            for down in range(min(source["rowSpan"], n_rows - row_index)):
-                for across in range(min(source["colSpan"], n_cols - col)):
+            reach_rows = min(source["rowSpan"], n_rows - row_index)
+            reach_cols = min(source["colSpan"], n_cols - col)
+            for down in range(reach_rows):
+                for across in range(reach_cols):
                     owner[row_index + down][col + across] = (source, down == 0 and across == 0)
             if source["colSpan"] == 1:
                 widths[col] = source["rect"][2]
+            placed.append((row_index, col, reach_rows, reach_cols, source))
             col += source["colSpan"]
+    # Two cells meet along one edge and the page draws a single line there. Writing each cell
+    # its own four sides left one of a pair asking for a line where the other asked for none,
+    # and the slots a spanning cell covers asked for nothing at all, so a reader that draws
+    # each slot of the grid in turn broke the line into pieces. The edges are settled once,
+    # here, and every slot reads its four sides back off them.
+    horizontal, vertical = {}, {}
+    for row_index, col, reach_rows, reach_cols, source in placed:
+        for across in range(reach_cols):
+            above, below = (row_index, col + across), (row_index + reach_rows, col + across)
+            horizontal[above] = _wider(horizontal.get(above), source["borderTop"])
+            horizontal[below] = _wider(horizontal.get(below), source["borderBottom"])
+        for down in range(reach_rows):
+            before, after = (row_index + down, col), (row_index + down, col + reach_cols)
+            vertical[before] = _wider(vertical.get(before), source["borderLeft"])
+            vertical[after] = _wider(vertical.get(after), source["borderRight"])
     spare = max(0.0, w - sum(width for width in widths if width is not None))
     unknown = sum(1 for width in widths if width is None)
     for col in range(n_cols):
         table.columns[col].width = _px(widths[col] if widths[col] is not None else spare / unknown)
     for row_index, row in enumerate(rows):
         table.rows[row_index].height = _px(row["rect"][3])
+    reach = {(row_index, col): (reach_rows, reach_cols)
+             for row_index, col, reach_rows, reach_cols, _ in placed}
+    for row_index, col, reach_rows, reach_cols, source in placed:
+        if reach_rows > 1 or reach_cols > 1:
+            table.cell(row_index, col).merge(
+                table.cell(row_index + reach_rows - 1, col + reach_cols - 1))
     for row_index in range(n_rows):
         for col in range(n_cols):
             slot = owner[row_index][col]
-            if slot is not None and not slot[1]:
-                continue
             source = None if slot is None else slot[0]
-            if source is not None and (source["rowSpan"] > 1 or source["colSpan"] > 1):
-                table.cell(row_index, col).merge(table.cell(
-                    min(row_index + source["rowSpan"], n_rows) - 1,
-                    min(col + source["colSpan"], n_cols) - 1))
+            starts = slot is not None and slot[1]
             cell = table.cell(row_index, col)
             cell.margin_left = cell.margin_right = Emu(int(6 * EMU_PER_PX))
             cell.margin_top = cell.margin_bottom = Emu(int(4 * EMU_PER_PX))
             cell.vertical_anchor = MSO_ANCHOR.MIDDLE
-            if source is None:
-                # Borders go in before the fill: the schema orders lnL/R/T/B ahead of the
-                # fill, and PowerPoint drops borders that come after it (LibreOffice tolerates them).
-                _set_cell_borders(cell, None, None)
-                cell.fill.background()
-                continue
-            _set_cell_borders(cell, source["borderTop"], source["borderBottom"],
-                              source["borderLeft"], source["borderRight"])
-            background = _rgb(source["bg"])
+            # A cell that starts a span is drawn over all of it, so its far sides are the
+            # span's; a slot it covers is drawn on its own and takes the sides it sits on.
+            down, across = reach[(row_index, col)] if starts else (1, 1)
+            # Borders go in before the fill: the schema orders lnL/R/T/B ahead of the fill,
+            # and PowerPoint drops borders that come after it (LibreOffice tolerates them).
+            _set_cell_borders(cell,
+                              horizontal.get((row_index, col)),
+                              horizontal.get((row_index + down, col)),
+                              vertical.get((row_index, col)),
+                              vertical.get((row_index, col + across)))
+            background = _rgb(source["bg"]) if source is not None else None
             if background is None:
                 cell.fill.background()
             else:
                 cell.fill.solid()
                 cell.fill.fore_color.rgb = background
+            if not starts:
+                continue
             frame = cell.text_frame
             frame.word_wrap = True
             _fill_paragraph(frame.paragraphs[0], source["para"], font, bold_all=source["header"])

@@ -107,8 +107,16 @@ def test_export_bakes_chrome_into_background_and_keeps_body_editable(tmp_path: P
     assert kinds["TABLE"][0].top + kinds["TABLE"][0].height <= card_title.top
     # The table carries no style-drawn grid; only the per-cell borders from the DOM show.
     from pptx.oxml.ns import qn
-    # The rule between the two groups is a left border, which no top or bottom line carries.
-    assert table.cell(2, 1)._tc.find(qn("a:tcPr")).find(qn("a:lnL")).find(qn("a:solidFill")) is not None
+    # A line runs the whole width or height of the table, so every slot along it says the same
+    # thing. The slots a spanning cell covers said nothing at all, and a reader that draws the
+    # grid slot by slot rather than the spanning cell left the line in pieces.
+    def drawn(row, col, tag):
+        properties = table.cell(row, col)._tc.find(qn("a:tcPr"))
+        line = properties.find(qn(tag)) if properties is not None else None
+        return line is not None and line.find(qn("a:solidFill")) is not None
+
+    assert all(drawn(1, col, "a:lnB") for col in range(3))   # the rule under the header
+    assert all(drawn(row, 1, "a:lnL") for row in range(4))   # the rule between the two groups
     assert kinds["TABLE"][0]._element.xpath(".//a:tableStyleId")[0].text == "{2D5ABB26-0587-4C30-8999-92F81FD0307C}"
     # Borders come before the fill in tcPr; PowerPoint drops borders placed after it.
     header_cell = table.cell(0, 0)._tc
