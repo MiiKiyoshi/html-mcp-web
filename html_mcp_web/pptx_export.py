@@ -243,12 +243,17 @@ const emit = (el) => {
       const cells = [];
       for (const td of tr.children) {
         const s2 = cs(td);
+        // A cell that spans says so, and the row carries its own height: a spanning cell is
+        // as tall as the rows it covers, which is not the height of the row it starts in.
         cells.push({rect: rel(td.getBoundingClientRect()), header: td.tagName.toLowerCase() === 'th',
+                    colSpan: td.colSpan || 1, rowSpan: td.rowSpan || 1,
                     align: s2.textAlign, bg: s2.backgroundColor, para: paraOf(td, 0, 0),
                     borderBottom: [s2.borderBottomColor, parseFloat(s2.borderBottomWidth) || 0, s2.borderBottomStyle],
-                    borderTop: [s2.borderTopColor, parseFloat(s2.borderTopWidth) || 0, s2.borderTopStyle]});
+                    borderTop: [s2.borderTopColor, parseFloat(s2.borderTopWidth) || 0, s2.borderTopStyle],
+                    borderLeft: [s2.borderLeftColor, parseFloat(s2.borderLeftWidth) || 0, s2.borderLeftStyle],
+                    borderRight: [s2.borderRightColor, parseFloat(s2.borderRightWidth) || 0, s2.borderRightStyle]});
       }
-      if (cells.length) rows.push(cells);
+      if (cells.length) rows.push({rect: rel(tr.getBoundingClientRect()), cells});
     }
     items.push({kind: 'table', rect, rows, i: mark(el)});
     return;
@@ -468,11 +473,11 @@ def _add_text(slide, item: dict[str, Any], font: str) -> None:
         previous_bottom = para.get("marginBottom", 0)
 
 
-def _set_cell_borders(cell, top, bottom) -> None:
-    """top/bottom: (css color, width px, style) from the DOM; left/right are never drawn."""
+def _set_cell_borders(cell, top, bottom, left=None, right=None) -> None:
+    """Each side: (css color, width px, style) from the DOM, or None for no line."""
     from pptx.oxml.ns import qn
     tcPr = cell._tc.get_or_add_tcPr()
-    for tag, spec in (("a:lnL", None), ("a:lnR", None), ("a:lnT", top), ("a:lnB", bottom)):
+    for tag, spec in (("a:lnL", left), ("a:lnR", right), ("a:lnT", top), ("a:lnB", bottom)):
         for element in tcPr.findall(qn(tag)):
             tcPr.remove(element)
         line = tcPr.makeelement(qn(tag), {})
@@ -493,7 +498,8 @@ def _add_table(slide, item: dict[str, Any], font: str) -> None:
     from pptx.oxml.ns import qn
     from pptx.util import Emu
     rows = item["rows"]
-    n_rows, n_cols = len(rows), max(len(row) for row in rows)
+    n_rows = len(rows)
+    n_cols = max(sum(cell["colSpan"] for cell in row["cells"]) for row in rows)
     x, y, w, h = item["rect"]
     graphic = slide.shapes.add_table(n_rows, n_cols, _px(x), _px(y), _px(w), _px(h))
     table = graphic.table
@@ -505,24 +511,53 @@ def _add_table(slide, item: dict[str, Any], font: str) -> None:
         # No Style, No Grid: the style adds nothing, so the per-cell borders read from the
         # DOM are the only lines. The Table Grid style drew a full grid over them in PowerPoint.
         style.text = "{2D5ABB26-0587-4C30-8999-92F81FD0307C}"
-    widest = max(rows, key=len)
+    # A row holds one cell per slot it still has free, not one per column: a cell above it
+    # spanning down, or one before it spanning across, has already taken the rest. Filling by
+    # position in the row put a header group over the wrong columns and left the far side of
+    # the row empty. Each slot records the cell it belongs to and whether it starts there.
+    owner = [[None] * n_cols for _ in range(n_rows)]
+    widths = [None] * n_cols
+    for row_index, row in enumerate(rows):
+        col = 0
+        for source in row["cells"]:
+            while col < n_cols and owner[row_index][col] is not None:
+                col += 1
+            if col >= n_cols:
+                break
+            for down in range(min(source["rowSpan"], n_rows - row_index)):
+                for across in range(min(source["colSpan"], n_cols - col)):
+                    owner[row_index + down][col + across] = (source, down == 0 and across == 0)
+            if source["colSpan"] == 1:
+                widths[col] = source["rect"][2]
+            col += source["colSpan"]
+    spare = max(0.0, w - sum(width for width in widths if width is not None))
+    unknown = sum(1 for width in widths if width is None)
     for col in range(n_cols):
-        table.columns[col].width = _px(widest[col]["rect"][2])
-    for row_index, cells in enumerate(rows):
-        table.rows[row_index].height = _px(cells[0]["rect"][3])
+        table.columns[col].width = _px(widths[col] if widths[col] is not None else spare / unknown)
+    for row_index, row in enumerate(rows):
+        table.rows[row_index].height = _px(row["rect"][3])
+    for row_index in range(n_rows):
         for col in range(n_cols):
+            slot = owner[row_index][col]
+            if slot is not None and not slot[1]:
+                continue
+            source = None if slot is None else slot[0]
+            if source is not None and (source["rowSpan"] > 1 or source["colSpan"] > 1):
+                table.cell(row_index, col).merge(table.cell(
+                    min(row_index + source["rowSpan"], n_rows) - 1,
+                    min(col + source["colSpan"], n_cols) - 1))
             cell = table.cell(row_index, col)
             cell.margin_left = cell.margin_right = Emu(int(6 * EMU_PER_PX))
             cell.margin_top = cell.margin_bottom = Emu(int(4 * EMU_PER_PX))
             cell.vertical_anchor = MSO_ANCHOR.MIDDLE
-            if col >= len(cells):
+            if source is None:
                 # Borders go in before the fill: the schema orders lnL/R/T/B ahead of the
                 # fill, and PowerPoint drops borders that come after it (LibreOffice tolerates them).
                 _set_cell_borders(cell, None, None)
                 cell.fill.background()
                 continue
-            source = cells[col]
-            _set_cell_borders(cell, source["borderTop"], source["borderBottom"])
+            _set_cell_borders(cell, source["borderTop"], source["borderBottom"],
+                              source["borderLeft"], source["borderRight"])
             background = _rgb(source["bg"])
             if background is None:
                 cell.fill.background()
