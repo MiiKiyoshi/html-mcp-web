@@ -21,8 +21,11 @@ CONTENT = '''<!doctype html>
   <p class="lead">Lead sentence with <b>bold</b> and <code>code</code>.</p>
   <ul class="notes"><li>First point<ul><li>Nested point</li></ul></li><li>Second point</li></ul>
   <ol><li>Step one</li><li>Step two</li></ol>
-  <table><thead><tr><th>Name</th><th>Value</th></tr></thead>
-    <tbody><tr><td>alpha</td><td>1</td></tr><tr><td>beta</td><td>2</td></tr></tbody></table>
+  <table><thead>
+      <tr><th rowspan="2">Name</th><th colspan="2" style="border-left:1px solid #888">Group</th></tr>
+      <tr><th style="border-left:1px solid #888">Value</th><th>Share</th></tr></thead>
+    <tbody><tr><td>alpha</td><td style="border-left:1px solid #888">1</td><td>10%</td></tr>
+      <tr><td>beta</td><td style="border-left:1px solid #888">2</td><td>20%</td></tr></tbody></table>
   <div class="card"><h3>Card title</h3><p>Card body text.</p></div>
   <p>Math stays a picture: $x^2$</p>
   <img src="fig/box.png" alt="">
@@ -91,9 +94,21 @@ def test_export_bakes_chrome_into_background_and_keeps_body_editable(tmp_path: P
     assert "buAutoNum" in steps.text_frame.paragraphs[0]._p.xml
     assert len(kinds["TABLE"]) == 1
     table = kinds["TABLE"][0].table
-    assert table.cell(0, 0).text == "Name" and table.cell(2, 1).text == "2"
+    assert table.cell(0, 0).text == "Name" and table.cell(3, 1).text == "2"
+    # A header that spans covers the columns it names. Laying the cells out by their place in
+    # the row instead put "Group" over one column and left the rest of the header row empty,
+    # and the row under it started one column too far left.
+    assert table.cell(0, 0).span_height == 2   # "Name" reaches down past the second header row
+    assert table.cell(0, 1).span_width == 2    # and "Group" reaches across both of its columns
+    assert table.cell(1, 1).text == "Value" and table.cell(1, 2).text == "Share"
+    # A cell as tall as the two rows it spans is not the height of the row it starts in. Taking
+    # it for one stretched the table past where the page ends it, over the block underneath.
+    card_title = next(shape for shape in kinds["TEXT_BOX"] if shape.text_frame.text == "Card title")
+    assert kinds["TABLE"][0].top + kinds["TABLE"][0].height <= card_title.top
     # The table carries no style-drawn grid; only the per-cell borders from the DOM show.
     from pptx.oxml.ns import qn
+    # The rule between the two groups is a left border, which no top or bottom line carries.
+    assert table.cell(2, 1)._tc.find(qn("a:tcPr")).find(qn("a:lnL")).find(qn("a:solidFill")) is not None
     assert kinds["TABLE"][0]._element.xpath(".//a:tableStyleId")[0].text == "{2D5ABB26-0587-4C30-8999-92F81FD0307C}"
     # Borders come before the fill in tcPr; PowerPoint drops borders placed after it.
     header_cell = table.cell(0, 0)._tc
