@@ -39,6 +39,21 @@ from ..template_content import parse_template_content
 HERE = Path(__file__).parent
 SKELETON = HERE / "skeleton.css"
 
+# A page is 1280x720 and the file may be opened in a window narrower than that. The
+# skeleton scales it by --deck-fit; only the number needs measuring, and only when the
+# deck stands on its own: the review viewer marks the document and fits it itself, and
+# the pptx export lays the page out at its full size, so both leave the factor at 1.
+FIT_SCRIPT = """<script>
+(() => {
+  const root = document.documentElement;
+  if (root.hasAttribute("data-html-mcp-layout")) return;
+  const fit = () => root.style.setProperty(
+    "--deck-fit", String(Math.min(1, (root.clientWidth - 24) / 1280)));
+  addEventListener("resize", fit);
+  fit();
+})();
+</script>"""
+
 # Widths the embedded images are downscaled to; a slot only needs what its box shows.
 SLOT_WIDTHS = {
     "cover_band_left": 500,
@@ -258,6 +273,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
 {body_html}
 
   </main>{math[1]}
+{FIT_SCRIPT}
 </body>
 </html>
 '''

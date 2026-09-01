@@ -51,7 +51,8 @@ BULLETS = ["•", "◦", "▪"]
 JS_SETUP = """
 const st = document.createElement('style');
 st.textContent = 'section.page{width:%dpx !important;height:%dpx !important;margin:0 auto !important;'
-  + 'box-shadow:none !important;border-radius:0 !important}.script-block{display:none !important}';
+  + 'transform:none !important;box-shadow:none !important;border-radius:0 !important}'
+  + '.script-block{display:none !important}';
 document.head.appendChild(st);
 """ % (PAGE_WIDTH_PX, PAGE_HEIGHT_PX)
 
