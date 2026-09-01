@@ -704,6 +704,28 @@ def test_browser_review_contract(tmp_path: Path) -> None:
           return Array.from(document.querySelectorAll(".artifact-tab"))
             .map((tab) => tab.textContent).join("|") === "Updated Slides|Updated Report";
         '''))
+
+        # Resolve all closes the whole open queue at once, which is how the reviewer signs
+        # off a batch the agent answered and deliberately left open. The first press asks
+        # in the label and changes nothing; the second one closes them.
+        browser.find_element("css selector", '.artifact-tab:nth-child(1)').click()
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#main-file").textContent === "slides.html"'))
+        for note in ("First of the batch", "Second of the batch"):
+            post_json(f"{base}/artifacts/slides/comments",
+                      {"anchor": {"kind": "artifact"}, "text": note})
+        still_open = get_json(f"{base}/artifacts/slides/comments?status=open")["comments"]
+        assert len(still_open) == 2
+        asking = f"Resolve {len(still_open)}?"
+        browser.find_element("css selector", "#resolve-open-btn").click()
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#resolve-open-btn").textContent') == asking)
+        assert get_json(f"{base}/artifacts/slides/comments?status=open")["comments"] == still_open
+        browser.find_element("css selector", "#resolve-open-btn").click()
+        wait_until(lambda: not get_json(f"{base}/artifacts/slides/comments?status=open")["comments"])
+        closed = get_json(f"{base}/artifacts/slides/comments/{still_open[0]['id']}")
+        assert closed["status"] == "resolved"
+        assert closed["thread"][-1]["author"] == "human"   # the reviewer closed it, not the agent
     finally:
         if browser is not None:
             try:

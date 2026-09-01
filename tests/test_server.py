@@ -732,6 +732,45 @@ async def test_render_page_crops_to_a_target_block(client, monkeypatch) -> None:
     assert stale.status == 409
 
 
+async def test_the_reviewer_closes_a_batch_under_their_own_name(client) -> None:
+    """The agent answers and leaves the thread open so its reasoning stays readable; the
+    reviewer closes what they have read. A batch closed from the page is the reviewer's
+    act, so the thread records them, and the agent's did-my-edit-land check stays out."""
+    test_client, review = client
+    digest = review.artifacts["slides"].digest()
+    ids = []
+    for number in range(2):
+        made = await (await test_client.post(
+            "/artifacts/slides/comments",
+            json={"anchor": text_anchor(digest), "text": f"Look at {number}"},
+        )).json()
+        ids.append(made["id"])
+
+    closed = await (await test_client.post("/artifacts/slides/comments/update", json={
+        "comment_ids": ids, "status": "resolved", "author": "human", "message": "read, all fine",
+    })).json()
+    assert [entry["status"] for entry in closed["updated"]] == ["resolved", "resolved"]
+    # The anchors all survive here, and that is not news to the reviewer who just read them.
+    assert "warning" not in closed
+    thread = await (await test_client.get(f"/artifacts/slides/comments/{ids[0]}")).json()
+    assert thread["thread"][-1] == {**thread["thread"][-1], "author": "human", "text": "read, all fine"}
+
+    # The agent closing its own batch still gets the check that its edit landed.
+    reopened = await (await test_client.post("/artifacts/slides/comments/update", json={
+        "comment_ids": ids, "status": "open", "author": "human", "message": "not yet",
+    })).json()
+    assert [entry["status"] for entry in reopened["updated"]] == ["open", "open"]
+    agent_closed = await (await test_client.post("/artifacts/slides/comments/update", json={
+        "comment_ids": ids, "status": "resolved",
+    })).json()
+    assert ids[0] in agent_closed["warning"]
+
+    bad = await test_client.post("/artifacts/slides/comments/update", json={
+        "comment_ids": ids, "status": "resolved", "author": "someone",
+    })
+    assert bad.status == 400
+
+
 async def test_call_button_wakes_a_parked_waiter_and_keeps_an_early_press(client) -> None:
     """The reviewer's press is an interrupt, not a message the agent must be listening for:
     a parked wait returns the moment the button is pressed, and a press made before anyone

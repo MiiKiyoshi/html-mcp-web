@@ -251,6 +251,24 @@ export function createComments(dependencies) {
     }
   }
   
+  // Closing the batch is the reviewer's act, not the agent's: the agent answers and edits
+  // and leaves the thread open, so its reasoning stays readable, and this closes what has
+  // been read and found sound. The open list is fetched now rather than taken from the
+  // view, which the status filter may have narrowed to something else entirely.
+  async function openCommentIds() {
+    const payload = await fetchJson(`${artifactBase()}/comments?status=open`);
+    return payload.comments.map((comment) => comment.id);
+  }
+
+  async function resolveComments(ids) {
+    await fetchJson(`${artifactBase()}/comments/update`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ comment_ids: ids, status: "resolved", author: "human" }),
+    });
+    await refreshComments();
+  }
+
   async function mutateComment(commentId, action, body) {
     await fetchJson(`${artifactBase()}/comments/${commentId}/${action}`, {
       method: "POST",
@@ -355,8 +373,10 @@ export function createComments(dependencies) {
     captureCommentUi,
     focusComment,
     openCompose,
+    openCommentIds,
     refreshComments,
     renderComments,
+    resolveComments,
     restoreCommentUi,
     submitCompose,
     switchSidebarTab,

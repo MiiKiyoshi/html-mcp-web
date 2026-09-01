@@ -738,6 +738,11 @@ class HtmlReviewServer:
             message = data["message"] if "message" in data else ""
             status = data["status"] if "status" in data else None
             edited_files = data["edited_files"] if "edited_files" in data else None
+            # The reviewer closes a batch from the page as well, and a thread that reads
+            # "agent resolved" over the reviewer's own click misreports who decided.
+            author = data["author"] if "author" in data else "agent"
+            if author not in {"human", "agent"}:
+                raise ValueError("author must be human or agent")
             if not isinstance(comment_ids, list) or not all(isinstance(value, str) for value in comment_ids):
                 raise ValueError("comment_ids must be a list of strings")
             if not isinstance(message, str):
@@ -750,7 +755,7 @@ class HtmlReviewServer:
                 raise ValueError("edited_files must be a list of strings")
             comments = runtime.store.update_many(
                 comment_ids,
-                "agent",
+                author,
                 message,
                 status=status,
                 edits=edited_files,
@@ -765,7 +770,9 @@ class HtmlReviewServer:
                 for comment in comments
             ]
         }
-        if status == "resolved":
+        # The reviewer closing a batch has just read the threads; the check exists to tell
+        # an agent that its own edit did not land where the comment pointed.
+        if status == "resolved" and author == "agent":
             untouched = [comment.id for comment in comments if self._anchor_text_survives(runtime, comment)]
             if untouched:
                 listed = ", ".join(untouched)
