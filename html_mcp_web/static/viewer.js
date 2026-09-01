@@ -35,6 +35,7 @@ const state = {
   presentationLastWheelStep: 0,
   suppressPresentationClick: false,
   draggingPanel: false,
+  panelDraggedAt: -Infinity,
 };
 
 function artifactBase() {
@@ -573,10 +574,6 @@ function attachArtifactEvents() {
   // any of it: the words were highlighted and no button ever came. The selection itself is
   // watched as well, held back while a pointer is down so that a drag on a desktop still
   // settles before the button appears.
-  // A phone selects by holding a word and dragging the handles, and sends no mouseup for
-  // any of it: the words were highlighted and no button ever came. The selection itself is
-  // watched as well, held back while a pointer is down so that a drag on a desktop still
-  // settles before the button appears.
   doc.addEventListener("touchend", () => setTimeout(showSelectionButton, 60), true);
   doc.addEventListener("selectionchange", () => {
     if (state.selectionPointerDown) return;
@@ -861,6 +858,18 @@ function attachControls() {
   };
   const savedHeight = Number(localStorage.getItem("htmlMcpPanelHeight"));
   if (savedHeight > 0) layout.style.setProperty("--html-mcp-panel-height", `${savedHeight}px`);
+  // The tab row sits directly under the bar, and dragging moves the panel's edge out from
+  // under the finger: on release the tabs were where the finger now was, and the tap that
+  // ends a drag landed on one of them. A drag is not a tap, so clicks in the comments are
+  // ignored for a moment after one, at the capture phase, before any tab sees them. A
+  // window rather than a one-shot: the drag itself leaves a click behind, and a one-shot
+  // was spent on that one and let the offender through.
+  const dragQuietFor = 400;
+  $("#sidebar").addEventListener("click", (event) => {
+    if (performance.now() - state.panelDraggedAt >= dragQuietFor) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
   grip.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     grip.setPointerCapture(event.pointerId);
@@ -880,9 +889,11 @@ function attachControls() {
       pointerY = moved.clientY;
       if (frame === null) frame = requestAnimationFrame(apply);
     };
-    const done = () => {
+    const done = (ended) => {
       if (frame !== null) cancelAnimationFrame(frame);
       if (pointerY !== null) height = setPanelHeight(bottom - pointerY);
+      if (ended?.cancelable) ended.preventDefault();
+      if (pointerY !== null) state.panelDraggedAt = performance.now();
       state.draggingPanel = false;
       grip.removeEventListener("pointermove", move);
       grip.removeEventListener("pointerup", done);

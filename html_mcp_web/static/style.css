@@ -314,8 +314,16 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   #sidebar { border-left: 0; border-top: 1px solid var(--line); }
   /* A pointer lands where it is aimed and a finger does not, so the band to grab is wider
      here than the bar drawn inside it. */
-  .sidebar-grip { display: block; height: 24px; }
-  .sidebar-grip::before { margin: 10px auto; }
+  /* A finger is wider than the bar it aims at, and a touch that fell short of it hit the
+     tab row underneath. The band keeps the height it is drawn at and takes the space above
+     it as well, which is the gap between the artifact and the comments: transparent, so
+     the bar still reads as thin, and the whole of it answers a touch. */
+  .sidebar-grip {
+    display: block;
+    height: 38px;
+    background: linear-gradient(to bottom, transparent 14px, var(--bg) 14px);
+  }
+  .sidebar-grip::before { margin: 24px auto 0; }
 }
 
 /* A narrow screen also has no room for the row of controls, which ran off the right edge
