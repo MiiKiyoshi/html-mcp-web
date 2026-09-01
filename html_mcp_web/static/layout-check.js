@@ -72,9 +72,16 @@ export function createLayoutChecks(dependencies) {
     const style = frameDocument().documentElement.style;
     const previous = style.getPropertyValue("--html-mcp-page-scale");
     style.setProperty("--html-mcp-page-scale", "1");
+    // The reader's own zoom (panzoom's matrix on main.pages) scales measured geometry
+    // just as the fit does, and a page checked at whatever the reader happened to hold
+    // would report different problems per gesture.
+    const pages = frameDocument().querySelector("body > main.pages");
+    const held = pages === null ? "" : pages.style.transform;
+    if (pages !== null) pages.style.transform = "none";
     try {
       return read();
     } finally {
+      if (pages !== null) pages.style.transform = held;
       if (previous === "") style.removeProperty("--html-mcp-page-scale");
       else style.setProperty("--html-mcp-page-scale", previous);
     }
