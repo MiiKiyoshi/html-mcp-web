@@ -176,8 +176,14 @@ class ArtifactRuntime:
     space_revision: int | None = None
     space_pages: list[dict[str, Any]] = field(default_factory=list)
 
-    def digest(self) -> str:
-        return hashlib.sha256(self.main_file.read_bytes()).hexdigest()
+    def digest(self) -> str | None:
+        # None means the file is gone. is_file() alone cannot promise the read: the file
+        # can be renamed away between the check and it, which is exactly when this runs
+        # (the reviewer reorganising while the server answers).
+        try:
+            return hashlib.sha256(self.main_file.read_bytes()).hexdigest()
+        except FileNotFoundError:
+            return None
 
     def state(self) -> dict[str, Any]:
         comments = self.store.list()
@@ -190,7 +196,12 @@ class ArtifactRuntime:
             "label": self.config.label,
             "layout": self.config.layout,
             "main_file": self.config.main,
-            "artifact_digest": self.digest(),
+            # A main file can be missing mid-session: the reviewer renaming it, a build not
+            # run yet. That is this artifact's problem, reported on this artifact, and must
+            # not take the whole project's server down with it; the watcher picks the file
+            # up when it appears and the next state carries a digest again.
+            "artifact_digest": (made := self.digest()),
+            **({} if made is not None else {"error": f"HTML artifact not found: {self.main_file}"}),
             "revision": self.revision,
             "layout_check": {
                 "checked_revision": self.layout_revision,
@@ -244,10 +255,19 @@ class HtmlReviewServer:
         self.websockets: set[web.WebSocketResponse] = set()
         self.pdf_lock = asyncio.Lock()
         self.generated_paths: set[Path] = set()
-        # The reviewer's call button. Presses are a monotonic count, so a press made
-        # before anyone was waiting is not lost: the next wait sees count > since and
-        # returns at once.
-        self.review_calls = 0
+        # The reviewer's call button. Presses are a monotonic count and the server keeps
+        # the consumption watermark, so a press is never lost to timing: made while nobody
+        # waits, it answers the next wait at once (the first design froze the watermark
+        # into each waiter's script at arming time, and a press made before the arming was
+        # frozen out with it). The watermark moves only on the waiter's ack, after the line
+        # was delivered: consuming before delivery lost the wake-up whenever the response
+        # died on the wire. Until the ack lands the press is offered again, so delivery is
+        # at-least-once, and a duplicate wake-up is harmless where a lost one is not.
+        # Presses that pile up coalesce into one wake-up carrying the latest press number.
+        # Both counters persist across server restarts, or a press made just before one
+        # would strand a stateless waiter parked against fresh zeroes.
+        self.review_state_path = self.project_dir / ".html-mcp-web" / "review-state.json"
+        self.review_calls, self.review_consumed = self._load_review_state()
         self.review_called = asyncio.Event()
         self.review_waiters = 0
         self.headless_check = asyncio.Lock()
@@ -270,8 +290,9 @@ class HtmlReviewServer:
             if runtime.content_file is not None and runtime.content_file.is_file():
                 if not runtime.main_file.is_file() or runtime.content_file.stat().st_mtime > runtime.main_file.stat().st_mtime:
                     runtime.build()
-            if not runtime.main_file.is_file():
-                raise FileNotFoundError(f"HTML artifact not found: {runtime.main_file}")
+            # A missing main is reported on the artifact (state carries the error), not
+            # raised: raising here took the whole server down over one artifact while the
+            # reviewer was renaming its file, and blocked every healthy one with it.
             runtimes[artifact_id] = runtime
         return runtimes
 
@@ -283,7 +304,8 @@ class HtmlReviewServer:
             "config_path": str(self.config.config_path),
             "project_dir": str(self.project_dir),
             "port": self.config.port,
-            "review": {"calls": self.review_calls, "waiters": self.review_waiters},
+            "review": {"calls": self.review_calls, "consumed": self.review_consumed,
+                       "waiters": self.review_waiters},
             "artifacts": {artifact_id: runtime.state() for artifact_id, runtime in self.artifacts.items()},
         }
 
@@ -370,8 +392,13 @@ class HtmlReviewServer:
         return f"{head_content}{source}"
 
     async def artifact(self, request: web.Request) -> web.Response:
+        runtime = self.runtime(request)
         for_print = request.query.get("print") == "1"
-        return web.Response(text=self._artifact_html(self.runtime(request), for_print), content_type="text/html",
+        try:
+            body = self._artifact_html(runtime, for_print)
+        except FileNotFoundError as error:
+            raise web.HTTPNotFound(text=f"HTML artifact not found: {runtime.main_file}") from error
+        return web.Response(text=body, content_type="text/html",
                             charset="utf-8", headers={"Cache-Control": "no-store"})
 
     async def _pdf(self, runtime: ArtifactRuntime) -> bytes:
@@ -728,7 +755,12 @@ class HtmlReviewServer:
         if not quote:
             return False
         spot = "".join((anchor["prefix"] + anchor["quote"] + anchor["suffix"]).split())
-        return spot in "".join(artifact_text(runtime.main_file).split())
+        # The comments are already updated when this runs; an artifact renamed away in
+        # between must not turn that finished update into a 500. Gone means not surviving.
+        try:
+            return spot in "".join(artifact_text(runtime.main_file).split())
+        except FileNotFoundError:
+            return False
 
     async def update_comments(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
@@ -839,6 +871,23 @@ class HtmlReviewServer:
     # harness can watch a process in the background and wake the agent when it exits, so
     # the button becomes: a waiter parks here in a long poll, the press releases it, and
     # the waiter's exit is the interrupt. The agent spends nothing while parked.
+    def _load_review_state(self) -> tuple[int, int]:
+        try:
+            data = json.loads(self.review_state_path.read_text(encoding="utf-8"))
+            calls, consumed = int(data["calls"]), int(data["consumed"])
+        except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            return 0, 0
+        if calls < 0 or not 0 <= consumed <= calls:
+            return 0, 0
+        return calls, consumed
+
+    def _save_review_state(self) -> None:
+        self.review_state_path.parent.mkdir(parents=True, exist_ok=True)
+        staging = self.review_state_path.with_name(self.review_state_path.name + ".new")
+        staging.write_text(json.dumps(
+            {"calls": self.review_calls, "consumed": self.review_consumed}), encoding="utf-8")
+        staging.replace(self.review_state_path)
+
     def _review_line(self) -> str:
         opens = {artifact_id: sum(comment.status == "open" for comment in runtime.store.list())
                  for artifact_id, runtime in self.artifacts.items()}
@@ -849,6 +898,7 @@ class HtmlReviewServer:
 
     async def request_review(self, request: web.Request) -> web.Response:
         self.review_calls += 1
+        self._save_review_state()
         delivered = self.review_waiters > 0
         released = self.review_called
         self.review_called = asyncio.Event()
@@ -857,16 +907,18 @@ class HtmlReviewServer:
         return web.json_response({"calls": self.review_calls, "delivered": delivered})
 
     async def wait_review(self, request: web.Request) -> web.Response:
-        try:
-            since = int(request.query.get("since", "0"))
-        except ValueError as error:
-            raise web.HTTPBadRequest(text="since must be an integer") from error
+        # The consumption watermark lives here, not in the waiter: a waiter carrying its
+        # own (frozen when its script was written) could never see a press made before
+        # that. Waiting does not consume: the response can die on the wire after the
+        # watermark moved, and the wake-up died with it. The waiter acks what it printed
+        # (the X-Press header names it), and until then the press is offered again. The
+        # since query of the first design is accepted and ignored.
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self.REVIEW_POLL_TIMEOUT
         self.review_waiters += 1
         await self.broadcast({"type": "review_waiters", "waiters": self.review_waiters})
         try:
-            while self.review_calls <= since:
+            while self.review_calls <= self.review_consumed:
                 remaining = deadline - loop.time()
                 if remaining <= 0:
                     return web.Response(status=204)
@@ -875,10 +927,23 @@ class HtmlReviewServer:
                     await asyncio.wait_for(waited.wait(), timeout=remaining)
                 except asyncio.TimeoutError:
                     return web.Response(status=204)
-            return web.Response(text=self._review_line())
+            return web.Response(text=self._review_line(),
+                                headers={"X-Press": str(self.review_calls)})
         finally:
             self.review_waiters -= 1
             await self.broadcast({"type": "review_waiters", "waiters": self.review_waiters})
+
+    async def ack_review(self, request: web.Request) -> web.Response:
+        try:
+            upto = int(request.query["upto"])
+        except (KeyError, ValueError) as error:
+            raise web.HTTPBadRequest(text="upto must be an integer") from error
+        # Idempotent and monotonic: a late or repeated ack never moves the watermark back,
+        # and one beyond the count (a script talking to a restarted server whose counters
+        # are behind it) clamps rather than marking presses that do not exist yet.
+        self.review_consumed = max(self.review_consumed, min(upto, self.review_calls))
+        self._save_review_state()
+        return web.json_response({"calls": self.review_calls, "consumed": self.review_consumed})
 
     async def websocket(self, request: web.Request) -> web.WebSocketResponse:
         socket = web.WebSocketResponse(heartbeat=30)
@@ -931,6 +996,7 @@ class HtmlReviewServer:
         app.router.add_delete(f"{base}/comments/{{comment_id}}", self.delete_comment)
         app.router.add_post("/review-request", self.request_review)
         app.router.add_get("/wait-review", self.wait_review)
+        app.router.add_post("/wait-review/ack", self.ack_review)
         app.router.add_get("/ws", self.websocket)
         app.on_startup.append(self.start_watcher)
         app.on_cleanup.append(self.stop_watcher)

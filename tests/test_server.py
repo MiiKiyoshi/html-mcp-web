@@ -662,6 +662,22 @@ def test_watcher_names_the_costly_directories_when_the_limit_is_used_up(tmp_path
     assert watcher.observer is None  # the partly scheduled observer was dropped
 
 
+def test_watcher_reports_deletions_and_both_ends_of_a_rename(tmp_path):
+    """A deleted or renamed-away artifact is a change to it: unreported, the layout
+    measured from the old file stayed on offer as current."""
+    from watchdog.events import FileDeletedEvent, FileMovedEvent
+
+    watcher, _ = started_watcher(tmp_path, [])
+    seen: list[str] = []
+    watcher.handler._schedule = lambda path: seen.append(Path(path).name)
+
+    watcher.handler.on_deleted(FileDeletedEvent(str(tmp_path / "slides.html")))
+    assert seen == ["slides.html"]
+
+    watcher.handler.on_moved(FileMovedEvent(str(tmp_path / "old.html"), str(tmp_path / "new.html")))
+    assert seen == ["slides.html", "old.html", "new.html"]
+
+
 def test_watcher_follows_a_directory_created_after_it_started(tmp_path):
     """The root is watched flat so that ignoring a top-level directory frees its tree, and
     that leaves a directory made later without a watch of its own."""
@@ -732,6 +748,68 @@ async def test_render_page_crops_to_a_target_block(client, monkeypatch) -> None:
     assert stale.status == 409
 
 
+async def test_one_broken_artifact_does_not_take_the_server_down(tmp_path: Path) -> None:
+    """A main file can be missing mid-session (the reviewer renaming it, a build not run
+    yet). That is the artifact's own problem: it is reported on the artifact, and the
+    server comes up serving every healthy one instead of refusing to start."""
+    (tmp_path / "good.html").write_text(
+        "<!doctype html><html><head><title>Good</title></head><body><p>Fine.</p></body></html>",
+        encoding="utf-8",
+    )
+    config = Config(
+        artifacts={
+            "good": ArtifactConfig(label="Good", layout="slides", main="good.html"),
+            "gone": ArtifactConfig(label="Gone", layout="slides", main="renamed-away.html"),
+        },
+        watch=["*.html"],
+        config_path=tmp_path / ".html-mcp-web.yaml",
+    )
+    review = HtmlReviewServer(config)
+    state = review.project_state()
+    assert state["artifacts"]["gone"]["error"] == (
+        f"HTML artifact not found: {tmp_path / 'renamed-away.html'}")
+    assert state["artifacts"]["gone"]["artifact_digest"] is None
+    assert state["artifacts"]["good"]["artifact_digest"]
+    assert "error" not in state["artifacts"]["good"]
+
+    # The error reaches the agent, not only the raw state: dropped in the contract, a
+    # missing artifact looked exactly like a healthy unchecked one.
+    from html_mcp_web.mcp_contract import agent_artifact, agent_artifact_summary
+    summary = agent_artifact_summary("gone", state["artifacts"]["gone"])
+    assert "not found" in summary["error"]
+    detailed = agent_artifact("gone", state["artifacts"]["gone"], tmp_path)
+    assert "not found" in detailed["error"]
+    assert "error" not in agent_artifact_summary("good", state["artifacts"]["good"])
+
+    app = review.create_app()
+    app.on_startup.clear()
+    app.on_cleanup.clear()
+    test_client = TestClient(TestServer(app))
+    await test_client.start_server()
+    try:
+        assert (await test_client.get("/artifacts/good/artifact")).status == 200
+        missing = await test_client.get("/artifacts/gone/artifact")
+        assert missing.status == 404
+        assert "renamed-away.html" in await missing.text()
+
+        # Deleting a main is a change to its artifact: without the watcher reporting it,
+        # the layout measured from the deleted file stayed on offer as current.
+        posted = await test_client.post(
+            "/artifacts/good/layout",
+            json={"revision": review.artifacts["good"].revision, "errors": [],
+                  "space": space_snapshot()},
+        )
+        assert posted.status == 200
+        (tmp_path / "good.html").unlink()
+        await review.on_project_change(str(tmp_path / "good.html"))
+        gone_now = review.project_state()["artifacts"]["good"]
+        assert "not found" in gone_now["error"]
+        assert gone_now["layout_check"]["checked_revision"] is None
+        assert gone_now["space_revision"] is None
+    finally:
+        await test_client.close()
+
+
 async def test_the_reviewer_closes_a_batch_under_their_own_name(client) -> None:
     """The agent answers and leaves the thread open so its reasoning stays readable; the
     reviewer closes what they have read. A batch closed from the page is the reviewer's
@@ -772,35 +850,84 @@ async def test_the_reviewer_closes_a_batch_under_their_own_name(client) -> None:
 
 
 async def test_call_button_wakes_a_parked_waiter_and_keeps_an_early_press(client) -> None:
-    """The reviewer's press is an interrupt, not a message the agent must be listening for:
-    a parked wait returns the moment the button is pressed, and a press made before anyone
-    was waiting answers the next wait at once instead of being lost."""
+    """The reviewer's press is an interrupt, not a message the agent must be listening for.
+    The server keeps the press count and the consumption watermark, so a press made while
+    nobody waits answers the next wait at once (the first design froze the watermark into
+    each waiter's script, and a press made before the arming was frozen out with it). The
+    watermark moves only on the waiter's ack: consuming on the way out lost the wake-up
+    whenever the response died on the wire, so until the ack lands the press is offered
+    again, and only after it does a restarted waiter park."""
     test_client, review = client
 
-    # A press with nobody parked is kept.
+    # Presses with nobody parked are kept, and coalesce into the next wait.
     reply = await (await test_client.post("/review-request")).json()
     assert reply == {"calls": 1, "delivered": False}
-    early = await test_client.get("/wait-review", params={"since": 0})
+    reply = await (await test_client.post("/review-request")).json()
+    assert reply == {"calls": 2, "delivered": False}
+    early = await test_client.get("/wait-review")
     assert early.status == 200
+    assert early.headers["X-Press"] == "2"
     line = await early.text()
-    assert line.startswith("[review] reviewer called (press #1)")
+    assert line.startswith("[review] reviewer called (press #2)")
     assert "list_comments" in line
 
-    # A wait that is already up to date parks, and the press releases it with the line.
-    parked = asyncio.ensure_future(test_client.get("/wait-review", params={"since": 1}))
+    # Not acked yet (the line may never have reached the harness), so it is offered again.
+    again = await test_client.get("/wait-review")
+    assert again.status == 200
+    assert again.headers["X-Press"] == "2"
+
+    # Acked means consumed: the same waiter restarted parks rather than replaying, so
+    # running the script in a loop is safe.
+    acked = await (await test_client.post("/wait-review/ack?upto=2")).json()
+    assert acked == {"calls": 2, "consumed": 2}
+    review.REVIEW_POLL_TIMEOUT = 0.05
+    assert (await test_client.get("/wait-review")).status == 204
+    review.REVIEW_POLL_TIMEOUT = HtmlReviewServer.REVIEW_POLL_TIMEOUT
+
+    # A parked waiter is released by the press.
+    parked = asyncio.ensure_future(test_client.get("/wait-review"))
     for _ in range(50):
         if review.review_waiters == 1:
             break
         await asyncio.sleep(0.02)
     assert review.review_waiters == 1
     reply = await (await test_client.post("/review-request")).json()
-    assert reply == {"calls": 2, "delivered": True}
+    assert reply == {"calls": 3, "delivered": True}
     released = await parked
     assert released.status == 200
-    assert (await released.text()).startswith("[review] reviewer called (press #2)")
+    assert (await released.text()).startswith("[review] reviewer called (press #3)")
     assert review.review_waiters == 0
 
-    # Nothing to report within the poll window comes back empty for the script to loop on.
+    # An ack from a script that outlived a server restart clamps to what exists and a
+    # stale repeat never moves the watermark back.
+    over = await (await test_client.post("/wait-review/ack?upto=9")).json()
+    assert over == {"calls": 3, "consumed": 3}
+    stale = await (await test_client.post("/wait-review/ack?upto=1")).json()
+    assert stale == {"calls": 3, "consumed": 3}
     review.REVIEW_POLL_TIMEOUT = 0.05
-    quiet = await test_client.get("/wait-review", params={"since": 2})
-    assert quiet.status == 204
+    assert (await test_client.get("/wait-review")).status == 204
+
+
+async def test_presses_survive_a_server_restart(client, tmp_path: Path) -> None:
+    """The reviewer pressed, the listener restarted, and a stateless waiter that reattached
+    quickly parked against fresh zeroes forever: the counters persist, so the press is
+    still on offer to the next server."""
+    test_client, review = client
+    await test_client.post("/review-request")
+    reborn = HtmlReviewServer(review.config)
+    assert (reborn.review_calls, reborn.review_consumed) == (1, 0)
+    reborn.REVIEW_POLL_TIMEOUT = 0.05
+    app = reborn.create_app()
+    app.on_startup.clear()
+    app.on_cleanup.clear()
+    second_client = TestClient(TestServer(app))
+    await second_client.start_server()
+    try:
+        offered = await second_client.get("/wait-review")
+        assert offered.status == 200
+        assert offered.headers["X-Press"] == "1"
+        await second_client.post("/wait-review/ack?upto=1")
+        third = HtmlReviewServer(review.config)
+        assert (third.review_calls, third.review_consumed) == (1, 1)
+    finally:
+        await second_client.close()

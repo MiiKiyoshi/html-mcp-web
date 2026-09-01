@@ -105,6 +105,14 @@ class HtmlFileHandler(FileSystemEventHandler):
         if self._should_process(path):
             self._schedule(path)
 
+    def on_deleted(self, event: FileSystemEvent) -> None:
+        # A deleted artifact is a change to it: without this, the layout measured from the
+        # deleted file stayed on offer as current, revision and all.
+        if not event.is_directory:
+            path = self._path(event)
+            if self._should_process(path):
+                self._schedule(path)
+
     def on_moved(self, event: FileSystemEvent) -> None:
         destination = event.dest_path
         if event.is_directory:
@@ -112,6 +120,11 @@ class HtmlFileHandler(FileSystemEventHandler):
                 self.on_new_directory(
                     destination.decode("utf-8", errors="replace") if isinstance(destination, bytes) else destination)
             return
+        # A rename is a change at both ends: the file that appeared, and the artifact that
+        # just lost its main to the reviewer renaming it away.
+        source = self._path(event)
+        if self._should_process(source):
+            self._schedule(source)
         path = destination.decode("utf-8", errors="replace") if isinstance(destination, bytes) else destination
         if self._should_process(path):
             self._schedule(path)

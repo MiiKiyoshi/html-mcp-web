@@ -75,6 +75,9 @@ def agent_artifact_summary(artifact_id: str, artifact: dict[str, Any]) -> dict[s
         "checked_revision": layout_check["checked_revision"],
         "layout_error_count": len(layout_check["errors"]),
         "open_comment_count": artifact["comment_counts"]["open"],
+        # A missing main file, among others. Dropping it here showed the agent a healthy
+        # unchecked artifact where there was none to check.
+        **({"error": artifact["error"]} if "error" in artifact else {}),
     }
 
 
@@ -94,6 +97,7 @@ def agent_artifact(
         "layout_check": artifact["layout_check"],
         "space_revision": artifact["space_revision"],
         "comment_counts": artifact["comment_counts"],
+        **({"error": artifact["error"]} if "error" in artifact else {}),
     }
     if "template" in artifact:
         result["template"] = artifact["template"]
