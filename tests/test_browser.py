@@ -1315,3 +1315,96 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None:
+    """Pinching the page zoomed the controls and the comments with it, and a reader leaning
+    in at a figure got everything twice the size. Two fingers on the artifact are handed to
+    the page instead, and only the deck grows."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_zoom_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "900", "-height", "1200", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=900, height=1200)
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+
+        # The artifact refuses the browser's own pinch, so the gesture reaches the page.
+        assert browser.execute_script(
+            'const d = document.querySelector("#artifact-frame").contentDocument;'
+            'return getComputedStyle(d.documentElement).touchAction;') == "pan-x pan-y"
+
+        measure = """
+          const frame = document.querySelector("#artifact-frame");
+          const page = frame.contentDocument.querySelector("section.page");
+          const tabs = document.querySelector(".sidebar-tabs");
+          return {page: page.getBoundingClientRect().width,
+                  tabs: tabs.getBoundingClientRect().height,
+                  topbar: document.querySelector(".topbar").getBoundingClientRect().height,
+                  resetShown: !document.querySelector("#zoom-reset-btn").classList.contains("hidden")};
+        """
+        before = browser.execute_script(measure)
+        assert not before["resetShown"]
+
+        # Two fingers, drawn apart by half again.
+        browser.execute_script("""
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const view = doc.defaultView;
+          const send = (type, id, x, y) => doc.dispatchEvent(new view.PointerEvent(type, {
+            pointerId: id, pointerType: "touch", clientX: x, clientY: y,
+            bubbles: true, cancelable: true}));
+          send("pointerdown", 1, 200, 300);
+          send("pointerdown", 2, 400, 300);
+          send("pointermove", 2, 500, 300);
+          send("pointermove", 2, 600, 300);
+          send("pointerup", 1, 200, 300);
+          send("pointerup", 2, 600, 300);
+        """)
+        time.sleep(0.4)
+        after = browser.execute_script(measure)
+        assert after["page"] > before["page"] * 1.4      # the deck grew with the gesture
+        assert after["tabs"] == before["tabs"]           # the comments did not
+        assert after["topbar"] == before["topbar"]       # nor the controls
+        assert after["resetShown"]                       # and there is a way back
+
+        browser.find_element("css selector", "#zoom-reset-btn").click()
+        time.sleep(0.3)
+        back = browser.execute_script(measure)
+        assert abs(back["page"] - before["page"]) < 2
+        assert not back["resetShown"]
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()

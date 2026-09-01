@@ -36,6 +36,9 @@ const state = {
   suppressPresentationClick: false,
   draggingPanel: false,
   panelDraggedAt: -Infinity,
+  artifactZoom: 1,
+  pinchPointers: new Map(),
+  pinchSpan: null,
 };
 
 function artifactBase() {
@@ -247,9 +250,13 @@ function updatePageScale() {
   const margin = state.slideShow ? 0 : (frameWindow().innerWidth < 560 ? 8 : 48);
   const availableWidth = frameWindow().innerWidth - margin;
   const widthScale = availableWidth / page.offsetWidth;
-  const scale = state.slideShow
+  // Pinching the page zoomed the controls and the comments along with the artifact, which
+  // is not what a reader leaning in at a figure wants. The pane takes the gesture itself
+  // and the factor lands here, on the artifact alone.
+  const fitted = state.slideShow
     ? Math.min(widthScale, frameWindow().innerHeight / page.offsetHeight)
     : Math.min(1, widthScale);
+  const scale = fitted * state.artifactZoom;
   const root = frameDocument().documentElement;
   root.style.setProperty("--html-mcp-page-scale", String(scale));
   // The room a drawn-smaller block gives back depends on its own height, and only the
@@ -317,6 +324,42 @@ function selectionSpan(selection) {
     }
   }
   return span;
+}
+
+// Two pointers on the artifact are a pinch, and the factor they carry lands on the deck
+// alone. Distances only, so it does not matter that these coordinates belong to the
+// artifact's own window.
+function pinchZoom(event) {
+  if (event.pointerType === "mouse") return;
+  const pointers = state.pinchPointers;
+  if (event.type === "pointerup" || event.type === "pointercancel") {
+    pointers.delete(event.pointerId);
+    if (pointers.size < 2) state.pinchSpan = null;
+    return;
+  }
+  if (event.type === "pointerdown" || pointers.has(event.pointerId)) {
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  }
+  if (pointers.size !== 2) return;
+  const [first, second] = Array.from(pointers.values());
+  const span = Math.hypot(first.x - second.x, first.y - second.y);
+  if (state.pinchSpan === null || span === 0) {
+    state.pinchSpan = span === 0 ? null : span;
+    return;
+  }
+  if (event.type !== "pointermove") return;
+  if (event.cancelable) event.preventDefault();
+  // Held between half the fitted size and four times it: below that the deck is
+  // unreadable anyway, above it a page is a handful of words.
+  state.artifactZoom = Math.min(4, Math.max(0.5, state.artifactZoom * (span / state.pinchSpan)));
+  state.pinchSpan = span;
+  applyArtifactZoom();
+}
+
+function applyArtifactZoom() {
+  $("#zoom-reset-btn").classList.toggle("hidden", Math.abs(state.artifactZoom - 1) < 0.01);
+  updatePageScale();
+  scheduleHighlights();
 }
 
 function showSelectionButton() {
@@ -575,6 +618,14 @@ function attachArtifactEvents() {
   // watched as well, held back while a pointer is down so that a drag on a desktop still
   // settles before the button appears.
   doc.addEventListener("touchend", () => setTimeout(showSelectionButton, 60), true);
+  // Two fingers on the artifact zoom the artifact. Pinching the page zoomed the controls
+  // and the comments along with it, which is not what a reader leaning in at a figure
+  // wants; the artifact refuses the browser's own pinch (touch-action in artifact.css),
+  // so the gesture arrives here as two pointers and only the deck grows. One finger still
+  // scrolls, and the zoom is a factor on the fit, so 1 is the page as it lands.
+  for (const kind of ["pointerdown", "pointermove", "pointerup", "pointercancel"]) {
+    doc.addEventListener(kind, pinchZoom, { passive: false, capture: true });
+  }
   doc.addEventListener("selectionchange", () => {
     if (state.selectionPointerDown) return;
     if (state.selectionSettle !== null) clearTimeout(state.selectionSettle);
@@ -907,6 +958,10 @@ function attachControls() {
     grip.addEventListener("pointermove", move);
     grip.addEventListener("pointerup", done);
     grip.addEventListener("pointercancel", done);
+  });
+  $("#zoom-reset-btn").addEventListener("click", () => {
+    state.artifactZoom = 1;
+    applyArtifactZoom();
   });
   $("#fullscreen-btn").disabled = !document.fullscreenEnabled;
   // On a phone the comments cover the artifact, so they start out of the way until asked
