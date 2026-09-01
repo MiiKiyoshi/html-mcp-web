@@ -285,8 +285,45 @@ pre code { padding: 0; border-radius: 0; background: none; font-family: inherit;
 
 @media screen {
   main.pages section.page { border-radius: 10px; box-shadow: 0 2px 14px rgba(25, 35, 42, .09); }
+
+  /* The deck carries its own page size. Opened as a file, with no viewer to impose one,
+     a page was a plain block: it took the window's width while its height stayed with its
+     content, so the slide came out stretched sideways. The viewer sets the attribute below
+     and states the size itself, and the pptx export states it again, so this is for the
+     file on its own. --deck-fit is the shrink that keeps a page inside a narrower window;
+     the negative margins give back the room the unscaled box would still hold. */
+  html:not([data-html-mcp-layout]) body { margin: 0; }
+  html:not([data-html-mcp-layout]) main.pages {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    padding: 24px 0;
+  }
+  html:not([data-html-mcp-layout]) main.pages > section.page {
+    flex: none;
+    width: 1280px;
+    height: 720px;
+    overflow: hidden;
+    transform: scale(var(--deck-fit, 1));
+    transform-origin: top center;
+    margin: 0 calc(1280px * (var(--deck-fit, 1) - 1) / 2)
+            calc(720px * (var(--deck-fit, 1) - 1));
+  }
+  html:not([data-html-mcp-layout]) main.pages > .script-block {
+    width: 1280px;
+    transform: scale(var(--deck-fit, 1));
+    transform-origin: top center;
+    margin: 0 calc(1280px * (var(--deck-fit, 1) - 1) / 2);
+  }
 }
 @media print {
   .script-block { display: none; }
-  main.pages section.page { margin-bottom: 0 !important; border-radius: 0; box-shadow: none; }
+  /* The printed page is sized by @page, so the screen's fitting has no place here. */
+  main.pages section.page {
+    margin-bottom: 0 !important;
+    border-radius: 0;
+    box-shadow: none;
+    transform: none;
+  }
 }

@@ -950,3 +950,64 @@ def test_space_is_measured_with_no_review_ui_open(tmp_path: Path) -> None:
         assert checked["errors"] == []                            # and this deck is clean
     finally:
         shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_built_deck_keeps_its_page_size_when_opened_as_a_file(tmp_path: Path) -> None:
+    """Nothing in the file stated the page size: the viewer imposed it. Opened on its own
+    a page was a plain block, taking the window's width while its height stayed with its
+    content, so the slide came out stretched sideways. The deck now carries its size, and
+    a window too narrow for it shrinks the page whole rather than squashing it."""
+    from html_mcp_web.slides import build
+
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<!doctype html><meta charset="utf-8"><title>Deck</title>'
+        '<body data-author="A" data-meta="B">'
+        '<section data-title="One"><p>Only page.</p></section></body>', encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, Path(__file__).resolve().parents[1] / "templates" / "neutral-slides")
+
+    profile = tempfile.mkdtemp(prefix="html_mcp_standalone_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "1400", "-height", "900", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=1400, height=900)
+        browser.navigate(html.as_uri())
+        wait_until(lambda: browser.execute_script(
+            "return !!document.querySelector('section.page')"))
+        measure = """
+const box = document.querySelector('section.page').getBoundingClientRect();
+return [Math.round(box.width), Math.round(box.height)];
+"""
+        assert browser.execute_script(measure) == [1280, 720]
+
+        # Narrower than the page: the whole slide shrinks, keeping its shape.
+        browser.set_window_rect(width=900, height=900)
+        narrow = wait_until(lambda: (
+            browser.execute_script(measure)
+            if browser.execute_script(measure)[0] < 1280 else None))
+        assert narrow[0] <= 900
+        assert abs(narrow[0] / narrow[1] - 1280 / 720) < 0.01
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
