@@ -222,7 +222,9 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
             assert response.status == 200
 
         mcp = create_server(binding)
-        assert "a comment answered with words alone stays open" in mcp.instructions
+        # Closing its own comment hides the agent's reasoning from the reviewer who has to
+        # judge the fix, so the instructions leave the closing to them.
+        assert "leave the comment open" in mcp.instructions
 
         base = f"http://127.0.0.1:{config.port}"
         created = post_json(f"{base}/artifacts/slides/comments", {

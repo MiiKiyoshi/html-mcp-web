@@ -207,7 +207,8 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .filter-row { display: flex; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .filter-row select { flex: 1; min-width: 0; padding: 5px 8px; font-size: 12px; }
 /* Wakes the agent parked on wait_review; the dot shows one is parked right now. */
-#call-agent-btn { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 12px; white-space: nowrap; }
+#call-agent-btn, #resolve-open-btn { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 12px; white-space: nowrap; }
+#resolve-open-btn:disabled { opacity: .45; }
 .agent-dot { width: 8px; height: 8px; border-radius: 50%; background: #3d9a52; }
 .comments-list { flex: 1; overflow: auto; padding: 10px; }
 
