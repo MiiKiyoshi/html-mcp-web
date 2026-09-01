@@ -543,6 +543,12 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         tail_error = next(error for error in errors if "wastes its last line" in error)
         assert "overline" not in tail_error
         assert "A deliberately long" in tail_error
+        # The error itself says which block and by how much, so the fix needs no
+        # drill-down first and no second round to learn the amount.
+        assert re.search(r"on a \d+px tail", tail_error)
+        assert re.search(r"\[p1:\d+(\.\d+)*\]$", tail_error)
+        cut_error = next(error for error in errors if "svg#cut>" in error)
+        assert re.search(r"\[p1:\d+(\.\d+)*\]$", cut_error)
         assert any("overlaps its sibling" in error for error in errors)
         assert any("div#near-second" in error for error in errors)
         assert not any("This second paragraph" in error for error in errors)
