@@ -64,6 +64,12 @@
 }
 .body > .rest { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; }
 .body > .lead:first-child { margin-top: var(--lead-gap); }
+/* A picture keeps its own proportions. The body is a column flex box, and its default
+   stretch handed an image with no stated width the whole column: max-height then cut only
+   the height, so a 4:3 figure was drawn 1196x300, at 4:1. Centred because that is where a
+   figure narrower than the text belongs, and held inside the column because an image wider
+   than it no longer has the stretch to keep it in. */
+.body > img, .body > .rest > img { align-self: center; max-width: 100%; }
 
 .bbar {
   position: absolute;
