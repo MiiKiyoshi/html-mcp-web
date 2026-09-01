@@ -21,6 +21,10 @@ html[data-html-mcp-layout] { background: #faf8f2 !important; }
 html[data-html-mcp-layout] {
   -webkit-text-size-adjust: none !important;
   text-size-adjust: none !important;
+  /* One finger still scrolls; two are the reviewer's, and the page hands them over rather
+     than zooming itself. The browser's own pinch takes the whole window with it, controls
+     and comments included, where what was wanted was a closer look at the artifact. */
+  touch-action: pan-x pan-y !important;
 }
 
 html[data-html-mcp-layout] body {
