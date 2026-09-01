@@ -1,4 +1,4 @@
-import { measureArtifactSpace, groupLines } from "./space-measure.js";
+import { measureArtifactSpace, groupLines, elementRef } from "./space-measure.js";
 
 export function createLayoutChecks(dependencies) {
   const {
@@ -98,7 +98,18 @@ export function createLayoutChecks(dependencies) {
     // are not reported as an authoring mistake.
     const extra = Array.from(doc.body.children).filter((child) => child !== root && inNormalFlow(child));
     const errors = [];
+    let pages = [];
+    // The error carries the block's ref, so the reader of inspect() can go straight to
+    // measure_space(target=<ref>) instead of drilling down page by page to find which of
+    // a page's four svgs the message meant.
     const addError = (message, element) => {
+      const page = element ? element.closest("section.page") : null;
+      const number = page === null ? 0 : pages.indexOf(page) + 1;
+      if (number > 0 && element !== page) {
+        try {
+          message += ` [${elementRef(page, number, element)}]`;
+        } catch (error) { /* an element outside its page keeps the plain message */ }
+      }
       errors.push(message);
       if (element) problemTargets.set(message, element);
     };
@@ -115,7 +126,7 @@ export function createLayoutChecks(dependencies) {
         addError(`main.pages child ${index + 1} must be <section class="page">`, child);
       }
     }
-    const pages = children.filter((child) => child.matches("section.page"));
+    pages = children.filter((child) => child.matches("section.page"));
     // Everything below is measured with the pane zoom lifted. The artifact prints at
     // its own scale, so that is the layout to judge; at a fitted zoom the browser wraps
     // text and rounds boxes differently, and the same page reports different problems
@@ -169,7 +180,10 @@ export function createLayoutChecks(dependencies) {
         // last line carries a fraction of what the lines above carry).
         if (last <= Math.max(fontSize * 6, widest * 0.25)) {
           const label = readableText(block).slice(0, 24);
-          addError(`page ${index + 1} ${block.tagName.toLowerCase()} "${label}…" wastes its last line on a few characters`, block);
+          // The tail's own width is the amount to trim (or the room to fill): fitting it
+          // took a fix-rebuild-inspect round before, just to learn how far off it was.
+          addError(`page ${index + 1} ${block.tagName.toLowerCase()} "${label}…" wastes its last line `
+            + `on a ${Math.round(last)}px tail`, block);
         }
       }
       // An SVG viewport hides whatever falls outside its viewBox, and no box-model

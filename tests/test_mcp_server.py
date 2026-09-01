@@ -86,6 +86,7 @@ async def test_stdio_mcp_starts_without_project_config(tmp_path: Path) -> None:
                 "render_page",
                 "export_pptx",
                 "measure_space",
+                "wait_review",
             ]
             inspected = await session.call_tool("inspect", {})
             assert inspected.isError is False

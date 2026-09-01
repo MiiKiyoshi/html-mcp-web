@@ -37,7 +37,7 @@ function elementName(element) {
   return `${element.tagName.toLowerCase()}${id}${classes}`;
 }
 
-function elementRef(page, pageNumber, element) {
+export function elementRef(page, pageNumber, element) {
   const path = [];
   for (let current = element; current !== page; current = current.parentElement) {
     if (current.parentElement === null) throw new Error("measured element is outside its page");
