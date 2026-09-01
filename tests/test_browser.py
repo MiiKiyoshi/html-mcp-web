@@ -1236,3 +1236,82 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
+    """A card opened at the foot of the list unfolded below the fold, and the reader had to
+    scroll after every open to read what they had just asked for."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_expand_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        base = f"http://127.0.0.1:{port}"
+        # Enough comments to fill the list, the last one wordy enough to unfold past its foot.
+        for number in range(8):
+            body = "A short note." if number < 7 else ("A long one. " * 40)
+            post_json(f"{base}/artifacts/slides/comments",
+                      {"anchor": {"kind": "artifact"}, "text": f"{number}: {body}"})
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "1400", "-height", "800", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=1400, height=800)
+        browser.navigate(base)
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelectorAll(".comment-card").length === 8'))
+
+        # Scroll to the foot and open the card sitting there.
+        browser.execute_script(
+            'const l = document.querySelector("#comments-list"); l.scrollTop = l.scrollHeight;')
+        time.sleep(0.3)
+        browser.execute_script("""
+          const list = document.querySelector("#comments-list");
+          const cards = Array.from(list.querySelectorAll(".comment-card"));
+          cards[cards.length - 1].querySelector(".comment-summary").click();
+        """)
+        time.sleep(0.4)
+        shown = browser.execute_script("""
+          const list = document.querySelector("#comments-list");
+          const cards = Array.from(list.querySelectorAll(".comment-card"));
+          const card = cards[cards.length - 1];
+          const listBox = list.getBoundingClientRect();
+          const cardBox = card.getBoundingClientRect();
+          return {expanded: card.textContent.includes("A long one."),
+                  overhang: cardBox.bottom - listBox.bottom,
+                  above: listBox.top - cardBox.top,
+                  cardHeight: cardBox.height, listHeight: listBox.height};
+        """)
+        assert shown["expanded"]
+        assert shown["overhang"] <= 2, shown      # nothing of it is left below the fold
+        assert shown["above"] <= 2, shown         # and it did not scroll past the top
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
