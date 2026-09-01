@@ -178,9 +178,11 @@ export function createComments(dependencies) {
     });
     card.appendChild(h("div", { class: "comment-summary", onclick: () => {
       state.focusedCommentId = comment.id;
-      if (state.expanded.has(comment.id)) state.expanded.delete(comment.id);
-      else state.expanded.add(comment.id);
+      const opening = !state.expanded.has(comment.id);
+      if (opening) state.expanded.add(comment.id);
+      else state.expanded.delete(comment.id);
       renderComments();
+      if (opening) revealCard(comment.id);
       jumpToComment(comment.id);
     } },
     h("div", { class: "anchor-label" },
@@ -300,6 +302,27 @@ export function createComments(dependencies) {
     await refreshComments();
   }
   
+  // A card opened at the foot of the list unfolds below the fold, and the reader had to
+  // scroll after every open to read what they had just asked for. The list scrolls by
+  // what the card overhangs, so the whole of it shows; a card taller than the list is
+  // brought to the top instead, which is as much of it as there is room for.
+  function revealCard(commentId) {
+    const list = $("#comments-list");
+    const card = Array.from(list.querySelectorAll("[data-comment-id]")).find(
+      (node) => node.dataset.commentId === commentId);
+    if (card === undefined) return;
+    const listBox = list.getBoundingClientRect();
+    const cardBox = card.getBoundingClientRect();
+    const margin = 8;
+    const overhang = cardBox.bottom - (listBox.bottom - margin);
+    const above = listBox.top + margin - cardBox.top;
+    if (cardBox.height > listBox.height - margin * 2 || above > 0) {
+      list.scrollTop += cardBox.top - listBox.top - margin;
+    } else if (overhang > 0) {
+      list.scrollTop += overhang;
+    }
+  }
+
   function jumpToComment(commentId) {
     const comment = state.comments.find((value) => value.id === commentId);
     if (comment === undefined || comment.anchor.kind !== "text") return;
