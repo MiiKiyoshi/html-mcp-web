@@ -885,6 +885,51 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
             ' height: document.querySelector("#sidebar").getBoundingClientRect().height};')
         assert abs(kept["stored"] - kept["height"]) <= 2
 
+        # The tab row sits right under the bar and the drag moves the panel's edge out from
+        # under the finger, so the tap that ends a drag was landing on a tab.
+        browser.execute_script('''
+          document.body.dataset.tabClicks = "0";
+          for (const tab of document.querySelectorAll(".tab-btn")) {
+            tab.addEventListener("click", () => {
+              document.body.dataset.tabClicks = String(Number(document.body.dataset.tabClicks) + 1);
+            });
+          }
+        ''')
+        before = browser.execute_script(
+            'return document.querySelector(".tab-btn.active").dataset.tab;')
+        box = browser.execute_script(
+            'const r = document.querySelector("#sidebar-grip").getBoundingClientRect();'
+            'return {x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2)};')
+        drag = browser.actions.sequence("pointer", "mouse", {"pointerType": "mouse"})
+        drag.pointer_move(box["x"], box["y"]).pointer_down()
+        for step in range(1, 4):
+            drag.pointer_move(box["x"], box["y"] + 12 * step, duration=30)
+        drag.pointer_up().perform()
+        # The click a finger leaves where the drag ended is swallowed once.
+        browser.execute_script('document.querySelector(".tab-btn[data-tab=\\"pages\\"]").click();')
+        assert browser.execute_script("return document.body.dataset.tabClicks") == "0"
+        assert browser.execute_script(
+            'return document.querySelector(".tab-btn.active").dataset.tab;') == before
+        # Only that one: the next press is the reader's, and it goes through.
+        time.sleep(0.5)
+        browser.execute_script('document.querySelector(".tab-btn[data-tab=\\"pages\\"]").click();')
+        assert browser.execute_script("return document.body.dataset.tabClicks") == "1"
+        assert browser.execute_script(
+            'return document.querySelector(".tab-btn.active").dataset.tab;') == "pages"
+        browser.execute_script(f'document.querySelector(\'.tab-btn[data-tab="{before}"]\').click();')
+
+        # A finger is wider than the bar: the gap above it answers a touch as well, and the
+        # bar is still drawn as thin as it was.
+        band = browser.execute_script('''
+          const grip = document.querySelector("#sidebar-grip");
+          const box = grip.getBoundingClientRect();
+          const style = getComputedStyle(grip);
+          const near = document.elementFromPoint(box.left + box.width / 2, box.top + 3);
+          return {height: box.height, transparentTop: style.backgroundImage.includes("gradient"),
+                  grabbedNearTop: near === grip};
+        ''')
+        assert band["height"] >= 36 and band["transparentTop"] and band["grabbedNearTop"]
+
         # A tablet held upright has width to spare and still reads better with the comments
         # below, so the split follows the shape of the screen rather than its width.
         browser.set_window_rect(width=820, height=1200)
