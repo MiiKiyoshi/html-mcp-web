@@ -430,6 +430,21 @@ class HtmlReviewServer:
         if gray_value not in {"0", "1"}:
             raise web.HTTPBadRequest(text="gray must be 0 or 1")
         gray = gray_value == "1"
+        # A one-line fix in one block does not need the whole page back: a target ref crops
+        # the render to that block, at a fraction of the tokens the full page costs.
+        target_ref = request.query.get("target")
+        target_box = None
+        if target_ref is not None:
+            if runtime.space_revision != runtime.revision:
+                raise web.HTTPConflict(
+                    text="space measurement is not ready for the current revision, so the target's place "
+                         "is unknown; keep the review UI open until layout checking finishes")
+            if not target_ref.startswith(f"p{page}:"):
+                raise web.HTTPBadRequest(text=f"target {target_ref!r} is not on page {page}")
+            space_page = next((value for value in runtime.space_pages if value["number"] == page), None)
+            if space_page is None or target_ref not in space_page["nodes"]:
+                raise web.HTTPNotFound(text=f"unknown target {target_ref!r} on page {page}")
+            target_box = (space_page["nodes"][target_ref]["bbox"], space_page["bbox"])
         try:
             pdf = await self._pdf(runtime)
         except Exception as error:
@@ -439,7 +454,21 @@ class HtmlReviewServer:
             if not 1 <= page <= doc.page_count:
                 raise web.HTTPBadRequest(text=f"page must be in 1..{doc.page_count}")
             colorspace = fitz.csGRAY if gray else fitz.csRGB
-            png = doc[page - 1].get_pixmap(dpi=dpi, colorspace=colorspace).tobytes("png")
+            clip = None
+            if target_box is not None:
+                # The measurement is in page pixels and the PDF in points; the ratio of the
+                # two page widths carries one into the other. A small margin keeps the
+                # block's immediate surroundings in the picture.
+                (x, y, w, h), page_bbox = target_box
+                scale = doc[page - 1].rect.width / page_bbox[2]
+                margin = 8.0
+                clip = fitz.Rect(
+                    max(0.0, x - margin) * scale,
+                    max(0.0, y - margin) * scale,
+                    min(page_bbox[2], x + w + margin) * scale,
+                    min(page_bbox[3], y + h + margin) * scale,
+                )
+            png = doc[page - 1].get_pixmap(dpi=dpi, colorspace=colorspace, clip=clip).tobytes("png")
         return web.Response(body=png, content_type="image/png")
 
     async def project_file(self, request: web.Request) -> web.StreamResponse:
