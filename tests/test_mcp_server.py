@@ -119,7 +119,12 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
     try:
         mcp = create_server(binding)
         assert "reusing results while revision is unchanged" in mcp.instructions
-        assert "do not embed them as base64" in mcp.instructions
+        # A client cuts these instructions off: Claude Code delivered about 2,300 of 3,336
+        # characters, and the last 29% (the whole wait_review workflow among it) reached no
+        # agent. What has to arrive is kept here; the rest rides on inspect()'s guide.
+        assert len(mcp.instructions) < 2000
+        for needed in ("wait_review()", "templates/README.md", "guide field", "Resolve all"):
+            assert needed in mcp.instructions, needed
         tools = asyncio.run(mcp.list_tools())
         schemas = {tool.name: tool.inputSchema for tool in tools}
         assert list(schemas) == [
@@ -395,6 +400,27 @@ def test_render_page_save_writes_a_png_and_returns_its_path(tmp_path: Path) -> N
         with pytest.raises(Exception, match="inside the project"):
             asyncio.run(mcp.call_tool(
                 "render_page", {"artifact": "slides", "page": 1, "save": True, "out": "../escape.png"}))
+    finally:
+        binding.stop()
+
+
+def test_the_working_guide_rides_on_the_discovery_call_only(tmp_path: Path) -> None:
+    """The rules a client's truncation used to swallow live here instead, on the call every
+    agent starts with. A later inspect(artifact) is made many times and carries none of it."""
+    project(tmp_path)
+    binding = ProjectBinding(tmp_path)
+    try:
+        mcp = create_server(binding)
+        _, discovered = asyncio.run(mcp.call_tool("inspect", {}))
+        guide = discovered["guide"]
+        assert set(guide) == {"layout_check", "measure_space", "render_page", "images", "watching"}
+        assert "layout_check.room" in guide["layout_check"]
+        assert "min_no_wrap_width" in guide["measure_space"]
+        assert "inotify watch limit reached" in guide["watching"]
+        assert "base64" in guide["images"]
+
+        _, one = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
+        assert "guide" not in one
     finally:
         binding.stop()
 
