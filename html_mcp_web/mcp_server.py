@@ -48,51 +48,73 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     _check_dependencies()
     mcp = FastMCP(
         "html-mcp-web",
+        # A client may cut this text off: Claude Code delivers about 2,300 characters, and
+        # the rest reached no agent at all. What stays here is what is needed before the
+        # first call; the rest is one field of the inspect() an agent starts with anyway.
         instructions=(
-            "Call inspect() first, then read only the artifact, comments, and pages needed, reusing results while "
-            "revision is unchanged. Find new comments with list_comments(unanswered=True) or since=<the largest "
-            "last_human_at already handled>, not by re-reading the open list. inspect(artifact) reports the "
-            "layout_check: completion requires checked_revision == revision and no errors, and those errors are the "
-            "fit failures. A fit error names the block that spills, not where the page still has room, and the room "
-            "for that page comes back beside the errors as layout_check.room: a block that is not tied to its column "
-            "(a footnote, a shared definition, a result line) moves there before anything is trimmed. "
-            "No errors is not the same as a page that reads well, so measure_space(target=<block ref>) "
-            "on the block that fills most of the page settles the rest: line_count and last_line_right_space are the "
-            "pixels to trim or add, a table adds min_no_wrap_width, and unused_ratio is the share of the block's box "
-            "that nothing is drawn in. What the check does not judge is "
-            "whether a drawing is right: that a wire reaches the part it is drawn to, that a curve matches the "
-            "formula beside it. After moving coordinates in an svg, look at that part with render_page(dpi=150). "
-            "render_page carries "
-            "what numbers do not (figure placement, a crop, colour); run it once per page when that changes and once "
-            "before hand-off, not after each edit. When the page is for the user to look at rather than for you, "
-            "render_page(save=True) writes the png and returns its path, which costs none of the tokens the image "
-            "itself would. Make the edit, reply with what was changed and why, record edited_files, and leave the "
-            "comment open: closing it hides the reasoning the reviewer reads to judge the fix, and the reviewer "
-            "closes the batch with Resolve all once nothing in it looks wrong. set_comment_status is for a comment "
-            "that asks for no edit (a question answered, a request declined), not for signing off your own work. "
-            "edit_file is the source; for a templated artifact "
-            "main_file is build output and is not edited. Saving the content file is the whole edit cycle: the "
-            "watcher rebuilds the artifact and bumps its revision by itself, so build.py is never run by hand. "
-            "Link images with a relative src into a project folder; do "
-            "not embed them as base64, so content stays small and editable. The content format and component "
-            "vocabulary are in templates/README.md beside the package (a skin's own README covers only what that skin "
-            "changes); read it before writing content. The project is watched with inotify, one watch per "
-            "directory under it, and the per-user watch limit is shared by every session on the host; a large tree "
-            "that holds no artifact content (checkpoints, a baseline dump, a dataset) goes in the config's ignore "
-            "list by its top-level directory name, or the project server fails to start with 'inotify watch limit "
-            "reached' for this session and every other one. After handing a revision to the reviewer, call "
-            "wait_review() and start the script it returns in the background (Claude Code: Monitor), then end the "
-            "turn: the script exits when the reviewer presses the Call agent button in the sidebar, the harness's "
-            "completion notification wakes you, and list_comments(unanswered=True) picks up from there. Waiting this "
+            "Call inspect() first: it returns a guide field with the rules for reading a layout check, "
+            "measuring space, rendering, and writing content. Read only the artifact, comments and pages "
+            "needed, reusing results while revision is unchanged, and find new comments with "
+            "list_comments(unanswered=True) or since=<the largest last_human_at already handled>. "
+            "edit_file is the source; for a templated artifact main_file is build output and is not "
+            "edited. Saving the content file is the whole edit cycle: the watcher rebuilds and bumps the "
+            "revision by itself, so build.py is never run by hand. The content format and component "
+            "vocabulary are in templates/README.md beside the package; read it before writing content. "
+            "Completion is layout_check.checked_revision == revision with no errors, and each error ends "
+            "with the ref of the block it is about, which measure_space(target=<ref>) and "
+            "render_page(target=<ref>) both take. Make the edit, reply with what changed and why, record "
+            "edited_files, and leave the comment open: closing it hides the reasoning the reviewer reads "
+            "to judge the fix, and the reviewer closes the batch with Resolve all. set_comment_status is "
+            "for a comment that asks for no edit, not for signing off your own work. Then call "
+            "wait_review() and start the script it returns in the background (Claude Code: Monitor) and "
+            "end the turn: it exits when the reviewer presses Call agent, the harness's completion "
+            "notification wakes you, and list_comments(unanswered=True) picks up from there. Waiting that "
             "way costs no tokens, so prefer it to polling for comments."
         ),
     )
+
+    # The working rules, kept here rather than in the server instructions because a client
+    # may cut those off before the end. They ride on the discovery call, which is made once,
+    # and stay off every later inspect(artifact).
+    GUIDE = {
+        "layout_check": (
+            "checked_revision == revision and no errors is the fit bar. An error names the block that "
+            "spills and ends with its ref; where the page still has room comes back beside the errors as "
+            "layout_check.room, and a block not tied to its column (a footnote, a shared definition, a "
+            "result line) moves there before anything is trimmed."
+        ),
+        "measure_space": (
+            "No errors is not the same as a page that reads well. measure_space(target=<ref>) on the block "
+            "that fills most of the page settles the rest: line_count and last_line_right_space are the "
+            "pixels to trim or add, edge_space is the gap to each side of the block, a table adds "
+            "min_no_wrap_width, and unused_ratio is the share of the block's box nothing is drawn in."
+        ),
+        "render_page": (
+            "The check does not judge whether a drawing is right: that a wire reaches the part it is drawn "
+            "to, that a curve matches the formula beside it. render_page carries what numbers do not "
+            "(figure placement, a crop, colour). render_page(target=<ref>) crops to one block for a fraction "
+            "of a page's tokens, dpi=150 shows fine detail, and save=True writes a png for the user to look "
+            "at without the image entering the transcript. Run it when what it carries changed and once "
+            "before hand-off, not after each edit."
+        ),
+        "images": (
+            "Link images with a relative src into a project folder; do not embed them as base64, so content "
+            "stays small and editable."
+        ),
+        "watching": (
+            "The project is watched with inotify, one watch per directory under it, and the per-user watch "
+            "limit is shared by every session on the host. A large tree that holds no artifact content "
+            "(checkpoints, a baseline dump, a dataset) goes in the config's ignore list by its top-level "
+            "directory name, or the project server fails to start with 'inotify watch limit reached' for "
+            "this session and every other one."
+        ),
+    }
 
     @mcp.tool()
     async def inspect(
         artifact: str | None = None,
     ) -> dict[str, Any]:
-        """Discover compact project state, or inspect one artifact without comment threads."""
+        """Discover compact project state with the working guide, or inspect one artifact without comment threads."""
         try:
             client = binding.connect()
         except ProjectSetupError as error:
@@ -113,6 +135,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "config_path": state["config_path"],
             "project_dir": state["project_dir"],
             "review_url": f"http://127.0.0.1:{state['port']}",
+            **({} if artifact is not None else {"guide": GUIDE}),
             "artifacts": result,
         }
 
