@@ -1389,9 +1389,9 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None:
-    """Pinching the page zoomed the controls and the comments with it, and a reader leaning
-    in at a figure got everything twice the size. Two fingers on the artifact are handed to
-    the page instead, and only the deck grows."""
+    """Two fingers on the artifact zoom the artifact alone. The gesture is panzoom's: our
+    own pointer reading lost the tug-of-war with the browser, which kept deciding mid-pinch
+    that two fingers were a scroll and cancelling the gesture."""
     slides = tmp_path / "slides.html"
     slides.write_text(slides_html(), encoding="utf-8")
     port = available_port()
@@ -1405,7 +1405,8 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
     profile = tempfile.mkdtemp(prefix="html_mcp_zoom_")
     marionette_port = available_port()
     (Path(profile) / "user.js").write_text(
-        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+        f'user_pref("marionette.port", {marionette_port});\n'
+        'user_pref("dom.w3c_touch_events.enabled", 1);\n', encoding="utf-8")
     browser_process = None
     browser = None
     try:
@@ -1420,88 +1421,90 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#artifact-status")?.textContent === "ready"'))
-
-        # The artifact refuses the browser's own pinch, so the gesture reaches the page.
-        assert browser.execute_script(
-            'const d = document.querySelector("#artifact-frame").contentDocument;'
-            'return getComputedStyle(d.documentElement).touchAction;') == "pan-x pan-y"
+        # The library reaches the artifact document and takes over its pages element.
+        wait_until(lambda: browser.execute_script(
+            'const w = document.querySelector("#artifact-frame").contentWindow;'
+            'return typeof w.wrappedJSObject.panzoom === "function"'))
 
         measure = """
           const frame = document.querySelector("#artifact-frame");
-          const page = frame.contentDocument.querySelector("section.page");
-          const tabs = document.querySelector(".sidebar-tabs");
-          return {page: page.getBoundingClientRect().width,
-                  tabs: tabs.getBoundingClientRect().height,
+          const pages = frame.contentDocument.querySelector("main.pages");
+          const raw = getComputedStyle(pages).transform;
+          const matrix = new frame.contentWindow.DOMMatrixReadOnly(raw === "none" ? "" : raw);
+          return {scale: matrix.a, shift: [matrix.e, matrix.f],
+                  tabs: document.querySelector(".sidebar-tabs").getBoundingClientRect().height,
                   topbar: document.querySelector(".topbar").getBoundingClientRect().height,
                   resetShown: !document.querySelector("#zoom-reset-btn").classList.contains("hidden")};
         """
         before = browser.execute_script(measure)
+        assert abs(before["scale"] - 1) < 0.01
         assert not before["resetShown"]
 
-        # The gesture's fixed point, in zoom-independent coordinates: what sits between
-        # the fingers is what the reader is looking at, and it has to stay put.
-        fixed_point = """
-          const win = document.querySelector("#artifact-frame").contentWindow;
-          const zoom = arguments[1] ?? 1;
-          return {x: (win.scrollX + arguments[0][0] - win.document.documentElement.scrollWidth / 2) / zoom,
-                  y: (win.scrollY + arguments[0][1]) / zoom};
-        """
-        held = browser.execute_script(fixed_point, script_args=[[300, 300], 1])
-
-        # Two fingers, drawn apart by half again and carried 40px left: a pinch and a pan
-        # in one gesture, the way a hand actually does it.
         browser.execute_script("""
-          const doc = document.querySelector("#artifact-frame").contentDocument;
-          const view = doc.defaultView;
-          const send = (type, id, x, y) => doc.dispatchEvent(new view.PointerEvent(type, {
-            pointerId: id, pointerType: "touch", clientX: x, clientY: y,
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const pages = doc.querySelector("main.pages");
+          const touch = (id, x, y) => new view.Touch({identifier: id, target: pages, clientX: x, clientY: y});
+          const send = (type, touches) => pages.dispatchEvent(new view.TouchEvent(type, {
+            touches, targetTouches: touches, changedTouches: touches,
             bubbles: true, cancelable: true}));
-          window.pinchSend = send;
-          send("pointerdown", 1, 200, 300);
-          send("pointerdown", 2, 400, 300);
-          send("pointermove", 2, 500, 300);
-          send("pointermove", 2, 600, 300);
+          send("touchstart", [touch(1, 300, 400), touch(2, 400, 400)]);
+          for (let step = 1; step <= 6; step += 1) {
+            send("touchmove", [touch(1, 300 - step * 20, 400), touch(2, 400 + step * 20, 400)]);
+          }
+          send("touchend", []);
+        """)
+        time.sleep(0.5)
+        after = browser.execute_script(measure)
+        assert after["scale"] > 1.4, after            # the deck grew with the gesture
+        assert after["tabs"] == before["tabs"]        # the comments did not
+        assert after["topbar"] == before["topbar"]    # nor the controls
+        assert after["resetShown"]                    # and there is a way back
+
+        # Zoomed in, one finger pans, the way a map behaves.
+        browser.execute_script("""
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const pages = doc.querySelector("main.pages");
+          const touch = (id, x, y) => new view.Touch({identifier: id, target: pages, clientX: x, clientY: y});
+          const send = (type, touches) => pages.dispatchEvent(new view.TouchEvent(type, {
+            touches, targetTouches: touches, changedTouches: touches,
+            bubbles: true, cancelable: true}));
+          send("touchstart", [touch(9, 300, 500)]);
+          send("touchmove", [touch(9, 300, 420)]);
+          send("touchend", []);
         """)
         time.sleep(0.3)
-        browser.execute_script("""
-          const doc = document.querySelector("#artifact-frame").contentDocument;
-          const view = doc.defaultView;
-          const send = (type, id, x, y) => doc.dispatchEvent(new view.PointerEvent(type, {
-            pointerId: id, pointerType: "touch", clientX: x, clientY: y,
-            bubbles: true, cancelable: true}));
-          send("pointermove", 1, 160, 300);
-          send("pointermove", 2, 560, 300);
-          send("pointerup", 1, 160, 300);
-          send("pointerup", 2, 560, 300);
-        """)
-        time.sleep(0.4)
-        after = browser.execute_script(measure)
-        assert after["page"] > before["page"] * 1.4      # the deck grew with the gesture
-        assert after["tabs"] == before["tabs"]           # the comments did not
-        assert after["topbar"] == before["topbar"]       # nor the controls
-        assert after["resetShown"]                       # and there is a way back
-
-        # What was between the fingers is still under their final midpoint (360, 300).
-        zoom = after["page"] / before["page"]
-        still = browser.execute_script(fixed_point, script_args=[[360, 300], zoom])
-        assert abs(still["x"] - held["x"]) <= 6, (still, held)
-        assert abs(still["y"] - held["y"]) <= 6, (still, held)
-
-        # Zoomed in, the left edge is still reachable: grown from the corner it was not,
-        # the growth all went right and the left half sat outside the scrollable range.
-        reach = browser.execute_script("""
-          const win = document.querySelector("#artifact-frame").contentWindow;
-          win.scrollTo(0, win.scrollY);
-          const page = win.document.querySelector("section.page");
-          return page.getBoundingClientRect().left;
-        """)
-        assert reach >= -2, reach
+        panned = browser.execute_script(measure)
+        assert abs(panned["scale"] - after["scale"]) < 0.01
+        assert panned["shift"] != after["shift"], panned
 
         browser.find_element("css selector", "#zoom-reset-btn").click()
         time.sleep(0.3)
         back = browser.execute_script(measure)
-        assert abs(back["page"] - before["page"]) < 2
+        assert abs(back["scale"] - 1) < 0.01
         assert not back["resetShown"]
+
+        # At rest, that same finger is the browser's again: the library sees none of it.
+        browser.execute_script("""
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const pages = doc.querySelector("main.pages");
+          const touch = (id, x, y) => new view.Touch({identifier: id, target: pages, clientX: x, clientY: y});
+          const send = (type, touches) => pages.dispatchEvent(new view.TouchEvent(type, {
+            touches, targetTouches: touches, changedTouches: touches,
+            bubbles: true, cancelable: true}));
+          send("touchstart", [touch(9, 300, 500)]);
+          send("touchmove", [touch(9, 300, 380)]);
+          send("touchend", []);
+        """)
+        time.sleep(0.3)
+        rest = browser.execute_script(measure)
+        assert abs(rest["scale"] - 1) < 0.01
+        assert rest["shift"] == back["shift"], rest
     finally:
         if browser is not None:
             try:
@@ -1516,3 +1519,5 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
+
+

@@ -38,6 +38,10 @@ html[data-html-mcp-layout] body {
 html[data-html-mcp-layout] body > main.pages {
   display: flex !important;
   width: 100% !important;
+  /* The reader's zoom (panzoom) writes a matrix onto this element and computes it against
+     the top-left corner; the default centre origin would put its own offset under every
+     factor and the content would drift as it scales. */
+  transform-origin: 0 0 !important;
   flex-direction: column !important;
   /* safe: centring a page wider than the window pushes half of it into the range no
      scrollbar reaches; once it overflows, it starts from the left instead, and with the

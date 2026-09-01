@@ -36,9 +36,7 @@ const state = {
   suppressPresentationClick: false,
   draggingPanel: false,
   panelDraggedAt: -Infinity,
-  artifactZoom: 1,
-  pinchPointers: new Map(),
-  pinch: null,
+  artifactPanzoom: null,
 };
 
 function artifactBase() {
@@ -250,13 +248,9 @@ function updatePageScale() {
   const margin = state.slideShow ? 0 : (frameWindow().innerWidth < 560 ? 8 : 48);
   const availableWidth = frameWindow().innerWidth - margin;
   const widthScale = availableWidth / page.offsetWidth;
-  // Pinching the page zoomed the controls and the comments along with the artifact, which
-  // is not what a reader leaning in at a figure wants. The pane takes the gesture itself
-  // and the factor lands here, on the artifact alone.
-  const fitted = state.slideShow
+  const scale = state.slideShow
     ? Math.min(widthScale, frameWindow().innerHeight / page.offsetHeight)
     : Math.min(1, widthScale);
-  const scale = fitted * state.artifactZoom;
   const root = frameDocument().documentElement;
   root.style.setProperty("--html-mcp-page-scale", String(scale));
   // The room a drawn-smaller block gives back depends on its own height, and only the
@@ -326,74 +320,59 @@ function selectionSpan(selection) {
   return span;
 }
 
-// Two pointers on the artifact are a pinch, and the factor they carry lands on the deck
-// alone. A real pinch holds the point between the fingers still while everything grows
-// around it, and moving both fingers pans: growing about the corner instead threw what
-// was being looked at off the screen, which is what read as unnatural. The pages scale
-// about the document's top left, so a document position is proportional to the zoom;
-// dividing one by the current zoom gives a coordinate the gesture can hold on to, and
-// the scroll that keeps it under the fingers is one multiplication away. Applied once
-// per frame: every move re-laid the page out and the deck trailed the fingers.
-function pinchZoom(event) {
-  if (event.pointerType === "mouse") return;
-  const pointers = state.pinchPointers;
-  if (event.type === "pointerup" || event.type === "pointercancel") {
-    pointers.delete(event.pointerId);
-    if (pointers.size < 2 && state.pinch !== null) {
-      state.pinch = null;
-      scheduleHighlights();       // drawn once at the size the gesture settled on
-      scheduleLayoutCheck();
-    }
-    return;
-  }
-  if (event.type === "pointerdown" || pointers.has(event.pointerId)) {
-    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-  }
-  if (pointers.size !== 2) return;
-  const [first, second] = Array.from(pointers.values());
-  const span = Math.hypot(first.x - second.x, first.y - second.y);
-  const middle = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
-  if (state.pinch === null) {
-    if (span === 0) return;
-    const win = frameWindow();
-    // The point between the fingers, in zoom-independent coordinates: pages grow about
-    // the document's top centre, so vertically a position is proportional to the zoom,
-    // and horizontally it is the offset from the centre line that is.
-    state.pinch = {
-      startSpan: span,
-      startZoom: state.artifactZoom,
-      anchorY: (win.scrollY + middle.y) / state.artifactZoom,
-      anchorX: (win.scrollX + middle.x - win.document.documentElement.scrollWidth / 2)
-        / state.artifactZoom,
-      middle,
-      frame: null,
-    };
-    return;
-  }
-  if (event.type !== "pointermove") return;
-  if (event.cancelable) event.preventDefault();
-  const pinch = state.pinch;
-  pinch.middle = middle;
-  // Held between half the fitted size and four times it: below that the deck is
-  // unreadable anyway, above it a page is a handful of words.
-  state.artifactZoom = Math.min(4, Math.max(0.5, pinch.startZoom * (span / pinch.startSpan)));
-  if (pinch.frame !== null) return;
-  pinch.frame = requestAnimationFrame(() => {
-    pinch.frame = null;
-    applyArtifactZoom();
-    const win = frameWindow();
-    win.scrollTo(
-      pinch.anchorX * state.artifactZoom + win.document.documentElement.scrollWidth / 2
-        - pinch.middle.x,
-      pinch.anchorY * state.artifactZoom - pinch.middle.y,
-    );
+// Two fingers on the artifact zoom the artifact alone; the controls and the comments
+// stay their size. The gesture handling is panzoom's (vendored, MIT): our own reading of
+// pointer events lost the tug-of-war with the browser, which kept deciding mid-gesture
+// that two fingers were a scroll and cancelling the pinch, where panzoom claims the
+// touches with preventDefault the moment two of them land. One finger stays the
+// browser's and scrolls; the wheel zooms only with ctrl held, as maps do.
+function installArtifactZoom() {
+  const doc = frameDocument();
+  const win = frameWindow();
+  state.artifactPanzoom?.dispose();
+  state.artifactPanzoom = null;
+  const pages = doc.querySelector("body > main.pages");
+  if (pages === null || state.artifact.layout !== "slides" && state.artifact.layout !== "report") return;
+  // Registered before panzoom's own listeners, so it decides first: at rest a single
+  // finger is the browser's and scrolls the document; zoomed in it is panzoom's and pans,
+  // the way a map behaves. panzoom's onTouch hook is not enough here: declining a touch
+  // there only skips the preventDefault, the tracking goes on, and a resting one-finger
+  // scroll still dragged the pages sideways.
+  const gate = (event) => {
+    const zoomer = state.artifactPanzoom;
+    const resting = zoomer === null || Math.abs(zoomer.getTransform().scale - 1) < 0.01;
+    if (resting && event.touches.length < 2) event.stopImmediatePropagation();
+  };
+  pages.addEventListener("touchstart", gate, { capture: true });
+  pages.addEventListener("touchmove", gate, { capture: true });
+  const script = doc.createElement("script");
+  script.src = "/static/vendor/panzoom.min.js";
+  script.addEventListener("load", () => {
+    if (doc !== frameDocument()) return;      // the artifact reloaded while loading
+    const zoomer = win.panzoom(pages, {
+      maxZoom: 4,
+      minZoom: 0.5,
+      beforeMouseDown: () => true,
+      beforeWheel: (event) => !event.ctrlKey,
+      zoomDoubleClickSpeed: 1,
+      filterKey: () => true,
+      smoothScroll: false,
+    });
+    state.artifactPanzoom = zoomer;
+    zoomer.on("transform", () => {
+      const scale = zoomer.getTransform().scale;
+      $("#zoom-reset-btn").classList.toggle("hidden", Math.abs(scale - 1) < 0.01);
+      scheduleHighlights();
+    });
   });
+  doc.head.appendChild(script);
 }
 
-function applyArtifactZoom() {
-  $("#zoom-reset-btn").classList.toggle("hidden", Math.abs(state.artifactZoom - 1) < 0.01);
-  updatePageScale();
-  scheduleHighlights();
+function resetArtifactZoom() {
+  const zoomer = state.artifactPanzoom;
+  if (zoomer === null) return;
+  zoomer.moveTo(0, 0);
+  zoomer.zoomAbs(0, 0, 1);
 }
 
 function showSelectionButton() {
@@ -683,14 +662,7 @@ function attachArtifactEvents() {
   // watched as well, held back while a pointer is down so that a drag on a desktop still
   // settles before the button appears.
   doc.addEventListener("touchend", () => setTimeout(showSelectionButton, 60), true);
-  // Two fingers on the artifact zoom the artifact. Pinching the page zoomed the controls
-  // and the comments along with it, which is not what a reader leaning in at a figure
-  // wants; the artifact refuses the browser's own pinch (touch-action in artifact.css),
-  // so the gesture arrives here as two pointers and only the deck grows. One finger still
-  // scrolls, and the zoom is a factor on the fit, so 1 is the page as it lands.
-  for (const kind of ["pointerdown", "pointermove", "pointerup", "pointercancel"]) {
-    doc.addEventListener(kind, pinchZoom, { passive: false, capture: true });
-  }
+  installArtifactZoom();
   doc.addEventListener("selectionchange", () => {
     if (state.selectionPointerDown) return;
     if (state.selectionSettle !== null) clearTimeout(state.selectionSettle);
@@ -875,6 +847,9 @@ function attachControls() {
   $("#print-btn").addEventListener("click", printArtifact);
   $("#download-pptx-btn").addEventListener("click", downloadPptx);
   $("#fullscreen-btn").addEventListener("click", () => {
+    // The slide show sizes the current page itself; a reader's zoom held from browsing
+    // would put the show off screen.
+    resetArtifactZoom();
     toggleFullscreen().catch((error) => alert(`Could not enter full screen: ${error.message}`));
   });
   $("#presentation-prev-btn").addEventListener("click", () => movePresentationPage(-1));
@@ -1025,8 +1000,7 @@ function attachControls() {
     grip.addEventListener("pointercancel", done);
   });
   $("#zoom-reset-btn").addEventListener("click", () => {
-    state.artifactZoom = 1;
-    applyArtifactZoom();
+    resetArtifactZoom();
   });
   $("#fullscreen-btn").disabled = !document.fullscreenEnabled;
   // On a phone the comments cover the artifact, so they start out of the way until asked
