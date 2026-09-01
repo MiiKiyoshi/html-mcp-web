@@ -1011,3 +1011,74 @@ return [Math.round(box.width), Math.round(box.height)];
             except subprocess.TimeoutExpired:
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_body_image_keeps_its_proportions(tmp_path: Path) -> None:
+    """The body is a column flex box, and its default stretch handed an image with no
+    stated width the whole column while max-height cut only the height: a 4:3 figure came
+    out at 4:1. An image wider than the column is held inside it instead."""
+    from PIL import Image
+
+    from html_mcp_web.slides import build
+
+    (tmp_path / "fig").mkdir()
+    Image.new("RGB", (400, 300), "#3366aa").save(tmp_path / "fig" / "small.png")
+    Image.new("RGB", (2400, 600), "#aa3333").save(tmp_path / "fig" / "huge.png")
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<!doctype html><meta charset="utf-8"><title>Deck</title>'
+        '<body data-author="A" data-meta="B">'
+        '<section data-title="Figures"><p class="lead">Two figures.</p>'
+        '<img id="small" src="fig/small.png" style="max-height:300px">'
+        '<img id="huge" src="fig/huge.png" style="max-height:300px"></section></body>',
+        encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, Path(__file__).resolve().parents[1] / "templates" / "neutral-slides")
+
+    profile = tempfile.mkdtemp(prefix="html_mcp_img_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "1500", "-height", "1000", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=1500, height=1000)
+        browser.navigate(html.as_uri())
+        wait_until(lambda: browser.execute_script(
+            "const i = document.querySelector('#small'); return i !== null && i.complete"))
+        measured = browser.execute_script("""
+const read = (id) => {
+  const image = document.querySelector(id);
+  const box = image.getBoundingClientRect();
+  return {drawn: [Math.round(box.width), Math.round(box.height)],
+          source: image.naturalWidth / image.naturalHeight,
+          shown: box.width / box.height,
+          column: Math.round(image.parentElement.getBoundingClientRect().width)};
+};
+return {small: read('#small'), huge: read('#huge')};
+""")
+        for name in ("small", "huge"):
+            one = measured[name]
+            assert abs(one["shown"] - one["source"]) < 0.02, name   # proportions survive
+            assert one["drawn"][0] <= one["column"], name           # and stay in the column
+        assert measured["small"]["drawn"] == [400, 300]             # small enough to sit as it is
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
