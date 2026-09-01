@@ -38,7 +38,7 @@ const state = {
   panelDraggedAt: -Infinity,
   artifactZoom: 1,
   pinchPointers: new Map(),
-  pinchSpan: null,
+  pinch: null,
 };
 
 function artifactBase() {
@@ -327,14 +327,23 @@ function selectionSpan(selection) {
 }
 
 // Two pointers on the artifact are a pinch, and the factor they carry lands on the deck
-// alone. Distances only, so it does not matter that these coordinates belong to the
-// artifact's own window.
+// alone. A real pinch holds the point between the fingers still while everything grows
+// around it, and moving both fingers pans: growing about the corner instead threw what
+// was being looked at off the screen, which is what read as unnatural. The pages scale
+// about the document's top left, so a document position is proportional to the zoom;
+// dividing one by the current zoom gives a coordinate the gesture can hold on to, and
+// the scroll that keeps it under the fingers is one multiplication away. Applied once
+// per frame: every move re-laid the page out and the deck trailed the fingers.
 function pinchZoom(event) {
   if (event.pointerType === "mouse") return;
   const pointers = state.pinchPointers;
   if (event.type === "pointerup" || event.type === "pointercancel") {
     pointers.delete(event.pointerId);
-    if (pointers.size < 2) state.pinchSpan = null;
+    if (pointers.size < 2 && state.pinch !== null) {
+      state.pinch = null;
+      scheduleHighlights();       // drawn once at the size the gesture settled on
+      scheduleLayoutCheck();
+    }
     return;
   }
   if (event.type === "pointerdown" || pointers.has(event.pointerId)) {
@@ -343,17 +352,42 @@ function pinchZoom(event) {
   if (pointers.size !== 2) return;
   const [first, second] = Array.from(pointers.values());
   const span = Math.hypot(first.x - second.x, first.y - second.y);
-  if (state.pinchSpan === null || span === 0) {
-    state.pinchSpan = span === 0 ? null : span;
+  const middle = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+  if (state.pinch === null) {
+    if (span === 0) return;
+    const win = frameWindow();
+    // The point between the fingers, in zoom-independent coordinates: pages grow about
+    // the document's top centre, so vertically a position is proportional to the zoom,
+    // and horizontally it is the offset from the centre line that is.
+    state.pinch = {
+      startSpan: span,
+      startZoom: state.artifactZoom,
+      anchorY: (win.scrollY + middle.y) / state.artifactZoom,
+      anchorX: (win.scrollX + middle.x - win.document.documentElement.scrollWidth / 2)
+        / state.artifactZoom,
+      middle,
+      frame: null,
+    };
     return;
   }
   if (event.type !== "pointermove") return;
   if (event.cancelable) event.preventDefault();
+  const pinch = state.pinch;
+  pinch.middle = middle;
   // Held between half the fitted size and four times it: below that the deck is
   // unreadable anyway, above it a page is a handful of words.
-  state.artifactZoom = Math.min(4, Math.max(0.5, state.artifactZoom * (span / state.pinchSpan)));
-  state.pinchSpan = span;
-  applyArtifactZoom();
+  state.artifactZoom = Math.min(4, Math.max(0.5, pinch.startZoom * (span / pinch.startSpan)));
+  if (pinch.frame !== null) return;
+  pinch.frame = requestAnimationFrame(() => {
+    pinch.frame = null;
+    applyArtifactZoom();
+    const win = frameWindow();
+    win.scrollTo(
+      pinch.anchorX * state.artifactZoom + win.document.documentElement.scrollWidth / 2
+        - pinch.middle.x,
+      pinch.anchorY * state.artifactZoom - pinch.middle.y,
+    );
+  });
 }
 
 function applyArtifactZoom() {

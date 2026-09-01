@@ -39,7 +39,10 @@ html[data-html-mcp-layout] body > main.pages {
   display: flex !important;
   width: 100% !important;
   flex-direction: column !important;
-  align-items: center !important;
+  /* safe: centring a page wider than the window pushes half of it into the range no
+     scrollbar reaches; once it overflows, it starts from the left instead, and with the
+     margins split evenly the zoomed page's left edge lands exactly at zero. */
+  align-items: safe center !important;
   gap: 24px !important;
   margin: 0 !important;
   padding: 0 !important;
@@ -64,9 +67,14 @@ html[data-html-mcp-layout] body > main.pages > section.page {
      the page wrote it and only paints it smaller. The negative margins give back the room
      the untransformed box would still take up, so the column stays as wide as what shows. */
   transform: scale(var(--html-mcp-page-scale, 1));
-  transform-origin: top left;
-  margin: 0 calc(var(--html-mcp-page-width) * (var(--html-mcp-page-scale, 1) - 1))
-          calc(var(--html-mcp-page-height) * (var(--html-mcp-page-scale, 1) - 1)) 0 !important;
+  /* About the top centre, growing evenly both ways: grown from the left corner, a page
+     zoomed past the window put its whole growth on the right, and the centred box's left
+     half fell outside the scrollable range, so nothing could scroll back to it. The
+     margins give back (or take up) the difference between the drawn box and the laid-out
+     one, half on each side to match. */
+  transform-origin: top center;
+  margin: 0 calc(var(--html-mcp-page-width) * (var(--html-mcp-page-scale, 1) - 1) / 2)
+          calc(var(--html-mcp-page-height) * (var(--html-mcp-page-scale, 1) - 1)) !important;
 }
 
 html[data-html-mcp-presentation="slides"],
@@ -110,9 +118,9 @@ html[data-html-mcp-presentation="slides"] body > main.pages > section.page.html-
    Its own height is measured and handed over, because only the page's is known here. */
 html[data-html-mcp-layout] body > main.pages > .script-block {
   transform: scale(var(--html-mcp-page-scale, 1));
-  transform-origin: top left;
-  margin: -14px calc(var(--html-mcp-page-width) * (var(--html-mcp-page-scale, 1) - 1))
-          calc(var(--html-mcp-script-height, 164px) * (var(--html-mcp-page-scale, 1) - 1)) 0 !important;
+  transform-origin: top center;
+  margin: -14px calc(var(--html-mcp-page-width) * (var(--html-mcp-page-scale, 1) - 1) / 2)
+          calc(var(--html-mcp-script-height, 164px) * (var(--html-mcp-page-scale, 1) - 1)) !important;
 }
 
 html[data-html-mcp-presentation="slides"] body > main.pages > .script-block,
