@@ -76,7 +76,11 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "directory under it, and the per-user watch limit is shared by every session on the host; a large tree "
             "that holds no artifact content (checkpoints, a baseline dump, a dataset) goes in the config's ignore "
             "list by its top-level directory name, or the project server fails to start with 'inotify watch limit "
-            "reached' for this session and every other one."
+            "reached' for this session and every other one. After handing a revision to the reviewer, call "
+            "wait_review() and start the script it returns in the background (Claude Code: Monitor), then end the "
+            "turn: the script exits when the reviewer presses the Call agent button in the sidebar, the harness's "
+            "completion notification wakes you, and list_comments(unanswered=True) picks up from there. Waiting this "
+            "way costs no tokens, so prefer it to polling for comments."
         ),
     )
 
@@ -247,6 +251,47 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         if min_height is not None:
             query["min_height"] = min_height
         return await client.request_json("GET", f"/artifacts/{artifact}/space?{urlencode(query)}")
+
+    @mcp.tool()
+    async def wait_review() -> dict[str, Any]:
+        """Arm the reviewer's Call agent button and return at once with a waiter script. Start that script with the harness's background facility (Claude Code: Monitor) and end the turn; the script exits the moment the reviewer presses the button, and the harness's completion notification is the wake-up. Costs nothing while waiting."""
+        client = binding.require_client()
+        state = await client.request_json("GET", "/state")
+        port = state["port"]
+        calls = state["review"]["calls"]
+        script = (
+            "#!/bin/sh\n"
+            f"# Exits when the reviewer presses 'Call agent' on http://127.0.0.1:{port}\n"
+            f"since={calls}\n"
+            "tries=0\n"
+            "while [ $tries -lt 60 ]; do\n"
+            f"  out=$(curl -sf --max-time 60 \"http://127.0.0.1:{port}/wait-review?since=$since\"); rc=$?\n"
+            "  if [ $rc -eq 0 ] && [ -n \"$out\" ]; then printf '%s\\n' \"$out\"; exit 0; fi\n"
+            "  if [ $rc -ne 0 ] && [ $rc -ne 28 ]; then printf '[gone] review server unreachable (curl exit %s)\\n' $rc; exit 1; fi\n"
+            "  tries=$((tries + 1))\n"
+            "done\n"
+            "printf '[timeout] no review call within an hour; call wait_review again to keep waiting\\n'\n"
+        )
+        # Replaced atomically so a waiter started from the previous script keeps reading
+        # the file it opened.
+        directory = Path(state["project_dir"]) / ".html-mcp-web"
+        directory.mkdir(parents=True, exist_ok=True)
+        target = directory / "wait-review.sh"
+        staging = directory / "wait-review.sh.new"
+        staging.write_text(script, encoding="utf-8")
+        staging.chmod(0o755)
+        staging.replace(target)
+        return {
+            "script": str(target),
+            "how": (
+                "Run the script with the harness's background completion facility and end the turn: on "
+                "Claude Code, Monitor(command=<script>, description='waiting for the reviewer', "
+                "timeout_ms=3900000). It prints one line and exits: [review] means comments are ready, "
+                "so continue with list_comments(unanswered=True); [timeout] after an hour means call "
+                "wait_review again if still waiting; [gone] means the review server stopped. Without a "
+                "background facility, running it with a shell tool blocks until the button is pressed."
+            ),
+        }
 
     return mcp
 

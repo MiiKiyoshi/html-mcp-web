@@ -232,6 +232,11 @@ class ArtifactRuntime:
 
 
 class HtmlReviewServer:
+    # How long one long-poll request is held before it returns empty and the caller asks
+    # again. Under the MCP client's own timeouts, and short enough that a stopped server
+    # is noticed within a minute.
+    REVIEW_POLL_TIMEOUT = 55.0
+
     def __init__(self, config: Config):
         self.config = config
         self.project_dir = get_project_dir(config).resolve()
@@ -239,6 +244,12 @@ class HtmlReviewServer:
         self.websockets: set[web.WebSocketResponse] = set()
         self.pdf_lock = asyncio.Lock()
         self.generated_paths: set[Path] = set()
+        # The reviewer's call button. Presses are a monotonic count, so a press made
+        # before anyone was waiting is not lost: the next wait sees count > since and
+        # returns at once.
+        self.review_calls = 0
+        self.review_called = asyncio.Event()
+        self.review_waiters = 0
         self.artifacts = self._create_artifacts(config)
         self.watcher = self._create_watcher(config)
 
@@ -271,6 +282,7 @@ class HtmlReviewServer:
             "config_path": str(self.config.config_path),
             "project_dir": str(self.project_dir),
             "port": self.config.port,
+            "review": {"calls": self.review_calls, "waiters": self.review_waiters},
             "artifacts": {artifact_id: runtime.state() for artifact_id, runtime in self.artifacts.items()},
         }
 
@@ -734,6 +746,51 @@ class HtmlReviewServer:
         await self.broadcast({"type": "comment_deleted", "artifact": runtime.artifact_id, "comment_id": comment_id})
         return web.Response(status=204)
 
+    # The reviewer's call button. An agent cannot be spoken to first over MCP, but its
+    # harness can watch a process in the background and wake the agent when it exits, so
+    # the button becomes: a waiter parks here in a long poll, the press releases it, and
+    # the waiter's exit is the interrupt. The agent spends nothing while parked.
+    def _review_line(self) -> str:
+        opens = {artifact_id: sum(comment.status == "open" for comment in runtime.store.list())
+                 for artifact_id, runtime in self.artifacts.items()}
+        listed = ", ".join(f"{count} on '{artifact_id}'" for artifact_id, count in opens.items() if count)
+        return (f"[review] reviewer called (press #{self.review_calls}): "
+                + (f"open comments: {listed}" if listed else "no open comments")
+                + " -- read them with list_comments(unanswered=True)")
+
+    async def request_review(self, request: web.Request) -> web.Response:
+        self.review_calls += 1
+        delivered = self.review_waiters > 0
+        released = self.review_called
+        self.review_called = asyncio.Event()
+        released.set()
+        await self.broadcast({"type": "review_requested", "calls": self.review_calls, "delivered": delivered})
+        return web.json_response({"calls": self.review_calls, "delivered": delivered})
+
+    async def wait_review(self, request: web.Request) -> web.Response:
+        try:
+            since = int(request.query.get("since", "0"))
+        except ValueError as error:
+            raise web.HTTPBadRequest(text="since must be an integer") from error
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.REVIEW_POLL_TIMEOUT
+        self.review_waiters += 1
+        await self.broadcast({"type": "review_waiters", "waiters": self.review_waiters})
+        try:
+            while self.review_calls <= since:
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    return web.Response(status=204)
+                waited = self.review_called
+                try:
+                    await asyncio.wait_for(waited.wait(), timeout=remaining)
+                except asyncio.TimeoutError:
+                    return web.Response(status=204)
+            return web.Response(text=self._review_line())
+        finally:
+            self.review_waiters -= 1
+            await self.broadcast({"type": "review_waiters", "waiters": self.review_waiters})
+
     async def websocket(self, request: web.Request) -> web.WebSocketResponse:
         socket = web.WebSocketResponse(heartbeat=30)
         await socket.prepare(request)
@@ -783,6 +840,8 @@ class HtmlReviewServer:
         app.router.add_post(f"{base}/comments/{{comment_id}}/reopen", self.reopen_comment)
         app.router.add_post(f"{base}/comments/{{comment_id}}/edit", self.edit_comment_entry)
         app.router.add_delete(f"{base}/comments/{{comment_id}}", self.delete_comment)
+        app.router.add_post("/review-request", self.request_review)
+        app.router.add_get("/wait-review", self.wait_review)
         app.router.add_get("/ws", self.websocket)
         app.on_startup.append(self.start_watcher)
         app.on_cleanup.append(self.stop_watcher)
