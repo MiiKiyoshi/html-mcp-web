@@ -118,7 +118,12 @@ takes no part in that spread; everything after it shares the remaining height.
   1200px body into 622px and 541px), give the `viewBox` those proportions, and draw inside
   it. The element takes the width it is given and stops at its `max-height`, and the
   drawing keeps the `viewBox` proportions inside that, so a `viewBox` of another shape
-  leaves a band down both sides or across the top and bottom that nothing can use
+  leaves a band down both sides or across the top and bottom that nothing can use.
+  Give the `viewBox` the size the figure is drawn at, not a smaller one scaled up: a
+  browser misplaces its own selection inside an svg that scales, by the scale factor, so
+  the handles a reader drags to widen a selection on a touch screen sit away from the
+  letters and collapse the selection when pressed. The review page's highlight and comment
+  button are computed from the letters themselves and are right either way
 - `<img>` for a raster figure; give it a `max-height` so the body stays inside its box
 
 Math is written as TeX between `$…$` (inline) or `$$…$$` (display); `\(…\)` and
