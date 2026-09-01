@@ -3,6 +3,7 @@
 import asyncio
 import fcntl
 import json
+import os
 import threading
 import time
 import urllib.error
@@ -78,19 +79,46 @@ class SharedProjectServer:
             return
         lock_path = self.config_path.parent / ".html-mcp-web" / "server.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
-        handle = lock_path.open("a")
+        handle = lock_path.open("a+")
         try:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            handle.close()
+            claimed = False
             for _ in range(50):
                 time.sleep(0.1)
                 identity = self._remote_identity()
                 if identity is not None:
                     if Path(identity).resolve() != self.config_path:
+                        handle.close()
                         raise RuntimeError(f"port {self.port} is used by another project: {identity}")
+                    handle.close()
                     return
-            raise RuntimeError(f"project server lock is held but port {self.port} is not reachable")
+                # The holder can die mid-poll; flock dies with it, and the takeover is
+                # ours rather than an error naming a pid that no longer exists.
+                try:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    claimed = True
+                    break
+                except BlockingIOError:
+                    continue
+            if not claimed:
+                # A holder that serves nothing. flock dies with its process, so this holder
+                # is alive; the file says who it is, so the way out can be named instead of
+                # left to be dug up by hand.
+                handle.seek(0)
+                recorded = handle.read().strip()
+                handle.close()
+                holder = f"held by {recorded}" if recorded else "holder unknown (an older version left no note)"
+                raise RuntimeError(
+                    f"project server lock is held but port {self.port} is not reachable; {holder}. "
+                    "The holding process is alive but not serving: reconnect MCP in that session or kill "
+                    "that pid, and the lock frees itself with it."
+                )
+        # Who holds it, for the message above when a later claimant finds us absent.
+        handle.truncate(0)
+        handle.seek(0)
+        handle.write(f"pid {os.getpid()}, port {self.port}")
+        handle.flush()
         self.lock_handle = handle
         self.ready.clear()
         self.start_error = None

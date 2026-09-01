@@ -100,6 +100,16 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "at without the image entering the transcript. Run it when what it carries changed and once "
             "before hand-off, not after each edit."
         ),
+        "review": (
+            "After handing a revision over, call wait_review() and start the script it returns with the "
+            "harness's background facility (Claude Code: Monitor), then end the turn: it exits when the "
+            "reviewer presses Call agent (at once if an unacknowledged press is waiting), the completion "
+            "notification wakes you, and list_comments(unanswered=True) picks up from there. Presses made "
+            "while nobody waits are kept, presses that pile up coalesce into one wake-up carrying the "
+            "latest press number, and a wake-up can repeat if its delivery could not be confirmed, so "
+            "treat one as 'there is something to read', not as a count. Waiting costs no tokens, so "
+            "prefer it to polling."
+        ),
         "images": (
             "Link images with a relative src into a project folder; do not embed them as base64, so content "
             "stays small and editable."
@@ -291,23 +301,32 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
 
     @mcp.tool()
     async def wait_review() -> dict[str, Any]:
-        """Arm the reviewer's Call agent button and return at once with a waiter script. Start that script with the harness's background facility (Claude Code: Monitor) and end the turn; the script exits the moment the reviewer presses the button, and the harness's completion notification is the wake-up. Costs nothing while waiting."""
+        """Return at once with a waiter script for the reviewer's Call agent button. Start that script with the harness's background facility (Claude Code: Monitor) and end the turn; it exits the moment the reviewer presses the button, or at once if a press is already waiting, and the harness's completion notification is the wake-up. Costs nothing while waiting."""
         client = binding.require_client()
         state = await client.request_json("GET", "/state")
         port = state["port"]
-        calls = state["review"]["calls"]
+        # The server keeps the press count and the consumption watermark, so the script
+        # carries no state of its own: a press made before this call answers it at once,
+        # and restarting the script after a wake-up parks it again rather than replaying
+        # the press it acked. The ack comes after the line is printed: consuming before
+        # delivery lost the wake-up whenever the response died on the wire, so a press is
+        # offered until a waiter confirms it landed, and delivery is at-least-once.
         script = (
             "#!/bin/sh\n"
-            f"# Exits when the reviewer presses 'Call agent' on http://127.0.0.1:{port}\n"
-            f"since={calls}\n"
-            "tries=0\n"
-            "while [ $tries -lt 60 ]; do\n"
-            f"  out=$(curl -sf --max-time 60 \"http://127.0.0.1:{port}/wait-review?since=$since\"); rc=$?\n"
-            "  if [ $rc -eq 0 ] && [ -n \"$out\" ]; then printf '%s\\n' \"$out\"; exit 0; fi\n"
+            f"# Exits when the reviewer presses 'Call agent' on http://127.0.0.1:{port},\n"
+            "# at once if an unacknowledged press is waiting to be picked up.\n"
+            "headers=$(mktemp)\n"
+            "trap 'rm -f \"$headers\"' EXIT\n"
+            "while :; do\n"
+            f"  out=$(curl -sf -D \"$headers\" --max-time 60 \"http://127.0.0.1:{port}/wait-review\"); rc=$?\n"
+            "  if [ $rc -eq 0 ] && [ -n \"$out\" ]; then\n"
+            "    printf '%s\\n' \"$out\"\n"
+            "    press=$(tr -d '\\r' < \"$headers\" | sed -n 's/^[Xx]-[Pp]ress: *//p' | head -1)\n"
+            f"    [ -n \"$press\" ] && curl -sf -X POST \"http://127.0.0.1:{port}/wait-review/ack?upto=$press\" >/dev/null\n"
+            "    exit 0\n"
+            "  fi\n"
             "  if [ $rc -ne 0 ] && [ $rc -ne 28 ]; then printf '[gone] review server unreachable (curl exit %s)\\n' $rc; exit 1; fi\n"
-            "  tries=$((tries + 1))\n"
             "done\n"
-            "printf '[timeout] no review call within an hour; call wait_review again to keep waiting\\n'\n"
         )
         # Replaced atomically so a waiter started from the previous script keeps reading
         # the file it opened.
@@ -323,9 +342,9 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "how": (
                 "Run the script with the harness's background completion facility and end the turn: on "
                 "Claude Code, Monitor(command=<script>, description='waiting for the reviewer', "
-                "timeout_ms=3900000). It prints one line and exits: [review] means comments are ready, "
-                "so continue with list_comments(unanswered=True); [timeout] after an hour means call "
-                "wait_review again if still waiting; [gone] means the review server stopped. Without a "
+                "timeout_ms=86400000). It waits silently as long as it takes, prints one line and exits: "
+                "[review] means comments are ready, so continue with list_comments(unanswered=True) and "
+                "start the script again afterwards; [gone] means the review server stopped. Without a "
                 "background facility, running it with a shell tool blocks until the button is pressed."
             ),
         }

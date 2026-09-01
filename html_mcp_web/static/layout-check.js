@@ -326,19 +326,23 @@ export function createLayoutChecks(dependencies) {
     const layoutCheck = state.artifact.layout_check;
     const checked = layoutCheck.checked_revision === state.revision;
     const errors = checked ? layoutCheck.errors : [];
-    status.textContent = checked ? (errors.length === 0 ? "ready" : "layout error") : "checking";
-    status.classList.toggle("error", errors.length > 0);
+    // An artifact whose main file is missing is not "checking": there is nothing to check,
+    // and saying otherwise reads as "wait a moment" forever.
+    status.textContent = state.artifact.error ? "missing"
+      : checked ? (errors.length === 0 ? "ready" : "layout error") : "checking";
+    status.classList.toggle("error", errors.length > 0 || Boolean(state.artifact.error));
     renderProblems(checked, errors);
   }
-  
-  // The Problems tab mirrors what the agent sees in inspect(): the build error,
-  // then the layout errors for the current revision.
+
+  // The Problems tab mirrors what the agent sees in inspect(): the artifact error and the
+  // build error, then the layout errors for the current revision.
   function renderProblems(checked, errors) {
     const list = $("#problems-list");
     const count = $("#problems-count");
     if (list === null) return;
     clear(list);
     const problems = [];
+    if (state.artifact.error) problems.push({ kind: "artifact", text: state.artifact.error });
     if (state.artifact.build_error) problems.push({ kind: "build", text: state.artifact.build_error });
     // A check that cannot be reported is worse than one that finds something: the tab said
     // only that nothing had been checked yet, which reads as "wait a moment" forever.

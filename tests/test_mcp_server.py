@@ -1,8 +1,11 @@
 import asyncio
 import json
+import os
 import shutil
 import socket
+import subprocess
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
@@ -365,21 +368,27 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
 
 
 def test_failed_start_releases_the_lock_so_a_retry_can_serve(tmp_path: Path) -> None:
-    # main file is absent, so the first start fails; the lock must be freed so that fixing the
-    # cause and retrying serves the project instead of blocking forever on this process's lock.
+    # The first start fails (the config breaks between the binding and the serve thread's
+    # own load); the lock must be freed so that fixing the cause and retrying serves the
+    # project instead of blocking forever on this process's lock. A missing main no longer
+    # fails the start at all: that is one artifact's problem, reported on it.
     port = available_port()
-    (tmp_path / ".html-mcp-web.yaml").write_text(yaml.safe_dump({
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    good = yaml.safe_dump({
         "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
         "port": port,
-    }, sort_keys=False), encoding="utf-8")
-    shared = SharedProjectServer(load_config(tmp_path / ".html-mcp-web.yaml"))
+    }, sort_keys=False)
+    config_path.write_text(good, encoding="utf-8")
+    (tmp_path / "slides.html").write_text(
+        '<!doctype html><html><body><main class="pages"><section class="page"></section></main></body></html>',
+        encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    config_path.write_text("artifacts: [broken", encoding="utf-8")
     try:
         with pytest.raises(RuntimeError, match="failed to start"):
             shared.ensure()
         assert shared.lock_handle is None  # the lock was released, not leaked
-        (tmp_path / "slides.html").write_text(
-            '<!doctype html><html><body><main class="pages"><section class="page"></section></main></body></html>',
-            encoding="utf-8")
+        config_path.write_text(good, encoding="utf-8")
         shared.ensure()  # would raise "lock is held but port is not reachable" before the fix
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/state", timeout=3) as response:
             assert response.status == 200
@@ -409,6 +418,67 @@ def test_render_page_save_writes_a_png_and_returns_its_path(tmp_path: Path) -> N
         binding.stop()
 
 
+def test_the_lock_names_its_holder(tmp_path: Path) -> None:
+    """A lock held by a process that serves nothing used to say only that it was held,
+    and finding the holder was a by-hand dig through /proc. The holder writes its pid
+    into the file, and the refusal names it with the way out."""
+    from html_mcp_web.project_server import SharedProjectServer
+
+    config = project(tmp_path)
+    lock_path = tmp_path / ".html-mcp-web" / "server.lock"
+    shared = SharedProjectServer(load_config(config.config_path))
+    try:
+        shared.ensure()
+        assert f"pid {os.getpid()}, port {config.port}" == lock_path.read_text()
+    finally:
+        shared.stop()
+
+    # Another process holds the lock and serves nothing, the way a wedged session does.
+    holder = subprocess.Popen(
+        [sys.executable, "-c",
+         "import fcntl, sys, time\n"
+         "handle = open(sys.argv[1], 'a+')\n"
+         "fcntl.flock(handle.fileno(), fcntl.LOCK_EX)\n"
+         "handle.truncate(0); handle.seek(0)\n"
+         "handle.write('pid 424242, port 65000'); handle.flush()\n"
+         "print('holding', flush=True)\n"
+         "time.sleep(60)\n",
+         str(lock_path)],
+        stdout=subprocess.PIPE, text=True)
+    try:
+        assert holder.stdout.readline().strip() == "holding"
+        fresh = SharedProjectServer(load_config(config.config_path))
+        with pytest.raises(RuntimeError) as refusal:
+            fresh.ensure()
+        assert "held by pid 424242, port 65000" in str(refusal.value)
+        assert "reconnect MCP in that session or kill" in str(refusal.value)
+    finally:
+        holder.terminate()
+        holder.wait(timeout=5)
+
+    # A holder that dies while the contender is polling frees the lock with it, and the
+    # contender takes over instead of reporting a dead pid as alive.
+    dying = subprocess.Popen(
+        [sys.executable, "-c",
+         "import fcntl, sys, time\n"
+         "handle = open(sys.argv[1], 'a+')\n"
+         "fcntl.flock(handle.fileno(), fcntl.LOCK_EX)\n"
+         "print('holding', flush=True)\n"
+         "time.sleep(1)\n",
+         str(lock_path)],
+        stdout=subprocess.PIPE, text=True)
+    try:
+        assert dying.stdout.readline().strip() == "holding"
+        taker = SharedProjectServer(load_config(config.config_path))
+        taker.ensure()   # the holder dies about a second in; the poll claims the lock
+        try:
+            assert f"pid {os.getpid()}" in lock_path.read_text()
+        finally:
+            taker.stop()
+    finally:
+        dying.wait(timeout=10)
+
+
 def test_the_working_guide_rides_on_the_discovery_call_only(tmp_path: Path) -> None:
     """The rules a client's truncation used to swallow live here instead, on the call every
     agent starts with. A later inspect(artifact) is made many times and carries none of it."""
@@ -418,7 +488,8 @@ def test_the_working_guide_rides_on_the_discovery_call_only(tmp_path: Path) -> N
         mcp = create_server(binding)
         _, discovered = asyncio.run(mcp.call_tool("inspect", {}))
         guide = discovered["guide"]
-        assert set(guide) == {"layout_check", "measure_space", "render_page", "images", "watching"}
+        assert set(guide) == {"layout_check", "measure_space", "render_page", "review", "images", "watching"}
+        assert "wait_review()" in guide["review"]
         assert "layout_check.room" in guide["layout_check"]
         assert "min_no_wrap_width" in guide["measure_space"]
         assert "inotify watch limit reached" in guide["watching"]
@@ -443,9 +514,34 @@ def test_wait_review_writes_a_waiter_script_carrying_port_and_press_count(tmp_pa
         assert script == tmp_path / ".html-mcp-web" / "wait-review.sh"
         assert script.stat().st_mode & 0o111
         body = script.read_text(encoding="utf-8")
-        assert "since=0" in body                      # no press yet, so any press wakes it
-        assert f":{binding._shared.port}/wait-review" in body
-        assert "[gone]" in body and "[timeout]" in body
+        # The script carries no watermark: the server keeps consumption, so a press made
+        # before this call is picked up at once and a restarted script parks again. It
+        # acks after printing, so a press is only marked consumed once its line was
+        # delivered, and it never exits on an empty 204 or a curl timeout.
+        assert "since" not in body
+        assert f":{binding._shared.port}/wait-review\"" in body
+        assert f":{binding._shared.port}/wait-review/ack?upto=$press" in body
+        assert body.index("printf '%s\\n' \"$out\"") < body.index("/wait-review/ack")
+        assert "[gone]" in body and "timeout" not in body
         assert "Monitor" in told["how"]
+
+        # The whole loop, live: an early press is picked up and acked (the server's
+        # watermark moves), and the restarted script parks instead of replaying it.
+        base = f"http://127.0.0.1:{binding._shared.port}"
+        with urllib.request.urlopen(urllib.request.Request(f"{base}/review-request", method="POST")):
+            pass
+        first = subprocess.run(["/bin/sh", str(script)], capture_output=True, text=True, timeout=15)
+        assert first.returncode == 0 and first.stdout.startswith("[review]")
+        with urllib.request.urlopen(f"{base}/state") as reply:
+            review_state = json.loads(reply.read().decode("utf-8"))["review"]
+        assert review_state == {"calls": 1, "consumed": 1, "waiters": 0}
+        parked = subprocess.Popen(["/bin/sh", str(script)],
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            time.sleep(1.5)
+            assert parked.poll() is None    # nothing unconsumed, so it parks
+        finally:
+            parked.terminate()
+            parked.wait(timeout=5)
     finally:
         binding.stop()
