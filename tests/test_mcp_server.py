@@ -142,7 +142,9 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         assert schemas["render_page"]["properties"]["dpi"]["minimum"] == 36
         assert schemas["render_page"]["properties"]["dpi"]["maximum"] == 300
         assert set(schemas["render_page"]["properties"]) >= {"save", "out"}
-        assert schemas["measure_space"]["required"] == ["artifact", "page", "revision", "clearance"]
+        # revision is optional: left out, the server measures its current one, so a lone
+        # measure_space needs no inspect round first just to learn the number.
+        assert schemas["measure_space"]["required"] == ["artifact", "page", "clearance"]
 
         _, setup = asyncio.run(mcp.call_tool("inspect", {}))
         assert setup == {

@@ -10,10 +10,31 @@ export function createAnchors(dependencies) {
     const nodes = [];
     const starts = [];
     let text = "";
+    // Text from different blocks reads as one word without this: a table row came out as
+    // "지표OpenROAD evaluator". The stored prefix and suffix are cut from this text, so the
+    // break lands in them too, and resolution compares anchors against this same snapshot,
+    // which keeps the two sides consistent.
+    const blockOf = new Map();
+    const nearestBlock = (element) => {
+      for (let current = element; current !== null; current = current.parentElement) {
+        if (blockOf.has(current)) return blockOf.get(current);
+        const display = doc.defaultView.getComputedStyle(current).display;
+        if (!display.startsWith("inline") && display !== "contents") {
+          for (let walk = element; walk !== current; walk = walk.parentElement) blockOf.set(walk, current);
+          blockOf.set(current, current);
+          return current;
+        }
+      }
+      return null;
+    };
+    let previousBlock = null;
     const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
     while (walker.nextNode()) {
       const node = walker.currentNode;
       if (ignoredTextNode(node)) continue;
+      const block = nearestBlock(node.parentElement);
+      if (previousBlock !== null && block !== previousBlock) text += "\n";
+      previousBlock = block;
       starts.push(text.length);
       nodes.push(node);
       text += node.nodeValue;

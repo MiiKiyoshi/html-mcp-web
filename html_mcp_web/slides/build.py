@@ -239,7 +239,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
 
     body_html = chr(10).join(pages)
     math = math_bundle() if has_math(body_html) else ("", "")
-    out_path.write_text(f'''<!doctype html>
+    document = f'''<!doctype html>
 <html lang="{skin.label("lang") or "en"}">
 <head>
   <meta charset="utf-8">
@@ -260,9 +260,17 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
   </main>{math[1]}
 </body>
 </html>
-''', encoding="utf-8")
+'''
+    # Two builds run concurrently: the watcher's on a content save, and a by-hand one. A
+    # plain write truncates first, so the other build's stat read 0KB off a file that was
+    # complete a moment later. The swap is atomic and the report counts what was written,
+    # not what a stat happens to catch.
+    staging = out_path.with_name(out_path.name + ".building")
+    staging.write_text(document, encoding="utf-8")
+    staging.replace(out_path)
     scripts = sum(1 for section in content.sections if section.script_html) + bool(content.cover_script_html)
-    print(f"{out_path}: cover + {len(content.sections)} slides, {scripts} scripts, {out_path.stat().st_size // 1024}KB")
+    print(f"{out_path}: cover + {len(content.sections)} slides, {scripts} scripts, "
+          f"{len(document.encode('utf-8')) // 1024}KB")
 
 
 def main(argv: list[str] | None = None) -> None:
