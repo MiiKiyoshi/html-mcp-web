@@ -1462,7 +1462,8 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         assert after["topbar"] == before["topbar"]    # nor the controls
         assert after["resetShown"]                    # and there is a way back
 
-        # Zoomed in, one finger pans, the way a map behaves.
+        # One finger is the browser's at every zoom: it scrolls and it holds a word to
+        # select it, which is what the artifact is read with. Panning is the two fingers'.
         browser.execute_script("""
           const frame = document.querySelector("#artifact-frame");
           const doc = frame.contentDocument;
@@ -1479,7 +1480,7 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         time.sleep(0.3)
         panned = browser.execute_script(measure)
         assert abs(panned["scale"] - after["scale"]) < 0.01
-        assert panned["shift"] != after["shift"], panned
+        assert panned["shift"] == after["shift"], panned
 
         browser.find_element("css selector", "#zoom-reset-btn").click()
         time.sleep(0.3)
@@ -1521,3 +1522,167 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         shared.stop()
 
 
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_the_artifact_stays_selectable_under_the_zoom(tmp_path: Path) -> None:
+    """The zoom library disables the document's selectstart while it holds a gesture, and
+    a long press then caught no words at all, so no comment could be started from the
+    page. Reading the artifact is the point of it: selection stays the reader's."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_press_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n'
+        'user_pref("dom.w3c_touch_events.enabled", 1);\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "900", "-height", "1200", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=900, height=1200)
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        wait_until(lambda: browser.execute_script(
+            'const w = document.querySelector("#artifact-frame").contentWindow;'
+            'return typeof w.wrappedJSObject.panzoom === "function"'))
+
+        # A long press starts with one finger landing and staying: if anything cancels
+        # that touchstart the browser never offers a selection, and the whole path from a
+        # finger to a comment is gone. This is what the zoom library did to every touch
+        # until one finger was left to the browser.
+        cancelled = browser.execute_script('''
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const words = doc.querySelector("#target");
+          const box = words.getBoundingClientRect();
+          const touch = new view.Touch({identifier: 7, target: words,
+            clientX: box.left + 20, clientY: box.top + box.height / 2});
+          const event = new view.TouchEvent("touchstart", {
+            touches: [touch], targetTouches: [touch], changedTouches: [touch],
+            bubbles: true, cancelable: true});
+          words.dispatchEvent(event);
+          const stopped = event.defaultPrevented;
+          words.dispatchEvent(new view.TouchEvent("touchend", {
+            touches: [], targetTouches: [], changedTouches: [touch],
+            bubbles: true, cancelable: true}));
+          return stopped;
+        ''')
+        assert cancelled is False
+
+        # A press that lands on a word and settles: the selection stands and the button
+        # comes out, which is the whole path from a finger to a comment.
+        browser.execute_script("""
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const words = doc.querySelector("#target");
+          const box = words.getBoundingClientRect();
+          const touch = new view.Touch({identifier: 3, target: words,
+            clientX: box.left + 20, clientY: box.top + box.height / 2});
+          const send = (type, touches) => words.dispatchEvent(new view.TouchEvent(type, {
+            touches, targetTouches: touches, changedTouches: touches,
+            bubbles: true, cancelable: true}));
+          send("touchstart", [touch]);
+          const selection = view.getSelection();
+          selection.removeAllRanges();
+          const range = doc.createRange();
+          range.setStart(words.firstChild, 0);
+          range.setEnd(words.firstChild, 8);
+          selection.addRange(range);
+          send("touchend", []);
+        """)
+        wait_until(lambda: browser.execute_script(
+            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+        assert browser.execute_script(
+            'return document.querySelector("#artifact-frame").contentWindow'
+            '.getSelection().toString().length') == 8
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_fitted_page_sits_evenly_on_a_phone(tmp_path: Path) -> None:
+    """The fit took the window's width less a guessed margin, and on a phone the guess was
+    8px where the stylesheet spends 48: the page came out 40px too wide, hung off the
+    right and kept its margin only on the left. The width is measured now."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_fit_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "390", "-height", "844", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=390, height=844)      # a phone, in CSS pixels
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        sides = wait_until(lambda: browser.execute_script("""
+          const frame = document.querySelector("#artifact-frame");
+          const win = frame.contentWindow;
+          const page = frame.contentDocument.querySelector("section.page");
+          if (page === null) return null;
+          const box = page.getBoundingClientRect();
+          return {left: box.left, right: win.innerWidth - box.right, width: box.width};
+        """))
+        assert sides["right"] >= -1, sides                  # nothing hangs off the edge
+        assert abs(sides["left"] - sides["right"]) <= 2, sides   # and it sits evenly
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()

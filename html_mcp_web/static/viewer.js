@@ -243,10 +243,11 @@ function updatePageScale() {
     ? doc.querySelector("body > main.pages > section.page.html-mcp-current-page")
     : doc.querySelector("body > main.pages > section.page");
   if (page === null) return;
-  // The margin is there so a page does not touch the pane's edges; on a phone it is a
-  // tenth of the width and the page cannot afford it.
-  const margin = state.slideShow ? 0 : (frameWindow().innerWidth < 560 ? 8 : 48);
-  const availableWidth = frameWindow().innerWidth - margin;
+  // The width the page is actually given, measured rather than guessed from the window:
+  // the guess put a phone's margin at 8px where the stylesheet spends 48, so the page was
+  // fitted 40px too wide and hung off the right while the left kept its margin.
+  const holder = page.parentElement;
+  const availableWidth = holder.clientWidth || frameWindow().innerWidth;
   const widthScale = availableWidth / page.offsetWidth;
   const scale = state.slideShow
     ? Math.min(widthScale, frameWindow().innerHeight / page.offsetHeight)
@@ -333,15 +334,15 @@ function installArtifactZoom() {
   state.artifactPanzoom = null;
   const pages = doc.querySelector("body > main.pages");
   if (pages === null || state.artifact.layout !== "slides" && state.artifact.layout !== "report") return;
-  // Registered before panzoom's own listeners, so it decides first: at rest a single
-  // finger is the browser's and scrolls the document; zoomed in it is panzoom's and pans,
-  // the way a map behaves. panzoom's onTouch hook is not enough here: declining a touch
-  // there only skips the preventDefault, the tracking goes on, and a resting one-finger
-  // scroll still dragged the pages sideways.
+  // One finger is always the browser's: it scrolls, and it holds a word to select it,
+  // which is what the artifact is read with. Two are the zoom's, and they pan while they
+  // pinch, so nothing is lost by leaving one alone. Registered before panzoom's own
+  // listeners so it decides first, because declining a touch in panzoom's onTouch hook
+  // only skips its preventDefault and the tracking goes on: with the hook alone a
+  // one-finger scroll dragged the pages sideways, and without it every touchstart was
+  // preventDefaulted, which is what stopped a long press catching any words at all.
   const gate = (event) => {
-    const zoomer = state.artifactPanzoom;
-    const resting = zoomer === null || Math.abs(zoomer.getTransform().scale - 1) < 0.01;
-    if (resting && event.touches.length < 2) event.stopImmediatePropagation();
+    if (event.touches.length < 2) event.stopImmediatePropagation();
   };
   pages.addEventListener("touchstart", gate, { capture: true });
   pages.addEventListener("touchmove", gate, { capture: true });
@@ -352,6 +353,10 @@ function installArtifactZoom() {
     const zoomer = win.panzoom(pages, {
       maxZoom: 4,
       minZoom: 0.5,
+      // Without this the library preventDefaults every touchstart, one finger included,
+      // and a long press then caught no words at all: the artifact is read, not just
+      // looked at. The gate above still keeps single fingers from reaching it.
+      onTouch: (event) => event.touches.length >= 2,
       beforeMouseDown: () => true,
       beforeWheel: (event) => !event.ctrlKey,
       zoomDoubleClickSpeed: 1,

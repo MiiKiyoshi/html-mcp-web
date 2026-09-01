@@ -35,6 +35,11 @@ html[data-html-mcp-layout] body {
   background: #faf8f2 !important;
 }
 
+/* A narrow screen cannot spend a tenth of its width on the gap around a page. */
+@media (max-width: 560px) {
+  html[data-html-mcp-layout] body { padding: 8px !important; }
+}
+
 html[data-html-mcp-layout] body > main.pages {
   display: flex !important;
   width: 100% !important;
