@@ -311,9 +311,10 @@ export function createComments(dependencies) {
     const card = Array.from(list.querySelectorAll("[data-comment-id]")).find(
       (node) => node.dataset.commentId === commentId);
     if (card === undefined) return;
+    const margin = 8;
+    growPanelFor(card.getBoundingClientRect().height + margin * 2);
     const listBox = list.getBoundingClientRect();
     const cardBox = card.getBoundingClientRect();
-    const margin = 8;
     const overhang = cardBox.bottom - (listBox.bottom - margin);
     const above = listBox.top + margin - cardBox.top;
     if (cardBox.height > listBox.height - margin * 2 || above > 0) {
@@ -321,6 +322,25 @@ export function createComments(dependencies) {
     } else if (overhang > 0) {
       list.scrollTop += overhang;
     }
+  }
+
+  // Under the artifact, the comments get a slice of a phone's screen, and a thread opened
+  // there is usually taller than the slice: scrolling cannot show what does not fit, so
+  // the reader was left scrolling after every open. The panel takes the room the card
+  // needs instead, up to what the drag bar itself allows, and the artifact keeps the
+  // rest. Beside the artifact it is already full height, so there is nothing to take.
+  function growPanelFor(wanted) {
+    const layout = $(".layout");
+    const sidebar = $("#sidebar");
+    const list = $("#comments-list");
+    const stacked = Math.abs(sidebar.getBoundingClientRect().width
+      - layout.getBoundingClientRect().width) < 2;
+    if (!stacked) return;
+    const shortfall = wanted - list.getBoundingClientRect().height;
+    if (shortfall <= 0) return;
+    const height = sidebar.getBoundingClientRect().height + shortfall;
+    const limited = Math.round(Math.max(90, Math.min(height, window.innerHeight - 140)));
+    layout.style.setProperty("--html-mcp-panel-height", `${limited}px`);
   }
 
   function jumpToComment(commentId) {

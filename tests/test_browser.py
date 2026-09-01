@@ -1686,3 +1686,75 @@ def test_a_fitted_page_sits_evenly_on_a_phone(tmp_path: Path) -> None:
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_phone_gives_an_opened_comment_the_room_it_needs(tmp_path: Path) -> None:
+    """Under the artifact the comments get a slice of the screen, and a thread opened there
+    is usually taller than the slice: scrolling cannot show what does not fit, so the
+    reader was left scrolling after every open. The panel takes the room instead."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_room_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        base = f"http://127.0.0.1:{port}"
+        post_json(f"{base}/artifacts/slides/comments",
+                  {"anchor": {"kind": "artifact"}, "text": "A wordy one. " * 60})
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "390", "-height", "844", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=390, height=844)      # a phone: comments under the deck
+        browser.navigate(base)
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelectorAll(".comment-card").length === 1'))
+        browser.find_element("css selector", "#sidebar-toggle-btn").click()
+        wait_until(lambda: browser.execute_script(
+            'return !document.querySelector(".layout").classList.contains("sidebar-collapsed")'))
+
+        before = browser.execute_script(
+            'return document.querySelector("#sidebar").getBoundingClientRect().height;')
+        browser.execute_script('document.querySelector(".comment-summary").click();')
+        time.sleep(0.4)
+        shown = browser.execute_script("""
+          const list = document.querySelector("#comments-list");
+          const card = document.querySelector(".comment-card");
+          const listBox = list.getBoundingClientRect();
+          const cardBox = card.getBoundingClientRect();
+          return {overhang: cardBox.bottom - listBox.bottom,
+                  panel: document.querySelector("#sidebar").getBoundingClientRect().height,
+                  pane: document.querySelector("#artifact-pane").getBoundingClientRect().height};
+        """)
+        assert shown["panel"] > before + 20, shown     # the panel took the room it needed
+        assert shown["overhang"] <= 2, shown           # and the whole card shows
+        assert shown["pane"] > 80, shown               # the artifact is still there
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
