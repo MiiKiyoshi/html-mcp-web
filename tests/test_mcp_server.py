@@ -125,6 +125,11 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         assert len(mcp.instructions) < 2000
         for needed in ("wait_review()", "templates/README.md", "guide field", "Resolve all"):
             assert needed in mcp.instructions, needed
+        # The guide rides on the discovery call alone, so the instructions have to say which
+        # call carries it: an agent that already knows its artifact would otherwise call
+        # inspect(artifact) first and never learn the guide exists.
+        assert "no arguments first" in mcp.instructions
+        assert "inspect(artifact) leaves out" in mcp.instructions
         tools = asyncio.run(mcp.list_tools())
         schemas = {tool.name: tool.inputSchema for tool in tools}
         assert list(schemas) == [
