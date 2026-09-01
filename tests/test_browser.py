@@ -45,6 +45,10 @@ def slides_html(text: str = "Selected sentence.") -> str:
     <table id="metrics" style="width: 400px"><tr><td style="width: 200px">Used<br>Value</td><td style="width: 200px"></td></tr></table>
     <table id="wrapped" style="width: 120px; table-layout: fixed"><tr><td>Automatic wrapping is detected here</td></tr></table>
     <svg id="chart" width="200" height="100" viewBox="0 0 200 100"><rect x="10" y="8" width="180" height="50"/><text x="12" y="88">label</text></svg>
+    <!-- Drawn at twice its viewBox, the way a deck's figures are: a Range inside svg text
+         reports the whole element once the viewBox scales, and reports it in user units. -->
+    <svg id="scaled-chart" width="224" height="24" viewBox="0 0 112 12">
+      <text id="svg-words" x="1" y="9" font-size="9">many words in this label</text></svg>
     <table id="hidden" style="width: 420px"><tr><td>alpha</td><td style="display:none">ghost</td><td>beta has much longer content</td></tr></table>
   </section>
 </main>
@@ -1082,3 +1086,108 @@ return {small: read('#small'), huge: read('#huge')};
             except subprocess.TimeoutExpired:
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Path) -> None:
+    """A Range inside an svg does not report the characters it holds: nine letters of a
+    label gave the whole element's box, and a selection starting mid-label gave an empty
+    rect. The highlight then covered the whole label and the comment button sat away from
+    what was grabbed, which is what a finger on a pad hits every time."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_svgsel_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "1400", "-height", "1000", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=1400, height=1000)
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        wait_until(lambda: browser.execute_script(
+            'const d = document.querySelector("#artifact-frame").contentDocument;'
+            'return d !== null && d.querySelector("#svg-words") !== null'))
+
+        # Grab five letters from the middle of the label, the way a long press does.
+        measured = browser.execute_script('''
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const label = doc.querySelector("#svg-words");
+          const selection = view.getSelection();
+          selection.removeAllRanges();
+          const range = doc.createRange();
+          range.setStart(label.firstChild, 5);
+          range.setEnd(label.firstChild, 10);
+          selection.addRange(range);
+          doc.dispatchEvent(new view.MouseEvent("mouseup", {bubbles: true}));
+          const ctm = label.getScreenCTM();
+          const first = label.getExtentOfChar(5);
+          const last = label.getExtentOfChar(9);
+          const at = (x, y) => [ctm.a * x + ctm.c * y + ctm.e, ctm.b * x + ctm.d * y + ctm.f];
+          const topLeft = at(first.x, first.y);
+          const bottomRight = at(last.x + last.width, last.y + last.height);
+          const whole = label.getBoundingClientRect();
+          return {letters: [topLeft[0], topLeft[1], bottomRight[0] - topLeft[0], bottomRight[1] - topLeft[1]],
+                  whole: [whole.left, whole.top, whole.width, whole.height],
+                  frame: (() => { const r = frame.getBoundingClientRect(); return [r.left, r.top]; })()};
+        ''')
+        letters = measured["letters"]
+        assert letters[2] < measured["whole"][2] / 2   # the grab is a fraction of the label
+
+        # The highlight covers those letters, not the label.
+        wait_until(lambda: browser.execute_script(
+            'const d = document.querySelector("#artifact-frame").contentDocument;'
+            'return d.querySelectorAll(".html-mcp-highlight").length === 0'))
+        wait_until(lambda: browser.execute_script(
+            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+        browser.find_element("css selector", "#selection-comment-btn").click()
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#compose-dialog").open === true'))
+        browser.find_element("css selector", "#compose-text").send_keys("Inside the svg")
+        browser.find_element("css selector", "#compose-submit").click()
+        wait_until(lambda: browser.execute_script(
+            'const d = document.querySelector("#artifact-frame").contentDocument;'
+            'return d.querySelectorAll(".html-mcp-highlight").length > 0'))
+        mark = browser.execute_script('''
+          const frame = document.querySelector("#artifact-frame");
+          const box = frame.contentDocument.querySelector(".html-mcp-highlight").getBoundingClientRect();
+          const r = frame.getBoundingClientRect();
+          return [box.left - r.left, box.top - r.top, box.width, box.height];
+        ''')
+        letters_in_frame = [letters[0] - measured["frame"][0], letters[1] - measured["frame"][1],
+                            letters[2], letters[3]]
+        for drawn, truth in zip(mark, letters_in_frame):
+            assert abs(drawn - truth) <= 3, (mark, letters_in_frame)
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()

@@ -77,7 +77,6 @@ export function createComments(dependencies) {
   
   const formConfig = {
     reply: { placeholder: "Reply", key: "text", label: "Post reply" },
-    reopen: { placeholder: "Why this needs another pass", key: "text", label: "Reopen" },
   };
   
   function renderForm(comment) {
@@ -215,11 +214,13 @@ export function createComments(dependencies) {
     if (comment.status === "open") {
       actions.append(
         actionButton("Reply", () => setActiveForm(comment.id, "reply")),
-        actionButton("Resolve", () => closeComment(comment.id, "resolve", "summary")),
-        actionButton("Dismiss", () => closeComment(comment.id, "dismiss", "reason")),
+        actionButton("Resolve", () => flipStatus(comment.id, "resolve", "summary")),
+        actionButton("Dismiss", () => flipStatus(comment.id, "dismiss", "reason")),
       );
     } else {
-      actions.appendChild(actionButton("Reopen", () => setActiveForm(comment.id, "reopen")));
+      // Reopening is a one-click status flip like closing: the status says what happened,
+      // and anything more belongs in a reply, which is a click away either way.
+      actions.appendChild(actionButton("Reopen", () => flipStatus(comment.id, "reopen", "text")));
     }
     actions.appendChild(actionButton("Delete", () => deleteComment(comment.id), "danger"));
     body.appendChild(actions);
@@ -277,9 +278,9 @@ export function createComments(dependencies) {
     });
   }
   
-  // Closing is a one-click status flip: content lives in replies, so resolve and
-  // dismiss send an empty text and the store records no extra thread entry.
-  async function closeComment(commentId, action, key) {
+  // A status change is one click: content lives in replies, so resolve, dismiss and
+  // reopen send an empty text and the store records no extra thread entry.
+  async function flipStatus(commentId, action, key) {
     try {
       await mutateComment(commentId, action, { [key]: "" });
     } catch (error) {

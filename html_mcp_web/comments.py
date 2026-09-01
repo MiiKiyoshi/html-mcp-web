@@ -256,9 +256,10 @@ class CommentStore:
         status: Status | None = None,
         edits: list[str] | None = None,
     ) -> list[Comment]:
-        # Closing a comment may be silent: replies already carry the content, and a
-        # forced summary duplicates them. Replies and reopens exist only as text.
-        if not text.strip() and status not in {"resolved", "dismissed"}:
+        # Changing a comment's status may be silent: replies already carry the content, a
+        # forced summary duplicates them, and reopening usually says no more than the
+        # status itself does. A reply is only its text, so that one still needs some.
+        if not text.strip() and status is None:
             raise ValueError("thread text must not be empty")
         if not comment_ids:
             raise ValueError("comment_ids must not be empty")
