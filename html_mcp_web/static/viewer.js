@@ -455,38 +455,69 @@ function hideSelectionButton() {
 // of a label gave the whole <text> element's box (218px wide where the letters were 143),
 // and selecting from the middle gave an empty rect, so a highlight covered the whole label
 // and the comment button sat away from what was grabbed. The element numbers its own
-// characters and can place each one, which is where the letters actually are.
+// characters and can place each one, which is where the letters actually are. The shapes a
+// touch screen's long press and handle drag produce are wider than one text node: element
+// containers and spans across tspans, and the first cut of this handled neither, so those
+// fell back to the misplaced native box. A character belongs to the selection when the
+// range intersects its node and its offset lies inside; the owning <text> indexes every
+// descendant character, so one element places them all, line by line.
 function svgSelectionRects(range) {
-  const node = range.startContainer;
-  if (node !== range.endContainer || node.nodeType !== Node.TEXT_NODE) return null;
-  const text = node.parentElement;
-  if (text === null || text.namespaceURI !== "http://www.w3.org/2000/svg") return null;
-  if (typeof text.getExtentOfChar !== "function" || typeof text.getNumberOfChars !== "function") return null;
-  const ctm = text.getScreenCTM();
-  if (ctm === null) return null;
-  // Character numbering belongs to the element that holds the text node, which is what
-  // the range's offsets count into; a tspan holds its own and is that element itself.
-  const total = text.getNumberOfChars();
-  const from = Math.max(0, Math.min(range.startOffset, total));
-  const to = Math.max(from, Math.min(range.endOffset, total));
-  if (to <= from) return null;
-  let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
-  for (let index = from; index < to; index += 1) {
-    let box;
-    try {
-      box = text.getExtentOfChar(index);
-    } catch (error) {
-      return null;
-    }
-    for (const [x, y] of [[box.x, box.y], [box.x + box.width, box.y],
-                          [box.x, box.y + box.height], [box.x + box.width, box.y + box.height]]) {
-      const screenX = ctm.a * x + ctm.c * y + ctm.e;
-      const screenY = ctm.b * x + ctm.d * y + ctm.f;
-      left = Math.min(left, screenX); right = Math.max(right, screenX);
-      top = Math.min(top, screenY); bottom = Math.max(bottom, screenY);
+  let ancestor = range.commonAncestorContainer;
+  if (ancestor.nodeType === Node.TEXT_NODE) ancestor = ancestor.parentElement;
+  if (ancestor === null || ancestor.namespaceURI !== "http://www.w3.org/2000/svg") return null;
+  const enclosing = ancestor.closest("text");
+  const roots = enclosing !== null ? [enclosing]
+    : Array.from(ancestor.querySelectorAll("text")).filter((text) => range.intersectsNode(text));
+  if (roots.length === 0) return null;
+  const rects = [];
+  for (const root of roots) {
+    if (typeof root.getExtentOfChar !== "function") return null;
+    const ctm = root.getScreenCTM();
+    if (ctm === null) return null;
+    const walker = frameDocument().createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let base = 0;
+    let band = null;
+    let node;
+    while ((node = walker.nextNode()) !== null) {
+      const length = node.nodeValue.length;
+      if (range.intersectsNode(node)) {
+        const from = range.startContainer === node ? Math.min(range.startOffset, length) : 0;
+        const to = range.endContainer === node ? Math.min(range.endOffset, length) : length;
+        for (let index = from; index < to; index += 1) {
+          let box;
+          try {
+            box = root.getExtentOfChar(base + index);
+          } catch (error) {
+            return null;
+          }
+          let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+          for (const [x, y] of [[box.x, box.y], [box.x + box.width, box.y],
+                                [box.x, box.y + box.height], [box.x + box.width, box.y + box.height]]) {
+            const screenX = ctm.a * x + ctm.c * y + ctm.e;
+            const screenY = ctm.b * x + ctm.d * y + ctm.f;
+            left = Math.min(left, screenX); right = Math.max(right, screenX);
+            top = Math.min(top, screenY); bottom = Math.max(bottom, screenY);
+          }
+          // One rect per line: a character on a new tspan line starts a new band rather
+          // than stretching the previous one down and across. Lines set tight overlap by
+          // a sliver, so joining takes half the character's height, not a mere touch.
+          if (band !== null
+              && Math.min(bottom, band.bottom) - Math.max(top, band.top) > (bottom - top) / 2) {
+            band.left = Math.min(band.left, left);
+            band.right = Math.max(band.right, right);
+            band.top = Math.min(band.top, top);
+            band.bottom = Math.max(band.bottom, bottom);
+          } else {
+            band = { left, top, right, bottom };
+            rects.push(band);
+          }
+        }
+      }
+      base += length;
     }
   }
-  return [{ left, top, right, bottom, width: right - left, height: bottom - top }];
+  if (rects.length === 0) return null;
+  return rects.map((box) => ({ ...box, width: box.right - box.left, height: box.bottom - box.top }));
 }
 
 function selectionRects(range) {

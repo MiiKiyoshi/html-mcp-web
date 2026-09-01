@@ -47,8 +47,9 @@ def slides_html(text: str = "Selected sentence.") -> str:
     <svg id="chart" width="200" height="100" viewBox="0 0 200 100"><rect x="10" y="8" width="180" height="50"/><text x="12" y="88">label</text></svg>
     <!-- Drawn at twice its viewBox, the way a deck's figures are: a Range inside svg text
          reports the whole element once the viewBox scales, and reports it in user units. -->
-    <svg id="scaled-chart" width="224" height="24" viewBox="0 0 112 12">
-      <text id="svg-words" x="1" y="9" font-size="9">many words in this label</text></svg>
+    <svg id="scaled-chart" width="224" height="60" viewBox="0 0 112 30">
+      <text id="svg-words" x="1" y="9" font-size="9">many words in this label</text>
+      <text id="svg-lines" x="1" y="18" font-size="7"><tspan id="svg-l1" x="1" dy="0">first svg line</tspan><tspan id="svg-l2" x="1" dy="8">second svg line</tspan></text></svg>
     <table id="hidden" style="width: 420px"><tr><td>alpha</td><td style="display:none">ghost</td><td>beta has much longer content</td></tr></table>
   </section>
 </main>
@@ -1222,6 +1223,75 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
                             letters[2], letters[3]]
         for drawn, truth in zip(mark, letters_in_frame):
             assert abs(drawn - truth) <= 3, (mark, letters_in_frame)
+
+        # A long press hands over element containers, and dragging a handle crosses tspans:
+        # neither is one text node, and both used to fall back to the misplaced native box.
+        # The button then lines up with the selection's left edge, under its lower line.
+        spanned = browser.execute_script('''
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const first = doc.querySelector("#svg-l1"), second = doc.querySelector("#svg-l2");
+          const selection = view.getSelection();
+          selection.removeAllRanges();
+          const range = doc.createRange();
+          range.setStart(first.firstChild, 6);
+          range.setEnd(second.firstChild, 6);
+          selection.addRange(range);
+          doc.dispatchEvent(new view.MouseEvent("mouseup", {bubbles: true}));
+          const owner = doc.querySelector("#svg-lines");
+          const ctm = owner.getScreenCTM();
+          const at = (x, y) => [ctm.a * x + ctm.c * y + ctm.e, ctm.b * x + ctm.d * y + ctm.f];
+          const spot = (index) => owner.getExtentOfChar(index);
+          const secondStart = "first svg line".length;
+          const upper = spot(6);                                  // where the grab begins
+          const lower = spot(secondStart);                        // "second svg line"[0]
+          const lastIncluded = spot(secondStart + 5);
+          const width = (fromIndex, toIndex) => {
+            const a = spot(fromIndex), b = spot(toIndex - 1);
+            return at(b.x + b.width, b.y)[0] - at(a.x, a.y)[0];
+          };
+          return {frame: (() => { const r = frame.getBoundingClientRect(); return [r.left, r.top]; })(),
+                  leftEdge: at(lower.x, lower.y)[0],
+                  top: at(upper.x, upper.y)[1],
+                  bottom: at(lastIncluded.x, lastIncluded.y + lastIncluded.height)[1],
+                  upperWidth: width(6, secondStart),
+                  lowerWidth: width(secondStart, secondStart + 6)};
+        ''')
+        wait_until(lambda: browser.execute_script(
+            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+        placed = browser.execute_script(
+            'const b = document.querySelector("#selection-comment-btn").getBoundingClientRect();'
+            'return [b.left, b.top];')
+        # Left-aligned with the letters the grab covers, which for this shape the native
+        # rects cannot say: they name nodes, not characters.
+        assert abs(placed[0] - (spanned["frame"][0] + spanned["leftEdge"])) <= 3, (placed, spanned)
+        # At the selection: under it, or above it when the pane's bottom is too near,
+        # which near the foot of a page it is.
+        assert spanned["frame"][1] + spanned["top"] - 45 <= placed[1] \
+            <= spanned["frame"][1] + spanned["bottom"] + 12, (placed, spanned)
+
+        # The highlight is one band per line, each as wide as the letters it covers: the
+        # native rects for this shape name whole nodes, and their widths gave the label
+        # away as the fallback.
+        browser.find_element("css selector", "#selection-comment-btn").click()
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#compose-dialog").open === true'))
+        browser.find_element("css selector", "#compose-text").send_keys("Across the lines")
+        browser.find_element("css selector", "#compose-submit").click()
+        wait_until(lambda: browser.execute_script(
+            'const d = document.querySelector("#artifact-frame").contentDocument;'
+            'return d.querySelectorAll(\'.html-mcp-highlight[data-comment-id]\').length >= 3'))
+        bands = browser.execute_script('''
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const marks = Array.from(doc.querySelectorAll(".html-mcp-highlight"))
+            .map((mark) => mark.getBoundingClientRect())
+            .filter((box) => box.top > arguments[0]);
+          return marks.sort((a, b) => a.top - b.top).map((box) => box.width);
+        ''', script_args=[spanned["top"] - 10])
+        assert len(bands) == 2, bands
+        assert abs(bands[0] - spanned["upperWidth"]) <= 3, (bands, spanned)
+        assert abs(bands[1] - spanned["lowerWidth"]) <= 3, (bands, spanned)
     finally:
         if browser is not None:
             try:
