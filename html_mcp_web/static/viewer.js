@@ -635,6 +635,12 @@ function printArtifact() {
   frameWindow().print();
 }
 
+// The green dot beside Call agent: an agent is parked on wait_review right now, so a
+// press reaches it at once rather than waiting to be picked up.
+function showAgentWaiting(waiters) {
+  $("#agent-waiting-dot").classList.toggle("hidden", !(waiters > 0));
+}
+
 async function handleSocketMessage(message) {
   if (message.type === "config_error") {
     $("#artifact-status").textContent = `config error: ${message.error}`;
@@ -642,6 +648,7 @@ async function handleSocketMessage(message) {
   }
   if (message.type === "state") {
     state.project = message;
+    if (message.review !== undefined) showAgentWaiting(message.review.waiters);
     const artifact = message.artifacts[state.artifactId];
     if (artifact !== undefined && state.revision !== artifact.revision) {
       state.artifact = artifact;
@@ -649,6 +656,10 @@ async function handleSocketMessage(message) {
       updateLayoutUi();
       loadArtifact(true);
     }
+    return;
+  }
+  if (message.type === "review_waiters") {
+    showAgentWaiting(message.waiters);
     return;
   }
   if (["artifacts_changed", "config_reloaded"].includes(message.type)) {
@@ -711,6 +722,22 @@ function attachControls() {
     state.pendingAnchor = null;
   });
   $("#comment-filter").addEventListener("change", () => refreshComments().catch((error) => alert(error.message)));
+  $("#call-agent-btn").addEventListener("click", async () => {
+    const button = $("#call-agent-btn");
+    const label = button.lastChild;
+    button.disabled = true;
+    try {
+      const reply = await fetchJson("/review-request", { method: "POST" });
+      // Delivered went straight to a parked agent; queued is kept by the server and
+      // answers the agent's next wait at once.
+      label.textContent = reply.delivered ? "Called ✓" : "Queued";
+    } catch (error) {
+      label.textContent = "Failed";
+      console.error(error);
+    } finally {
+      setTimeout(() => { label.textContent = "Call agent"; button.disabled = false; }, 2000);
+    }
+  });
   for (const button of document.querySelectorAll(".tab-btn")) {
     button.addEventListener("click", () => switchSidebarTab(button.dataset.tab));
   }

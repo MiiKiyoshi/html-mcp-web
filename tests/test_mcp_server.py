@@ -130,6 +130,7 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
             "render_page",
             "export_pptx",
             "measure_space",
+            "wait_review",
         ]
         assert set(schemas["inspect"]["properties"]) == {"artifact"}
         assert schemas["read_comments"]["required"] == ["artifact", "comment_ids"]
@@ -389,5 +390,26 @@ def test_render_page_save_writes_a_png_and_returns_its_path(tmp_path: Path) -> N
         with pytest.raises(Exception, match="inside the project"):
             asyncio.run(mcp.call_tool(
                 "render_page", {"artifact": "slides", "page": 1, "save": True, "out": "../escape.png"}))
+    finally:
+        binding.stop()
+
+
+def test_wait_review_writes_a_waiter_script_carrying_port_and_press_count(tmp_path: Path) -> None:
+    # The tool returns at once with a script for the harness to watch in the background;
+    # blocking here would freeze the agent, which is what the button exists to avoid.
+    project(tmp_path)
+    binding = ProjectBinding(tmp_path)
+    try:
+        mcp = create_server(binding)
+        unstructured, told = asyncio.run(mcp.call_tool("wait_review", {}))
+        assert json.loads(unstructured[0].text) == told
+        script = Path(told["script"])
+        assert script == tmp_path / ".html-mcp-web" / "wait-review.sh"
+        assert script.stat().st_mode & 0o111
+        body = script.read_text(encoding="utf-8")
+        assert "since=0" in body                      # no press yet, so any press wakes it
+        assert f":{binding._shared.port}/wait-review" in body
+        assert "[gone]" in body and "[timeout]" in body
+        assert "Monitor" in told["how"]
     finally:
         binding.stop()

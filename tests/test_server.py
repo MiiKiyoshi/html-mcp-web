@@ -611,3 +611,38 @@ def test_watcher_follows_a_directory_created_after_it_started(tmp_path):
     (tmp_path / "docs" / "figures").mkdir()
     watcher.handler.on_created(DirCreatedEvent(str(tmp_path / "docs" / "figures")))
     assert scheduled[-1] == ("figs", True)
+
+
+async def test_call_button_wakes_a_parked_waiter_and_keeps_an_early_press(client) -> None:
+    """The reviewer's press is an interrupt, not a message the agent must be listening for:
+    a parked wait returns the moment the button is pressed, and a press made before anyone
+    was waiting answers the next wait at once instead of being lost."""
+    test_client, review = client
+
+    # A press with nobody parked is kept.
+    reply = await (await test_client.post("/review-request")).json()
+    assert reply == {"calls": 1, "delivered": False}
+    early = await test_client.get("/wait-review", params={"since": 0})
+    assert early.status == 200
+    line = await early.text()
+    assert line.startswith("[review] reviewer called (press #1)")
+    assert "list_comments" in line
+
+    # A wait that is already up to date parks, and the press releases it with the line.
+    parked = asyncio.ensure_future(test_client.get("/wait-review", params={"since": 1}))
+    for _ in range(50):
+        if review.review_waiters == 1:
+            break
+        await asyncio.sleep(0.02)
+    assert review.review_waiters == 1
+    reply = await (await test_client.post("/review-request")).json()
+    assert reply == {"calls": 2, "delivered": True}
+    released = await parked
+    assert released.status == 200
+    assert (await released.text()).startswith("[review] reviewer called (press #2)")
+    assert review.review_waiters == 0
+
+    # Nothing to report within the poll window comes back empty for the script to loop on.
+    review.REVIEW_POLL_TIMEOUT = 0.05
+    quiet = await test_client.get("/wait-review", params={"since": 2})
+    assert quiet.status == 204
