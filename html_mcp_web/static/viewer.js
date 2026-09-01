@@ -598,7 +598,10 @@ function loadArtifact(preserveView) {
 async function refreshState() {
   state.project = await fetchJson("/state");
   const ids = Object.keys(state.project.artifacts);
-  const remembered = localStorage.getItem("htmlMcpArtifact");
+  // ?artifact= names the artifact to open: a shareable link, and how the server's own
+  // headless browser is pointed at the artifact whose layout it has to check.
+  const asked = new URLSearchParams(location.search).get("artifact");
+  const remembered = asked !== null ? asked : localStorage.getItem("htmlMcpArtifact");
   state.artifactId = remembered !== null && ids.includes(remembered) ? remembered : ids[0];
   state.artifact = state.project.artifacts[state.artifactId];
   state.revision = state.artifact.revision;
