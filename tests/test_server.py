@@ -613,6 +613,51 @@ def test_watcher_follows_a_directory_created_after_it_started(tmp_path):
     assert scheduled[-1] == ("figs", True)
 
 
+async def test_render_page_crops_to_a_target_block(client, monkeypatch) -> None:
+    """A one-line fix in one block is confirmed with that block's picture, not the whole
+    page's: the target ref crops the render to the block plus a small margin."""
+    import io
+
+    import fitz
+    from PIL import Image
+
+    test_client, review = client
+    revision = review.artifacts["slides"].revision
+    posted = await test_client.post(
+        "/artifacts/slides/layout",
+        json={"revision": revision, "errors": [], "space": space_snapshot()},
+    )
+    assert posted.status == 200
+
+    # A real one-page PDF at the slide deck's print size, standing in for firefox.
+    with fitz.open() as made:
+        made.new_page(width=960, height=540)
+        pdf = made.tobytes()
+
+    async def printed(runtime):
+        return pdf
+
+    monkeypatch.setattr(review, "_pdf", printed)
+
+    # p1:0 is [100, 100, 400, 300] page pixels; with the 8px margin and at 96 dpi the
+    # rendered pixels come back one to one with page pixels.
+    part = await test_client.get("/artifacts/slides/render/page?page=1&dpi=96&target=p1%3A0")
+    assert part.status == 200
+    width, height = Image.open(io.BytesIO(await part.read())).size
+    assert abs(width - 416) <= 1 and abs(height - 316) <= 1
+
+    whole = await test_client.get("/artifacts/slides/render/page?page=1&dpi=96")
+    assert Image.open(io.BytesIO(await whole.read())).size[0] >= 1279
+
+    # The ref names the page it lives on; asking for it on another page is a mistake,
+    # an unknown ref is not found, and without a fresh measurement the place is unknown.
+    assert (await test_client.get("/artifacts/slides/render/page?page=2&dpi=96&target=p1%3A0")).status == 400
+    assert (await test_client.get("/artifacts/slides/render/page?page=1&dpi=96&target=p1%3A9")).status == 404
+    review.artifacts["slides"].revision += 1
+    stale = await test_client.get("/artifacts/slides/render/page?page=1&dpi=96&target=p1%3A0")
+    assert stale.status == 409
+
+
 async def test_call_button_wakes_a_parked_waiter_and_keeps_an_early_press(client) -> None:
     """The reviewer's press is an interrupt, not a message the agent must be listening for:
     a parked wait returns the moment the button is pressed, and a press made before anyone

@@ -4,7 +4,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any, Literal
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from .mcp_contract import (
     agent_artifact,
@@ -198,10 +198,13 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         grayscale: Annotated[bool, Field(description="Grayscale is smaller and enough for layout; set false when colour itself is being checked.")] = True,
         save: Annotated[bool, Field(description="Write the png and return its path instead of the image, for showing a page to the user without spending the tokens an image costs.")] = False,
         out: Annotated[str | None, Field(description="Project-relative png path used when save is set; default .html-mcp-web/renders/<artifact>-p<page>.png.")] = None,
+        target: Annotated[str | None, Field(description="A block ref on this page (e.g. p8:1.1.0.2, as layout errors and measure_space report them) to render just that block with a small margin, at a fraction of a full page's tokens. Needs the layout check to have run for the current revision.")] = None,
     ) -> "Image":
-        """Render one page for visual inspection, or with save, to a png file to hand to the user."""
+        """Render one page (or with target, one block of it) for visual inspection, or with save, to a png file to hand to the user."""
         client = binding.require_client()
         params = f"?page={page}&dpi={dpi}&gray={'1' if grayscale else '0'}"
+        if target is not None:
+            params += f"&target={quote(target)}"
         data = await client.get_bytes(
             f"/artifacts/{artifact}/render/page{params}",
             timeout=120.0,
@@ -209,13 +212,14 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         if not save:
             return Image(data=data, format="png")
         project_dir = Path((await client.request_json("GET", "/state"))["project_dir"])
-        target = ((project_dir / out) if out is not None
-                  else project_dir / ".html-mcp-web" / "renders" / f"{artifact}-p{page}.png").resolve()
-        if not target.is_relative_to(project_dir.resolve()):
+        name = f"{artifact}-{target.replace(':', '-')}.png" if target is not None else f"{artifact}-p{page}.png"
+        out_path = ((project_dir / out) if out is not None
+                    else project_dir / ".html-mcp-web" / "renders" / name).resolve()
+        if not out_path.is_relative_to(project_dir.resolve()):
             raise ValueError("out must stay inside the project directory")
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(data)
-        return {"path": str(target), "bytes": len(data), "page": page, "dpi": dpi}
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_bytes(data)
+        return {"path": str(out_path), "bytes": len(data), "page": page, "dpi": dpi}
 
     @mcp.tool()
     async def export_pptx(
