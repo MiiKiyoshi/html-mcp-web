@@ -380,6 +380,26 @@ async def test_resolving_reports_an_anchor_the_artifact_still_carries(client) ->
     assert still["id"] in noted["note"]
 
 
+async def test_reopening_needs_no_words(client) -> None:
+    """Reopening asked for a reason where resolving asks for nothing, and the reason was
+    usually the status said twice. A reply is only its text, so that one still needs some."""
+    test_client, review = client
+    comment = await (await test_client.post(
+        "/artifacts/slides/comments",
+        json={"anchor": text_anchor(review.artifacts["slides"].digest()), "text": "Look again"},
+    )).json()
+    await test_client.post(f"/artifacts/slides/comments/{comment['id']}/resolve", json={"summary": ""})
+
+    reopened = await (await test_client.post(
+        f"/artifacts/slides/comments/{comment['id']}/reopen", json={"text": ""})).json()
+    assert reopened["status"] == "open"
+    assert len(reopened["thread"]) == 1          # nothing added: the status is the news
+
+    empty_reply = await test_client.post(
+        f"/artifacts/slides/comments/{comment['id']}/reply", json={"text": "   "})
+    assert empty_reply.status == 400
+
+
 async def test_replying_never_reports_the_anchor(client) -> None:
     test_client, review = client
     comment = await (await test_client.post(

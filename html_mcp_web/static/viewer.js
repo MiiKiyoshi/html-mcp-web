@@ -344,7 +344,14 @@ function showSelectionButton() {
     button.classList.add("hidden");
     return;
   }
-  const rect = range.getBoundingClientRect();
+  // The same geometry the highlight uses, so the button meets the letters that were
+  // grabbed rather than the whole svg label they sit in.
+  const marks = selectionRects(range);
+  const rect = marks.length === 0 ? range.getBoundingClientRect() : {
+    left: Math.min(...marks.map((mark) => mark.left)),
+    top: Math.min(...marks.map((mark) => mark.top)),
+    bottom: Math.max(...marks.map((mark) => mark.top + mark.height)),
+  };
   const iframe = $("#artifact-frame");
   const pane = $("#artifact-pane");
   button.classList.remove("hidden");
@@ -364,6 +371,49 @@ function showSelectionButton() {
 
 function hideSelectionButton() {
   $("#selection-comment-btn").classList.add("hidden");
+}
+
+// A Range inside an <svg> does not report the characters it holds. Selecting nine letters
+// of a label gave the whole <text> element's box (218px wide where the letters were 143),
+// and selecting from the middle gave an empty rect, so a highlight covered the whole label
+// and the comment button sat away from what was grabbed. The element numbers its own
+// characters and can place each one, which is where the letters actually are.
+function svgSelectionRects(range) {
+  const node = range.startContainer;
+  if (node !== range.endContainer || node.nodeType !== Node.TEXT_NODE) return null;
+  const text = node.parentElement;
+  if (text === null || text.namespaceURI !== "http://www.w3.org/2000/svg") return null;
+  if (typeof text.getExtentOfChar !== "function" || typeof text.getNumberOfChars !== "function") return null;
+  const ctm = text.getScreenCTM();
+  if (ctm === null) return null;
+  // Character numbering belongs to the element that holds the text node, which is what
+  // the range's offsets count into; a tspan holds its own and is that element itself.
+  const total = text.getNumberOfChars();
+  const from = Math.max(0, Math.min(range.startOffset, total));
+  const to = Math.max(from, Math.min(range.endOffset, total));
+  if (to <= from) return null;
+  let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+  for (let index = from; index < to; index += 1) {
+    let box;
+    try {
+      box = text.getExtentOfChar(index);
+    } catch (error) {
+      return null;
+    }
+    for (const [x, y] of [[box.x, box.y], [box.x + box.width, box.y],
+                          [box.x, box.y + box.height], [box.x + box.width, box.y + box.height]]) {
+      const screenX = ctm.a * x + ctm.c * y + ctm.e;
+      const screenY = ctm.b * x + ctm.d * y + ctm.f;
+      left = Math.min(left, screenX); right = Math.max(right, screenX);
+      top = Math.min(top, screenY); bottom = Math.max(bottom, screenY);
+    }
+  }
+  return [{ left, top, right, bottom, width: right - left, height: bottom - top }];
+}
+
+function selectionRects(range) {
+  return svgSelectionRects(range)
+    ?? Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
 }
 
 function ensureHighlightLayer(page) {
@@ -442,7 +492,7 @@ function renderHighlights() {
       height: rect.height / frame.ratio,
     });
     const layer = ensureHighlightLayer(frame.page);
-    const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
+    const rects = selectionRects(range);
     for (const rect of rects) {
       const box = local(rect);
       const mark = frameDocument().createElement("div");
