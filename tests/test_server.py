@@ -724,6 +724,9 @@ async def test_render_page_crops_to_a_target_block(client, monkeypatch) -> None:
     # an unknown ref is not found, and without a fresh measurement the place is unknown.
     assert (await test_client.get("/artifacts/slides/render/page?page=2&dpi=96&target=p1%3A0")).status == 400
     assert (await test_client.get("/artifacts/slides/render/page?page=1&dpi=96&target=p1%3A9")).status == 404
+    # With a review UI connected the server leaves the checking to it, so a target whose
+    # measurement has gone stale is refused rather than measured behind the reviewer's back.
+    review.websockets.add(object())
     review.artifacts["slides"].revision += 1
     stale = await test_client.get("/artifacts/slides/render/page?page=1&dpi=96&target=p1%3A0")
     assert stale.status == 409

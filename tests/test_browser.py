@@ -897,3 +897,34 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_space_is_measured_with_no_review_ui_open(tmp_path: Path) -> None:
+    """A headless session has nobody's browser on the page, and every measurement 409'd
+    until someone opened the UI. The server runs the check itself: the same page scripts,
+    in a browser of its own."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    try:
+        shared.ensure()
+        base = f"http://127.0.0.1:{port}"
+        state = get_json(f"{base}/state")["artifacts"]["slides"]
+        assert state["layout_check"]["checked_revision"] is None   # nobody has looked yet
+        with urllib.request.urlopen(f"{base}/artifacts/slides/space?page=1&clearance=0", timeout=75) as reply:
+            measured = json.loads(reply.read().decode("utf-8"))
+        assert measured["revision"] == state["revision"]
+        assert measured["children"]                    # the page's blocks were measured
+        checked = get_json(f"{base}/state")["artifacts"]["slides"]["layout_check"]
+        assert checked["checked_revision"] == state["revision"]   # the check really ran
+        assert checked["errors"] == []                            # and this deck is clean
+    finally:
+        shared.stop()

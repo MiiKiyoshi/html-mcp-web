@@ -257,7 +257,9 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             query["min_width"] = min_width
         if min_height is not None:
             query["min_height"] = min_height
-        return await client.request_json("GET", f"/artifacts/{artifact}/space?{urlencode(query)}")
+        # Long enough for the server to run the layout check itself when no review UI is
+        # open: it starts a headless browser on its own page and answers once that posts.
+        return await client.request_json("GET", f"/artifacts/{artifact}/space?{urlencode(query)}", timeout=75.0)
 
     @mcp.tool()
     async def wait_review() -> dict[str, Any]:

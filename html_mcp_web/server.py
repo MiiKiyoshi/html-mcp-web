@@ -250,6 +250,7 @@ class HtmlReviewServer:
         self.review_calls = 0
         self.review_called = asyncio.Event()
         self.review_waiters = 0
+        self.headless_check = asyncio.Lock()
         self.artifacts = self._create_artifacts(config)
         self.watcher = self._create_watcher(config)
 
@@ -436,6 +437,8 @@ class HtmlReviewServer:
         target_box = None
         if target_ref is not None:
             if runtime.space_revision != runtime.revision:
+                await self._ensure_layout_checked(runtime, request.host)
+            if runtime.space_revision != runtime.revision:
                 raise web.HTTPConflict(
                     text="space measurement is not ready for the current revision, so the target's place "
                          "is unknown; keep the review UI open until layout checking finishes")
@@ -522,6 +525,43 @@ class HtmlReviewServer:
         runtime.layout_room = room_for_errors(errors, space_pages)
         return web.json_response(runtime.state())
 
+    async def _ensure_layout_checked(self, runtime: ArtifactRuntime, host: str) -> None:
+        """Run the layout check ourselves when no review UI is open to run it.
+
+        The check is browser work (the page's own scripts measure it and post the result
+        back), and with no browser on the page checked_revision sat at null and every
+        measurement 409'd until someone opened the UI. The measurers only need a browser,
+        not a reader: a headless one pointed at this server's own page runs the same
+        scripts and posts the same result. A connected UI is left to do it instead, and
+        one check runs at a time.
+        """
+        import shutil as _shutil
+        import tempfile
+
+        if runtime.space_revision == runtime.revision or self.websockets:
+            return
+        if _shutil.which("firefox") is None:
+            return
+        async with self.headless_check:
+            if runtime.space_revision == runtime.revision:
+                return
+            profile = tempfile.mkdtemp(prefix="html_mcp_check_")
+            process = await asyncio.create_subprocess_exec(
+                "firefox", "-headless", "-no-remote", "-profile", profile,
+                f"http://{host}/?artifact={runtime.artifact_id}",
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+            )
+            try:
+                for _ in range(90):
+                    if runtime.space_revision == runtime.revision:
+                        return
+                    await asyncio.sleep(0.5)
+            finally:
+                process.terminate()
+                await process.wait()
+                await asyncio.get_running_loop().run_in_executor(
+                    None, lambda: _shutil.rmtree(profile, ignore_errors=True))
+
     async def measure_space(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         try:
@@ -541,6 +581,8 @@ class HtmlReviewServer:
             raise web.HTTPBadRequest(text=str(error)) from error
         if revision != runtime.revision:
             raise web.HTTPConflict(text=f"requested revision {revision} does not match current revision {runtime.revision}")
+        if runtime.space_revision != revision:
+            await self._ensure_layout_checked(runtime, request.host)
         if runtime.space_revision != revision:
             raise web.HTTPConflict(
                 text=f"space measurement is not ready for revision {revision}; keep the review UI open until layout checking finishes"
