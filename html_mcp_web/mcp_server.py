@@ -69,7 +69,9 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "itself would. Resolve only alongside the edit the comment asked for; a comment "
             "answered with words alone stays open for its owner to close, and a resolve message is unnecessary when "
             "replies or edited_files already record the outcome. edit_file is the source; for a templated artifact "
-            "main_file is build output and is not edited. Link images with a relative src into a project folder; do "
+            "main_file is build output and is not edited. Saving the content file is the whole edit cycle: the "
+            "watcher rebuilds the artifact and bumps its revision by itself, so build.py is never run by hand. "
+            "Link images with a relative src into a project folder; do "
             "not embed them as base64, so content stays small and editable. The content format and component "
             "vocabulary are in templates/README.md beside the package (a skin's own README covers only what that skin "
             "changes); read it before writing content. The project is watched with inotify, one watch per "
@@ -235,8 +237,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     async def measure_space(
         artifact: str,
         page: Annotated[int, Field(ge=1)],
-        revision: Annotated[int, Field(ge=1, description="Current revision from inspect(); space is ready when space_revision equals it.")],
         clearance: Annotated[float, Field(ge=0, description="Page pixels kept clear around existing content when free regions are computed; 0 to measure exactly.")],
+        revision: Annotated[int | None, Field(ge=1, description="Revision the measurement must belong to, from inspect(); omitted, the current one is measured without an inspect round to learn its number.")] = None,
         target: Annotated[str | None, Field(description="A block ref from a previous result's children (e.g. p1:0.2), including a table cell ref, to measure inside that block instead of the page.")] = None,
         min_width: Annotated[float | None, Field(ge=0, description="Keep only free regions at least this wide, in page pixels.")] = None,
         min_height: Annotated[float | None, Field(ge=0, description="Keep only free regions at least this tall, in page pixels.")] = None,
@@ -245,9 +247,10 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         client = binding.require_client()
         query: dict[str, Any] = {
             "page": page,
-            "revision": revision,
             "clearance": clearance,
         }
+        if revision is not None:
+            query["revision"] = revision
         if target is not None:
             query["target"] = target
         if min_width is not None:

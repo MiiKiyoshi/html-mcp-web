@@ -220,6 +220,11 @@ async def test_space_measurement_is_revision_scoped_and_drills_into_one_block(cl
     )
     assert stale.status == 409
 
+    # Left out, the revision means the current one; the reading is the same measurement.
+    bare = await (await test_client.get("/artifacts/slides/space?page=1&clearance=0&target=p1%3A0")).json()
+    assert bare["revision"] == revision
+    assert bare["content_bbox"] == [120.0, 120.0, 200.0, 80.0]
+
 
 async def test_comment_and_agent_reply_round_trip(client) -> None:
     test_client, review = client
@@ -330,6 +335,50 @@ async def test_resolving_reports_an_anchor_the_artifact_still_carries(client) ->
     })).json()
     assert "warning" not in quiet
 
+    # A quote that survives inside a bigger phrase is not an untouched spot. The old text
+    # rewritten as a superset still contains the quote, and the close warned on a sentence
+    # that had just been changed; the stored context around it is what tells the two apart.
+    (review.project_dir / "artifact.html").write_text(
+        "<!doctype html><html><head><title>Artifact</title></head><body><p>Plain sentence here.</p></body></html>",
+        encoding="utf-8",
+    )
+    grown_anchor = {
+        "kind": "text", "quote": "sentence", "prefix": "Plain ", "suffix": " here.",
+        "start": {"path": [1, 0, 0], "offset": 6}, "end": {"path": [1, 0, 0], "offset": 14},
+        "artifact_digest": review.artifacts["slides"].digest(),
+    }
+    grown = await (await test_client.post(
+        "/artifacts/slides/comments",
+        json={"anchor": grown_anchor, "text": "Wrap this in a sum"},
+    )).json()
+    (review.project_dir / "artifact.html").write_text(
+        "<!doctype html><html><head><title>Artifact</title></head><body><p>Plain longer sentence here.</p></body></html>",
+        encoding="utf-8",
+    )
+    reworded = await (await test_client.post("/artifacts/slides/comments/update", json={
+        "comment_ids": [grown["id"]],
+        "status": "resolved",
+        "message": "wrapped",
+    })).json()
+    assert "warning" not in reworded
+
+    # With edits on record, an anchor still in place is the normal shape of a fix made
+    # elsewhere (a heading anchor over a body fix), so it is a note, not a warning.
+    still_anchor = dict(grown_anchor, quote="longer", prefix="Plain ", suffix=" sentence here.",
+                        artifact_digest=review.artifacts["slides"].digest())
+    still = await (await test_client.post(
+        "/artifacts/slides/comments",
+        json={"anchor": still_anchor, "text": "Fix the caption below"},
+    )).json()
+    noted = await (await test_client.post("/artifacts/slides/comments/update", json={
+        "comment_ids": [still["id"]],
+        "status": "resolved",
+        "message": "caption fixed",
+        "edited_files": ["docs/other.html"],
+    })).json()
+    assert "warning" not in noted
+    assert still["id"] in noted["note"]
+
 
 async def test_replying_never_reports_the_anchor(client) -> None:
     test_client, review = client
@@ -344,6 +393,28 @@ async def test_replying_never_reports_the_anchor(client) -> None:
     })).json()
 
     assert "warning" not in payload
+
+
+def test_build_reports_what_it_wrote_and_leaves_no_staging_file(tmp_path: Path, capsys) -> None:
+    """The watcher's rebuild and a by-hand one run concurrently, and a plain write let one
+    build's report stat the other's just-truncated file: '0KB' over a file that was
+    complete a moment later. The size reported is the size written."""
+    from html_mcp_web.slides.build import build
+
+    skin = Path(__file__).resolve().parent.parent / "templates" / "neutral-slides"
+    content = tmp_path / "content.html"
+    content.write_text(
+        "<!doctype html><meta charset=\"utf-8\"><title>Deck</title>"
+        "<body data-author=\"Author\" data-meta=\"Lab|Today\">"
+        "<section data-title=\"One\"><p>Only page.</p></section></body>",
+        encoding="utf-8",
+    )
+    out = tmp_path / "slides.html"
+    build(content, out, skin)
+    reported = capsys.readouterr().out
+    kilobytes = int(re.search(r"(\d+)KB", reported).group(1))
+    assert kilobytes == out.stat().st_size // 1024 > 0
+    assert list(tmp_path.glob("*.building")) == []
 
 
 def test_template_build_uses_common_build_entrypoint(tmp_path: Path) -> None:

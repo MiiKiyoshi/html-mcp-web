@@ -452,6 +452,42 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         browser.execute_script(
             'document.querySelector("#artifact-frame").contentWindow.getSelection().removeAllRanges();')
 
+        # The context stored around a selection keeps blocks apart: the cell "Used" carries
+        # the heading before it in its prefix, and without the break they read as one word.
+        browser.execute_script('''
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const cell = doc.querySelector("#metrics td").firstChild;
+          const selection = view.getSelection();
+          selection.removeAllRanges();
+          const range = doc.createRange();
+          range.setStart(cell, 0);
+          range.setEnd(cell, 4);
+          selection.addRange(range);
+          doc.dispatchEvent(new view.MouseEvent("mouseup", {bubbles: true}));
+        ''')
+        wait_until(lambda: browser.execute_script(
+            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+        browser.find_element("css selector", "#selection-comment-btn").click()
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#compose-dialog").open === true'))
+        browser.find_element("css selector", "#compose-text").send_keys("Separator check")
+        browser.find_element("css selector", "#compose-submit").click()
+        separated = wait_until(lambda: next(
+            (comment for comment in get_json(f"{base}/artifacts/slides/comments")["comments"]
+             if comment["thread"][0]["text"] == "Separator check"), None))
+        stored = get_json(f"{base}/artifacts/slides/comments/{separated['id']}")
+        assert stored["anchor"]["quote"] == "Used"
+        assert "\n" in stored["anchor"]["prefix"]
+        assert stored["anchor"]["prefix"].split("\n")[-1] == ""  # the cell starts its own block
+        delete = urllib.request.Request(
+            f"{base}/artifacts/slides/comments/{separated['id']}", method="DELETE")
+        with urllib.request.urlopen(delete, timeout=3):
+            pass
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelectorAll(".comment-card").length === 0'))
+
         anchor = browser.execute_script('''
           const frame = document.querySelector("#artifact-frame");
           const doc = frame.contentDocument;

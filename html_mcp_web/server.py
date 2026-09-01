@@ -525,7 +525,9 @@ class HtmlReviewServer:
     async def measure_space(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         try:
-            revision = int(request.query["revision"])
+            # A stated revision guards against measuring a page that changed underneath;
+            # left out, the current one is meant, without an inspect round to learn it.
+            revision = int(request.query["revision"]) if "revision" in request.query else runtime.revision
             page_number = int(request.query["page"])
             clearance = float(request.query["clearance"])
             min_width = float(request.query["min_width"]) if "min_width" in request.query else 0.0
@@ -667,25 +669,24 @@ class HtmlReviewServer:
         return web.json_response(comment.to_dict())
 
     def _anchor_text_survives(self, runtime: ArtifactRuntime, comment: Comment) -> bool:
-        """Whether the quote a comment points at still reads the same in the artifact.
+        """Whether the spot a comment points at still reads the same in the artifact.
 
-        A quote that survives a resolve says the sentence under discussion was not
-        touched. That is normal for a question or for a change made elsewhere, so it is
-        reported rather than refused.
+        The spot is the quote in its stored context. The quote alone proved nothing:
+        lambda*delay rewritten into Sigma(lambda*delay) still contains the old quote, and
+        the warning fired on a sentence that had just been changed. Context that is gone
+        means the edit reached this spot; all of it intact means it was not touched, which
+        is normal for a question or for a change made elsewhere, so it is reported rather
+        than refused. Spacing is dropped on both sides: the anchor carries the rendered
+        page's spacing, the artifact the source's.
         """
         anchor = comment.anchor.to_dict()
         if anchor["kind"] != "text":
             return False
-        quote = " ".join(anchor["quote"].split())
+        quote = "".join(anchor["quote"].split())
         if not quote:
             return False
-        text = artifact_text(runtime.main_file)
-        if quote in text:
-            return True
-        # A quote that runs across elements carries the spacing of the rendered page,
-        # which is not the spacing of the source; comparing without spaces still shows
-        # whether those characters are still there.
-        return "".join(quote.split()) in "".join(text.split())
+        spot = "".join((anchor["prefix"] + anchor["quote"] + anchor["suffix"]).split())
+        return spot in "".join(artifact_text(runtime.main_file).split())
 
     async def update_comments(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
@@ -725,11 +726,21 @@ class HtmlReviewServer:
         if status == "resolved":
             untouched = [comment.id for comment in comments if self._anchor_text_survives(runtime, comment)]
             if untouched:
-                result["warning"] = (
-                    "anchor text unchanged in the artifact for "
-                    + ", ".join(untouched)
-                    + "; confirm the change landed or reopen"
-                )
+                listed = ", ".join(untouched)
+                # With edits on record the untouched anchor is the normal case: the fix
+                # landed elsewhere, or the comment anchored a heading over the body it
+                # asked about. Without any, resolving with nothing changed anywhere is
+                # what the warning is for.
+                if edited_files:
+                    result["note"] = (
+                        f"anchor text unchanged for {listed}; normal when the fix landed in "
+                        "the files recorded, no action needed"
+                    )
+                else:
+                    result["warning"] = (
+                        f"anchor text unchanged in the artifact for {listed}"
+                        "; confirm the change landed or reopen"
+                    )
         await self.broadcast({
             "type": "comments_updated",
             "artifact": runtime.artifact_id,
