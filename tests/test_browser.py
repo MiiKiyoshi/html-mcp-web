@@ -1776,11 +1776,38 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         assert edges["left"] >= -1, edges
         assert edges["top"] >= -1, edges
 
+        # Fit keeps the reader's place: what sat at the middle of the window sits there
+        # still at the fitted size. Laid out again with the scroll left as it was, the deck
+        # showed some other part of itself the moment the button was pressed.
+        middle = browser.execute_script("""
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const view = doc.documentElement;
+          const x = view.clientWidth / 2, y = view.clientHeight / 2;
+          // The page under the middle, or the nearest one when the middle is in a gap.
+          const pages = Array.from(doc.querySelectorAll("main.pages > section.page"));
+          const away = (p) => { const b = p.getBoundingClientRect(); return Math.max(b.top - y, y - b.bottom, 0); };
+          const page = pages.reduce((best, p) => away(p) < away(best) ? p : best, pages[0]);
+          const box = page.getBoundingClientRect();
+          const ratio = box.width / page.offsetWidth;
+          return {index: Array.from(page.parentElement.children).indexOf(page),
+                  x: (x - box.left) / ratio, y: (y - box.top) / ratio};
+        """)
         browser.find_element("css selector", "#zoom-reset-btn").click()
         time.sleep(0.3)
         back = browser.execute_script(measure)
         assert abs(back["width"] - before["width"]) < 2
         assert not back["resetShown"]
+        kept = browser.execute_script("""
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const view = doc.documentElement;
+          const page = doc.querySelector("main.pages").children[arguments[0]];
+          const box = page.getBoundingClientRect();
+          const ratio = box.width / page.offsetWidth;
+          return {dy: box.top + arguments[2] * ratio - view.clientHeight / 2};
+        """, script_args=[middle["index"], middle["x"], middle["y"]])
+        assert abs(kept["dy"]) < 2, kept
+        # The sections below address points on the first page from the top of the deck.
+        browser.execute_script('document.querySelector("#artifact-frame").contentWindow.scrollTo(0, 0);')
 
         # A trackpad pinch and a modifier-held wheel take the same path: ctrl is what a
         # trackpad pinch carries and what Windows and Linux zoom with, command what a Mac
