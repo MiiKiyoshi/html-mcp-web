@@ -257,6 +257,7 @@ function updatePageScale() {
   const scale = state.slideShow ? fitted : fitted * state.artifactZoom;
   const root = frameDocument().documentElement;
   root.style.setProperty("--html-mcp-page-scale", String(scale));
+  root.style.setProperty("--html-mcp-zoom", String(state.slideShow ? 1 : state.artifactZoom));
   // The room a drawn-smaller block gives back depends on its own height, and only the
   // template knows how tall a script block is.
   const script = doc.querySelector("body > main.pages > .script-block");
@@ -331,6 +332,8 @@ function selectionSpan(selection) {
 // because that is a reader holding a word.
 function installArtifactZoom() {
   const doc = frameDocument();
+  // A gesture on the document this one replaces is over, whatever its fingers do next.
+  state.pinch = null;
   for (const kind of ["touchstart", "touchmove", "touchend", "touchcancel"]) {
     doc.addEventListener(kind, handleArtifactTouch, { passive: false, capture: true });
   }
@@ -372,10 +375,24 @@ function handleArtifactTouch(event) {
     // The holder scaled about its own corner and shifted so that what sat between the
     // fingers at the start is under them now.
     const grown = pinch.zoom / pinch.startZoom;
+    const room = pinch.room;
     const shift = {
       x: middle.x - pinch.origin.x - grown * pinch.focal.x,
       y: middle.y - pinch.origin.y - grown * pinch.focal.y,
     };
+    // Held within what the settled layout can reach: a page narrower than its holder sits
+    // centred with no scroll to move it, a wider one scrolls between its two edges, and
+    // the deck scrolls between the document's top and bottom margins. Shown anywhere else,
+    // the deck jumped to the nearest reachable place the moment the fingers lifted.
+    const pageWidth = grown * room.pageWidth;
+    const pageAtZero = room.left - pinch.origin.x - grown * room.pageOffset;
+    shift.x = pageWidth <= room.width
+      ? pageAtZero + (room.width - pageWidth) / 2
+      : Math.min(pageAtZero, Math.max(
+          pageAtZero - (room.left + pageWidth + room.right - room.viewWidth), shift.x));
+    const holderAtZero = room.top - pinch.origin.y;
+    shift.y = Math.min(holderAtZero, Math.max(
+      holderAtZero - (room.top + grown * room.height + room.bottom - room.viewHeight), shift.y));
     pinch.holder.style.transform = `translate(${shift.x}px, ${shift.y}px) scale(${grown})`;
     return;
   }
@@ -400,18 +417,46 @@ function handleArtifactTouch(event) {
 }
 
 // What the gesture keeps of its start: the holder's corner and the point between the
-// fingers relative to it, for carrying the holder; and that point in the coordinates of
-// the page it lies on, which no zoom changes, for putting it back under the fingers once
-// the layout is settled. Page coordinates rather than document ones, because the gaps
-// between pages and the margin around them do not grow with the zoom.
+// fingers relative to it, for carrying the holder; that point in the coordinates of the
+// page it lies on, which no zoom changes, for putting it back under the fingers once the
+// layout is settled; and the room the settled layout will have, read off the document
+// now, since the holder grows by the zoom alone and the margins around it not at all.
 function beginPinch(span, middle) {
   if (span === 0 || state.slideShow) return null;
-  const holder = frameDocument().querySelector("body > main.pages");
+  const doc = frameDocument();
+  const win = frameWindow();
+  const holder = doc.querySelector("body > main.pages");
   const page = pageNear(middle);
   if (holder === null || page === null) return null;
   const corner = holder.getBoundingClientRect();
   const box = page.getBoundingClientRect();
   const ratio = box.width / page.offsetWidth;
+  const left = corner.left + win.scrollX;
+  const top = corner.top + win.scrollY;
+  const room = {
+    left,
+    top,
+    right: doc.documentElement.scrollWidth - (left + corner.width),
+    bottom: doc.documentElement.scrollHeight - (top + corner.height),
+    width: corner.width,
+    height: corner.height,
+    pageOffset: box.left - corner.left,
+    pageWidth: box.width,
+    viewWidth: doc.documentElement.clientWidth,
+    viewHeight: doc.documentElement.clientHeight,
+  };
+  // The document's scrollable size follows the carried holder, and shrunk by a zoom out
+  // it let the browser pull the scroll position back in the middle of the gesture. A dot
+  // pinned at the document's far corner holds that size until the layout settles.
+  const keeper = doc.createElement("div");
+  Object.assign(keeper.style, {
+    position: "absolute", left: "0px", top: "0px", width: "1px", height: "1px",
+    visibility: "hidden", pointerEvents: "none",
+  });
+  doc.body.appendChild(keeper);
+  const placed = keeper.getBoundingClientRect();
+  keeper.style.left = `${doc.documentElement.scrollWidth - 1 - (placed.left + win.scrollX)}px`;
+  keeper.style.top = `${doc.documentElement.scrollHeight - 1 - (placed.top + win.scrollY)}px`;
   holder.style.transformOrigin = "0 0";
   holder.style.willChange = "transform";
   return {
@@ -424,12 +469,15 @@ function beginPinch(span, middle) {
     focal: { x: middle.x - corner.left, y: middle.y - corner.top },
     page,
     local: { x: (middle.x - box.left) / ratio, y: (middle.y - box.top) / ratio },
+    room,
+    keeper,
   };
 }
 
 function settlePinch() {
   const pinch = state.pinch;
   state.pinch = null;
+  pinch.keeper.remove();
   pinch.holder.style.transform = "";
   pinch.holder.style.transformOrigin = "";
   pinch.holder.style.willChange = "";

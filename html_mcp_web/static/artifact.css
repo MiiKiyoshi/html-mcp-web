@@ -48,7 +48,10 @@ html[data-html-mcp-layout] body > main.pages {
      scrollbar reaches; once it overflows, it starts from the left instead, and with the
      margins split evenly the zoomed page's left edge lands exactly at zero. */
   align-items: safe center !important;
-  gap: 24px !important;
+  /* Grows with the zoom, as the pages do: while two fingers carry the whole holder as one
+     picture, a gap that stayed put would have every page below it land somewhere else
+     the moment the layout settled. */
+  gap: calc(24px * var(--html-mcp-zoom, 1)) !important;
   margin: 0 !important;
   padding: 0 !important;
 }
@@ -124,7 +127,8 @@ html[data-html-mcp-presentation="slides"] body > main.pages > section.page.html-
 html[data-html-mcp-layout] body > main.pages > .script-block {
   transform: scale(var(--html-mcp-page-scale, 1));
   transform-origin: top center;
-  margin: -14px calc(var(--html-mcp-page-width) * (var(--html-mcp-page-scale, 1) - 1) / 2)
+  margin: calc(-14px * var(--html-mcp-zoom, 1))
+          calc(var(--html-mcp-page-width) * (var(--html-mcp-page-scale, 1) - 1) / 2)
           calc(var(--html-mcp-script-height, 164px) * (var(--html-mcp-page-scale, 1) - 1)) !important;
 }
 
