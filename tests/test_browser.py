@@ -1638,6 +1638,26 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
             browser.find_element("css selector", "#zoom-reset-btn").click()
             time.sleep(0.3)
 
+        # A trackpad's many small steps carry the size as far as the fingers travel, at
+        # the rate a browser zooms its own pages by; a mouse's one large step per notch,
+        # where that rate would multiply the size by e, has a step of its own.
+        zoom_now = ('return Number(document.querySelector("#artifact-frame").contentDocument'
+                    '.documentElement.style.getPropertyValue("--html-mcp-zoom"));')
+        for delta, mode, expected in [(-10, 0, 2.718 ** 0.1), (-100, 0, 1.25), (-3, 1, 1.25)]:
+            browser.execute_script("""
+              const frame = document.querySelector("#artifact-frame");
+              const doc = frame.contentDocument;
+              const view = frame.contentWindow;
+              doc.elementFromPoint(350, 300).dispatchEvent(new view.WheelEvent("wheel", {
+                clientX: 350, clientY: 300, deltaY: arguments[0], deltaMode: arguments[1],
+                ctrlKey: true, bubbles: true, cancelable: true}));
+            """, script_args=[delta, mode])
+            time.sleep(0.5)
+            grew = browser.execute_script(zoom_now)
+            assert abs(grew - expected) < 0.01, (delta, mode, grew, expected)
+            browser.find_element("css selector", "#zoom-reset-btn").click()
+            time.sleep(0.3)
+
         # Fingers drift on a trackpad, so the fixed point is read on every step, not kept
         # from the first: what the gesture started on follows the pointer where it goes.
         held = browser.execute_script("""
