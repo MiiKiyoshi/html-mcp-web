@@ -351,12 +351,17 @@ function handleArtifactWheel(event) {
   if (state.pinch === null) state.pinch = beginPinch(1, point);
   const pinch = state.pinch;
   if (pinch === null) return;
-  const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE
-    ? 40
-    : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? 800 : 1;
-  // Each step multiplies, so a notch moves the same share of the size at any zoom, and
+  // Fingers spreading on a trackpad arrive as many small steps, and the size follows the
+  // distance they travel, at the rate a browser zooms its own pages by: a pinch here
+  // reaches as far as the same pinch anywhere else. A mouse sends one large step per
+  // notch, where that rate would multiply the size by e, so a notch has a step of its
+  // own. Both multiply, so a step moves the same share of the size at any zoom and
   // zooming in then out by the same amount lands back where it started.
-  carryPinch(pinch, pinch.zoom * Math.exp(-event.deltaY * unit * 0.0025), point);
+  const notch = event.deltaMode !== WheelEvent.DOM_DELTA_PIXEL || Math.abs(event.deltaY) >= 40;
+  const factor = notch
+    ? (event.deltaY < 0 ? 1.25 : 1 / 1.25)
+    : Math.exp(-event.deltaY / 100);
+  carryPinch(pinch, pinch.zoom * factor, point);
   // A wheel has no lift to end on, so the gesture ends where the steps stop.
   if (state.pinchSettle !== null) clearTimeout(state.pinchSettle);
   state.pinchSettle = setTimeout(settlePinch, 150);
