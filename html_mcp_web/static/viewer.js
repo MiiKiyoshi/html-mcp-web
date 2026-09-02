@@ -354,10 +354,22 @@ function installArtifactZoom() {
 // mouse sends under the key each desktop zooms with: ctrl on Windows and Linux, command
 // on a Mac. The pointer is the fixed point, as the point between two fingers is.
 function handleArtifactWheel(event) {
+  zoomFromWheel(event, { x: event.clientX, y: event.clientY });
+}
+
+// Over the rest of the viewer, the comments or the bar, the same pinch zooms the artifact
+// about its middle. Left to the browser there, it zoomed the whole page, comments and
+// all, while the artifact kept a zoom of its own, and the two ran side by side.
+function handleViewerWheel(event) {
+  if (frameDocument() === null) return;
+  const frame = $("#artifact-frame").getBoundingClientRect();
+  zoomFromWheel(event, { x: frame.width / 2, y: frame.height / 2 });
+}
+
+function zoomFromWheel(event, point) {
   state.settledScroll = null;
   if (!(event.ctrlKey || event.metaKey) || state.slideShow) return;
   event.preventDefault();
-  const point = { x: event.clientX, y: event.clientY };
   if (state.pinch === null) state.pinch = beginPinch(1, point);
   const pinch = state.pinch;
   if (pinch === null) return;
@@ -512,6 +524,9 @@ function beginPinch(span, middle) {
   keeper.style.top = `${doc.documentElement.scrollHeight - 1 - (placed.top + win.scrollY)}px`;
   holder.style.transformOrigin = "0 0";
   holder.style.willChange = "transform";
+  // The comment button is placed by the selection and stays where it was placed while
+  // the deck under it is carried; it is placed again once the deck has settled.
+  hideSelectionButton();
   return {
     startSpan: span,
     startZoom: state.artifactZoom,
@@ -537,6 +552,7 @@ function settlePinch() {
   pinch.holder.style.willChange = "";
   if (pinch.zoom === pinch.startZoom) {
     pinch.keeper.remove();
+    setTimeout(showSelectionButton, 60);
     return;
   }
   const win = frameWindow();
@@ -561,6 +577,8 @@ function settlePinch() {
   // What the browser moves on its own in the moment after is put back; the reader's own
   // next touch or wheel ends the watch.
   state.settledScroll = { x: win.scrollX, y: win.scrollY, until: performance.now() + 400 };
+  // After the scroll that follows, which hides the button as any scroll does.
+  setTimeout(showSelectionButton, 60);
 }
 
 // The page under a point, or the nearest one when the point is in a gap.
@@ -1094,6 +1112,10 @@ function attachControls() {
     document.exitFullscreen().catch((error) => alert(`Could not exit full screen: ${error.message}`));
   });
   document.addEventListener("wheel", handlePresentationWheel, { passive: false });
+  document.addEventListener("wheel", handleViewerWheel, { passive: false });
+  for (const kind of ["gesturestart", "gesturechange", "gestureend"]) {
+    document.addEventListener(kind, (event) => event.preventDefault(), { passive: false });
+  }
   document.addEventListener("fullscreenchange", syncFullscreenMode);
   // A device that cannot be watched from where the code is written draws its own touch
   // record over the page when the address carries ?trace.

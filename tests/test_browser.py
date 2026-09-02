@@ -1546,6 +1546,24 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         """)
         assert taken == {"two": True, "one": False, "gesture": True}, taken
 
+        # A selection with its comment button placed by it, so the gesture has something
+        # that would otherwise stay put while the deck under it moved.
+        browser.execute_script("""
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const words = doc.querySelector("#mathlike");
+          const range = doc.createRange();
+          range.setStart(words.firstChild, 0);
+          range.setEnd(words.firstChild, 6);
+          view.getSelection().removeAllRanges();
+          view.getSelection().addRange(range);
+          doc.dispatchEvent(new view.MouseEvent("mouseup", {bubbles: true}));
+        """)
+        button_hidden = ('return document.querySelector("#selection-comment-btn")'
+                         '.classList.contains("hidden");')
+        wait_until(lambda: not browser.execute_script(button_hidden))
+
         # The point between the fingers, in the coordinates of the page it lies on.
         held = browser.execute_script("""
           const frame = document.querySelector("#artifact-frame");
@@ -1581,6 +1599,7 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         """)
         assert carried["scale"] == before["scale"], carried
         assert carried["transform"].startswith("translate("), carried
+        assert browser.execute_script(button_hidden)     # not left beside the old place
         # Where the carried holder shows the page is where the settled layout puts it, so
         # nothing moves when the fingers lift.
         page_box = """
@@ -1595,6 +1614,7 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         for side in ("left", "top", "width"):
             assert abs(shown[side] - settled[side]) < 2, (shown, settled)
         after = browser.execute_script(measure)
+        wait_until(lambda: not browser.execute_script(button_hidden))   # placed again
         assert after["width"] > before["width"] * 1.4, after   # the deck grew
         assert after["tabs"] == before["tabs"]                 # the comments did not
         assert after["topbar"] == before["topbar"]             # nor the controls
@@ -1808,6 +1828,31 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         plain = browser.execute_script(measure)
         assert abs(plain["width"] - before["width"]) < 2, plain
         assert not plain["resetShown"]
+
+        # Over the comments the same pinch zooms the artifact, about its middle, and is
+        # taken from the browser, whose own zoom would have grown the comments with it.
+        over_comments = browser.execute_script("""
+          const sidebar = document.querySelector("#sidebar");
+          const event = new WheelEvent("wheel", {clientX: 20, clientY: 300, deltaY: -100,
+            ctrlKey: true, bubbles: true, cancelable: true});
+          sidebar.dispatchEvent(event);
+          return event.defaultPrevented;
+        """)
+        assert over_comments is True
+        time.sleep(0.5)
+        beside = browser.execute_script(measure)
+        assert beside["width"] > before["width"] * 1.2, beside
+        assert beside["tabs"] == before["tabs"]
+        browser.find_element("css selector", "#zoom-reset-btn").click()
+        time.sleep(0.3)
+        plain_over_comments = browser.execute_script("""
+          const sidebar = document.querySelector("#sidebar");
+          const event = new WheelEvent("wheel", {clientX: 20, clientY: 300, deltaY: -100,
+            bubbles: true, cancelable: true});
+          sidebar.dispatchEvent(event);
+          return event.defaultPrevented;
+        """)
+        assert plain_over_comments is False
     finally:
         if browser is not None:
             try:
