@@ -1405,9 +1405,12 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
     shared = SharedProjectServer(load_config(config_path))
     profile = tempfile.mkdtemp(prefix="html_mcp_zoom_")
     marionette_port = available_port()
+    # Overlay scrollbars, as a phone has: a scrollbar that takes layout room widens the
+    # holder when it goes away, and the page is centred in a wider holder than it was drawn in.
     (Path(profile) / "user.js").write_text(
         f'user_pref("marionette.port", {marionette_port});\n'
-        'user_pref("dom.w3c_touch_events.enabled", 1);\n', encoding="utf-8")
+        'user_pref("dom.w3c_touch_events.enabled", 1);\n'
+        'user_pref("ui.useOverlayScrollbars", 1);\n', encoding="utf-8")
     browser_process = None
     browser = None
     try:
@@ -1474,8 +1477,19 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         """)
         assert carried["scale"] == before["scale"], carried
         assert carried["transform"].startswith("translate("), carried
+        # Where the carried holder shows the page is where the settled layout puts it, so
+        # nothing moves when the fingers lift.
+        page_box = """
+          const box = document.querySelector("#artifact-frame").contentDocument
+            .querySelector("section.page").getBoundingClientRect();
+          return {left: box.left, top: box.top, width: box.width};
+        """
+        shown = browser.execute_script(page_box)
         browser.execute_script(fingers + 'send("touchend", []);')
         time.sleep(0.4)
+        settled = browser.execute_script(page_box)
+        for side in ("left", "top", "width"):
+            assert abs(shown[side] - settled[side]) < 2, (shown, settled)
         after = browser.execute_script(measure)
         assert after["width"] > before["width"] * 1.4, after   # the deck grew
         assert after["tabs"] == before["tabs"]                 # the comments did not
@@ -1496,6 +1510,33 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         """ % (held["index"], held["x"], held["y"]))
         assert abs(placed["x"] - 350) < 2 and abs(placed["y"] - 400) < 2, placed
         assert placed["transform"] == "", placed
+
+        # Zooming out past the fit, the layout has no room to keep the page under the
+        # fingers: it sits centred, at the top. The carried holder is held there too, so
+        # the deck does not jump there when the fingers lift. And while the fingers move
+        # the scroll position stays put: the shrunk holder must not shrink the document
+        # under the browser's own clamp.
+        scroll_of = """
+          const win = document.querySelector("#artifact-frame").contentWindow;
+          return [win.scrollX, win.scrollY];
+        """
+        scrolled = browser.execute_script(scroll_of)
+        assert scrolled[0] > 0 and scrolled[1] > 0, scrolled
+        browser.execute_script(fingers + """
+          send("touchstart", [touch(1, 200, 400), touch(2, 500, 400)]);
+          for (let step = 1; step <= 6; step += 1) {
+            send("touchmove", [touch(1, 200 + step * 22, 400), touch(2, 500 - step * 22, 400)]);
+          }
+        """)
+        assert browser.execute_script(scroll_of) == scrolled
+        shown = browser.execute_script(page_box)
+        browser.execute_script(fingers + 'send("touchend", []);')
+        time.sleep(0.4)
+        settled = browser.execute_script(page_box)
+        for side in ("left", "top", "width"):
+            assert abs(shown[side] - settled[side]) < 2, (shown, settled)
+        assert settled["width"] < before["width"], (settled, before)   # below the fit
+        assert settled["left"] > 0 and settled["top"] > 0, settled      # centred, at the top
 
         # Both ends are reachable: the left edge, and the top of the first page.
         edges = browser.execute_script("""
