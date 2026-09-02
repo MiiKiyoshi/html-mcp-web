@@ -127,16 +127,29 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .selection-comment:hover { color: white; background: #506277; }
 
 /* Only while the artifact is held at something other than the size the pane fits, and
-   out of the way at the top, where the deck's own margin is. */
+   out of the way at the top, where the deck's own margin is. The left corner: on a touch
+   screen the comment button holds the right one. */
 .zoom-reset {
   position: absolute;
   z-index: 20;
   top: 8px;
-  right: 10px;
+  left: 10px;
   padding: 4px 10px;
   font-size: 12px;
   background: var(--paper);
   box-shadow: 0 2px 8px rgba(0, 0, 0, .16);
+}
+
+/* A touch screen answers a long press with a bar of its own (copy, look up, share) drawn
+   over the words, and a button placed by the selection sits under it. Held in the corner
+   it is always reachable, and the phone's bar has nothing to cover. */
+@media (pointer: coarse) {
+  .selection-comment {
+    top: 8px !important;
+    right: 10px !important;
+    left: auto !important;
+    bottom: auto !important;
+  }
 }
 #artifact-pane:fullscreen .selection-comment { display: none !important; }
 
