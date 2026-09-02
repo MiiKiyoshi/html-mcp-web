@@ -36,7 +36,9 @@ const state = {
   suppressPresentationClick: false,
   draggingPanel: false,
   panelDraggedAt: -Infinity,
-  artifactPanzoom: null,
+  artifactZoom: 1,
+  pinch: null,
+  artifactDrag: null,
 };
 
 function artifactBase() {
@@ -249,9 +251,10 @@ function updatePageScale() {
   const holder = page.parentElement;
   const availableWidth = holder.clientWidth || frameWindow().innerWidth;
   const widthScale = availableWidth / page.offsetWidth;
-  const scale = state.slideShow
+  const fitted = state.slideShow
     ? Math.min(widthScale, frameWindow().innerHeight / page.offsetHeight)
     : Math.min(1, widthScale);
+  const scale = state.slideShow ? fitted : fitted * state.artifactZoom;
   const root = frameDocument().documentElement;
   root.style.setProperty("--html-mcp-page-scale", String(scale));
   // The room a drawn-smaller block gives back depends on its own height, and only the
@@ -322,62 +325,84 @@ function selectionSpan(selection) {
 }
 
 // Two fingers on the artifact zoom the artifact alone; the controls and the comments
-// stay their size. The gesture handling is panzoom's (vendored, MIT): our own reading of
-// pointer events lost the tug-of-war with the browser, which kept deciding mid-gesture
-// that two fingers were a scroll and cancelling the pinch, where panzoom claims the
-// touches with preventDefault the moment two of them land. One finger stays the
-// browser's and scrolls; the wheel zooms only with ctrl held, as maps do.
+// stay their size. Every touch on the artifact is answered here, so the browser cannot
+// take a gesture halfway through and turn a pinch into a scroll, which is what made an
+// earlier reading of it cut out. A finger that stays put still belongs to the browser,
+// because that is a reader holding a word.
 function installArtifactZoom() {
   const doc = frameDocument();
+  for (const kind of ["touchstart", "touchmove", "touchend", "touchcancel"]) {
+    doc.addEventListener(kind, handleArtifactTouch, { passive: false, capture: true });
+  }
+}
+
+// The reader's zoom is the page's own size, not a transform laid over it. A transform
+// creates no scrollable room, so whatever it pushed past an edge could not be reached:
+// zoomed in, the left never came back and the first page lost its top. The factor goes
+// into the scale the pages are laid out at, whose margins grow the boxes with it, so the
+// document is genuinely larger and scrolls in both directions like any other.
+function handleArtifactTouch(event) {
   const win = frameWindow();
-  state.artifactPanzoom?.dispose();
-  state.artifactPanzoom = null;
-  const pages = doc.querySelector("body > main.pages");
-  if (pages === null || state.artifact.layout !== "slides" && state.artifact.layout !== "report") return;
-  // One finger is always the browser's: it scrolls, and it holds a word to select it,
-  // which is what the artifact is read with. Two are the zoom's, and they pan while they
-  // pinch, so nothing is lost by leaving one alone. Registered before panzoom's own
-  // listeners so it decides first, because declining a touch in panzoom's onTouch hook
-  // only skips its preventDefault and the tracking goes on: with the hook alone a
-  // one-finger scroll dragged the pages sideways, and without it every touchstart was
-  // preventDefaulted, which is what stopped a long press catching any words at all.
-  const gate = (event) => {
-    if (event.touches.length < 2) event.stopImmediatePropagation();
-  };
-  pages.addEventListener("touchstart", gate, { capture: true });
-  pages.addEventListener("touchmove", gate, { capture: true });
-  const script = doc.createElement("script");
-  script.src = "/static/vendor/panzoom.min.js";
-  script.addEventListener("load", () => {
-    if (doc !== frameDocument()) return;      // the artifact reloaded while loading
-    const zoomer = win.panzoom(pages, {
-      maxZoom: 4,
-      minZoom: 0.5,
-      // Without this the library preventDefaults every touchstart, one finger included,
-      // and a long press then caught no words at all: the artifact is read, not just
-      // looked at. The gate above still keeps single fingers from reaching it.
-      onTouch: (event) => event.touches.length >= 2,
-      beforeMouseDown: () => true,
-      beforeWheel: (event) => !event.ctrlKey,
-      zoomDoubleClickSpeed: 1,
-      filterKey: () => true,
-      smoothScroll: false,
-    });
-    state.artifactPanzoom = zoomer;
-    zoomer.on("transform", () => {
-      const scale = zoomer.getTransform().scale;
-      $("#zoom-reset-btn").classList.toggle("hidden", Math.abs(scale - 1) < 0.01);
-      scheduleHighlights();
-    });
-  });
-  doc.head.appendChild(script);
+  const touches = Array.from(event.touches);
+  if (event.type === "touchend" || event.type === "touchcancel") {
+    if (touches.length < 2) state.pinch = null;
+    if (touches.length === 0) state.artifactDrag = null;
+    return;
+  }
+  if (touches.length >= 2) {
+    const [first, second] = touches;
+    const span = Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
+    const middle = { x: (first.clientX + second.clientX) / 2, y: (first.clientY + second.clientY) / 2 };
+    state.artifactDrag = null;
+    if (state.pinch === null || event.type === "touchstart") {
+      // What sits between the fingers, in coordinates the zoom does not change, so it can
+      // be put back under them at whatever size the gesture settles on.
+      state.pinch = span === 0 ? null : {
+        startSpan: span,
+        startZoom: state.artifactZoom,
+        anchorX: (win.scrollX + middle.x) / state.artifactZoom,
+        anchorY: (win.scrollY + middle.y) / state.artifactZoom,
+      };
+      return;
+    }
+    event.preventDefault();
+    const pinch = state.pinch;
+    state.artifactZoom = Math.min(4, Math.max(0.5, pinch.startZoom * (span / pinch.startSpan)));
+    applyArtifactZoom();
+    win.scrollTo(pinch.anchorX * state.artifactZoom - middle.x,
+                 pinch.anchorY * state.artifactZoom - middle.y);
+    return;
+  }
+  const touch = touches[0];
+  if (touch === undefined) return;
+  if (event.type === "touchstart") {
+    state.artifactDrag = { x: touch.clientX, y: touch.clientY, panning: false };
+    return;
+  }
+  const drag = state.artifactDrag;
+  if (drag === null) return;
+  // A finger that has not moved may be holding a word, which is how the artifact is read;
+  // only once it travels past a threshold is it asking to pan, and only then is the
+  // browser's own handling taken away.
+  const moved = Math.hypot(touch.clientX - drag.x, touch.clientY - drag.y);
+  if (!drag.panning && moved < 12) return;
+  drag.panning = true;
+  event.preventDefault();
+  win.scrollBy(drag.x - touch.clientX, drag.y - touch.clientY);
+  drag.x = touch.clientX;
+  drag.y = touch.clientY;
+}
+
+function applyArtifactZoom() {
+  $("#zoom-reset-btn").classList.toggle("hidden", Math.abs(state.artifactZoom - 1) < 0.01);
+  updatePageScale();
+  scheduleHighlights();
 }
 
 function resetArtifactZoom() {
-  const zoomer = state.artifactPanzoom;
-  if (zoomer === null) return;
-  zoomer.moveTo(0, 0);
-  zoomer.zoomAbs(0, 0, 1);
+  if (state.artifactZoom === 1) return;
+  state.artifactZoom = 1;
+  applyArtifactZoom();
 }
 
 function showSelectionButton() {
