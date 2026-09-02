@@ -642,11 +642,24 @@ function applyArtifactZoom() {
   scheduleHighlights();
 }
 
+// The way back from a zoom keeps the reader's place: laid out again with the scroll
+// position left as it was, the deck showed some other part of itself, further down after
+// a zoom in and further up after a zoom out. What sits at the middle of the window is
+// the fixed point, and the settle a pinch ends with puts it back there.
 function resetArtifactZoom() {
   if (state.pinch !== null) settlePinch();
   if (state.artifactZoom === 1) return;
-  state.artifactZoom = 1;
-  applyArtifactZoom();
+  const view = frameDocument().documentElement;
+  const middle = { x: view.clientWidth / 2, y: view.clientHeight / 2 };
+  const pinch = beginPinch(1, middle, "wheel");
+  if (pinch === null) {
+    state.artifactZoom = 1;
+    applyArtifactZoom();
+    return;
+  }
+  pinch.zoom = 1;
+  state.pinch = pinch;
+  settlePinch();
 }
 
 function showSelectionButton() {
