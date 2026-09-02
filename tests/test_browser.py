@@ -1436,7 +1436,7 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
         assert abs(bands[1] - spanned["lowerWidth"]) <= 3, (bands, spanned)
 
         # Chromium hands a character's extent back divided by the scale the page is drawn
-        # at, while the screen matrix carries that scale; a label on the MLCAD deck was
+        # at, while the screen matrix carries that scale; a label on a page drawn at 0.76 was
         # boxed 155px to the right and 67px down. Played here by dividing the extents the
         # same way, in the page's own realm, where the viewer reads them.
         browser.execute_script('''
