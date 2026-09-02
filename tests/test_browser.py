@@ -310,14 +310,45 @@ def test_browser_review_contract(tmp_path: Path) -> None:
           return buttons[0].id === "compose-submit" && buttons[1].id === "compose-cancel";
         ''')
         text_area = browser.find_element("css selector", "#compose-text")
-        text_area.send_keys("Posted with the keyboard")
-        text_area.send_keys(Keys.TAB)
+        # Plain enter writes a line, as it does in any box of text.
+        text_area.send_keys("Posted with")
+        text_area.send_keys(Keys.ENTER)
+        text_area.send_keys("the keyboard")
         assert browser.execute_script(
-            'return document.activeElement === document.querySelector("#compose-submit");')
-        browser.find_element("css selector", "#compose-submit").send_keys(Keys.ENTER)
+            'return document.querySelector("#compose-dialog").open === true')
+        assert browser.execute_script(
+            'return document.querySelector("#compose-text").value') == "Posted with\nthe keyboard"
+        # Shift with it sends, so the hand never leaves the keyboard.
+        text_area.send_keys(Keys.SHIFT + Keys.ENTER)
         keyboard_comment = wait_until(lambda: next(
             (comment for comment in get_json(f"{base}/artifacts/slides/comments")["comments"]
-             if comment["thread"][0]["text"] == "Posted with the keyboard"), None))
+             if comment["thread"][0]["text"] == "Posted with\nthe keyboard"), None))
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#compose-dialog").open === false'))
+        # A reply is sent the same way: enter writes a line, shift with it sends. Done on
+        # the comment this block deletes, so the counts asserted later are untouched.
+        card = f"[data-comment-id=\"{keyboard_comment['id']}\"]"
+        wait_until(lambda: browser.execute_script(
+            f'return document.querySelector(\'{card}\') !== null'))
+        browser.execute_script(f'''
+          document.querySelector(\'{card} .comment-summary\').click();
+          const buttons = document.querySelector(\'{card}\').querySelectorAll("button");
+          Array.from(buttons).find((button) => button.textContent === "Reply").click();
+          document.querySelector(\'{card} .comment-form-input\').focus();
+        ''')
+        reply_box = browser.find_element("css selector", f"{card} .comment-form-input")
+        reply_box.send_keys("Read it")
+        reply_box.send_keys(Keys.ENTER)
+        reply_box.send_keys("and fixed it")
+        assert browser.execute_script(
+            f'return document.querySelector(\'{card} .comment-form-input\').value;'
+        ) == "Read it\nand fixed it"
+        reply_box.send_keys(Keys.SHIFT + Keys.ENTER)
+        wait_until(lambda: any(
+            entry["text"] == "Read it\nand fixed it"
+            for entry in get_json(
+                f"{base}/artifacts/slides/comments/{keyboard_comment['id']}")["thread"]))
+
         # The rest of the run expects the sidebar to hold only the anchored comment below.
         delete = urllib.request.Request(
             f"{base}/artifacts/slides/comments/{keyboard_comment['id']}", method="DELETE")
