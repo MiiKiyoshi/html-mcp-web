@@ -76,6 +76,9 @@ async def test_stdio_mcp_starts_without_project_config(tmp_path: Path) -> None:
         command=sys.executable,
         args=["-c", "from html_mcp_web.cli import main_mcp; raise SystemExit(main_mcp())"],
         cwd=tmp_path,
+        # The child imports the package by name, which the installed copy answers first;
+        # the copy under test goes ahead of it, or a worktree's change is never spoken to.
+        env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])},
     )
     async with stdio_client(server, errlog=sys.stderr) as (read, write):
         async with ClientSession(read, write) as session:
@@ -91,6 +94,7 @@ async def test_stdio_mcp_starts_without_project_config(tmp_path: Path) -> None:
                 "export_pptx",
                 "measure_space",
                 "wait_review",
+                "read_template_docs",
             ]
             inspected = await session.call_tool("inspect", {})
             assert inspected.isError is False
@@ -109,6 +113,9 @@ async def test_stdio_mcp_serves_existing_project_at_startup(tmp_path: Path) -> N
         command=sys.executable,
         args=["-c", "from html_mcp_web.cli import main_mcp; raise SystemExit(main_mcp())"],
         cwd=tmp_path,
+        # The child imports the package by name, which the installed copy answers first;
+        # the copy under test goes ahead of it, or a worktree's change is never spoken to.
+        env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])},
     )
     async with stdio_client(server, errlog=sys.stderr) as (read, write):
         async with ClientSession(read, write) as session:
@@ -125,11 +132,15 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         assert "reusing results while revision is unchanged" in mcp.instructions
         # A client cuts these instructions off: Claude Code delivered about 2,300 of 3,336
         # characters, and the last 29% (the whole wait_review workflow among it) reached no
-        # agent. What has to arrive is kept here; the rest rides on inspect()'s guide.
+        # agent. And they are read once, at connect: a session that began before a rule
+        # changed kept the old one all day. So they carry what an agent cannot find out
+        # (call inspect() first, edit_file is the source, the tools that hold the rest);
+        # a rule that may change rides on a tool result, and one that must hold is code.
         assert len(mcp.instructions) < 2000
-        for needed in ("wait_review()", "templates/README.md", "guide field", "Resolve all",
-                       "tells you to wait"):
+        for needed in ("wait_review()", "read_template_docs", "guide field", "refuses a resolve"):
             assert needed in mcp.instructions, needed
+        for gone in ("templates/README.md", "Resolve all", "Monitor", "tells you to wait"):
+            assert gone not in mcp.instructions, gone
         # The guide rides on the discovery call alone, so the instructions have to say which
         # call carries it: an agent that already knows its artifact would otherwise call
         # inspect(artifact) first and never learn the guide exists.
@@ -147,6 +158,7 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
             "export_pptx",
             "measure_space",
             "wait_review",
+            "read_template_docs",
         ]
         assert set(schemas["inspect"]["properties"]) == {"artifact"}
         assert schemas["read_comments"]["required"] == ["artifact", "comment_ids"]
@@ -238,8 +250,8 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
 
         mcp = create_server(binding)
         # Closing its own comment hides the agent's reasoning from the reviewer who has to
-        # judge the fix, so the instructions leave the closing to them.
-        assert "leave the comment open" in mcp.instructions
+        # judge the fix; the server refuses it, and the instructions say so.
+        assert "refuses a resolve from an agent" in mcp.instructions
 
         base = f"http://127.0.0.1:{config.port}"
         created = post_json(f"{base}/artifacts/slides/comments", {
@@ -343,19 +355,27 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
         assert measured["children"][0]["ref"] == "p1:0"
         assert measured["clearance"] == 12
 
-        _, resolved = asyncio.run(mcp.call_tool("set_comment_status", {
+        # Closing a thread is the reviewer's act, from the page; the server holds to it,
+        # so the rule does not depend on which instructions a session happened to read.
+        with pytest.raises(Exception, match="an agent does not resolve"):
+            asyncio.run(mcp.call_tool("set_comment_status", {
+                "artifact": "slides",
+                "comment_ids": [created["id"]],
+                "status": "resolved",
+            }))
+        _, dismissed = asyncio.run(mcp.call_tool("set_comment_status", {
             "artifact": "slides",
             "comment_ids": [created["id"]],
-            "status": "resolved",
+            "status": "dismissed",
         }))
-        assert resolved["updated"][0]["status"] == "resolved"
-        _, resolved_read = asyncio.run(mcp.call_tool("read_comments", {
+        assert dismissed["updated"][0]["status"] == "dismissed"
+        _, dismissed_read = asyncio.run(mcp.call_tool("read_comments", {
             "artifact": "slides",
             "comment_ids": [created["id"]],
         }))
-        resolved_comment = resolved_read["comments"][0]
-        assert resolved_comment["status"] == "resolved"
-        assert all(entry["text"] for entry in resolved_comment["thread"])
+        dismissed_comment = dismissed_read["comments"][0]
+        assert dismissed_comment["status"] == "dismissed"
+        assert all(entry["text"] for entry in dismissed_comment["thread"])
 
         first.stop()
         second.ensure()
@@ -506,6 +526,38 @@ def test_the_working_guide_rides_on_the_discovery_call_only(tmp_path: Path) -> N
         binding.stop()
 
 
+def test_read_template_docs_returns_the_content_format(tmp_path: Path) -> None:
+    """A client without file tools could not follow a host path in the instructions, and
+    the path leaked the contract out of the tools; the format is a tool result now."""
+    (tmp_path / "content.html").write_text(
+        '<section class="page"><h1>One</h1></section>', encoding="utf-8")
+    (tmp_path / ".html-mcp-web.yaml").write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html",
+                                 "template": "neutral-slides", "content": "content.html"}},
+        "port": available_port(),
+    }, sort_keys=False), encoding="utf-8")
+    binding = ProjectBinding(tmp_path)
+    try:
+        mcp = create_server(binding)
+        _, docs = asyncio.run(mcp.call_tool("read_template_docs", {"artifact": "slides"}))
+        assert docs["template"] == "neutral-slides"
+        assert "section" in docs["readme"]           # the shared content format
+        assert docs["skin_readme"] is None or isinstance(docs["skin_readme"], str)
+    finally:
+        binding.stop()
+
+
+def test_read_template_docs_has_nothing_for_a_plain_artifact(tmp_path: Path) -> None:
+    project(tmp_path)
+    binding = ProjectBinding(tmp_path)
+    try:
+        mcp = create_server(binding)
+        _, docs = asyncio.run(mcp.call_tool("read_template_docs", {"artifact": "slides"}))
+        assert docs == {"artifact": "slides", "template": None, "readme": None, "skin_readme": None}
+    finally:
+        binding.stop()
+
+
 def test_wait_review_writes_a_waiter_script_carrying_port_and_press_count(tmp_path: Path) -> None:
     # The tool returns at once with a script for the harness to watch in the background;
     # blocking here would freeze the agent, which is what the button exists to avoid.
@@ -546,11 +598,28 @@ def test_wait_review_writes_a_waiter_script_carrying_port_and_press_count(tmp_pa
 
         press()
         waiter = subprocess.Popen(["/bin/sh", str(script)],
-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
+            pending = b""
+
             def line(timeout):
-                ready, _, _ = select.select([waiter.stdout], [], [], timeout)
-                return waiter.stdout.readline() if ready else ""
+                # Read raw and keep the remainder: two lines written together left the
+                # second in a buffered reader, where select on the pipe could not see it.
+                nonlocal pending
+                deadline = time.monotonic() + timeout
+                while b"\n" not in pending:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        return ""
+                    ready, _, _ = select.select([waiter.stdout], [], [], remaining)
+                    if not ready:
+                        return ""
+                    chunk = os.read(waiter.stdout.fileno(), 4096)
+                    if not chunk:
+                        return ""
+                    pending += chunk
+                head, pending = pending.split(b"\n", 1)
+                return head.decode("utf-8")
 
             assert line(15).startswith("[review]")
             time.sleep(1.0)
@@ -562,6 +631,19 @@ def test_wait_review_writes_a_waiter_script_carrying_port_and_press_count(tmp_pa
             time.sleep(1.0)
             assert waiter.poll() is None
             assert review() == {"calls": 2, "consumed": 2, "waiters": 1}
+
+            # The server going away is not the end of the waiter: a reconnect of the MCP
+            # client restarted it and the monitor died with "[gone]", to be started again
+            # by hand. It says so once, keeps trying, says when the server answers again,
+            # and the next press still comes out of the same process.
+            binding._shared.stop()
+            assert line(15).startswith("[gone]")
+            assert line(3) == ""                    # said once, not on every try
+            binding._shared.ensure()
+            press()
+            assert line(40).startswith("[back]")   # the retry pauses grow to 30s at most
+            assert line(15).startswith("[review]")
+            assert waiter.poll() is None
         finally:
             waiter.terminate()
             waiter.wait(timeout=5)

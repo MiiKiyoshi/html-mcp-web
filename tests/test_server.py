@@ -298,7 +298,13 @@ async def test_editing_a_thread_entry_rewrites_it_in_place(client) -> None:
     assert empty.status == 400
 
 
-async def test_resolving_reports_an_anchor_the_artifact_still_carries(client) -> None:
+async def test_an_edit_reported_on_an_untouched_anchor_is_noted(client) -> None:
+    """An agent reports its edit in a reply with the files it touched. Where the quoted
+    text is still in the artifact unchanged, the reply comes back with a note: normal when
+    the fix landed elsewhere (a heading anchored over the body it asked about), and the
+    one hint that the edit went to the wrong place when it was not. A reply that reports
+    no edit claims nothing, and the reviewer's own close carries no check: they have just
+    read the thread."""
     test_client, review = client
     digest = review.artifacts["slides"].digest()
     untouched = await (await test_client.post(
@@ -310,16 +316,21 @@ async def test_resolving_reports_an_anchor_the_artifact_still_carries(client) ->
         json={"anchor": {"kind": "artifact"}, "text": "General note"},
     )).json()
 
-    response = await test_client.post("/artifacts/slides/comments/update", json={
+    reported = await (await test_client.post("/artifacts/slides/comments/update", json={
         "comment_ids": [untouched["id"], whole["id"]],
-        "status": "resolved",
         "message": "done",
-    })
-    payload = await response.json()
-    assert untouched["id"] in payload["warning"]
-    assert whole["id"] not in payload["warning"]
+        "edited_files": ["artifact.html"],
+    })).json()
+    assert untouched["id"] in reported["note"]
+    assert whole["id"] not in reported["note"]
 
-    # Once the quoted sentence is actually gone, the same close says nothing.
+    plain = await (await test_client.post("/artifacts/slides/comments/update", json={
+        "comment_ids": [untouched["id"]],
+        "message": "will look",
+    })).json()
+    assert "note" not in plain
+
+    # Once the quoted sentence is actually gone, the same report says nothing.
     (review.project_dir / "artifact.html").write_text(
         "<!doctype html><html><head><title>Artifact</title></head><body><p>Rewritten line.</p></body></html>",
         encoding="utf-8",
@@ -330,13 +341,13 @@ async def test_resolving_reports_an_anchor_the_artifact_still_carries(client) ->
     )).json()
     quiet = await (await test_client.post("/artifacts/slides/comments/update", json={
         "comment_ids": [edited["id"]],
-        "status": "resolved",
         "message": "done",
+        "edited_files": ["artifact.html"],
     })).json()
-    assert "warning" not in quiet
+    assert "note" not in quiet
 
     # A quote that survives inside a bigger phrase is not an untouched spot. The old text
-    # rewritten as a superset still contains the quote, and the close warned on a sentence
+    # rewritten as a superset still contains the quote, and the report noted a sentence
     # that had just been changed; the stored context around it is what tells the two apart.
     (review.project_dir / "artifact.html").write_text(
         "<!doctype html><html><head><title>Artifact</title></head><body><p>Plain sentence here.</p></body></html>",
@@ -357,28 +368,19 @@ async def test_resolving_reports_an_anchor_the_artifact_still_carries(client) ->
     )
     reworded = await (await test_client.post("/artifacts/slides/comments/update", json={
         "comment_ids": [grown["id"]],
-        "status": "resolved",
         "message": "wrapped",
+        "edited_files": ["artifact.html"],
     })).json()
-    assert "warning" not in reworded
+    assert "note" not in reworded
 
-    # With edits on record, an anchor still in place is the normal shape of a fix made
-    # elsewhere (a heading anchor over a body fix), so it is a note, not a warning.
-    still_anchor = dict(grown_anchor, quote="longer", prefix="Plain ", suffix=" sentence here.",
-                        artifact_digest=review.artifacts["slides"].digest())
-    still = await (await test_client.post(
-        "/artifacts/slides/comments",
-        json={"anchor": still_anchor, "text": "Fix the caption below"},
-    )).json()
-    noted = await (await test_client.post("/artifacts/slides/comments/update", json={
-        "comment_ids": [still["id"]],
+    # The reviewer's close carries no check of its own.
+    closed = await (await test_client.post("/artifacts/slides/comments/update", json={
+        "comment_ids": [untouched["id"]],
         "status": "resolved",
-        "message": "caption fixed",
-        "edited_files": ["docs/other.html"],
+        "author": "human",
+        "message": "read",
     })).json()
-    assert "warning" not in noted
-    assert still["id"] in noted["note"]
-
+    assert "note" not in closed and "warning" not in closed
 
 async def test_reopening_needs_no_words(client) -> None:
     """Reopening asked for a reason where resolving asks for nothing, and the reason was
@@ -541,6 +543,22 @@ async def test_artifact_content_change_does_not_invalidate_sibling(tmp_path: Pat
     review.generated_paths.add((tmp_path / "report.html").resolve())
     await review.on_project_change(str(tmp_path / "report.html"))
     assert review.artifacts["report"].revision == 2
+
+
+def test_a_templated_artifact_names_its_missing_content(tmp_path: Path) -> None:
+    """Right after init the content file may not exist yet; an error that named the built
+    main file sent the reader looking for a build that had nothing to build from."""
+    config = Config.from_dict({"artifacts": {
+        "report": {
+            "label": "Report", "layout": "report", "main": "report.html",
+            "template": "neutral-report", "content": "report-content.html",
+        },
+    }}, config_path=tmp_path / ".html-mcp-web.yaml")
+    review = HtmlReviewServer(config)
+    error = review.project_state()["artifacts"]["report"]["error"]
+    assert error.startswith("content file not found: ")
+    assert "report-content.html" in error
+    assert "builds" in error and "report.html" in error
 
 
 def test_fit_errors_report_where_the_page_still_has_room():
@@ -853,15 +871,23 @@ async def test_the_reviewer_closes_a_batch_under_their_own_name(client) -> None:
     thread = await (await test_client.get(f"/artifacts/slides/comments/{ids[0]}")).json()
     assert thread["thread"][-1] == {**thread["thread"][-1], "author": "human", "text": "read, all fine"}
 
-    # The agent closing its own batch still gets the check that its edit landed.
+    # Closing is the reviewer's act: an agent that closed its own work hid the reasoning
+    # it is judged by, and a rule that only the instructions carried was read by some
+    # sessions and not others. The server refuses it, on the batch and on one thread.
     reopened = await (await test_client.post("/artifacts/slides/comments/update", json={
         "comment_ids": ids, "status": "open", "author": "human", "message": "not yet",
     })).json()
     assert [entry["status"] for entry in reopened["updated"]] == ["open", "open"]
-    agent_closed = await (await test_client.post("/artifacts/slides/comments/update", json={
+    agent_closed = await test_client.post("/artifacts/slides/comments/update", json={
         "comment_ids": ids, "status": "resolved",
-    })).json()
-    assert ids[0] in agent_closed["warning"]
+    })
+    assert agent_closed.status == 400
+    assert "an agent does not resolve" in await agent_closed.text()
+    one_closed = await test_client.post(f"/artifacts/slides/comments/{ids[0]}/resolve", json={
+        "summary": "", "author": "agent",
+    })
+    assert one_closed.status == 400
+    assert (await (await test_client.get(f"/artifacts/slides/comments/{ids[0]}")).json())["status"] == "open"
 
     bad = await test_client.post("/artifacts/slides/comments/update", json={
         "comment_ids": ids, "status": "resolved", "author": "someone",
@@ -890,6 +916,18 @@ async def test_call_button_wakes_a_parked_waiter_and_keeps_an_early_press(client
     line = await early.text()
     assert line.startswith("[review] reviewer called (press #2)")
     assert "list_comments" in line
+    # The line counts threads whose last word is the reviewer's: a count of open threads
+    # sent an agent to read one it had already answered.
+    assert "no unanswered comments" in line
+    asked = await (await test_client.post(
+        "/artifacts/slides/comments",
+        json={"anchor": {"kind": "artifact"}, "text": "Is this right?"},
+    )).json()
+    assert "unanswered comments: 1 on 'slides'" in review._review_line()
+    await test_client.post("/artifacts/slides/comments/update", json={
+        "comment_ids": [asked["id"]], "message": "Yes, checked.",
+    })
+    assert "no unanswered comments" in review._review_line()
 
     # Not acked yet (the line may never have reached the harness), so it is offered again.
     again = await test_client.get("/wait-review")

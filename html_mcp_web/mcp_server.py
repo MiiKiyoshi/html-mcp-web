@@ -60,21 +60,14 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "edit_file is the source; for a templated artifact main_file is build output and is not "
             "edited. Saving edit_file triggers the rebuild and bumps the revision, so build.py is never "
             "run by hand, and inspect(artifact) after it reports the new revision and how far the check "
-            "has caught up. The content format and components are in templates/README.md beside the "
-            "package; a skin's own README, in the template_dir inspect(artifact) reports, covers only what "
-            "that skin changes. "
+            "has caught up. For a templated artifact, read_template_docs(artifact) returns the content "
+            "format and the components. "
             "Completion is layout_check.checked_revision == revision with no errors, and each error ends "
             "with the ref of the block it is about, which measure_space(target=<ref>) and "
-            "render_page(target=<ref>) both take. Make the edit, reply with what changed and why, record "
-            "edited_files, and leave the comment open: closing it hides the reasoning the reviewer reads "
-            "to judge the fix, and the reviewer closes the batch with Resolve all. set_comment_status is "
-            "for a comment that asks for no edit, not for signing off your own work. Then call "
-            "wait_review() once and start the script it returns as a persistent background monitor "
-            "(Claude Code: Monitor, persistent=true) and end the turn: it prints a line each time the "
-            "reviewer presses Call agent, that line wakes you, and list_comments(unanswered=True) picks up "
-            "from there; the same monitor serves every later press. When the reviewer tells you to wait, "
-            "in any words, that is this: start the waiter if it is not running and end the turn. Waiting "
-            "that way costs no tokens, so prefer it to polling for comments."
+            "render_page(target=<ref>) both take. Make the edit, reply with what changed and why, and "
+            "record edited_files; a thread is closed by the reviewer from the page, and the server "
+            "refuses a resolve from an agent. After handing a revision over, call wait_review() and do "
+            "what its result says."
         ),
     )
 
@@ -86,7 +79,9 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "checked_revision == revision and no errors is the fit bar. An error names the block that "
             "spills and ends with its ref; where the page still has room comes back beside the errors as "
             "layout_check.room, and a block not tied to its column (a footnote, a shared definition, a "
-            "result line) moves there before anything is trimmed."
+            "result line) moves there before anything is trimmed. The check is run by the review page; "
+            "with no review page open, inspect(artifact) starts it on the server and a later inspect "
+            "carries the result, so a checked_revision behind the revision means ask again shortly."
         ),
         "measure_space": (
             "No errors is not the same as a page that reads well. measure_space(target=<ref>) on the block "
@@ -103,17 +98,14 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "before hand-off, not after each edit."
         ),
         "review": (
-            "After handing a revision over, call wait_review() once and start the script it returns as a "
-            "persistent background monitor (Claude Code: Monitor with persistent=true), then end the "
-            "turn: it prints one line each time the reviewer presses Call agent (at once if an "
-            "unacknowledged press is waiting) and keeps waiting for the next, so each line wakes you, "
-            "list_comments(unanswered=True) picks up from there, and the script is never started again. "
-            "When the reviewer tells you to wait, in any words, that is this: start the waiter if it "
-            "is not running and end the turn; a reply that only says you are waiting is not waiting. "
-            "Presses made while nobody waits are kept, presses that pile up coalesce into one wake-up "
-            "carrying the latest press number, and a wake-up can repeat if its delivery could not be "
-            "confirmed, so treat one as 'there is something to read', not as a count. Waiting costs no "
-            "tokens, so prefer it to polling."
+            "After handing a revision over, call wait_review() and do what its result says; the waiter "
+            "it returns is started once and serves every press of the session. When the reviewer tells "
+            "you to wait, in any words, that is this: start the waiter if it is not running and end the "
+            "turn; a reply that only says you are waiting is not waiting. Presses made while nobody "
+            "waits are kept, presses that pile up coalesce into one wake-up carrying the latest press "
+            "number, and a wake-up can repeat if its delivery could not be confirmed, so treat one as "
+            "'there is something to read', not as a count. Waiting costs no tokens, so prefer it to "
+            "polling."
         ),
         "images": (
             "Link images with a relative src into a project folder; do not embed them as base64, so content "
@@ -207,6 +199,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             raise ValueError("each comment appears at most once in replies")
         client = binding.require_client()
         updated: list[dict[str, Any]] = []
+        notes: list[str] = []
         for reply in replies:
             result = await client.request_json("POST", f"/artifacts/{artifact}/comments/update", {
                 "comment_ids": [reply.comment_id],
@@ -214,7 +207,11 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 **({"edited_files": edited_files} if edited_files is not None else {}),
             })
             updated.extend(result["updated"])
-        return {"updated": updated}
+            # Where the quoted text is still in the artifact unchanged after an edit was
+            # reported for it: normal for a fix that landed elsewhere, a place to look otherwise.
+            if "note" in result:
+                notes.append(result["note"])
+        return {"updated": updated, **({"notes": notes} if notes else {})}
 
     @mcp.tool()
     async def set_comment_status(
@@ -224,7 +221,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         message: str = "",
         edited_files: Annotated[list[str] | None, Field(description="Project-relative paths edited for these comments; recorded on the thread entry.")] = None,
     ) -> dict[str, Any]:
-        """Change status after verification. A message posts to every id, so batch with one only when it fits each thread."""
+        """Dismiss a mistaken comment or reopen one. A thread is resolved by the reviewer from the page, and the server refuses a resolve from an agent. A message posts to every id, so batch with one only when it fits each thread."""
         if not comment_ids:
             raise ValueError("comment_ids must not be empty")
         client = binding.require_client()
@@ -306,7 +303,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
 
     @mcp.tool()
     async def wait_review() -> dict[str, Any]:
-        """Return at once with a waiter script for the reviewer's Call agent button. Start that script once as a persistent background monitor (Claude Code: Monitor with persistent=true) and end the turn; it prints one line each time the reviewer presses the button, at once if a press is already waiting, and keeps waiting for the next, so each line is a wake-up and the script is never started again. Costs nothing while waiting."""
+        """Return at once with a waiter script for the reviewer's Call agent button. Start that script once as a persistent background monitor (Claude Code: Monitor with persistent=true) and end the turn; it prints one line each time the reviewer presses the button, at once if a press is already waiting, and keeps waiting for the next, so each line is a wake-up and the script is never started again. Being told to wait, in any words, means this. Costs nothing while waiting."""
         client = binding.require_client()
         state = await client.request_json("GET", "/state")
         port = state["port"]
@@ -320,17 +317,27 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         script = (
             "#!/bin/sh\n"
             f"# Prints one line each time the reviewer presses 'Call agent' on http://127.0.0.1:{port},\n"
-            "# at once if an unacknowledged press is waiting, and keeps waiting for the next.\n"
+            "# at once if an unacknowledged press is waiting, and keeps waiting for the next. A server\n"
+            "# that goes away is waited for too: one [gone] line, then [back] when it answers again.\n"
             "headers=$(mktemp)\n"
             "trap 'rm -f \"$headers\"' EXIT\n"
+            "gone=0\n"
+            "delay=2\n"
             "while :; do\n"
             f"  out=$(curl -sf -D \"$headers\" --max-time 60 \"http://127.0.0.1:{port}/wait-review\"); rc=$?\n"
+            "  if [ $gone -eq 1 ] && { [ $rc -eq 0 ] || [ $rc -eq 28 ]; }; then\n"
+            "    printf '[back] review server reachable again\\n'; gone=0; delay=2\n"
+            "  fi\n"
             "  if [ $rc -eq 0 ] && [ -n \"$out\" ]; then\n"
             "    printf '%s\\n' \"$out\"\n"
             "    press=$(tr -d '\\r' < \"$headers\" | sed -n 's/^[Xx]-[Pp]ress: *//p' | head -1)\n"
             f"    [ -n \"$press\" ] && curl -sf -X POST \"http://127.0.0.1:{port}/wait-review/ack?upto=$press\" >/dev/null\n"
             "  fi\n"
-            "  if [ $rc -ne 0 ] && [ $rc -ne 28 ]; then printf '[gone] review server unreachable (curl exit %s)\\n' $rc; exit 1; fi\n"
+            "  if [ $rc -ne 0 ] && [ $rc -ne 28 ]; then\n"
+            "    if [ $gone -eq 0 ]; then printf '[gone] review server unreachable (curl exit %s); waiting for it\\n' $rc; gone=1; fi\n"
+            "    sleep $delay\n"
+            "    [ $delay -lt 30 ] && delay=$((delay * 2))\n"
+            "  fi\n"
             "done\n"
         )
         # Replaced atomically so a waiter started from the previous script keeps reading
@@ -349,10 +356,31 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 "Claude Code, Monitor(command=<script>, description='waiting for the reviewer', "
                 "persistent=true, timeout_ms=3600000). It waits silently as long as it takes and prints "
                 "one line per press without exiting: [review] means comments are ready, so continue with "
-                "list_comments(unanswered=True) and leave the monitor running for the next press; [gone] "
-                "means the review server stopped and the script exited. Without a background facility, "
+                "list_comments(unanswered=True) and leave the monitor running for the next press. [gone] "
+                "means the review server is unreachable and the script keeps trying, [back] that it "
+                "answered again; neither needs anything from you. Without a background facility, "
                 "running it with a shell tool blocks until the button is pressed."
             ),
+        }
+
+    @mcp.tool()
+    async def read_template_docs(artifact: str) -> dict[str, Any]:
+        """The content format and the components of a templated artifact: the templates' README, and the skin's own README where it has one. An artifact with no template has nothing to read here."""
+        client = binding.require_client()
+        state = await client.request_json("GET", "/state")
+        artifacts = state["artifacts"]
+        if artifact not in artifacts:
+            raise RuntimeError(f"unknown artifact: {artifact}; available artifacts: {', '.join(artifacts)}")
+        value = artifacts[artifact]
+        if "template" not in value:
+            return {"artifact": artifact, "template": None, "readme": None, "skin_readme": None}
+        readme = Path(__file__).resolve().parent.parent / "templates" / "README.md"
+        skin_readme = Path(value["template_dir"]) / "README.md"
+        return {
+            "artifact": artifact,
+            "template": value["template"],
+            "readme": readme.read_text(encoding="utf-8") if readme.is_file() else None,
+            "skin_readme": skin_readme.read_text(encoding="utf-8") if skin_readme.is_file() else None,
         }
 
     return mcp
