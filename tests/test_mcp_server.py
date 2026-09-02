@@ -127,7 +127,8 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         # characters, and the last 29% (the whole wait_review workflow among it) reached no
         # agent. What has to arrive is kept here; the rest rides on inspect()'s guide.
         assert len(mcp.instructions) < 2000
-        for needed in ("wait_review()", "templates/README.md", "guide field", "Resolve all"):
+        for needed in ("wait_review()", "templates/README.md", "guide field", "Resolve all",
+                       "tells you to wait"):
             assert needed in mcp.instructions, needed
         # The guide rides on the discovery call alone, so the instructions have to say which
         # call carries it: an agent that already knows its artifact would otherwise call
@@ -491,6 +492,9 @@ def test_the_working_guide_rides_on_the_discovery_call_only(tmp_path: Path) -> N
         guide = discovered["guide"]
         assert set(guide) == {"layout_check", "measure_space", "render_page", "review", "images", "watching"}
         assert "wait_review()" in guide["review"]
+        # Told to wait, an agent answered that it was waiting and started nothing; the
+        # words have to be named as the waiter.
+        assert "tells you to wait" in guide["review"]
         assert "layout_check.room" in guide["layout_check"]
         assert "min_no_wrap_width" in guide["measure_space"]
         assert "inotify watch limit reached" in guide["watching"]

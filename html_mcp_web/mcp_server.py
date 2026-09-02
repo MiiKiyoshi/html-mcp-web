@@ -72,8 +72,9 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "wait_review() once and start the script it returns as a persistent background monitor "
             "(Claude Code: Monitor, persistent=true) and end the turn: it prints a line each time the "
             "reviewer presses Call agent, that line wakes you, and list_comments(unanswered=True) picks up "
-            "from there; the same monitor serves every later press. Waiting that way costs no tokens, so "
-            "prefer it to polling for comments."
+            "from there; the same monitor serves every later press. When the reviewer tells you to wait, "
+            "in any words, that is this: start the waiter if it is not running and end the turn. Waiting "
+            "that way costs no tokens, so prefer it to polling for comments."
         ),
     )
 
@@ -107,6 +108,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "turn: it prints one line each time the reviewer presses Call agent (at once if an "
             "unacknowledged press is waiting) and keeps waiting for the next, so each line wakes you, "
             "list_comments(unanswered=True) picks up from there, and the script is never started again. "
+            "When the reviewer tells you to wait, in any words, that is this: start the waiter if it "
+            "is not running and end the turn; a reply that only says you are waiting is not waiting. "
             "Presses made while nobody waits are kept, presses that pile up coalesce into one wake-up "
             "carrying the latest press number, and a wake-up can repeat if its delivery could not be "
             "confirmed, so treat one as 'there is something to read', not as a count. Waiting costs no "
