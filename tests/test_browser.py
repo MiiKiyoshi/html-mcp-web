@@ -1732,3 +1732,105 @@ def test_a_phone_gives_an_opened_comment_the_room_it_needs(tmp_path: Path) -> No
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_touch_screen_keeps_the_two_buttons_in_their_corners(tmp_path: Path) -> None:
+    """A phone answers a long press with a bar of its own drawn over the words, so a
+    comment button placed by the selection sits under it however it is placed. On a touch
+    screen it keeps the top right, the way back from a zoom keeps the top left, and
+    neither is where the phone draws anything."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_corner_")
+    marionette_port = available_port()
+    # A coarse pointer is what a finger is; the media query keys off it.
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n'
+        'user_pref("ui.primaryPointerCapabilities", 1);\n'
+        'user_pref("ui.allPointerCapabilities", 1);\n'
+        'user_pref("dom.w3c_touch_events.enabled", 1);\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "900", "-height", "1200", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=900, height=1200)
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        assert browser.execute_script(
+            'return window.matchMedia("(pointer: coarse)").matches') is True
+
+        # Select words low on the page: placed by the selection the button would be there,
+        # which is exactly where the phone's own bar is.
+        browser.execute_script("""
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const words = doc.querySelector("#mathlike");
+          const selection = view.getSelection();
+          selection.removeAllRanges();
+          const range = doc.createRange();
+          range.setStart(words.firstChild, 0);
+          range.setEnd(words.firstChild, 6);
+          selection.addRange(range);
+          doc.dispatchEvent(new view.MouseEvent("mouseup", {bubbles: true}));
+        """)
+        wait_until(lambda: browser.execute_script(
+            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+        placed = browser.execute_script("""
+          const pane = document.querySelector("#artifact-pane").getBoundingClientRect();
+          const button = document.querySelector("#selection-comment-btn").getBoundingClientRect();
+          const words = (() => {
+            const frame = document.querySelector("#artifact-frame");
+            const box = frame.contentWindow.getSelection().getRangeAt(0).getBoundingClientRect();
+            return frame.getBoundingClientRect().top + box.top;
+          })();
+          return {fromTop: button.top - pane.top, fromRight: pane.right - button.right,
+                  selectionTop: words - pane.top};
+        """)
+        assert placed["selectionTop"] > 150, placed      # the words are well down the page
+        assert placed["fromTop"] <= 12, placed           # the button is not
+        assert placed["fromRight"] <= 14, placed         # and it holds the right corner
+
+        # The way back from a zoom takes the other corner, so the two never overlap.
+        reset = browser.execute_script("""
+          const pane = document.querySelector("#artifact-pane").getBoundingClientRect();
+          const fit = document.querySelector("#zoom-reset-btn");
+          fit.classList.remove("hidden");   // it shows itself only while the artifact is zoomed
+          const box = fit.getBoundingClientRect();
+          const button = document.querySelector("#selection-comment-btn").getBoundingClientRect();
+          return {fromLeft: box.left - pane.left, fromTop: box.top - pane.top,
+                  gap: button.left - box.right};
+        """)
+        assert reset["fromLeft"] <= 14, reset
+        assert reset["fromTop"] <= 12, reset
+        assert reset["gap"] > 0, reset
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
