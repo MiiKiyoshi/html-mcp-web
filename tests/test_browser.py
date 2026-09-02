@@ -1836,17 +1836,27 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
           }
           send("touchend", []);
           const settled = [view.scrollX, view.scrollY];
+          // One finger is the browser's: the move is not taken from it, nothing of ours
+          // scrolls, and the scroll the browser then makes is the reader's own.
           send("touchstart", [touch(3, 300, 400)]);
-          send("touchmove", [touch(3, 260, 360)]);
+          const move = new view.TouchEvent("touchmove", {
+            touches: [touch(3, 260, 360)], targetTouches: [touch(3, 260, 360)],
+            changedTouches: [touch(3, 260, 360)], bubbles: true, cancelable: true});
+          target.dispatchEvent(move);
+          const taken = move.defaultPrevented;
+          const untouched = [view.scrollX, view.scrollY];
+          view.scrollBy(40, 40);            // what the browser's own pan would do
           send("touchend", []);
-          return settled;
+          return {settled, taken, untouched};
         """)
         time.sleep(0.3)
         panned = browser.execute_script("""
           const win = document.querySelector("#artifact-frame").contentWindow;
           return [win.scrollX, win.scrollY];
         """)
-        assert panned == [settled[0] + 40, settled[1] + 40], (panned, settled)
+        assert settled["taken"] is False, settled
+        assert settled["untouched"] == settled["settled"], settled
+        assert panned == [settled["settled"][0] + 40, settled["settled"][1] + 40], (panned, settled)
 
         # Zooming out past the fit, the layout has no room to keep the page under the
         # fingers: it sits centred, at the top. The carried holder is held there too, so
@@ -2156,8 +2166,9 @@ def test_the_artifact_stays_selectable_under_the_zoom(tmp_path: Path) -> None:
 
         # A long press is a finger that lands and stays, with the small wobble a hand
         # always has. If anything cancels those the browser never offers a selection, and
-        # the whole path from a finger to a comment is gone; past a threshold the same
-        # finger is asking to pan, and only then is the browser's handling taken away.
+        # the whole path from a finger to a comment is gone. A finger that travels is the
+        # browser's as well: it scrolls the document itself, with its own smoothness and
+        # momentum, and a pan of ours on top of it stuttered and doubled the distance.
         gestures = browser.execute_script('''
           const frame = document.querySelector("#artifact-frame");
           const doc = frame.contentDocument;
@@ -2179,7 +2190,7 @@ def test_the_artifact_stays_selectable_under_the_zoom(tmp_path: Path) -> None:
           return {held, panned};
         ''')
         assert gestures["held"] == [False, False], gestures
-        assert gestures["panned"] is True, gestures
+        assert gestures["panned"] is False, gestures
 
         # A press that lands on a word and settles: the selection stands and the button
         # comes out, which is the whole path from a finger to a comment.
