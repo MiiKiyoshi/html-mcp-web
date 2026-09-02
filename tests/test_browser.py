@@ -1369,6 +1369,37 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
         assert len(bands) == 2, bands
         assert abs(bands[0] - spanned["upperWidth"]) <= 3, (bands, spanned)
         assert abs(bands[1] - spanned["lowerWidth"]) <= 3, (bands, spanned)
+
+        # Chromium hands a character's extent back divided by the scale the page is drawn
+        # at, while the screen matrix carries that scale; a label on the MLCAD deck was
+        # boxed 155px to the right and 67px down. Played here by dividing the extents the
+        # same way, in the page's own realm, where the viewer reads them.
+        browser.execute_script('''
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const script = doc.createElement("script");
+          script.textContent = `
+            const real = SVGTextContentElement.prototype.getExtentOfChar;
+            SVGTextContentElement.prototype.getExtentOfChar = function (index) {
+              const box = real.call(this, index);
+              const skewed = this.ownerSVGElement.createSVGRect();
+              skewed.x = box.x / 0.7; skewed.y = box.y / 0.7;
+              skewed.width = box.width / 0.7; skewed.height = box.height / 0.7;
+              return skewed;
+            };
+          `;
+          doc.body.appendChild(script);
+          script.remove();
+          document.querySelector("#artifact-frame").contentWindow.dispatchEvent(new Event("resize"));
+        ''')
+        time.sleep(0.4)
+        redrawn = browser.execute_script('''
+          const frame = document.querySelector("#artifact-frame");
+          const box = frame.contentDocument.querySelector(".html-mcp-highlight").getBoundingClientRect();
+          const r = frame.getBoundingClientRect();
+          return [box.left - r.left, box.top - r.top, box.width, box.height];
+        ''')
+        for drawn, truth in zip(redrawn, letters_in_frame):
+            assert abs(drawn - truth) <= 3, (redrawn, letters_in_frame)
     finally:
         if browser is not None:
             try:
@@ -1853,6 +1884,55 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
           return event.defaultPrevented;
         """)
         assert plain_over_comments is False
+
+        # Safari sends a trackpad pinch as a gesture of its own, with the scale since it
+        # began, and no wheel: the gesture drives the same zoom and is taken from the
+        # browser. Played in the page's own realm, where the viewer reads its fields.
+        def play_gesture(in_frame, selector, steps):
+            return browser.execute_script("""
+              const doc = arguments[0]
+                ? document.querySelector("#artifact-frame").contentDocument : document;
+              const script = doc.createElement("script");
+              script.textContent = `(() => {
+                const prevented = [];
+                for (const [type, scale] of ${JSON.stringify(arguments[2])}) {
+                  const event = new Event(type, {bubbles: true, cancelable: true});
+                  event.scale = scale; event.clientX = 350; event.clientY = 300;
+                  document.querySelector(${JSON.stringify(arguments[1])}).dispatchEvent(event);
+                  prevented.push(event.defaultPrevented);
+                }
+                document.body.dataset.gesturePrevented = prevented.join(",");
+              })();`;
+              doc.body.appendChild(script);
+              script.remove();
+              return doc.body.dataset.gesturePrevented;
+            """, script_args=[in_frame, selector, steps])
+
+        prevented = play_gesture(True, "section.page",
+                                 [["gesturestart", 1], ["gesturechange", 1.5], ["gesturechange", 2]])
+        assert prevented == "true,true,true", prevented
+        during = browser.execute_script("""
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          return {transform: doc.querySelector("main.pages").style.transform,
+                  zoom: doc.documentElement.style.getPropertyValue("--html-mcp-zoom")};
+        """)
+        assert during["transform"].startswith("translate(") and during["zoom"] == "1", during
+        play_gesture(True, "section.page", [["gestureend", 2]])
+        time.sleep(0.4)
+        ended = browser.execute_script(zoom_now)
+        assert abs(ended - 2) < 0.01, ended
+        browser.find_element("css selector", "#zoom-reset-btn").click()
+        time.sleep(0.3)
+
+        # Over the comments the gesture zooms the artifact about its middle, as the wheel does.
+        prevented = play_gesture(False, "#sidebar",
+                                 [["gesturestart", 1], ["gesturechange", 1.5], ["gestureend", 1.5]])
+        assert prevented == "true,true,true", prevented
+        time.sleep(0.4)
+        beside = browser.execute_script(zoom_now)
+        assert abs(beside - 1.5) < 0.01, beside
+        browser.find_element("css selector", "#zoom-reset-btn").click()
+        time.sleep(0.3)
     finally:
         if browser is not None:
             try:

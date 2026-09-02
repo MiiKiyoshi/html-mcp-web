@@ -341,13 +341,47 @@ function installArtifactZoom() {
     doc.addEventListener(kind, handleArtifactTouch, { passive: false, capture: true });
   }
   doc.addEventListener("wheel", handleArtifactWheel, { passive: false, capture: true });
-  // Safari zooms a page from two fingers through a gesture of its own, which is not the
-  // page's to preventDefault once it has begun. Refused here, the artifact is zoomed by
-  // the artifact alone; left to run, it moved the window under the settled layout and
-  // the deck appeared somewhere else the moment the fingers lifted.
   for (const kind of ["gesturestart", "gesturechange", "gestureend"]) {
-    doc.addEventListener(kind, (event) => event.preventDefault(), { passive: false, capture: true });
+    doc.addEventListener(kind, handleArtifactGesture, { passive: false, capture: true });
   }
+}
+
+// Safari sends two fingers as a gesture of its own, with the scale since the gesture
+// began, and on a Mac that gesture is all a trackpad pinch sends: refused and left at
+// that, the pinch zoomed nothing there. So the gesture drives the zoom, unless touches
+// already do, as on a phone, where the gesture comes beside them and is only refused.
+// Refusing it matters either way: left to run, Safari's own zoom moved the window under
+// the settled layout and the deck appeared somewhere else the moment the fingers lifted.
+function handleArtifactGesture(event) {
+  zoomFromGesture(event, { x: event.clientX, y: event.clientY });
+}
+
+function handleViewerGesture(event) {
+  if (frameDocument() === null) {
+    event.preventDefault();
+    return;
+  }
+  const frame = $("#artifact-frame").getBoundingClientRect();
+  zoomFromGesture(event, { x: frame.width / 2, y: frame.height / 2 });
+}
+
+function zoomFromGesture(event, point) {
+  event.preventDefault();
+  if (state.slideShow) return;
+  const pinch = state.pinch;
+  if (pinch !== null && pinch.driver === "touch") return;
+  if (event.type === "gesturestart") {
+    if (pinch !== null) settlePinch();
+    state.settledScroll = null;
+    state.pinch = beginPinch(1, point, "gesture");
+    return;
+  }
+  if (pinch === null || pinch.driver !== "gesture") return;
+  if (event.type === "gesturechange") {
+    carryPinch(pinch, pinch.startZoom * event.scale, point);
+    return;
+  }
+  settlePinch();
 }
 
 // A trackpad pinch reaches the page as a wheel event holding ctrl, which is also what a
@@ -370,7 +404,9 @@ function zoomFromWheel(event, point) {
   state.settledScroll = null;
   if (!(event.ctrlKey || event.metaKey) || state.slideShow) return;
   event.preventDefault();
-  if (state.pinch === null) state.pinch = beginPinch(1, point);
+  // A gesture that drives the zoom is the whole gesture: a wheel beside it is not a step.
+  if (state.pinch !== null && state.pinch.driver === "gesture") return;
+  if (state.pinch === null) state.pinch = beginPinch(1, point, "wheel");
   const pinch = state.pinch;
   if (pinch === null) return;
   // Fingers spreading on a trackpad arrive as many small steps, and the size follows the
@@ -416,7 +452,7 @@ function handleArtifactTouch(event) {
     state.artifactDrag = null;
     if (state.pinch === null || event.type === "touchstart") {
       if (state.pinch !== null) settlePinch();
-      state.pinch = beginPinch(span, middle);
+      state.pinch = beginPinch(span, middle, "touch");
       // A second finger is never a reader holding a word, so this one is taken from the
       // browser at once: told only at the first move, it has already begun a zoom of its
       // own, and two zooms ran on the same fingers.
@@ -486,7 +522,7 @@ function carryPinch(pinch, zoom, at) {
 // page it lies on, which no zoom changes, for putting it back under the fingers once the
 // layout is settled; and the room the settled layout will have, read off the document
 // now, since the holder grows by the zoom alone and the margins around it not at all.
-function beginPinch(span, middle) {
+function beginPinch(span, middle, driver) {
   if (span === 0 || state.slideShow) return null;
   const doc = frameDocument();
   const win = frameWindow();
@@ -528,6 +564,7 @@ function beginPinch(span, middle) {
   // the deck under it is carried; it is placed again once the deck has settled.
   hideSelectionButton();
   return {
+    driver,
     startSpan: span,
     startZoom: state.artifactZoom,
     zoom: state.artifactZoom,
@@ -690,6 +727,13 @@ function svgSelectionRects(range) {
     if (typeof root.getExtentOfChar !== "function") return null;
     const ctm = root.getScreenCTM();
     if (ctm === null) return null;
+    // Chromium hands a character's extent back divided by the scale the page is drawn at
+    // (a label at user-space y 282 on a page scaled by 0.76 came back at 369), while the
+    // screen matrix carries that scale, so the two together put the box where the label
+    // would be unscaled. The text's own box is right in every engine, and the extents
+    // are measured against it: the factor is 1 where they already agree.
+    const unit = extentUnit(root);
+    if (unit === null) return null;
     const walker = frameDocument().createTreeWalker(root, NodeFilter.SHOW_TEXT);
     let base = 0;
     let band = null;
@@ -709,8 +753,8 @@ function svgSelectionRects(range) {
           let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
           for (const [x, y] of [[box.x, box.y], [box.x + box.width, box.y],
                                 [box.x, box.y + box.height], [box.x + box.width, box.y + box.height]]) {
-            const screenX = ctm.a * x + ctm.c * y + ctm.e;
-            const screenY = ctm.b * x + ctm.d * y + ctm.f;
+            const screenX = ctm.a * x * unit + ctm.c * y * unit + ctm.e;
+            const screenY = ctm.b * x * unit + ctm.d * y * unit + ctm.f;
             left = Math.min(left, screenX); right = Math.max(right, screenX);
             top = Math.min(top, screenY); bottom = Math.max(bottom, screenY);
           }
@@ -734,6 +778,26 @@ function svgSelectionRects(range) {
   }
   if (rects.length === 0) return null;
   return rects.map((box) => ({ ...box, width: box.right - box.left, height: box.bottom - box.top }));
+}
+
+// How many user-space units one unit of a character extent is: the height the extents
+// of all the characters span, against the height of the text's own box.
+function extentUnit(root) {
+  const total = root.getNumberOfChars();
+  const box = root.getBBox();
+  if (total === 0 || box.height === 0) return 1;
+  let top = Infinity, bottom = -Infinity;
+  for (let index = 0; index < total; index += 1) {
+    let extent;
+    try {
+      extent = root.getExtentOfChar(index);
+    } catch (error) {
+      return null;
+    }
+    top = Math.min(top, extent.y);
+    bottom = Math.max(bottom, extent.y + extent.height);
+  }
+  return bottom > top ? box.height / (bottom - top) : 1;
 }
 
 function selectionRects(range) {
@@ -1114,7 +1178,7 @@ function attachControls() {
   document.addEventListener("wheel", handlePresentationWheel, { passive: false });
   document.addEventListener("wheel", handleViewerWheel, { passive: false });
   for (const kind of ["gesturestart", "gesturechange", "gestureend"]) {
-    document.addEventListener(kind, (event) => event.preventDefault(), { passive: false });
+    document.addEventListener(kind, handleViewerGesture, { passive: false });
   }
   document.addEventListener("fullscreenchange", syncFullscreenMode);
   // A device that cannot be watched from where the code is written draws its own touch
