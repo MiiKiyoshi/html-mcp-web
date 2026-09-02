@@ -34,7 +34,7 @@ if HAS_MCP:
         model_config = ConfigDict(extra="forbid")
 
         comment_id: Annotated[str, Field(min_length=1)]
-        message: Annotated[str, Field(min_length=1)]
+        message: Annotated[str, Field(min_length=1, description="Write the text literally, non-ASCII (Korean, CJK) included; never as \\uXXXX escapes, which cost tokens and miscount code points.")]
 
 
 def _check_dependencies() -> None:
@@ -218,7 +218,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         artifact: str,
         comment_ids: list[str],
         status: Literal["open", "resolved"],
-        message: str = "",
+        message: Annotated[str, Field(description="Write the text literally, non-ASCII (Korean, CJK) included; never as \\uXXXX escapes, which cost tokens and miscount code points.")] = "",
         edited_files: Annotated[list[str] | None, Field(description="Project-relative paths edited for these comments; recorded on the thread entry.")] = None,
     ) -> dict[str, Any]:
         """Reopen a resolved thread. A thread is resolved by the reviewer from the page, and the server refuses a resolve from an agent. A message posts to every id, so batch with one only when it fits each thread."""
