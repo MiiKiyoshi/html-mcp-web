@@ -69,10 +69,11 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "edited_files, and leave the comment open: closing it hides the reasoning the reviewer reads "
             "to judge the fix, and the reviewer closes the batch with Resolve all. set_comment_status is "
             "for a comment that asks for no edit, not for signing off your own work. Then call "
-            "wait_review() and start the script it returns in the background (Claude Code: Monitor) and "
-            "end the turn: it exits when the reviewer presses Call agent, the harness's completion "
-            "notification wakes you, and list_comments(unanswered=True) picks up from there. Waiting that "
-            "way costs no tokens, so prefer it to polling for comments."
+            "wait_review() once and start the script it returns as a persistent background monitor "
+            "(Claude Code: Monitor, persistent=true) and end the turn: it prints a line each time the "
+            "reviewer presses Call agent, that line wakes you, and list_comments(unanswered=True) picks up "
+            "from there; the same monitor serves every later press. Waiting that way costs no tokens, so "
+            "prefer it to polling for comments."
         ),
     )
 
@@ -101,14 +102,15 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "before hand-off, not after each edit."
         ),
         "review": (
-            "After handing a revision over, call wait_review() and start the script it returns with the "
-            "harness's background facility (Claude Code: Monitor), then end the turn: it exits when the "
-            "reviewer presses Call agent (at once if an unacknowledged press is waiting), the completion "
-            "notification wakes you, and list_comments(unanswered=True) picks up from there. Presses made "
-            "while nobody waits are kept, presses that pile up coalesce into one wake-up carrying the "
-            "latest press number, and a wake-up can repeat if its delivery could not be confirmed, so "
-            "treat one as 'there is something to read', not as a count. Waiting costs no tokens, so "
-            "prefer it to polling."
+            "After handing a revision over, call wait_review() once and start the script it returns as a "
+            "persistent background monitor (Claude Code: Monitor with persistent=true), then end the "
+            "turn: it prints one line each time the reviewer presses Call agent (at once if an "
+            "unacknowledged press is waiting) and keeps waiting for the next, so each line wakes you, "
+            "list_comments(unanswered=True) picks up from there, and the script is never started again. "
+            "Presses made while nobody waits are kept, presses that pile up coalesce into one wake-up "
+            "carrying the latest press number, and a wake-up can repeat if its delivery could not be "
+            "confirmed, so treat one as 'there is something to read', not as a count. Waiting costs no "
+            "tokens, so prefer it to polling."
         ),
         "images": (
             "Link images with a relative src into a project folder; do not embed them as base64, so content "
@@ -301,20 +303,21 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
 
     @mcp.tool()
     async def wait_review() -> dict[str, Any]:
-        """Return at once with a waiter script for the reviewer's Call agent button. Start that script with the harness's background facility (Claude Code: Monitor) and end the turn; it exits the moment the reviewer presses the button, or at once if a press is already waiting, and the harness's completion notification is the wake-up. Costs nothing while waiting."""
+        """Return at once with a waiter script for the reviewer's Call agent button. Start that script once as a persistent background monitor (Claude Code: Monitor with persistent=true) and end the turn; it prints one line each time the reviewer presses the button, at once if a press is already waiting, and keeps waiting for the next, so each line is a wake-up and the script is never started again. Costs nothing while waiting."""
         client = binding.require_client()
         state = await client.request_json("GET", "/state")
         port = state["port"]
         # The server keeps the press count and the consumption watermark, so the script
         # carries no state of its own: a press made before this call answers it at once,
-        # and restarting the script after a wake-up parks it again rather than replaying
-        # the press it acked. The ack comes after the line is printed: consuming before
-        # delivery lost the wake-up whenever the response died on the wire, so a press is
-        # offered until a waiter confirms it landed, and delivery is at-least-once.
+        # and after a line is delivered the loop parks again rather than replaying the
+        # press it acked, so one monitor serves every press of the session. The ack comes
+        # after the line is printed: consuming before delivery lost the wake-up whenever
+        # the response died on the wire, so a press is offered until a waiter confirms it
+        # landed, and delivery is at-least-once.
         script = (
             "#!/bin/sh\n"
-            f"# Exits when the reviewer presses 'Call agent' on http://127.0.0.1:{port},\n"
-            "# at once if an unacknowledged press is waiting to be picked up.\n"
+            f"# Prints one line each time the reviewer presses 'Call agent' on http://127.0.0.1:{port},\n"
+            "# at once if an unacknowledged press is waiting, and keeps waiting for the next.\n"
             "headers=$(mktemp)\n"
             "trap 'rm -f \"$headers\"' EXIT\n"
             "while :; do\n"
@@ -323,7 +326,6 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "    printf '%s\\n' \"$out\"\n"
             "    press=$(tr -d '\\r' < \"$headers\" | sed -n 's/^[Xx]-[Pp]ress: *//p' | head -1)\n"
             f"    [ -n \"$press\" ] && curl -sf -X POST \"http://127.0.0.1:{port}/wait-review/ack?upto=$press\" >/dev/null\n"
-            "    exit 0\n"
             "  fi\n"
             "  if [ $rc -ne 0 ] && [ $rc -ne 28 ]; then printf '[gone] review server unreachable (curl exit %s)\\n' $rc; exit 1; fi\n"
             "done\n"
@@ -340,12 +342,13 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         return {
             "script": str(target),
             "how": (
-                "Run the script with the harness's background completion facility and end the turn: on "
+                "Run the script once with the harness's persistent background monitor and end the turn: on "
                 "Claude Code, Monitor(command=<script>, description='waiting for the reviewer', "
-                "timeout_ms=86400000). It waits silently as long as it takes, prints one line and exits: "
-                "[review] means comments are ready, so continue with list_comments(unanswered=True) and "
-                "start the script again afterwards; [gone] means the review server stopped. Without a "
-                "background facility, running it with a shell tool blocks until the button is pressed."
+                "persistent=true, timeout_ms=3600000). It waits silently as long as it takes and prints "
+                "one line per press without exiting: [review] means comments are ready, so continue with "
+                "list_comments(unanswered=True) and leave the monitor running for the next press; [gone] "
+                "means the review server stopped and the script exited. Without a background facility, "
+                "running it with a shell tool blocks until the button is pressed."
             ),
         }
 

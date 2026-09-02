@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import socket
+import select
 import subprocess
 import sys
 import time
@@ -523,25 +524,42 @@ def test_wait_review_writes_a_waiter_script_carrying_port_and_press_count(tmp_pa
         assert f":{binding._shared.port}/wait-review/ack?upto=$press" in body
         assert body.index("printf '%s\\n' \"$out\"") < body.index("/wait-review/ack")
         assert "[gone]" in body and "timeout" not in body
-        assert "Monitor" in told["how"]
+        assert "Monitor" in told["how"] and "persistent=true" in told["how"]
+        # One monitor serves the whole session: a press is printed, not exited on.
+        assert "exit 0" not in body
 
         # The whole loop, live: an early press is picked up and acked (the server's
-        # watermark moves), and the restarted script parks instead of replaying it.
+        # watermark moves), the same process parks again instead of exiting or replaying
+        # it, and the next press comes out of that process.
         base = f"http://127.0.0.1:{binding._shared.port}"
-        with urllib.request.urlopen(urllib.request.Request(f"{base}/review-request", method="POST")):
-            pass
-        first = subprocess.run(["/bin/sh", str(script)], capture_output=True, text=True, timeout=15)
-        assert first.returncode == 0 and first.stdout.startswith("[review]")
-        with urllib.request.urlopen(f"{base}/state") as reply:
-            review_state = json.loads(reply.read().decode("utf-8"))["review"]
-        assert review_state == {"calls": 1, "consumed": 1, "waiters": 0}
-        parked = subprocess.Popen(["/bin/sh", str(script)],
+
+        def press():
+            urllib.request.urlopen(urllib.request.Request(f"{base}/review-request", method="POST")).close()
+
+        def review():
+            with urllib.request.urlopen(f"{base}/state") as reply:
+                return json.loads(reply.read().decode("utf-8"))["review"]
+
+        press()
+        waiter = subprocess.Popen(["/bin/sh", str(script)],
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         try:
-            time.sleep(1.5)
-            assert parked.poll() is None    # nothing unconsumed, so it parks
+            def line(timeout):
+                ready, _, _ = select.select([waiter.stdout], [], [], timeout)
+                return waiter.stdout.readline() if ready else ""
+
+            assert line(15).startswith("[review]")
+            time.sleep(1.0)
+            assert waiter.poll() is None
+            assert review() == {"calls": 1, "consumed": 1, "waiters": 1}    # parked again
+            assert line(1.5) == ""                                           # and silent
+            press()
+            assert line(15).startswith("[review]")
+            time.sleep(1.0)
+            assert waiter.poll() is None
+            assert review() == {"calls": 2, "consumed": 2, "waiters": 1}
         finally:
-            parked.terminate()
-            parked.wait(timeout=5)
+            waiter.terminate()
+            waiter.wait(timeout=5)
     finally:
         binding.stop()
