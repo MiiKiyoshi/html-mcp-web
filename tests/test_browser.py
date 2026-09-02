@@ -825,6 +825,71 @@ def test_browser_review_contract(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_short_column_spreads_over_the_height_of_the_tall_one(tmp_path: Path) -> None:
+    """Beside a 350px figure, a stack of two cards 120px tall sat in a clump at the top of
+    its column and left the rest empty; the row's height is now shared, and the column
+    spreads its blocks over it the way the body spreads its own."""
+    from html_mcp_web.slides import build
+
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<!doctype html>\n<meta charset="utf-8">\n<title>Two</title>\n'
+        '<body data-author="A" data-meta="B">\n'
+        '<section data-title="Two"><div class="two">'
+        '<div style="height: 350px; background: #eee"></div>'
+        '<div><div class="card" style="height: 40px">first</div>'
+        '<div class="card" style="height: 40px">second</div></div>'
+        '</div></section>\n'
+        "</body>\n", encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, Path(__file__).resolve().parents[1] / "templates" / "neutral-slides")
+
+    profile = tempfile.mkdtemp(prefix="html_mcp_two_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(html.as_uri())
+        wait_until(lambda: browser.execute_script("return !!document.querySelector('.two .card')"))
+        boxes = browser.execute_script("""
+const row = document.querySelector('.two');
+const [tall, stack] = row.children;
+const cards = stack.querySelectorAll('.card');
+const box = (el) => el.getBoundingClientRect();
+return {tall: [box(tall).top, box(tall).bottom], column: [box(stack).top, box(stack).bottom],
+        first: [box(cards[0]).top, box(cards[0]).bottom], second: [box(cards[1]).top, box(cards[1]).bottom]};
+""")
+        # The short column is as tall as the figure beside it...
+        assert abs(boxes["column"][1] - boxes["tall"][1]) < 2, boxes
+        # ...and its two cards are spread over that height, the gaps around them alike.
+        gaps = [boxes["first"][0] - boxes["column"][0],
+                boxes["second"][0] - boxes["first"][1],
+                boxes["column"][1] - boxes["second"][1]]
+        assert min(gaps) > 60, (gaps, boxes)
+        assert max(gaps) - min(gaps) < 2, (gaps, boxes)
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_display_math_matches_its_paragraph(tmp_path: Path) -> None:
     """KaTeX enlarges maths to 1.21em. That suits inline maths in a line of text, but a
     display equation standing alone then overpowers the body, so it takes the paragraph's
@@ -1471,8 +1536,21 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
     try:
         shared.ensure()
         base = f"http://127.0.0.1:{port}"
-        # Enough comments to fill the list, the last one wordy enough to unfold past its foot.
+        # Enough comments to fill the list, the last one wordy enough to unfold past its foot,
+        # and a wordy one in the middle anchored to the page's text, so it has a badge.
+        digest = get_json(f"{base}/state")["artifacts"]["slides"]["artifact_digest"]
         for number in range(8):
+            if number == 3:
+                badged = post_json(f"{base}/artifacts/slides/comments", {
+                    "anchor": {
+                        "kind": "text", "quote": "Selected sentence.", "prefix": "", "suffix": "",
+                        "start": {"path": [1, 1, 0, 1, 0], "offset": 0},
+                        "end": {"path": [1, 1, 0, 1, 0], "offset": len("Selected sentence.")},
+                        "artifact_digest": digest,
+                    },
+                    "text": "3: " + ("A long one. " * 40),
+                })
+                continue
             body = "A short note." if number < 7 else ("A long one. " * 40)
             post_json(f"{base}/artifacts/slides/comments",
                       {"anchor": {"kind": "artifact"}, "text": f"{number}: {body}"})
@@ -1511,6 +1589,39 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
         assert shown["expanded"]
         assert shown["overhang"] <= 2, shown      # nothing of it is left below the fold
         assert shown["above"] <= 2, shown         # and it did not scroll past the top
+
+        # Opened from its badge on the page, a tall card in the middle of the list lands
+        # the same way: whole, its foot at the box's foot. Centred, a card taller than half
+        # the box was cut off below and the reader scrolled after every open.
+        browser.execute_script("""
+          const list = document.querySelector("#comments-list");
+          const cards = Array.from(list.querySelectorAll(".comment-card"));
+          cards[cards.length - 1].querySelector(".comment-summary").click();
+          list.scrollTop = 0;
+        """)
+        time.sleep(0.3)
+        wait_until(lambda: browser.execute_script("""
+          return document.querySelector("#artifact-frame").contentDocument
+            .querySelectorAll(".html-mcp-highlight-badge").length > 0;
+        """))
+        browser.execute_script("""
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          doc.querySelector(".html-mcp-highlight-badge").click();
+        """)
+        time.sleep(0.6)
+        from_badge = browser.execute_script("""
+          const list = document.querySelector("#comments-list");
+          const card = list.querySelector(arguments[0]);
+          const listBox = list.getBoundingClientRect();
+          const cardBox = card.getBoundingClientRect();
+          return {expanded: card.querySelector(".comment-body") !== null,
+                  overhang: cardBox.bottom - listBox.bottom, above: listBox.top - cardBox.top,
+                  tall: cardBox.height > listBox.height / 2};
+        """, script_args=[f'[data-comment-id="{badged["id"]}"]'])
+        assert from_badge["tall"], from_badge          # the case where centring falls short
+        assert from_badge["expanded"], from_badge
+        assert from_badge["overhang"] <= 2, from_badge
+        assert from_badge["above"] <= 2, from_badge
     finally:
         if browser is not None:
             try:
