@@ -343,22 +343,36 @@ export function createComments(dependencies) {
   // scroll after every open to read what they had just asked for. The list scrolls by
   // what the card overhangs, so the whole of it shows; a card taller than the list is
   // brought to the top instead, which is as much of it as there is room for.
+  // The opened card is brought into the list's box: its foot at the box's foot when it
+  // fits, its head at the box's head when it does not. Done at once, then again a frame
+  // later and once more shortly after: the measurement taken inside the click is not
+  // always the one the engine paints (Safari laid the list out again after the click),
+  // and the reader was left to scroll after opening the last card of the list.
   function revealCard(commentId) {
-    const list = $("#comments-list");
-    const card = Array.from(list.querySelectorAll("[data-comment-id]")).find(
-      (node) => node.dataset.commentId === commentId);
-    if (card === undefined) return;
-    const margin = 8;
-    growPanelFor(card.getBoundingClientRect().height + margin * 2);
-    const listBox = list.getBoundingClientRect();
-    const cardBox = card.getBoundingClientRect();
-    const overhang = cardBox.bottom - (listBox.bottom - margin);
-    const above = listBox.top + margin - cardBox.top;
-    if (cardBox.height > listBox.height - margin * 2 || above > 0) {
-      list.scrollTop += cardBox.top - listBox.top - margin;
-    } else if (overhang > 0) {
-      list.scrollTop += overhang;
-    }
+    const settle = () => {
+      const list = $("#comments-list");
+      const card = Array.from(list.querySelectorAll("[data-comment-id]")).find(
+        (node) => node.dataset.commentId === commentId);
+      if (card === undefined || !state.expanded.has(commentId)) return;
+      const margin = 8;
+      growPanelFor(card.getBoundingClientRect().height + margin * 2);
+      const listBox = list.getBoundingClientRect();
+      const cardBox = card.getBoundingClientRect();
+      const overhang = cardBox.bottom - (listBox.bottom - margin);
+      const above = listBox.top + margin - cardBox.top;
+      if (cardBox.height > listBox.height - margin * 2 || above > 0) {
+        list.scrollTop += cardBox.top - listBox.top - margin;
+      } else if (overhang > 0) {
+        list.scrollTop += overhang;
+      }
+      // On the record when the page is traced, for a device that cannot be watched.
+      window.htmlMcpTrace?.(`reveal ${commentId} card=${Math.round(cardBox.top)}..${Math.round(cardBox.bottom)}`
+        + ` list=${Math.round(listBox.top)}..${Math.round(listBox.bottom)} over=${Math.round(overhang)}`
+        + ` scroll=${Math.round(list.scrollTop)}/${list.scrollHeight - list.clientHeight}`);
+    };
+    settle();
+    requestAnimationFrame(settle);
+    setTimeout(settle, 150);
   }
 
   // Under the artifact, the comments get a slice of a phone's screen, and a thread opened
@@ -396,12 +410,14 @@ export function createComments(dependencies) {
     }, 350);
   }
   
+  // From its badge on the page a card opens the same way it does from the list: whole,
+  // and at the foot of the box when it sits at the foot of the list. Centred, a tall card
+  // at the foot was cut off below and the reader scrolled after every open.
   function focusComment(commentId) {
     state.focusedCommentId = commentId;
     state.expanded.add(commentId);
     renderComments();
-    const card = Array.from(document.querySelectorAll("[data-comment-id]")).find((node) => node.dataset.commentId === commentId);
-    card?.scrollIntoView({ behavior: "smooth", block: "center" });
+    revealCard(commentId);
   }
   
   function composeAnchorText(anchor) {

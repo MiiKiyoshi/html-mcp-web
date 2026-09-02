@@ -19,6 +19,9 @@ function log(text) {
   if (lines.length > 30) lines.shift();
   box.textContent = lines.join("\n");
 }
+// The viewer's own scripts write here too, when there is something to record: the
+// comment list's reveal of an opened card, among them.
+window.htmlMcpTrace = log;
 
 function install() {
   const frame = document.querySelector("#artifact-frame");
