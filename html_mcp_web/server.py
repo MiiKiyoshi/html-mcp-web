@@ -41,6 +41,12 @@ from .watcher import Watcher
 
 PRINT_PAGE_SIZES = {"slides": "13.333in 7.5in", "report": "A4 portrait"}
 NO_CACHE = {"Cache-Control": "no-cache"}
+# Closing a thread is the reviewer's act, made from the page once the reply and the edit
+# have been read: an agent that closed its own work hid the reasoning it is judged by,
+# and a rule that only the instructions carried was read by some sessions and not others.
+# Dismissing a mistaken comment or reopening one stays the agent's to do.
+AGENT_CLOSE_REFUSED = ("an agent does not resolve a thread: reply, record the edited files and "
+                       "leave it open; the reviewer resolves from the page")
 
 
 def strip_script_blocks(source: str) -> str:
@@ -185,6 +191,14 @@ class ArtifactRuntime:
         except FileNotFoundError:
             return None
 
+    def missing_file(self) -> str:
+        # For a templated artifact the file to write is the content and the main file is
+        # built from it; named after the main file, the error sent a reader after a build.
+        if self.content_file is not None and not self.content_file.is_file():
+            return (f"content file not found: {self.content_file} "
+                    f"(the template builds {self.main_file} from it)")
+        return f"HTML artifact not found: {self.main_file}"
+
     def state(self) -> dict[str, Any]:
         comments = self.store.list()
         comment_counts = {
@@ -201,7 +215,7 @@ class ArtifactRuntime:
             # not take the whole project's server down with it; the watcher picks the file
             # up when it appears and the next state carries a digest again.
             "artifact_digest": (made := self.digest()),
-            **({} if made is not None else {"error": f"HTML artifact not found: {self.main_file}"}),
+            **({} if made is not None else {"error": self.missing_file()}),
             "revision": self.revision,
             "layout_check": {
                 "checked_revision": self.layout_revision,
@@ -270,6 +284,7 @@ class HtmlReviewServer:
         self.review_calls, self.review_consumed = self._load_review_state()
         self.review_called = asyncio.Event()
         self.review_waiters = 0
+        self.closing = False
         self.headless_check = asyncio.Lock()
         self.artifacts = self._create_artifacts(config)
         self.watcher = self._create_watcher(config)
@@ -511,6 +526,14 @@ class HtmlReviewServer:
         return web.FileResponse(target, headers={"Cache-Control": "no-store"})
 
     async def get_state(self, request: web.Request) -> web.Response:
+        # An agent reads completion off this state, and with no review UI open nothing ran
+        # the check it waited for. The check is started here, one at a time, and a later
+        # state carries its result.
+        if not self.websockets and not self.headless_check.locked():
+            for runtime in self.artifacts.values():
+                if runtime.space_revision != runtime.revision and runtime.main_file.is_file():
+                    asyncio.ensure_future(self._ensure_layout_checked(runtime, request.host))
+                    break
         return web.json_response(self.project_state())
 
     async def apply_config(self) -> None:
@@ -717,6 +740,8 @@ class HtmlReviewServer:
         author = data["author"] if "author" in data else "human"
         if author not in {"human", "agent"}:
             raise web.HTTPBadRequest(text="invalid author")
+        if author == "agent" and action == "resolve":
+            raise web.HTTPBadRequest(text=AGENT_CLOSE_REFUSED)
         try:
             if action == "reply":
                 comment = runtime.store.reply(comment_id, str(data["text"]), author,
@@ -781,6 +806,8 @@ class HtmlReviewServer:
                 raise ValueError("message must be a string")
             if status not in {None, "open", "resolved", "dismissed"}:
                 raise ValueError("status must be open, resolved, or dismissed")
+            if author == "agent" and status == "resolved":
+                raise ValueError(AGENT_CLOSE_REFUSED)
             if edited_files is not None and (
                 not isinstance(edited_files, list) or not all(isinstance(value, str) for value in edited_files)
             ):
@@ -802,26 +829,18 @@ class HtmlReviewServer:
                 for comment in comments
             ]
         }
-        # The reviewer closing a batch has just read the threads; the check exists to tell
-        # an agent that its own edit did not land where the comment pointed.
-        if status == "resolved" and author == "agent":
+        # An agent reporting an edit, with the files it touched, is told where the quoted
+        # text is still in the artifact unchanged: normal when the fix landed elsewhere (a
+        # heading anchored over the body it asked about), and the one hint that the edit
+        # went to the wrong place when it was not. The reviewer's close carries no such
+        # check: they have just read the thread.
+        if author == "agent" and edited_files:
             untouched = [comment.id for comment in comments if self._anchor_text_survives(runtime, comment)]
             if untouched:
-                listed = ", ".join(untouched)
-                # With edits on record the untouched anchor is the normal case: the fix
-                # landed elsewhere, or the comment anchored a heading over the body it
-                # asked about. Without any, resolving with nothing changed anywhere is
-                # what the warning is for.
-                if edited_files:
-                    result["note"] = (
-                        f"anchor text unchanged for {listed}; normal when the fix landed in "
-                        "the files recorded, no action needed"
-                    )
-                else:
-                    result["warning"] = (
-                        f"anchor text unchanged in the artifact for {listed}"
-                        "; confirm the change landed or reopen"
-                    )
+                result["note"] = (
+                    f"anchor text unchanged for {', '.join(untouched)}; normal when the fix landed "
+                    "in the files recorded, and the place to look if it was meant to change that text"
+                )
         await self.broadcast({
             "type": "comments_updated",
             "artifact": runtime.artifact_id,
@@ -889,11 +908,14 @@ class HtmlReviewServer:
         staging.replace(self.review_state_path)
 
     def _review_line(self) -> str:
-        opens = {artifact_id: sum(comment.status == "open" for comment in runtime.store.list())
-                 for artifact_id, runtime in self.artifacts.items()}
-        listed = ", ".join(f"{count} on '{artifact_id}'" for artifact_id, count in opens.items() if count)
+        # The line counts what a wake-up is for: open threads whose last word is the
+        # reviewer's. A count of open threads sent an agent to read one it had answered.
+        waiting = {artifact_id: sum(comment.status == "open" and comment.thread[-1].author == "human"
+                                    for comment in runtime.store.list())
+                   for artifact_id, runtime in self.artifacts.items()}
+        listed = ", ".join(f"{count} on '{artifact_id}'" for artifact_id, count in waiting.items() if count)
         return (f"[review] reviewer called (press #{self.review_calls}): "
-                + (f"open comments: {listed}" if listed else "no open comments")
+                + (f"unanswered comments: {listed}" if listed else "no unanswered comments")
                 + " -- read them with list_comments(unanswered=True)")
 
     async def request_review(self, request: web.Request) -> web.Response:
@@ -926,6 +948,8 @@ class HtmlReviewServer:
                 try:
                     await asyncio.wait_for(waited.wait(), timeout=remaining)
                 except asyncio.TimeoutError:
+                    return web.Response(status=204)
+                if self.closing:
                     return web.Response(status=204)
             return web.Response(text=self._review_line(),
                                 headers={"X-Press": str(self.review_calls)})
@@ -999,8 +1023,17 @@ class HtmlReviewServer:
         app.router.add_post("/wait-review/ack", self.ack_review)
         app.router.add_get("/ws", self.websocket)
         app.on_startup.append(self.start_watcher)
+        app.on_shutdown.append(self.release_waiters)
         app.on_cleanup.append(self.stop_watcher)
         return app
+
+    async def release_waiters(self, app: web.Application) -> None:
+        # A parked waiter holds its connection for the whole poll, and a shutdown that
+        # waited for it kept the port half-alive for that long: the waiter's script saw
+        # nothing gone, and a restart could not take the port. Let go, it asks again at
+        # once and finds the port closed.
+        self.closing = True
+        self.review_called.set()
 
 
 def run_server(config: Config, host: str = "127.0.0.1") -> None:
