@@ -1519,6 +1519,33 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         before = browser.execute_script(measure)
         assert not before["resetShown"]
 
+        # Two fingers are the artifact's zoom, taken from the browser at the touch that
+        # starts it: told only at the first move, Safari has begun a zoom of its own and
+        # moves the window under the settled layout. One finger is left alone, because it
+        # may be a reader holding a word.
+        taken = browser.execute_script("""
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const target = doc.querySelector("section.page");
+          const touch = (id, x, y) => new view.Touch({identifier: id, target, clientX: x, clientY: y});
+          const send = (touches) => {
+            const event = new view.TouchEvent("touchstart", {
+              touches, targetTouches: touches, changedTouches: touches,
+              bubbles: true, cancelable: true});
+            target.dispatchEvent(event);
+            return event.defaultPrevented;
+          };
+          const two = send([touch(1, 300, 400), touch(2, 400, 400)]);
+          send([]);
+          const one = send([touch(3, 300, 400)]);
+          send([]);
+          const gesture = new view.Event("gesturestart", {bubbles: true, cancelable: true});
+          target.dispatchEvent(gesture);
+          return {two, one, gesture: gesture.defaultPrevented};
+        """)
+        assert taken == {"two": True, "one": False, "gesture": True}, taken
+
         # The point between the fingers, in the coordinates of the page it lies on.
         held = browser.execute_script("""
           const frame = document.querySelector("#artifact-frame");
