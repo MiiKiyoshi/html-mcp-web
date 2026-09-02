@@ -652,6 +652,9 @@ function resetArtifactZoom() {
 function showSelectionButton() {
   const selection = frameWindow().getSelection();
   const button = $("#selection-comment-btn");
+  // While a gesture carries the deck the button stays out of it: the selection's own
+  // settle, timed from before the gesture, would otherwise bring it back mid-way.
+  if (state.pinch !== null) return;
   if (document.fullscreenElement === $("#artifact-pane")) {
     state.selectionAnchor = null;
     button.classList.add("hidden");
@@ -725,15 +728,9 @@ function svgSelectionRects(range) {
   const rects = [];
   for (const root of roots) {
     if (typeof root.getExtentOfChar !== "function") return null;
-    const ctm = root.getScreenCTM();
-    if (ctm === null) return null;
-    // Chromium hands a character's extent back divided by the scale the page is drawn at
-    // (a label at user-space y 282 on a page scaled by 0.76 came back at 369), while the
-    // screen matrix carries that scale, so the two together put the box where the label
-    // would be unscaled. The text's own box is right in every engine, and the extents
-    // are measured against it: the factor is 1 where they already agree.
     const unit = extentUnit(root);
-    if (unit === null) return null;
+    const toScreen = textMapping(root);
+    if (unit === null || toScreen === null) return null;
     const walker = frameDocument().createTreeWalker(root, NodeFilter.SHOW_TEXT);
     let base = 0;
     let band = null;
@@ -753,8 +750,7 @@ function svgSelectionRects(range) {
           let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
           for (const [x, y] of [[box.x, box.y], [box.x + box.width, box.y],
                                 [box.x, box.y + box.height], [box.x + box.width, box.y + box.height]]) {
-            const screenX = ctm.a * x * unit + ctm.c * y * unit + ctm.e;
-            const screenY = ctm.b * x * unit + ctm.d * y * unit + ctm.f;
+            const [screenX, screenY] = toScreen(x * unit, y * unit);
             left = Math.min(left, screenX); right = Math.max(right, screenX);
             top = Math.min(top, screenY); bottom = Math.max(bottom, screenY);
           }
@@ -780,8 +776,40 @@ function svgSelectionRects(range) {
   return rects.map((box) => ({ ...box, width: box.right - box.left, height: box.bottom - box.top }));
 }
 
+// Where a point of a text's user space falls on screen. Two boxes of the text are right
+// in every engine: its own box in user space (getBBox) and its box on screen
+// (getBoundingClientRect). The screen matrix is used where it carries the one onto the
+// other, which keeps a turned label right; where it does not, as in Safari, whose matrix
+// leaves out the CSS scale the page is drawn at and so put the box further off the more
+// the page was zoomed, the two boxes give the mapping themselves.
+function textMapping(root) {
+  const box = root.getBBox();
+  const rect = root.getBoundingClientRect();
+  const ctm = root.getScreenCTM();
+  if (ctm !== null) {
+    const through = (x, y) => [ctm.a * x + ctm.c * y + ctm.e, ctm.b * x + ctm.d * y + ctm.f];
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+    for (const [x, y] of [[box.x, box.y], [box.x + box.width, box.y],
+                          [box.x, box.y + box.height], [box.x + box.width, box.y + box.height]]) {
+      const [screenX, screenY] = through(x, y);
+      left = Math.min(left, screenX); right = Math.max(right, screenX);
+      top = Math.min(top, screenY); bottom = Math.max(bottom, screenY);
+    }
+    if (Math.abs(left - rect.left) < 1.5 && Math.abs(top - rect.top) < 1.5
+        && Math.abs(right - rect.right) < 1.5 && Math.abs(bottom - rect.bottom) < 1.5) {
+      return through;
+    }
+  }
+  if (box.width === 0 || box.height === 0) return null;
+  const scaleX = rect.width / box.width;
+  const scaleY = rect.height / box.height;
+  return (x, y) => [rect.left + (x - box.x) * scaleX, rect.top + (y - box.y) * scaleY];
+}
+
 // How many user-space units one unit of a character extent is: the height the extents
-// of all the characters span, against the height of the text's own box.
+// of all the characters span, against the height of the text's own box. Chromium hands
+// the extents back divided by the scale the page is drawn at (a label at user-space y
+// 282 on a page scaled by 0.76 came back at 369); the factor is 1 where they agree.
 function extentUnit(root) {
   const total = root.getNumberOfChars();
   const box = root.getBBox();

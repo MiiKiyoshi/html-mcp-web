@@ -1400,6 +1400,38 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
         ''')
         for drawn, truth in zip(redrawn, letters_in_frame):
             assert abs(drawn - truth) <= 3, (redrawn, letters_in_frame)
+
+        # Safari's screen matrix leaves out the CSS scale the page is drawn at, so a box
+        # built through it landed further off the more the page was zoomed, and the
+        # comment button wandered with every pinch. Played by handing back a matrix that
+        # disagrees with the text's own box on screen; the two boxes then map the letters.
+        browser.execute_script('''
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const script = doc.createElement("script");
+          script.textContent = `
+            const realCtm = SVGGraphicsElement.prototype.getScreenCTM;
+            SVGGraphicsElement.prototype.getScreenCTM = function () {
+              const ctm = realCtm.call(this);
+              if (ctm === null) return null;
+              const off = this.ownerSVGElement.createSVGMatrix();
+              off.a = ctm.a / 0.7; off.d = ctm.d / 0.7; off.b = ctm.b; off.c = ctm.c;
+              off.e = ctm.e - 40; off.f = ctm.f - 25;
+              return off;
+            };
+          `;
+          doc.body.appendChild(script);
+          script.remove();
+          document.querySelector("#artifact-frame").contentWindow.dispatchEvent(new Event("resize"));
+        ''')
+        time.sleep(0.4)
+        remapped = browser.execute_script('''
+          const frame = document.querySelector("#artifact-frame");
+          const box = frame.contentDocument.querySelector(".html-mcp-highlight").getBoundingClientRect();
+          const r = frame.getBoundingClientRect();
+          return [box.left - r.left, box.top - r.top, box.width, box.height];
+        ''')
+        for drawn, truth in zip(remapped, letters_in_frame):
+            assert abs(drawn - truth) <= 3, (remapped, letters_in_frame)
     finally:
         if browser is not None:
             try:
@@ -1560,17 +1592,17 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
           const view = frame.contentWindow;
           const target = doc.querySelector("section.page");
           const touch = (id, x, y) => new view.Touch({identifier: id, target, clientX: x, clientY: y});
-          const send = (touches) => {
-            const event = new view.TouchEvent("touchstart", {
+          const send = (type, touches) => {
+            const event = new view.TouchEvent(type, {
               touches, targetTouches: touches, changedTouches: touches,
               bubbles: true, cancelable: true});
             target.dispatchEvent(event);
             return event.defaultPrevented;
           };
-          const two = send([touch(1, 300, 400), touch(2, 400, 400)]);
-          send([]);
-          const one = send([touch(3, 300, 400)]);
-          send([]);
+          const two = send("touchstart", [touch(1, 300, 400), touch(2, 400, 400)]);
+          send("touchend", []);
+          const one = send("touchstart", [touch(3, 300, 400)]);
+          send("touchend", []);
           const gesture = new view.Event("gesturestart", {bubbles: true, cancelable: true});
           target.dispatchEvent(gesture);
           return {two, one, gesture: gesture.defaultPrevented};
