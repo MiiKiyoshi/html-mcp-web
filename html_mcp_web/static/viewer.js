@@ -691,7 +691,13 @@ function attachArtifactEvents() {
   // any of it: the words were highlighted and no button ever came. The selection itself is
   // watched as well, held back while a pointer is down so that a drag on a desktop still
   // settles before the button appears.
-  doc.addEventListener("touchend", () => setTimeout(showSelectionButton, 60), true);
+  // Holding a word hands that touch to the browser's own selection, and the sequence ends
+  // as a cancel rather than a release. A cancel is the end of a touch like any other, so
+  // it asks the same question; without that the highlighted words waited for the next pan
+  // or pinch to bring the button.
+  for (const kind of ["touchend", "touchcancel"]) {
+    doc.addEventListener(kind, () => setTimeout(showSelectionButton, 60), true);
+  }
   installArtifactZoom();
   doc.addEventListener("selectionchange", () => {
     if (state.selectionPointerDown) return;
@@ -710,11 +716,12 @@ function attachArtifactEvents() {
     state.selectionPointerDown = true;
     if (!event.target.closest(".html-mcp-highlight-layer")) hideSelectionButton();
   }, true);
-  doc.addEventListener("pointerup", () => {
-    state.selectionPointerDown = false;
-    setTimeout(showSelectionButton, 60);
-  }, true);
-  doc.addEventListener("pointercancel", () => { state.selectionPointerDown = false; }, true);
+  for (const kind of ["pointerup", "pointercancel"]) {
+    doc.addEventListener(kind, () => {
+      state.selectionPointerDown = false;
+      setTimeout(showSelectionButton, 60);
+    }, true);
+  }
   win.addEventListener("scroll", () => {
     hideSelectionButton();
     scheduleCurrentPage();

@@ -1834,3 +1834,82 @@ def test_a_touch_screen_keeps_the_two_buttons_in_their_corners(tmp_path: Path) -
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_selection_the_browser_took_over_still_brings_the_button(tmp_path: Path) -> None:
+    """Holding a word hands the touch over to the browser's own selection, and the sequence
+    that started it ends as a cancel: no release arrives. The button has to come from the
+    selection itself, or it waits until the next pan or pinch to appear."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_cancel_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n'
+        'user_pref("ui.primaryPointerCapabilities", 1);\n'
+        'user_pref("ui.allPointerCapabilities", 1);\n'
+        'user_pref("dom.w3c_touch_events.enabled", 1);\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "900", "-height", "1200", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=900, height=1200)
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+
+        # A finger lands on the word and the browser makes the selection under it.
+        browser.execute_script("""
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const words = doc.querySelector("#mathlike");
+          words.dispatchEvent(new view.PointerEvent("pointerdown", {bubbles: true, pointerType: "touch"}));
+          const selection = view.getSelection();
+          selection.removeAllRanges();
+          const range = doc.createRange();
+          range.setStart(words.firstChild, 0);
+          range.setEnd(words.firstChild, 6);
+          selection.addRange(range);
+        """)
+        time.sleep(0.4)   # long enough that a settled selection would have shown the button
+        # The browser owns the touch now, so it ends the sequence rather than releasing it.
+        browser.execute_script("""
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const words = doc.querySelector("#mathlike");
+          words.dispatchEvent(new view.PointerEvent("pointercancel", {bubbles: true, pointerType: "touch"}));
+          words.dispatchEvent(new view.TouchEvent("touchcancel", {bubbles: true}));
+        """)
+        wait_until(lambda: browser.execute_script(
+            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
