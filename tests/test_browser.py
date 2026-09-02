@@ -1615,6 +1615,45 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         assert abs(placed["x"] - 350) < 2 and abs(placed["y"] - 400) < 2, placed
         assert placed["transform"] == "", placed
 
+        # A scroll the browser makes on its own in the moment after the fingers lift is
+        # put back (Safari's scroll anchoring moved the deck by the zoom's displacement a
+        # frame after it settled, and cannot be turned off there); the reader's own next
+        # touch is not.
+        settled = browser.execute_script(fingers + """
+          send("touchstart", [touch(1, 300, 400), touch(2, 400, 400)]);
+          for (let step = 1; step <= 3; step += 1) {
+            send("touchmove", [touch(1, 300 - step * 10, 400), touch(2, 400 + step * 10, 400)]);
+          }
+          send("touchend", []);
+          const settled = [view.scrollX, view.scrollY];
+          view.scrollBy(300, 300);
+          return settled;
+        """)
+        time.sleep(0.3)
+        stray = browser.execute_script("""
+          const win = document.querySelector("#artifact-frame").contentWindow;
+          return [win.scrollX, win.scrollY];
+        """)
+        assert stray == settled
+        settled = browser.execute_script(fingers + """
+          send("touchstart", [touch(1, 300, 400), touch(2, 400, 400)]);
+          for (let step = 1; step <= 2; step += 1) {
+            send("touchmove", [touch(1, 300 + step * 5, 400), touch(2, 400 - step * 5, 400)]);
+          }
+          send("touchend", []);
+          const settled = [view.scrollX, view.scrollY];
+          send("touchstart", [touch(3, 300, 400)]);
+          send("touchmove", [touch(3, 260, 360)]);
+          send("touchend", []);
+          return settled;
+        """)
+        time.sleep(0.3)
+        panned = browser.execute_script("""
+          const win = document.querySelector("#artifact-frame").contentWindow;
+          return [win.scrollX, win.scrollY];
+        """)
+        assert panned == [settled[0] + 40, settled[1] + 40], (panned, settled)
+
         # Zooming out past the fit, the layout has no room to keep the page under the
         # fingers: it sits centred, at the top. The carried holder is held there too, so
         # the deck does not jump there when the fingers lift. And while the fingers move

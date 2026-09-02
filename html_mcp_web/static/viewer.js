@@ -40,6 +40,7 @@ const state = {
   artifactZoom: 1,
   pinch: null,
   pinchSettle: null,
+  settledScroll: null,
   artifactDrag: null,
 };
 
@@ -353,6 +354,7 @@ function installArtifactZoom() {
 // mouse sends under the key each desktop zooms with: ctrl on Windows and Linux, command
 // on a Mac. The pointer is the fixed point, as the point between two fingers is.
 function handleArtifactWheel(event) {
+  state.settledScroll = null;
   if (!(event.ctrlKey || event.metaKey) || state.slideShow) return;
   event.preventDefault();
   const point = { x: event.clientX, y: event.clientY };
@@ -389,6 +391,7 @@ function handleArtifactWheel(event) {
 function handleArtifactTouch(event) {
   const win = frameWindow();
   const touches = Array.from(event.touches);
+  if (event.type === "touchstart") state.settledScroll = null;
   if (event.type === "touchend" || event.type === "touchcancel") {
     if (touches.length < 2 && state.pinch !== null) settlePinch();
     if (touches.length === 0) state.artifactDrag = null;
@@ -529,17 +532,35 @@ function settlePinch() {
   state.pinch = null;
   if (state.pinchSettle !== null) clearTimeout(state.pinchSettle);
   state.pinchSettle = null;
-  pinch.keeper.remove();
   pinch.holder.style.transform = "";
   pinch.holder.style.transformOrigin = "";
   pinch.holder.style.willChange = "";
-  if (pinch.zoom === pinch.startZoom) return;
+  if (pinch.zoom === pinch.startZoom) {
+    pinch.keeper.remove();
+    return;
+  }
+  const win = frameWindow();
+  const page = pinch.page;
   state.artifactZoom = pinch.zoom;
   applyArtifactZoom();
-  const box = pinch.page.getBoundingClientRect();
-  const ratio = box.width / pinch.page.offsetWidth;
-  frameWindow().scrollBy(box.left + pinch.local.x * ratio - pinch.middle.x,
-                         box.top + pinch.local.y * ratio - pinch.middle.y);
+  page.getBoundingClientRect();
+  // Safari keeps the scroll position anchored to an element and, after a layout, moves
+  // the position by what that element moved. A layout that changes transforms is left
+  // alone, so the zoom above leaves the anchor's recorded place where the old layout had
+  // it, and the next layout of any kind moved the deck by the zoom's whole displacement:
+  // the highlight boxes redrawn a frame later sent it somewhere else after the fingers
+  // had lifted. The dot's removal is that next layout, made here, before the position is
+  // set; and it is set absolutely, so nothing already applied is applied again. The
+  // property that turns the anchoring off is not implemented there.
+  pinch.keeper.remove();
+  frameDocument().body.getBoundingClientRect();
+  const box = page.getBoundingClientRect();
+  const ratio = box.width / page.offsetWidth;
+  win.scrollTo(win.scrollX + box.left + pinch.local.x * ratio - pinch.middle.x,
+               win.scrollY + box.top + pinch.local.y * ratio - pinch.middle.y);
+  // What the browser moves on its own in the moment after is put back; the reader's own
+  // next touch or wheel ends the watch.
+  state.settledScroll = { x: win.scrollX, y: win.scrollY, until: performance.now() + 400 };
 }
 
 // The page under a point, or the nearest one when the point is in a gap.
@@ -891,6 +912,14 @@ function attachArtifactEvents() {
     }, true);
   }
   win.addEventListener("scroll", () => {
+    const settled = state.settledScroll;
+    if (settled !== null) {
+      state.settledScroll = null;
+      if (performance.now() < settled.until
+          && (Math.abs(win.scrollX - settled.x) > 1 || Math.abs(win.scrollY - settled.y) > 1)) {
+        win.scrollTo(settled.x, settled.y);
+      }
+    }
     hideSelectionButton();
     scheduleCurrentPage();
   }, { passive: true });
