@@ -1389,9 +1389,10 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None:
-    """Two fingers on the artifact zoom the artifact alone. The gesture is panzoom's: our
-    own pointer reading lost the tug-of-war with the browser, which kept deciding mid-pinch
-    that two fingers were a scroll and cancelling the gesture."""
+    """Two fingers on the artifact zoom the artifact alone, and what they zoom is the size
+    the pages are laid out at, not a transform laid over them: a transform creates no
+    scrollable room, so zoomed in the left never came back and the first page lost its
+    top. Every edge stays reachable, and the comments keep their size."""
     slides = tmp_path / "slides.html"
     slides.write_text(slides_html(), encoding="utf-8")
     port = available_port()
@@ -1421,32 +1422,30 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#artifact-status")?.textContent === "ready"'))
-        # The library reaches the artifact document and takes over its pages element.
-        wait_until(lambda: browser.execute_script(
-            'const w = document.querySelector("#artifact-frame").contentWindow;'
-            'return typeof w.wrappedJSObject.panzoom === "function"'))
 
         measure = """
           const frame = document.querySelector("#artifact-frame");
-          const pages = frame.contentDocument.querySelector("main.pages");
-          const raw = getComputedStyle(pages).transform;
-          const matrix = new frame.contentWindow.DOMMatrixReadOnly(raw === "none" ? "" : raw);
-          return {scale: matrix.a, shift: [matrix.e, matrix.f],
+          const doc = frame.contentDocument;
+          const win = frame.contentWindow;
+          const page = doc.querySelector("section.page");
+          return {width: page.getBoundingClientRect().width,
+                  scale: Number(doc.documentElement.style.getPropertyValue("--html-mcp-page-scale")),
+                  scrollWidth: doc.documentElement.scrollWidth,
+                  viewport: win.innerWidth,
                   tabs: document.querySelector(".sidebar-tabs").getBoundingClientRect().height,
                   topbar: document.querySelector(".topbar").getBoundingClientRect().height,
                   resetShown: !document.querySelector("#zoom-reset-btn").classList.contains("hidden")};
         """
         before = browser.execute_script(measure)
-        assert abs(before["scale"] - 1) < 0.01
         assert not before["resetShown"]
 
-        browser.execute_script("""
+        pinch = """
           const frame = document.querySelector("#artifact-frame");
           const doc = frame.contentDocument;
           const view = frame.contentWindow;
-          const pages = doc.querySelector("main.pages");
-          const touch = (id, x, y) => new view.Touch({identifier: id, target: pages, clientX: x, clientY: y});
-          const send = (type, touches) => pages.dispatchEvent(new view.TouchEvent(type, {
+          const target = doc.querySelector("section.page");
+          const touch = (id, x, y) => new view.Touch({identifier: id, target, clientX: x, clientY: y});
+          const send = (type, touches) => target.dispatchEvent(new view.TouchEvent(type, {
             touches, targetTouches: touches, changedTouches: touches,
             bubbles: true, cancelable: true}));
           send("touchstart", [touch(1, 300, 400), touch(2, 400, 400)]);
@@ -1454,58 +1453,35 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
             send("touchmove", [touch(1, 300 - step * 20, 400), touch(2, 400 + step * 20, 400)]);
           }
           send("touchend", []);
-        """)
-        time.sleep(0.5)
+        """
+        browser.execute_script(pinch)
+        time.sleep(0.4)
         after = browser.execute_script(measure)
-        assert after["scale"] > 1.4, after            # the deck grew with the gesture
-        assert after["tabs"] == before["tabs"]        # the comments did not
-        assert after["topbar"] == before["topbar"]    # nor the controls
-        assert after["resetShown"]                    # and there is a way back
+        assert after["width"] > before["width"] * 1.4, after   # the deck grew
+        assert after["tabs"] == before["tabs"]                 # the comments did not
+        assert after["topbar"] == before["topbar"]             # nor the controls
+        assert after["resetShown"]                             # and there is a way back
+        # Grown by its own size, the document has somewhere to scroll: a transform would
+        # have left the overflow outside every scroll range.
+        assert after["scrollWidth"] > after["viewport"], after
 
-        # One finger is the browser's at every zoom: it scrolls and it holds a word to
-        # select it, which is what the artifact is read with. Panning is the two fingers'.
-        browser.execute_script("""
+        # Both ends are reachable: the left edge, and the top of the first page.
+        edges = browser.execute_script("""
           const frame = document.querySelector("#artifact-frame");
-          const doc = frame.contentDocument;
-          const view = frame.contentWindow;
-          const pages = doc.querySelector("main.pages");
-          const touch = (id, x, y) => new view.Touch({identifier: id, target: pages, clientX: x, clientY: y});
-          const send = (type, touches) => pages.dispatchEvent(new view.TouchEvent(type, {
-            touches, targetTouches: touches, changedTouches: touches,
-            bubbles: true, cancelable: true}));
-          send("touchstart", [touch(9, 300, 500)]);
-          send("touchmove", [touch(9, 300, 420)]);
-          send("touchend", []);
+          const win = frame.contentWindow;
+          const page = frame.contentDocument.querySelector("section.page");
+          win.scrollTo(0, 0);
+          const box = page.getBoundingClientRect();
+          return {left: box.left, top: box.top};
         """)
-        time.sleep(0.3)
-        panned = browser.execute_script(measure)
-        assert abs(panned["scale"] - after["scale"]) < 0.01
-        assert panned["shift"] == after["shift"], panned
+        assert edges["left"] >= -1, edges
+        assert edges["top"] >= -1, edges
 
         browser.find_element("css selector", "#zoom-reset-btn").click()
         time.sleep(0.3)
         back = browser.execute_script(measure)
-        assert abs(back["scale"] - 1) < 0.01
+        assert abs(back["width"] - before["width"]) < 2
         assert not back["resetShown"]
-
-        # At rest, that same finger is the browser's again: the library sees none of it.
-        browser.execute_script("""
-          const frame = document.querySelector("#artifact-frame");
-          const doc = frame.contentDocument;
-          const view = frame.contentWindow;
-          const pages = doc.querySelector("main.pages");
-          const touch = (id, x, y) => new view.Touch({identifier: id, target: pages, clientX: x, clientY: y});
-          const send = (type, touches) => pages.dispatchEvent(new view.TouchEvent(type, {
-            touches, targetTouches: touches, changedTouches: touches,
-            bubbles: true, cancelable: true}));
-          send("touchstart", [touch(9, 300, 500)]);
-          send("touchmove", [touch(9, 300, 380)]);
-          send("touchend", []);
-        """)
-        time.sleep(0.3)
-        rest = browser.execute_script(measure)
-        assert abs(rest["scale"] - 1) < 0.01
-        assert rest["shift"] == back["shift"], rest
     finally:
         if browser is not None:
             try:
@@ -1522,13 +1498,11 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         shared.stop()
 
 
-
-
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_the_artifact_stays_selectable_under_the_zoom(tmp_path: Path) -> None:
-    """The zoom library disables the document's selectstart while it holds a gesture, and
-    a long press then caught no words at all, so no comment could be started from the
-    page. Reading the artifact is the point of it: selection stays the reader's."""
+    """A long press starts with one finger landing and staying. Answering every touch to
+    own the zoom gesture cancelled that touchstart, and a press that catches no words can
+    start no comment: a finger that has not moved is still the reader's."""
     slides = tmp_path / "slides.html"
     slides.write_text(slides_html(), encoding="utf-8")
     port = available_port()
@@ -1558,33 +1532,33 @@ def test_the_artifact_stays_selectable_under_the_zoom(tmp_path: Path) -> None:
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#artifact-status")?.textContent === "ready"'))
-        wait_until(lambda: browser.execute_script(
-            'const w = document.querySelector("#artifact-frame").contentWindow;'
-            'return typeof w.wrappedJSObject.panzoom === "function"'))
 
-        # A long press starts with one finger landing and staying: if anything cancels
-        # that touchstart the browser never offers a selection, and the whole path from a
-        # finger to a comment is gone. This is what the zoom library did to every touch
-        # until one finger was left to the browser.
-        cancelled = browser.execute_script('''
+        # A long press is a finger that lands and stays, with the small wobble a hand
+        # always has. If anything cancels those the browser never offers a selection, and
+        # the whole path from a finger to a comment is gone; past a threshold the same
+        # finger is asking to pan, and only then is the browser's handling taken away.
+        gestures = browser.execute_script('''
           const frame = document.querySelector("#artifact-frame");
           const doc = frame.contentDocument;
           const view = frame.contentWindow;
           const words = doc.querySelector("#target");
           const box = words.getBoundingClientRect();
-          const touch = new view.Touch({identifier: 7, target: words,
-            clientX: box.left + 20, clientY: box.top + box.height / 2});
-          const event = new view.TouchEvent("touchstart", {
-            touches: [touch], targetTouches: [touch], changedTouches: [touch],
-            bubbles: true, cancelable: true});
-          words.dispatchEvent(event);
-          const stopped = event.defaultPrevented;
-          words.dispatchEvent(new view.TouchEvent("touchend", {
-            touches: [], targetTouches: [], changedTouches: [touch],
-            bubbles: true, cancelable: true}));
-          return stopped;
+          const at = (x, y) => new view.Touch({identifier: 7, target: words,
+            clientX: box.left + x, clientY: box.top + y});
+          const fire = (type, touch) => {
+            const event = new view.TouchEvent(type, {
+              touches: touch ? [touch] : [], targetTouches: touch ? [touch] : [],
+              changedTouches: [touch ?? at(20, 5)], bubbles: true, cancelable: true});
+            words.dispatchEvent(event);
+            return event.defaultPrevented;
+          };
+          const held = [fire("touchstart", at(20, 5)), fire("touchmove", at(23, 6))];
+          const panned = fire("touchmove", at(120, 5));
+          fire("touchend", null);
+          return {held, panned};
         ''')
-        assert cancelled is False
+        assert gestures["held"] == [False, False], gestures
+        assert gestures["panned"] is True, gestures
 
         # A press that lands on a word and settles: the selection stands and the button
         # comes out, which is the whole path from a finger to a comment.
