@@ -741,27 +741,73 @@ def test_browser_review_contract(tmp_path: Path) -> None:
             .map((tab) => tab.textContent).join("|") === "Updated Slides|Updated Report";
         '''))
 
-        # Resolve all closes the whole open queue at once, which is how the reviewer signs
-        # off a batch the agent answered and deliberately left open. The first press asks
-        # in the label and changes nothing; the second one closes them.
+        # The reviewer picks comments and closes what was picked, which is how a batch the
+        # agent answered and deliberately left open is signed off. Each button counts what
+        # it will touch, and what was not picked is left alone.
         browser.find_element("css selector", '.artifact-tab:nth-child(1)').click()
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#main-file").textContent === "slides.html"'))
-        for note in ("First of the batch", "Second of the batch"):
+        for note in ("First of the batch", "Second of the batch", "Third of the batch"):
             post_json(f"{base}/artifacts/slides/comments",
                       {"anchor": {"kind": "artifact"}, "text": note})
         still_open = get_json(f"{base}/artifacts/slides/comments?status=open")["comments"]
-        assert len(still_open) == 2
-        asking = f"Resolve {len(still_open)}?"
-        browser.find_element("css selector", "#resolve-open-btn").click()
+        assert len(still_open) == 3
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#resolve-open-btn").textContent') == asking)
-        assert get_json(f"{base}/artifacts/slides/comments?status=open")["comments"] == still_open
-        browser.find_element("css selector", "#resolve-open-btn").click()
-        wait_until(lambda: not get_json(f"{base}/artifacts/slides/comments?status=open")["comments"])
+            'return document.querySelectorAll(".comment-pick").length === 3'))
+
+        def label(button):
+            return browser.execute_script(f'''
+              const button = document.querySelector("{button}");
+              return button.classList.contains("hidden") ? null : button.textContent;
+            ''')
+
+        # Nothing picked, nothing to press.
+        assert label("#resolve-picked-btn") is None
+        assert label("#reopen-picked-btn") is None
+
+        def pick(comment_id):
+            browser.execute_script(f'''
+              document.querySelector(\'[data-comment-id="{comment_id}"] .comment-pick\').click();
+            ''')
+
+        pick(still_open[0]["id"])
+        pick(still_open[1]["id"])
+        assert label("#resolve-picked-btn") == "Resolve 2"
+        # One of them is put back, so the count follows.
+        pick(still_open[1]["id"])
+        assert label("#resolve-picked-btn") == "Resolve 1"
+        pick(still_open[1]["id"])
+
+        browser.find_element("css selector", "#resolve-picked-btn").click()
+        wait_until(lambda: len(
+            get_json(f"{base}/artifacts/slides/comments?status=open")["comments"]) == 1)
+        left = get_json(f"{base}/artifacts/slides/comments?status=open")["comments"]
+        assert left[0]["id"] == still_open[2]["id"]        # the one nobody picked
         closed = get_json(f"{base}/artifacts/slides/comments/{still_open[0]['id']}")
         assert closed["status"] == "resolved"
         assert closed["thread"][-1]["author"] == "human"   # the reviewer closed it, not the agent
+
+        # Select all takes the view, and in the resolved view the picked ones reopen.
+        browser.execute_script('''
+          const filter = document.querySelector("#comment-filter");
+          filter.value = "resolved";
+          filter.dispatchEvent(new Event("change", {bubbles: true}));
+        ''')
+        resolved = get_json(f"{base}/artifacts/slides/comments?status=resolved")["comments"]
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelectorAll(".comment-pick").length') == len(resolved))
+        assert label("#pick-all-btn") == "Select all"
+        browser.find_element("css selector", "#pick-all-btn").click()
+        wait_until(lambda: label("#reopen-picked-btn") == f"Reopen {len(resolved)}")
+        assert label("#resolve-picked-btn") is None
+        assert label("#pick-all-btn") == "Clear"           # pressed again it lets go
+        browser.find_element("css selector", "#reopen-picked-btn").click()
+        wait_until(lambda: len(
+            get_json(f"{base}/artifacts/slides/comments?status=open")["comments"])
+            == 1 + len(resolved))
+        reopened = get_json(f"{base}/artifacts/slides/comments/{still_open[0]['id']}")
+        assert reopened["status"] == "open"
+        assert reopened["thread"][-1]["author"] == "human"
     finally:
         if browser is not None:
             try:

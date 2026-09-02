@@ -16,6 +16,7 @@ const state = {
   selectionAnchor: null,
   composeSubmitting: false,
   expanded: new Set(),
+  picked: new Set(),
   focusedCommentId: null,
   activeForm: null,
   editingEntry: null,
@@ -950,10 +951,11 @@ const captureCommentUi = comments.captureCommentUi;
 const focusComment = comments.focusComment;
 const installComposeKeys = comments.installComposeKeys;
 const openCompose = comments.openCompose;
+const pickAll = comments.pickAll;
+const renderPickedActions = comments.renderPickedActions;
+const setPickedStatus = comments.setPickedStatus;
 const refreshComments = comments.refreshComments;
-const openCommentIds = comments.openCommentIds;
 const renderComments = comments.renderComments;
-const resolveComments = comments.resolveComments;
 const restoreCommentUi = comments.restoreCommentUi;
 const submitCompose = comments.submitCompose;
 const switchSidebarTab = comments.switchSidebarTab;
@@ -1054,44 +1056,25 @@ function attachControls() {
     state.pendingAnchor = null;
   });
   $("#comment-filter").addEventListener("change", () => refreshComments().catch((error) => alert(error.message)));
-  // Closing a whole queue at once is worth a second press rather than a first one. The
-  // button asks in its own label ("Resolve 7?"), which a dialog would only repeat, and
-  // goes back to asking if the press does not come.
-  let pendingResolve = null;
-  const restResolve = () => {
-    const button = $("#resolve-open-btn");
-    if (pendingResolve !== null) clearTimeout(pendingResolve.timer);
-    pendingResolve = null;
-    button.textContent = "Resolve all";
-    button.disabled = false;
-  };
-  $("#resolve-open-btn").addEventListener("click", async () => {
-    const button = $("#resolve-open-btn");
-    try {
-      if (pendingResolve !== null) {
-        const ids = pendingResolve.ids;
-        clearTimeout(pendingResolve.timer);
-        pendingResolve = null;
-        button.disabled = true;
-        await resolveComments(ids);
-        button.textContent = `Resolved ${ids.length}`;
-        setTimeout(restResolve, 2000);
-        return;
+  $("#pick-all-btn").addEventListener("click", pickAll);
+  // Picking is the reviewer's own act, and closing what was picked is the sign-off on a
+  // batch the agent answered and deliberately left open. The buttons carry the ids they
+  // were drawn with, so a press acts on what its label counted.
+  for (const [id, status] of [["#resolve-picked-btn", "resolved"], ["#reopen-picked-btn", "open"]]) {
+    $(id).addEventListener("click", async () => {
+      const button = $(id);
+      const ids = button.dataset.ids === "" ? [] : button.dataset.ids.split(" ");
+      if (ids.length === 0) return;
+      button.disabled = true;
+      try {
+        await setPickedStatus(ids, status);
+      } catch (error) {
+        alert(`Could not save: ${error.message}`);
+      } finally {
+        button.disabled = false;
       }
-      const ids = await openCommentIds();
-      if (ids.length === 0) {
-        button.textContent = "None open";
-        setTimeout(restResolve, 2000);
-        return;
-      }
-      button.textContent = `Resolve ${ids.length}?`;
-      pendingResolve = { ids, timer: setTimeout(restResolve, 5000) };
-    } catch (error) {
-      console.error(error);
-      button.textContent = "Failed";
-      setTimeout(restResolve, 2000);
-    }
-  });
+    });
+  }
   $("#call-agent-btn").addEventListener("click", async () => {
     const button = $("#call-agent-btn");
     const label = button.lastChild;

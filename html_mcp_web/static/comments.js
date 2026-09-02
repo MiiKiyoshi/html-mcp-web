@@ -178,6 +178,16 @@ export function createComments(dependencies) {
       class: `comment-card${state.focusedCommentId === comment.id ? " focused" : ""}${state.unattached.has(comment.id) ? " unattached" : ""}`,
       data: { commentId: comment.id },
     });
+    const box = h("input", { class: "comment-pick", type: "checkbox",
+                             title: "Pick this comment" });
+    box.checked = state.picked.has(comment.id);
+    // The box is inside the summary, which opens the card: picking is not opening.
+    box.addEventListener("click", (event) => event.stopPropagation());
+    box.addEventListener("change", () => {
+      if (box.checked) state.picked.add(comment.id);
+      else state.picked.delete(comment.id);
+      renderPickedActions();
+    });
     card.appendChild(h("div", { class: "comment-summary", onclick: () => {
       state.focusedCommentId = comment.id;
       const opening = !state.expanded.has(comment.id);
@@ -188,6 +198,7 @@ export function createComments(dependencies) {
       jumpToComment(comment.id);
     } },
     h("div", { class: "anchor-label" },
+      box,
       h("span", { class: "comment-id", text: comment.id }),
       h("span", { class: `status-pill ${comment.status}`, text: `[${comment.status}]` }),
       state.unattached.has(comment.id) ? h("span", { class: "stale-pill", text: "[stale]" }) : null,
@@ -241,12 +252,54 @@ export function createComments(dependencies) {
     if (state.comments.length === 0) list.appendChild(h("p", { class: "placeholder", text: "No comments in this view." }));
     else for (const comment of state.comments) list.appendChild(renderComment(comment));
     list.scrollTop = scrollTop;
+    renderPickedActions();
     const open = state.comments.filter((comment) => comment.status === "open").length;
     const count = $("#open-count");
     count.textContent = String(open);
     count.classList.toggle("hidden", open === 0);
   }
   
+  // What the picked comments can be sent to, which is decided by the state they are in:
+  // open ones close, closed ones reopen. Both buttons show a count, so a mixed pick says
+  // exactly what each press will touch, and neither appears with nothing to touch.
+  function renderPickedActions() {
+    const picked = state.comments.filter((comment) => state.picked.has(comment.id));
+    const open = picked.filter((comment) => comment.status === "open").map((comment) => comment.id);
+    const closed = picked.filter((comment) => comment.status !== "open").map((comment) => comment.id);
+    const shown = state.comments.length;
+    const all = $("#pick-all-btn");
+    all.classList.toggle("hidden", shown === 0);
+    all.textContent = picked.length === shown && shown > 0 ? "Clear" : "Select all";
+    const resolve = $("#resolve-picked-btn");
+    resolve.classList.toggle("hidden", open.length === 0);
+    resolve.textContent = `Resolve ${open.length}`;
+    resolve.dataset.ids = open.join(" ");
+    const reopen = $("#reopen-picked-btn");
+    reopen.classList.toggle("hidden", closed.length === 0);
+    reopen.textContent = `Reopen ${closed.length}`;
+    reopen.dataset.ids = closed.join(" ");
+  }
+
+  function pickAll() {
+    const shown = state.comments.map((comment) => comment.id);
+    const already = shown.every((id) => state.picked.has(id));
+    for (const id of shown) {
+      if (already) state.picked.delete(id);
+      else state.picked.add(id);
+    }
+    renderComments();
+  }
+
+  async function setPickedStatus(ids, status) {
+    await fetchJson(`${artifactBase()}/comments/update`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ comment_ids: ids, status, author: "human" }),
+    });
+    for (const id of ids) state.picked.delete(id);
+    await refreshComments();
+  }
+
   function switchSidebarTab(name) {
     for (const button of document.querySelectorAll(".tab-btn")) {
       button.classList.toggle("active", button.dataset.tab === name);
@@ -256,24 +309,6 @@ export function createComments(dependencies) {
     }
   }
   
-  // Closing the batch is the reviewer's act, not the agent's: the agent answers and edits
-  // and leaves the thread open, so its reasoning stays readable, and this closes what has
-  // been read and found sound. The open list is fetched now rather than taken from the
-  // view, which the status filter may have narrowed to something else entirely.
-  async function openCommentIds() {
-    const payload = await fetchJson(`${artifactBase()}/comments?status=open`);
-    return payload.comments.map((comment) => comment.id);
-  }
-
-  async function resolveComments(ids) {
-    await fetchJson(`${artifactBase()}/comments/update`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ comment_ids: ids, status: "resolved", author: "human" }),
-    });
-    await refreshComments();
-  }
-
   async function mutateComment(commentId, action, body) {
     await fetchJson(`${artifactBase()}/comments/${commentId}/${action}`, {
       method: "POST",
@@ -423,10 +458,11 @@ export function createComments(dependencies) {
     captureCommentUi,
     focusComment,
     openCompose,
-    openCommentIds,
+    pickAll,
     refreshComments,
     renderComments,
-    resolveComments,
+    renderPickedActions,
+    setPickedStatus,
     restoreCommentUi,
     installComposeKeys,
     submitCompose,
