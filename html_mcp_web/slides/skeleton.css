@@ -240,7 +240,12 @@ tfoot td { border-top: 2px solid var(--accent); border-bottom: 0; font-weight: 7
 .win strong { color: var(--good); }
 .lose strong { color: var(--bad); }
 
-.two { display: grid; grid-template-columns: 1.15fr 1fr; gap: 36px; align-items: start; }
+/* The two columns share the row's height, and a column that wraps its blocks in a div
+   spreads them over it the way the body spreads its own (.body > .rest above): beside a
+   tall figure, a short stack of cards sat in a clump at the top and left the rest of the
+   column empty. A column that is one block (a figure, a table) keeps its own height. */
+.two { display: grid; grid-template-columns: 1.15fr 1fr; gap: 36px; align-items: stretch; }
+.two > div { display: flex; flex-direction: column; justify-content: space-evenly; }
 .card { padding: 4px 0 4px 22px; border-left: 2px solid var(--accent); }
 .card h3 { margin: 0 0 9px; color: var(--primary); font-size: 21px; }
 .card p { margin: 0 0 8px; color: var(--ink-soft); font-size: 16px; }

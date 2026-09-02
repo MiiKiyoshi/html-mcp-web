@@ -103,7 +103,9 @@ takes no part in that spread; everything after it shares the remaining height.
 - `pos` and `neg` mark an improvement and a regression, `sep` draws a column boundary,
   and `nw` keeps a short label or status cell on one line
 - `grid3` containing `metric` cards, optionally marked `win` or `lose`
-- `two` containing normal content and `card`
+- `two` containing normal content and `card`; its two columns share the row's height, and
+  a column wrapped in a `div` spreads its blocks over that height, so a short stack beside
+  a tall figure does not sit in a clump at the top
 - `flow` containing four `step` blocks, `flow.cycle` when the last step feeds the first
 - `p.feedback` for received feedback
 - `div.concerns` for points raised about the work: a `<b>` label on its own line, then the
