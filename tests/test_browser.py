@@ -1439,7 +1439,16 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         before = browser.execute_script(measure)
         assert not before["resetShown"]
 
-        pinch = """
+        # The point between the fingers, in the coordinates of the page it lies on.
+        held = browser.execute_script("""
+          const frame = document.querySelector("#artifact-frame");
+          const page = frame.contentDocument.elementFromPoint(350, 400).closest("section.page");
+          const box = page.getBoundingClientRect();
+          const ratio = box.width / page.offsetWidth;
+          return {index: Array.from(page.parentElement.children).indexOf(page),
+                  x: (350 - box.left) / ratio, y: (400 - box.top) / ratio};
+        """)
+        fingers = """
           const frame = document.querySelector("#artifact-frame");
           const doc = frame.contentDocument;
           const view = frame.contentWindow;
@@ -1448,13 +1457,24 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
           const send = (type, touches) => target.dispatchEvent(new view.TouchEvent(type, {
             touches, targetTouches: touches, changedTouches: touches,
             bubbles: true, cancelable: true}));
+        """
+        browser.execute_script(fingers + """
           send("touchstart", [touch(1, 300, 400), touch(2, 400, 400)]);
           for (let step = 1; step <= 6; step += 1) {
             send("touchmove", [touch(1, 300 - step * 20, 400), touch(2, 400 + step * 20, 400)]);
           }
-          send("touchend", []);
-        """
-        browser.execute_script(pinch)
+        """)
+        # While the fingers are down nothing is laid out again: the pages keep the scale
+        # they started at and the holder is carried by one transform. Laying the deck out
+        # on every touchmove is what a phone could not finish between two frames.
+        carried = browser.execute_script("""
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          return {scale: Number(doc.documentElement.style.getPropertyValue("--html-mcp-page-scale")),
+                  transform: doc.querySelector("main.pages").style.transform};
+        """)
+        assert carried["scale"] == before["scale"], carried
+        assert carried["transform"].startswith("translate("), carried
+        browser.execute_script(fingers + 'send("touchend", []);')
         time.sleep(0.4)
         after = browser.execute_script(measure)
         assert after["width"] > before["width"] * 1.4, after   # the deck grew
@@ -1464,6 +1484,18 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         # Grown by its own size, the document has somewhere to scroll: a transform would
         # have left the overflow outside every scroll range.
         assert after["scrollWidth"] > after["viewport"], after
+        # What sat between the fingers is under them still, at the new size, and the
+        # transform that carried the holder is gone with the gesture.
+        placed = browser.execute_script("""
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const page = doc.querySelector("main.pages").children[%d];
+          const box = page.getBoundingClientRect();
+          const ratio = box.width / page.offsetWidth;
+          return {x: box.left + %r * ratio, y: box.top + %r * ratio,
+                  transform: doc.querySelector("main.pages").style.transform};
+        """ % (held["index"], held["x"], held["y"]))
+        assert abs(placed["x"] - 350) < 2 and abs(placed["y"] - 400) < 2, placed
+        assert placed["transform"] == "", placed
 
         # Both ends are reachable: the left edge, and the top of the first page.
         edges = browser.execute_script("""

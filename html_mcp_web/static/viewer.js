@@ -341,11 +341,17 @@ function installArtifactZoom() {
 // zoomed in, the left never came back and the first page lost its top. The factor goes
 // into the scale the pages are laid out at, whose margins grow the boxes with it, so the
 // document is genuinely larger and scrolls in both directions like any other.
+//
+// That layout is settled once, when the fingers lift. While they move, the holder of the
+// pages is carried by one transform the compositor applies, which lays nothing out and
+// paints nothing anew: laying the pages out again on every touchmove, and rebuilding the
+// highlight boxes each time, was work a phone could not finish between two frames, and
+// the zoom stuttered in step with it.
 function handleArtifactTouch(event) {
   const win = frameWindow();
   const touches = Array.from(event.touches);
   if (event.type === "touchend" || event.type === "touchcancel") {
-    if (touches.length < 2) state.pinch = null;
+    if (touches.length < 2 && state.pinch !== null) settlePinch();
     if (touches.length === 0) state.artifactDrag = null;
     return;
   }
@@ -355,22 +361,22 @@ function handleArtifactTouch(event) {
     const middle = { x: (first.clientX + second.clientX) / 2, y: (first.clientY + second.clientY) / 2 };
     state.artifactDrag = null;
     if (state.pinch === null || event.type === "touchstart") {
-      // What sits between the fingers, in coordinates the zoom does not change, so it can
-      // be put back under them at whatever size the gesture settles on.
-      state.pinch = span === 0 ? null : {
-        startSpan: span,
-        startZoom: state.artifactZoom,
-        anchorX: (win.scrollX + middle.x) / state.artifactZoom,
-        anchorY: (win.scrollY + middle.y) / state.artifactZoom,
-      };
+      if (state.pinch !== null) settlePinch();
+      state.pinch = beginPinch(span, middle);
       return;
     }
     event.preventDefault();
     const pinch = state.pinch;
-    state.artifactZoom = Math.min(4, Math.max(0.5, pinch.startZoom * (span / pinch.startSpan)));
-    applyArtifactZoom();
-    win.scrollTo(pinch.anchorX * state.artifactZoom - middle.x,
-                 pinch.anchorY * state.artifactZoom - middle.y);
+    pinch.zoom = Math.min(4, Math.max(0.5, pinch.startZoom * (span / pinch.startSpan)));
+    pinch.middle = middle;
+    // The holder scaled about its own corner and shifted so that what sat between the
+    // fingers at the start is under them now.
+    const grown = pinch.zoom / pinch.startZoom;
+    const shift = {
+      x: middle.x - pinch.origin.x - grown * pinch.focal.x,
+      y: middle.y - pinch.origin.y - grown * pinch.focal.y,
+    };
+    pinch.holder.style.transform = `translate(${shift.x}px, ${shift.y}px) scale(${grown})`;
     return;
   }
   const touch = touches[0];
@@ -391,6 +397,67 @@ function handleArtifactTouch(event) {
   win.scrollBy(drag.x - touch.clientX, drag.y - touch.clientY);
   drag.x = touch.clientX;
   drag.y = touch.clientY;
+}
+
+// What the gesture keeps of its start: the holder's corner and the point between the
+// fingers relative to it, for carrying the holder; and that point in the coordinates of
+// the page it lies on, which no zoom changes, for putting it back under the fingers once
+// the layout is settled. Page coordinates rather than document ones, because the gaps
+// between pages and the margin around them do not grow with the zoom.
+function beginPinch(span, middle) {
+  if (span === 0 || state.slideShow) return null;
+  const holder = frameDocument().querySelector("body > main.pages");
+  const page = pageNear(middle);
+  if (holder === null || page === null) return null;
+  const corner = holder.getBoundingClientRect();
+  const box = page.getBoundingClientRect();
+  const ratio = box.width / page.offsetWidth;
+  holder.style.transformOrigin = "0 0";
+  holder.style.willChange = "transform";
+  return {
+    startSpan: span,
+    startZoom: state.artifactZoom,
+    zoom: state.artifactZoom,
+    middle,
+    holder,
+    origin: { x: corner.left, y: corner.top },
+    focal: { x: middle.x - corner.left, y: middle.y - corner.top },
+    page,
+    local: { x: (middle.x - box.left) / ratio, y: (middle.y - box.top) / ratio },
+  };
+}
+
+function settlePinch() {
+  const pinch = state.pinch;
+  state.pinch = null;
+  pinch.holder.style.transform = "";
+  pinch.holder.style.transformOrigin = "";
+  pinch.holder.style.willChange = "";
+  if (pinch.zoom === pinch.startZoom) return;
+  state.artifactZoom = pinch.zoom;
+  applyArtifactZoom();
+  const box = pinch.page.getBoundingClientRect();
+  const ratio = box.width / pinch.page.offsetWidth;
+  frameWindow().scrollBy(box.left + pinch.local.x * ratio - pinch.middle.x,
+                         box.top + pinch.local.y * ratio - pinch.middle.y);
+}
+
+// The page under a point, or the nearest one when the point is in a gap.
+function pageNear(point) {
+  const hit = frameDocument().elementFromPoint(point.x, point.y);
+  const under = hit === null ? null : hit.closest("body > main.pages > section.page");
+  if (under !== null) return under;
+  let nearest = null;
+  let distance = Infinity;
+  for (const page of artifactPages()) {
+    const box = page.getBoundingClientRect();
+    const away = Math.max(box.top - point.y, point.y - box.bottom, 0);
+    if (away < distance) {
+      distance = away;
+      nearest = page;
+    }
+  }
+  return nearest;
 }
 
 function applyArtifactZoom() {
