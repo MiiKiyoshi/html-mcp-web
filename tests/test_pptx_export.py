@@ -252,6 +252,38 @@ def test_each_page_screenshots_its_own_element(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_an_svg_file_in_an_img_is_exported_like_an_inline_svg(tmp_path: Path) -> None:
+    """A deck's figure drawn as <img src="fig/step.svg"> failed the whole export: the file's
+    bytes went to python-pptx as a picture, and an svg is no image it can identify. It
+    takes the inline svg's path now, a screenshot for the frame and the file as the vector."""
+    import zipfile
+    from html_mcp_web.slides import build
+    (tmp_path / "fig").mkdir()
+    (tmp_path / "fig" / "step.svg").write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">'
+        '<rect x="10" y="10" width="180" height="80" fill="none" stroke="#333"/>'
+        '<text x="20" y="60" font-size="20">step</text></svg>\n', encoding="utf-8")
+    content = tmp_path / "content.html"
+    content.write_text('''<!doctype html>
+<meta charset="utf-8">
+<title>Figure</title>
+<body data-author="A" data-meta="B">
+<section data-title="Step"><img src="fig/step.svg" style="width: 400px"></section>
+</body>
+''', encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, NEUTRAL)
+    out = tmp_path / "deck.pptx"
+    result = export_pptx(html.as_uri(), out, tmp_path, None)
+    step = next(p for p in result["pages"] if p["title"] == "Step")
+    assert step["vector_svgs"] == 1
+    with zipfile.ZipFile(out) as archive:
+        assert any(n.endswith(".svg") for n in archive.namelist())
+        assert "svgBlip" in archive.read("ppt/slides/slide2.xml").decode("utf-8")
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_inline_svg_is_embedded_as_vector_math_stays_raster(tmp_path: Path) -> None:
     import re
     import zipfile

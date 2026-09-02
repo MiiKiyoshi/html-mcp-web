@@ -30,6 +30,7 @@ import io
 import json
 import re
 import shutil
+import urllib.parse
 import socket
 import struct
 import subprocess
@@ -202,11 +203,16 @@ const hasPseudo = (el) => pseudoContent(el) || Array.from(el.querySelectorAll('*
 // Images in inline flow (a row of <img> in a div, default display:inline) are not block
 // children, so their container reads as a leaf whose text is taken while the images are
 // dropped. Each such image still needs its own picture frame.
+// An <img> whose source is an svg is no image python-pptx can hold as it is; it goes as
+// a shot, with the file itself riding along as the vector, the way an inline <svg> does.
+const svgSource = (src) => /^data:image\/svg\+xml/i.test(src || '') || /\.svgz?(?:[?#]|$)/i.test(src || '');
 const inlineImages = (el) => {
   for (const im of el.querySelectorAll('img')) {
     const ir = im.getBoundingClientRect();
     if (ir.width === 0 || ir.height === 0) continue;
-    items.push({kind: 'img', rect: rel(ir), src: im.getAttribute('src'), i: mark(im)});
+    const src = im.getAttribute('src');
+    if (svgSource(src)) items.push({kind: 'shot', rect: rel(ir), i: mark(im), svgFile: src});
+    else items.push({kind: 'img', rect: rel(ir), src, i: mark(im)});
   }
 };
 
@@ -221,6 +227,10 @@ const emit = (el) => {
   const hasKatex = !!el.querySelector('.katex') || el.classList.contains('katex');
   const container = hasBlockChild(el);
   if (tag === 'img') {
+    if (svgSource(el.getAttribute('src'))) {
+      items.push({kind: 'shot', rect, i: mark(el), svgFile: el.getAttribute('src')});
+      return;
+    }
     // Where the picture is actually painted: object-fit decides how it sits in a box of
     // another shape, and taking the box alone stretched a tall figure across a wide one.
     items.push({kind: 'img', rect, src: el.getAttribute('src'), fit: s.objectFit,
@@ -913,6 +923,18 @@ def embed_fonts(pptx_path: Path, family: str, faces: dict[str, Path]) -> None:
             archive.writestr(name, data)
 
 
+def _svg_file_text(src: str, project_dir: Path) -> str:
+    """The svg an <img> points at, as text: a file inside the project, or a data URI."""
+    if src.startswith("data:"):
+        header, payload = src.split(",", 1)
+        raw = base64.b64decode(payload) if ";base64" in header else urllib.parse.unquote_to_bytes(payload)
+        return raw.decode("utf-8")
+    source = (project_dir / src.split("?", 1)[0].split("#", 1)[0]).resolve()
+    if not source.is_relative_to(project_dir.resolve()) or not source.is_file():
+        raise FileNotFoundError(f"image {src!r} is not a file inside the project")
+    return source.read_text(encoding="utf-8")
+
+
 def load_pptx_config(skin_dir: Path | None) -> dict[str, Any]:
     if skin_dir is None or not (skin_dir / "skin.json").is_file():
         return {}
@@ -1027,6 +1049,8 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
                         _crop_to_cover(picture, item["rect"], natural)
                 else:
                     shot_bytes = base64.b64decode(item["_shot"])
+                    if "svgFile" in item:
+                        item["svg"] = _svg_file_text(item["svgFile"], project_dir)
                     if "svg" in item:
                         svg = _normalize_svg(item["svg"].encode("utf-8"), item["rect"][2], item["rect"][3], font)
                         _add_svg_picture(slide, shot_bytes, svg, item["rect"])
