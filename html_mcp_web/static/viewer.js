@@ -340,6 +340,13 @@ function installArtifactZoom() {
     doc.addEventListener(kind, handleArtifactTouch, { passive: false, capture: true });
   }
   doc.addEventListener("wheel", handleArtifactWheel, { passive: false, capture: true });
+  // Safari zooms a page from two fingers through a gesture of its own, which is not the
+  // page's to preventDefault once it has begun. Refused here, the artifact is zoomed by
+  // the artifact alone; left to run, it moved the window under the settled layout and
+  // the deck appeared somewhere else the moment the fingers lifted.
+  for (const kind of ["gesturestart", "gesturechange", "gestureend"]) {
+    doc.addEventListener(kind, (event) => event.preventDefault(), { passive: false, capture: true });
+  }
 }
 
 // A trackpad pinch reaches the page as a wheel event holding ctrl, which is also what a
@@ -395,6 +402,10 @@ function handleArtifactTouch(event) {
     if (state.pinch === null || event.type === "touchstart") {
       if (state.pinch !== null) settlePinch();
       state.pinch = beginPinch(span, middle);
+      // A second finger is never a reader holding a word, so this one is taken from the
+      // browser at once: told only at the first move, it has already begun a zoom of its
+      // own, and two zooms ran on the same fingers.
+      if (state.pinch !== null) event.preventDefault();
       return;
     }
     event.preventDefault();
@@ -433,6 +444,12 @@ function carryPinch(pinch, zoom, at) {
   pinch.middle = at;
   const grown = pinch.zoom / pinch.startZoom;
   const room = pinch.room;
+  // What is visible is measured as it stands, not as it stood: a phone hides its address
+  // bar partway through a gesture, and a deck held within the room it had before that
+  // was outside the room it had after.
+  const view = frameDocument().documentElement;
+  room.viewWidth = view.clientWidth;
+  room.viewHeight = view.clientHeight;
   const shift = {
     x: at.x - pinch.origin.x - grown * pinch.focal.x,
     y: at.y - pinch.origin.y - grown * pinch.focal.y,
