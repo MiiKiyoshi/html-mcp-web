@@ -44,7 +44,7 @@ NO_CACHE = {"Cache-Control": "no-cache"}
 # Closing a thread is the reviewer's act, made from the page once the reply and the edit
 # have been read: an agent that closed its own work hid the reasoning it is judged by,
 # and a rule that only the instructions carried was read by some sessions and not others.
-# Dismissing a mistaken comment or reopening one stays the agent's to do.
+# Reopening one stays the agent's to do.
 AGENT_CLOSE_REFUSED = ("an agent does not resolve a thread: reply, record the edited files and "
                        "leave it open; the reviewer resolves from the page")
 
@@ -203,7 +203,7 @@ class ArtifactRuntime:
         comments = self.store.list()
         comment_counts = {
             status: sum(comment.status == status for comment in comments)
-            for status in ("open", "resolved", "dismissed")
+            for status in ("open", "resolved")
         }
         data: dict[str, Any] = {
             "id": self.artifact_id,
@@ -711,7 +711,7 @@ class HtmlReviewServer:
     async def list_comments(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         status = request.query["status"] if "status" in request.query else None
-        if status not in {None, "open", "resolved", "dismissed"}:
+        if status not in {None, "open", "resolved"}:
             raise web.HTTPBadRequest(text="invalid status")
         return web.json_response({"comments": [comment.to_dict() for comment in runtime.store.list(status=status)]})
 
@@ -749,8 +749,6 @@ class HtmlReviewServer:
             elif action == "resolve":
                 comment = runtime.store.resolve(comment_id, str(data["summary"]), author,
                                                 [str(value) for value in data["edits"]] if "edits" in data else None)
-            elif action == "dismiss":
-                comment = runtime.store.dismiss(comment_id, str(data["reason"]), author)
             elif action == "reopen":
                 comment = runtime.store.reopen(comment_id, str(data["text"]), author)
             else:
@@ -804,8 +802,8 @@ class HtmlReviewServer:
                 raise ValueError("comment_ids must be a list of strings")
             if not isinstance(message, str):
                 raise ValueError("message must be a string")
-            if status not in {None, "open", "resolved", "dismissed"}:
-                raise ValueError("status must be open, resolved, or dismissed")
+            if status not in {None, "open", "resolved"}:
+                raise ValueError("status must be open or resolved")
             if author == "agent" and status == "resolved":
                 raise ValueError(AGENT_CLOSE_REFUSED)
             if edited_files is not None and (
@@ -853,9 +851,6 @@ class HtmlReviewServer:
 
     async def resolve_comment(self, request: web.Request) -> web.Response:
         return await self._thread_mutation(request, "resolve")
-
-    async def dismiss_comment(self, request: web.Request) -> web.Response:
-        return await self._thread_mutation(request, "dismiss")
 
     async def reopen_comment(self, request: web.Request) -> web.Response:
         return await self._thread_mutation(request, "reopen")
@@ -1014,7 +1009,6 @@ class HtmlReviewServer:
         app.router.add_post(f"{base}/comments/update", self.update_comments)
         app.router.add_post(f"{base}/comments/{{comment_id}}/reply", self.reply_comment)
         app.router.add_post(f"{base}/comments/{{comment_id}}/resolve", self.resolve_comment)
-        app.router.add_post(f"{base}/comments/{{comment_id}}/dismiss", self.dismiss_comment)
         app.router.add_post(f"{base}/comments/{{comment_id}}/reopen", self.reopen_comment)
         app.router.add_post(f"{base}/comments/{{comment_id}}/edit", self.edit_comment_entry)
         app.router.add_delete(f"{base}/comments/{{comment_id}}", self.delete_comment)

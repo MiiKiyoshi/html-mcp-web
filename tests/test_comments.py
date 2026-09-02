@@ -91,15 +91,11 @@ def test_silent_close_flips_status_without_thread_entry(tmp_path: Path) -> None:
     assert resolved_with_edits.thread[-1].text == ""
     assert resolved_with_edits.thread[-1].edits == ["artifact.html"]
 
-    dismissed = store.dismiss(created.id, "", "human")
-    assert dismissed.status == "dismissed"
-    assert len(dismissed.thread) == len(resolved_with_edits.thread)
-
-    # Reopening is a status change like the closes above, and the reason asked for was
+    # Reopening is a status change like the close above, and the reason asked for was
     # usually the status said twice; a reply is only its text, so that one still needs some.
     silently_reopened = store.reopen(created.id, "", "human")
     assert silently_reopened.status == "open"
-    assert len(silently_reopened.thread) == len(dismissed.thread)
+    assert len(silently_reopened.thread) == len(resolved_with_edits.thread)
 
     with pytest.raises(ValueError, match="empty"):
         store.reply(created.id, "   ", "agent")
