@@ -230,7 +230,6 @@ export function createComments(dependencies) {
       actions.append(
         actionButton("Reply", () => setActiveForm(comment.id, "reply")),
         actionButton("Resolve", () => flipStatus(comment.id, "resolve", "summary")),
-        actionButton("Dismiss", () => flipStatus(comment.id, "dismiss", "reason")),
       );
     } else {
       // Reopening is a one-click status flip like closing: the status says what happened,
@@ -317,8 +316,8 @@ export function createComments(dependencies) {
     });
   }
   
-  // A status change is one click: content lives in replies, so resolve, dismiss and
-  // reopen send an empty text and the store records no extra thread entry.
+  // A status change is one click: content lives in replies, so resolve and reopen send
+  // an empty text and the store records no extra thread entry.
   async function flipStatus(commentId, action, key) {
     try {
       await mutateComment(commentId, action, { [key]: "" });

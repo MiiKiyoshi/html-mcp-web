@@ -357,25 +357,29 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
 
         # Closing a thread is the reviewer's act, from the page; the server holds to it,
         # so the rule does not depend on which instructions a session happened to read.
+        # Reopening what the reviewer closed is still the agent's to do.
         with pytest.raises(Exception, match="an agent does not resolve"):
             asyncio.run(mcp.call_tool("set_comment_status", {
                 "artifact": "slides",
                 "comment_ids": [created["id"]],
                 "status": "resolved",
             }))
-        _, dismissed = asyncio.run(mcp.call_tool("set_comment_status", {
+        post_json(f"http://127.0.0.1:{binding._shared.port}/artifacts/slides/comments/update", {
+            "comment_ids": [created["id"]], "status": "resolved", "author": "human",
+        })
+        _, reopened = asyncio.run(mcp.call_tool("set_comment_status", {
             "artifact": "slides",
             "comment_ids": [created["id"]],
-            "status": "dismissed",
+            "status": "open",
         }))
-        assert dismissed["updated"][0]["status"] == "dismissed"
-        _, dismissed_read = asyncio.run(mcp.call_tool("read_comments", {
+        assert reopened["updated"][0]["status"] == "open"
+        _, reopened_read = asyncio.run(mcp.call_tool("read_comments", {
             "artifact": "slides",
             "comment_ids": [created["id"]],
         }))
-        dismissed_comment = dismissed_read["comments"][0]
-        assert dismissed_comment["status"] == "dismissed"
-        assert all(entry["text"] for entry in dismissed_comment["thread"])
+        reopened_comment = reopened_read["comments"][0]
+        assert reopened_comment["status"] == "open"
+        assert all(entry["text"] for entry in reopened_comment["thread"])
 
         first.stop()
         second.ensure()

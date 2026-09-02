@@ -14,7 +14,10 @@ from typing import Any, Iterable, Iterator, Literal
 
 
 Author = Literal["human", "agent"]
-Status = Literal["open", "resolved", "dismissed"]
+# A thread is open or resolved. A third state, dismissed, closed a thread without acting
+# on it; the reviewer never used it, and it was the one close an agent still had for its
+# own work, so a comment not worth acting on is resolved or deleted like any other.
+Status = Literal["open", "resolved"]
 
 
 def _now() -> str:
@@ -293,8 +296,6 @@ class CommentStore:
     def resolve(self, comment_id: str, summary: str, author: Author, edits: list[str] | None = None) -> Comment:
         return self._append(comment_id, author, summary, status="resolved", edits=edits)
 
-    def dismiss(self, comment_id: str, reason: str, author: Author) -> Comment:
-        return self._append(comment_id, author, reason, status="dismissed")
 
     def reopen(self, comment_id: str, text: str, author: Author) -> Comment:
         return self._append(comment_id, author, text, status="open")

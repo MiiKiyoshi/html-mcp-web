@@ -264,7 +264,6 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .anchor-kind { margin-left: auto; }
 .status-pill.open { color: #665500; }
 .status-pill.resolved { color: #4f7758; }
-.status-pill.dismissed { color: var(--muted); }
 .comment-body { padding: 0 10px 10px; border-top: 1px solid #ebe5d9; }
 .thread-entry { padding: 9px 0; border-bottom: 1px solid #eee8dd; }
 .thread-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--muted); font-family: ui-monospace, monospace; font-size: 10px; }

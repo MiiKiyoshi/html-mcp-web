@@ -152,7 +152,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     @mcp.tool()
     async def list_comments(
         artifact: str,
-        status: Literal["open", "resolved", "dismissed", "all"] = "open",
+        status: Literal["open", "resolved", "all"] = "open",
         unanswered: Annotated[bool, Field(description="Only comments whose latest thread entry is the human's: not yet answered, or written to again after the agent's reply.")] = False,
         since: Annotated[str | None, Field(description="ISO 8601 time; only comments whose latest human entry is after it. Pass the largest last_human_at seen so far.")] = None,
     ) -> dict[str, Any]:
@@ -217,11 +217,11 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     async def set_comment_status(
         artifact: str,
         comment_ids: list[str],
-        status: Literal["open", "resolved", "dismissed"],
+        status: Literal["open", "resolved"],
         message: str = "",
         edited_files: Annotated[list[str] | None, Field(description="Project-relative paths edited for these comments; recorded on the thread entry.")] = None,
     ) -> dict[str, Any]:
-        """Dismiss a mistaken comment or reopen one. A thread is resolved by the reviewer from the page, and the server refuses a resolve from an agent. A message posts to every id, so batch with one only when it fits each thread."""
+        """Reopen a resolved thread. A thread is resolved by the reviewer from the page, and the server refuses a resolve from an agent. A message posts to every id, so batch with one only when it fits each thread."""
         if not comment_ids:
             raise ValueError("comment_ids must not be empty")
         client = binding.require_client()

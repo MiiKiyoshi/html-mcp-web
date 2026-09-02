@@ -78,7 +78,7 @@ port: 8765
 
 ## Use it
 
-Select text and press **Comment**; the anchor reattaches to the quote after edits. Use **+ Note** for a whole-artifact comment, the **Pages** tab to jump between pages, and the **Edit** link to fix your own message in place. **Resolve** and **Dismiss** close a comment in one click. Then ask the agent:
+Select text and press **Comment**; the anchor reattaches to the quote after edits. Use **+ Note** for a whole-artifact comment, the **Pages** tab to jump between pages, and the **Edit** link to fix your own message in place. **Resolve** closes a comment in one click. Then ask the agent:
 
 > Process the open html-mcp-web comments.
 

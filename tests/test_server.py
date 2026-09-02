@@ -246,7 +246,6 @@ async def test_comment_and_agent_reply_round_trip(client) -> None:
     assert state["artifacts"]["slides"]["comment_counts"] == {
         "open": 1,
         "resolved": 0,
-        "dismissed": 0,
     }
 
     reply = await test_client.post(
