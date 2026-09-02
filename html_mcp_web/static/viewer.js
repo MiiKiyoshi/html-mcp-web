@@ -41,7 +41,6 @@ const state = {
   pinch: null,
   pinchSettle: null,
   settledScroll: null,
-  artifactDrag: null,
 };
 
 function artifactBase() {
@@ -436,20 +435,23 @@ function zoomFromWheel(event, point) {
 // paints nothing anew: laying the pages out again on every step, and rebuilding the
 // highlight boxes each time, was work a phone could not finish between two frames, and
 // the zoom stuttered in step with it.
+//
+// One finger is the browser's, whether it holds a word or scrolls: the layout is a
+// document of its own size and scrolls like any other, with the browser's smoothness and
+// momentum. Scrolling it ourselves, by the finger's movement, stuttered, and doubled the
+// distance whenever the browser had begun a scroll of its own before we took over.
 function handleArtifactTouch(event) {
-  const win = frameWindow();
   const touches = Array.from(event.touches);
   if (event.type === "touchstart") state.settledScroll = null;
   if (event.type === "touchend" || event.type === "touchcancel") {
     if (touches.length < 2 && state.pinch !== null) settlePinch();
-    if (touches.length === 0) state.artifactDrag = null;
     return;
   }
-  if (touches.length >= 2) {
+  if (touches.length < 2) return;
+  {
     const [first, second] = touches;
     const span = Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
     const middle = { x: (first.clientX + second.clientX) / 2, y: (first.clientY + second.clientY) / 2 };
-    state.artifactDrag = null;
     if (state.pinch === null || event.type === "touchstart") {
       if (state.pinch !== null) settlePinch();
       state.pinch = beginPinch(span, middle, "touch");
@@ -462,26 +464,7 @@ function handleArtifactTouch(event) {
     event.preventDefault();
     const pinch = state.pinch;
     carryPinch(pinch, pinch.startZoom * (span / pinch.startSpan), middle);
-    return;
   }
-  const touch = touches[0];
-  if (touch === undefined) return;
-  if (event.type === "touchstart") {
-    state.artifactDrag = { x: touch.clientX, y: touch.clientY, panning: false };
-    return;
-  }
-  const drag = state.artifactDrag;
-  if (drag === null) return;
-  // A finger that has not moved may be holding a word, which is how the artifact is read;
-  // only once it travels past a threshold is it asking to pan, and only then is the
-  // browser's own handling taken away.
-  const moved = Math.hypot(touch.clientX - drag.x, touch.clientY - drag.y);
-  if (!drag.panning && moved < 12) return;
-  drag.panning = true;
-  event.preventDefault();
-  win.scrollBy(drag.x - touch.clientX, drag.y - touch.clientY);
-  drag.x = touch.clientX;
-  drag.y = touch.clientY;
 }
 
 // The holder scaled about its own corner and shifted so that what the gesture started on
