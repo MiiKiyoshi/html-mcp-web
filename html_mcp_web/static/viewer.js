@@ -943,6 +943,7 @@ const comments = createComments({
 const actionButton = comments.actionButton;
 const captureCommentUi = comments.captureCommentUi;
 const focusComment = comments.focusComment;
+const installComposeKeys = comments.installComposeKeys;
 const openCompose = comments.openCompose;
 const refreshComments = comments.refreshComments;
 const openCommentIds = comments.openCommentIds;
@@ -1042,6 +1043,7 @@ function attachControls() {
   document.addEventListener("wheel", handlePresentationWheel, { passive: false });
   document.addEventListener("fullscreenchange", syncFullscreenMode);
   $("#compose-form").addEventListener("submit", submitCompose);
+  installComposeKeys();
   $("#compose-cancel").addEventListener("click", () => {
     $("#compose-dialog").close();
     state.pendingAnchor = null;

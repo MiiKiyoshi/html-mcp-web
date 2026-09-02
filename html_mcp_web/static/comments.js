@@ -13,6 +13,18 @@ export function createComments(dependencies) {
     state,
   } = dependencies;
 
+  // Enter writes a new line, as it does in any box of text. What sends it is shift with
+  // enter, which keeps the hand on the keyboard, or the command or control key with it,
+  // which is the same key a comment is sent with elsewhere.
+  function sendOn(input, send) {
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      if (!(event.shiftKey || event.metaKey || event.ctrlKey) || event.altKey) return;
+      event.preventDefault();
+      send();
+    });
+  }
+
   function filteredCommentsPath() {
     const status = $("#comment-filter").value;
     return status === "all" ? `${artifactBase()}/comments` : `${artifactBase()}/comments?status=${encodeURIComponent(status)}`;
@@ -108,12 +120,7 @@ export function createComments(dependencies) {
       }
     };
     const submitButton = actionButton(config.label, submit);
-    input.addEventListener("keydown", (event) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-        event.preventDefault();
-        submit();
-      }
-    });
+    sendOn(input, submit);
     return h("div", { class: "comment-form" }, input,
       h("div", { class: "form-actions" },
         submitButton,
@@ -157,12 +164,7 @@ export function createComments(dependencies) {
       state.editingEntry = null;
       await refreshComments();
     };
-    input.addEventListener("keydown", (event) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-        event.preventDefault();
-        save();
-      }
-    });
+    sendOn(input, save);
     return h("div", { class: "comment-form" }, input,
       h("div", { class: "form-actions" },
         actionButton("Save", save),
@@ -381,6 +383,10 @@ export function createComments(dependencies) {
     $("#compose-text").focus();
   }
   
+  function installComposeKeys() {
+    sendOn($("#compose-text"), () => $("#compose-form").requestSubmit());
+  }
+
   async function submitCompose(event) {
     event.preventDefault();
     if (state.composeSubmitting || state.pendingAnchor === null) return;
@@ -422,6 +428,7 @@ export function createComments(dependencies) {
     renderComments,
     resolveComments,
     restoreCommentUi,
+    installComposeKeys,
     submitCompose,
     switchSidebarTab,
   };
