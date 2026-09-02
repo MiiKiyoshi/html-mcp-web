@@ -1555,6 +1555,96 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         back = browser.execute_script(measure)
         assert abs(back["width"] - before["width"]) < 2
         assert not back["resetShown"]
+
+        # A trackpad pinch and a modifier-held wheel take the same path: ctrl is what a
+        # trackpad pinch carries and what Windows and Linux zoom with, command what a Mac
+        # zooms with. The pointer is the fixed point, as the point between two fingers is.
+        wheel = """
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const target = doc.elementFromPoint(arguments[0], arguments[1]);
+          for (let step = 0; step < arguments[3]; step += 1) {
+            target.dispatchEvent(new view.WheelEvent("wheel", {
+              clientX: arguments[0], clientY: arguments[1], deltaY: arguments[2],
+              ctrlKey: arguments[4] === "ctrl", metaKey: arguments[4] === "meta",
+              bubbles: true, cancelable: true}));
+          }
+        """
+        for key in ("ctrl", "meta"):
+            held = browser.execute_script("""
+              const page = document.querySelector("#artifact-frame").contentDocument
+                .elementFromPoint(350, 300).closest("section.page");
+              const box = page.getBoundingClientRect();
+              const ratio = box.width / page.offsetWidth;
+              return {index: Array.from(page.parentElement.children).indexOf(page),
+                      x: (350 - box.left) / ratio, y: (300 - box.top) / ratio};
+            """)
+            browser.execute_script(wheel, script_args=[350, 300, -100, 4, key])
+            # Mid-gesture the deck is carried, not laid out again.
+            carried = browser.execute_script("""
+              const doc = document.querySelector("#artifact-frame").contentDocument;
+              return {scale: Number(doc.documentElement.style.getPropertyValue("--html-mcp-page-scale")),
+                      transform: doc.querySelector("main.pages").style.transform};
+            """)
+            assert carried["scale"] == before["scale"], carried
+            assert carried["transform"].startswith("translate("), carried
+            time.sleep(0.5)          # the wheel has no lift, so the steps stopping ends it
+            zoomed = browser.execute_script(measure)
+            assert zoomed["width"] > before["width"] * 1.2, (key, zoomed)
+            assert zoomed["resetShown"]
+            # What sat under the pointer is under it still.
+            placed = browser.execute_script("""
+              const doc = document.querySelector("#artifact-frame").contentDocument;
+              const page = doc.querySelector("main.pages").children[arguments[0]];
+              const box = page.getBoundingClientRect();
+              const ratio = box.width / page.offsetWidth;
+              return {x: box.left + arguments[1] * ratio, y: box.top + arguments[2] * ratio,
+                      transform: doc.querySelector("main.pages").style.transform};
+            """, script_args=[held["index"], held["x"], held["y"]])
+            assert abs(placed["x"] - 350) < 2 and abs(placed["y"] - 300) < 2, (key, placed)
+            assert placed["transform"] == "", placed
+            browser.find_element("css selector", "#zoom-reset-btn").click()
+            time.sleep(0.3)
+
+        # Fingers drift on a trackpad, so the fixed point is read on every step, not kept
+        # from the first: what the gesture started on follows the pointer where it goes.
+        held = browser.execute_script("""
+          const page = document.querySelector("#artifact-frame").contentDocument
+            .elementFromPoint(350, 300).closest("section.page");
+          const box = page.getBoundingClientRect();
+          const ratio = box.width / page.offsetWidth;
+          return {index: Array.from(page.parentElement.children).indexOf(page),
+                  x: (350 - box.left) / ratio, y: (300 - box.top) / ratio};
+        """)
+        browser.execute_script(wheel, script_args=[350, 300, -100, 3, "ctrl"])
+        browser.execute_script(wheel, script_args=[250, 340, -100, 1, "ctrl"])
+        time.sleep(0.5)
+        drifted = browser.execute_script("""
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const page = doc.querySelector("main.pages").children[arguments[0]];
+          const box = page.getBoundingClientRect();
+          const ratio = box.width / page.offsetWidth;
+          return {x: box.left + arguments[1] * ratio, y: box.top + arguments[2] * ratio};
+        """, script_args=[held["index"], held["x"], held["y"]])
+        assert abs(drifted["x"] - 250) < 2 and abs(drifted["y"] - 340) < 2, drifted
+        browser.find_element("css selector", "#zoom-reset-btn").click()
+        time.sleep(0.3)
+
+        # Without the modifier a wheel is a wheel: it scrolls, and the deck keeps its size.
+        rolled = browser.execute_script("""
+          const frame = document.querySelector("#artifact-frame");
+          const view = frame.contentWindow;
+          const doc = frame.contentDocument;
+          doc.elementFromPoint(350, 300).dispatchEvent(new view.WheelEvent("wheel", {
+            clientX: 350, clientY: 300, deltaY: -100, bubbles: true, cancelable: true}));
+          return doc.querySelector("main.pages").style.transform;
+        """)
+        time.sleep(0.4)
+        assert rolled == ""
+        plain = browser.execute_script(measure)
+        assert abs(plain["width"] - before["width"]) < 2, plain
+        assert not plain["resetShown"]
     finally:
         if browser is not None:
             try:

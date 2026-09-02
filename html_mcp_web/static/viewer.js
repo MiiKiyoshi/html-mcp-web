@@ -38,6 +38,7 @@ const state = {
   panelDraggedAt: -Infinity,
   artifactZoom: 1,
   pinch: null,
+  pinchSettle: null,
   artifactDrag: null,
 };
 
@@ -337,6 +338,28 @@ function installArtifactZoom() {
   for (const kind of ["touchstart", "touchmove", "touchend", "touchcancel"]) {
     doc.addEventListener(kind, handleArtifactTouch, { passive: false, capture: true });
   }
+  doc.addEventListener("wheel", handleArtifactWheel, { passive: false, capture: true });
+}
+
+// A trackpad pinch reaches the page as a wheel event holding ctrl, which is also what a
+// mouse sends under the key each desktop zooms with: ctrl on Windows and Linux, command
+// on a Mac. The pointer is the fixed point, as the point between two fingers is.
+function handleArtifactWheel(event) {
+  if (!(event.ctrlKey || event.metaKey) || state.slideShow) return;
+  event.preventDefault();
+  const point = { x: event.clientX, y: event.clientY };
+  if (state.pinch === null) state.pinch = beginPinch(1, point);
+  const pinch = state.pinch;
+  if (pinch === null) return;
+  const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE
+    ? 40
+    : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? 800 : 1;
+  // Each step multiplies, so a notch moves the same share of the size at any zoom, and
+  // zooming in then out by the same amount lands back where it started.
+  carryPinch(pinch, pinch.zoom * Math.exp(-event.deltaY * unit * 0.0025), point);
+  // A wheel has no lift to end on, so the gesture ends where the steps stop.
+  if (state.pinchSettle !== null) clearTimeout(state.pinchSettle);
+  state.pinchSettle = setTimeout(settlePinch, 150);
 }
 
 // The reader's zoom is the page's own size, not a transform laid over it. A transform
@@ -345,9 +368,9 @@ function installArtifactZoom() {
 // into the scale the pages are laid out at, whose margins grow the boxes with it, so the
 // document is genuinely larger and scrolls in both directions like any other.
 //
-// That layout is settled once, when the fingers lift. While they move, the holder of the
+// That layout is settled once, when the gesture ends. While it runs, the holder of the
 // pages is carried by one transform the compositor applies, which lays nothing out and
-// paints nothing anew: laying the pages out again on every touchmove, and rebuilding the
+// paints nothing anew: laying the pages out again on every step, and rebuilding the
 // highlight boxes each time, was work a phone could not finish between two frames, and
 // the zoom stuttered in step with it.
 function handleArtifactTouch(event) {
@@ -370,30 +393,7 @@ function handleArtifactTouch(event) {
     }
     event.preventDefault();
     const pinch = state.pinch;
-    pinch.zoom = Math.min(4, Math.max(0.5, pinch.startZoom * (span / pinch.startSpan)));
-    pinch.middle = middle;
-    // The holder scaled about its own corner and shifted so that what sat between the
-    // fingers at the start is under them now.
-    const grown = pinch.zoom / pinch.startZoom;
-    const room = pinch.room;
-    const shift = {
-      x: middle.x - pinch.origin.x - grown * pinch.focal.x,
-      y: middle.y - pinch.origin.y - grown * pinch.focal.y,
-    };
-    // Held within what the settled layout can reach: a page narrower than its holder sits
-    // centred with no scroll to move it, a wider one scrolls between its two edges, and
-    // the deck scrolls between the document's top and bottom margins. Shown anywhere else,
-    // the deck jumped to the nearest reachable place the moment the fingers lifted.
-    const pageWidth = grown * room.pageWidth;
-    const pageAtZero = room.left - pinch.origin.x - grown * room.pageOffset;
-    shift.x = pageWidth <= room.width
-      ? pageAtZero + (room.width - pageWidth) / 2
-      : Math.min(pageAtZero, Math.max(
-          pageAtZero - (room.left + pageWidth + room.right - room.viewWidth), shift.x));
-    const holderAtZero = room.top - pinch.origin.y;
-    shift.y = Math.min(holderAtZero, Math.max(
-      holderAtZero - (room.top + grown * room.height + room.bottom - room.viewHeight), shift.y));
-    pinch.holder.style.transform = `translate(${shift.x}px, ${shift.y}px) scale(${grown})`;
+    carryPinch(pinch, pinch.startZoom * (span / pinch.startSpan), middle);
     return;
   }
   const touch = touches[0];
@@ -414,6 +414,33 @@ function handleArtifactTouch(event) {
   win.scrollBy(drag.x - touch.clientX, drag.y - touch.clientY);
   drag.x = touch.clientX;
   drag.y = touch.clientY;
+}
+
+// The holder scaled about its own corner and shifted so that what the gesture started on
+// is under the fixed point now, held within what the settled layout can reach: a page
+// narrower than its holder sits centred with no scroll to move it, a wider one scrolls
+// between its two edges, and the deck scrolls between the document's top and bottom
+// margins. Shown anywhere else, the deck jumped to the nearest reachable place the moment
+// the gesture ended.
+function carryPinch(pinch, zoom, at) {
+  pinch.zoom = Math.min(4, Math.max(0.5, zoom));
+  pinch.middle = at;
+  const grown = pinch.zoom / pinch.startZoom;
+  const room = pinch.room;
+  const shift = {
+    x: at.x - pinch.origin.x - grown * pinch.focal.x,
+    y: at.y - pinch.origin.y - grown * pinch.focal.y,
+  };
+  const pageWidth = grown * room.pageWidth;
+  const pageAtZero = room.left - pinch.origin.x - grown * room.pageOffset;
+  shift.x = pageWidth <= room.width
+    ? pageAtZero + (room.width - pageWidth) / 2
+    : Math.min(pageAtZero, Math.max(
+        pageAtZero - (room.left + pageWidth + room.right - room.viewWidth), shift.x));
+  const holderAtZero = room.top - pinch.origin.y;
+  shift.y = Math.min(holderAtZero, Math.max(
+    holderAtZero - (room.top + grown * room.height + room.bottom - room.viewHeight), shift.y));
+  pinch.holder.style.transform = `translate(${shift.x}px, ${shift.y}px) scale(${grown})`;
 }
 
 // What the gesture keeps of its start: the holder's corner and the point between the
@@ -477,6 +504,8 @@ function beginPinch(span, middle) {
 function settlePinch() {
   const pinch = state.pinch;
   state.pinch = null;
+  if (state.pinchSettle !== null) clearTimeout(state.pinchSettle);
+  state.pinchSettle = null;
   pinch.keeper.remove();
   pinch.holder.style.transform = "";
   pinch.holder.style.transformOrigin = "";
@@ -515,6 +544,7 @@ function applyArtifactZoom() {
 }
 
 function resetArtifactZoom() {
+  if (state.pinch !== null) settlePinch();
   if (state.artifactZoom === 1) return;
   state.artifactZoom = 1;
   applyArtifactZoom();
