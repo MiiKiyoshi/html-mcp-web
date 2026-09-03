@@ -2682,6 +2682,13 @@ return {left: lines("left"), justify: lines("justify"), center: lines("center"),
         spread = lambda lines: max(line["width"] for line in lines) - min(line["width"] for line in lines)
         assert len(balance) == len(left)
         assert spread(balance) < spread(left), (balance, left)
+        # No line is a stub: every line of balance, and every line of justify but the
+        # last, holds at least six tenths of their mean, a justified line's widened
+        # spaces taken out again.
+        natural = lambda line: line["width"] - float(line["spacing"] or 0) * line["text"].count(" ")
+        for lines in (balance, justify[:-1]):
+            widths = [natural(line) for line in lines]
+            assert min(widths) >= 0.6 * sum(widths) / len(widths), lines
         assert seen["capped"] == str(len(left))
 
         # The review server's layout check: the wrapped label on the rect is inside it, its
