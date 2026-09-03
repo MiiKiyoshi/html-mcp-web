@@ -252,6 +252,7 @@ export function createComments(dependencies) {
     else for (const comment of state.comments) list.appendChild(renderComment(comment));
     list.scrollTop = scrollTop;
     renderPickedActions();
+    renderFoldAction();
     const open = state.comments.filter((comment) => comment.status === "open").length;
     const count = $("#open-count");
     count.textContent = String(open);
@@ -277,6 +278,26 @@ export function createComments(dependencies) {
     reopen.classList.toggle("hidden", closed.length === 0);
     reopen.textContent = `Reopen ${closed.length}`;
     reopen.dataset.ids = closed.join(" ");
+  }
+
+  // Every card in the view opened, or every one closed: which of the two the button does
+  // is read off the cards, so it always offers the one that changes something.
+  function renderFoldAction() {
+    const shown = state.comments.map((comment) => comment.id);
+    const button = $("#fold-all-btn");
+    button.classList.toggle("hidden", shown.length === 0);
+    button.textContent = shown.length > 0 && shown.every((id) => state.expanded.has(id))
+      ? "Collapse all" : "Expand all";
+  }
+
+  function foldAll() {
+    const shown = state.comments.map((comment) => comment.id);
+    const allOpen = shown.every((id) => state.expanded.has(id));
+    for (const id of shown) {
+      if (allOpen) state.expanded.delete(id);
+      else state.expanded.add(id);
+    }
+    renderComments();
   }
 
   function pickAll() {
@@ -473,6 +494,7 @@ export function createComments(dependencies) {
     captureCommentUi,
     focusComment,
     openCompose,
+    foldAll,
     pickAll,
     refreshComments,
     renderComments,

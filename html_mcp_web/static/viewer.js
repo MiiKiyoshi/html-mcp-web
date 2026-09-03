@@ -1103,6 +1103,7 @@ const captureCommentUi = comments.captureCommentUi;
 const focusComment = comments.focusComment;
 const installComposeKeys = comments.installComposeKeys;
 const openCompose = comments.openCompose;
+const foldAll = comments.foldAll;
 const pickAll = comments.pickAll;
 const renderPickedActions = comments.renderPickedActions;
 const setPickedStatus = comments.setPickedStatus;
@@ -1215,6 +1216,7 @@ function attachControls() {
     state.pendingAnchor = null;
   });
   $("#comment-filter").addEventListener("change", () => refreshComments().catch((error) => alert(error.message)));
+  $("#fold-all-btn").addEventListener("click", foldAll);
   $("#pick-all-btn").addEventListener("click", pickAll);
   // Picking is the reviewer's own act, and closing what was picked is the sign-off on a
   // batch the agent answered and deliberately left open. The buttons carry the ids they

@@ -778,6 +778,24 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert label("#resolve-picked-btn") == "Resolve 1"
         pick(still_open[1]["id"])
 
+        # One button opens every card in the view or closes every one, by what they are.
+        opened = ('return Array.from(document.querySelectorAll(".comment-card"))'
+                  '.map((card) => card.querySelector(".comment-body") !== null);')
+        assert label("#fold-all-btn") == "Expand all"
+        browser.find_element("css selector", "#fold-all-btn").click()
+        assert browser.execute_script(opened) == [True, True, True]
+        assert label("#fold-all-btn") == "Collapse all"
+        browser.execute_script("""
+          document.querySelectorAll(".comment-card")[0].querySelector(".comment-summary").click();
+        """)
+        assert browser.execute_script(opened) == [False, True, True]
+        assert label("#fold-all-btn") == "Expand all"       # not every card is open now
+        browser.find_element("css selector", "#fold-all-btn").click()
+        assert browser.execute_script(opened) == [True, True, True]
+        browser.find_element("css selector", "#fold-all-btn").click()
+        assert browser.execute_script(opened) == [False, False, False]
+        assert label("#fold-all-btn") == "Expand all"
+
         browser.find_element("css selector", "#resolve-picked-btn").click()
         wait_until(lambda: len(
             get_json(f"{base}/artifacts/slides/comments?status=open")["comments"]) == 1)
