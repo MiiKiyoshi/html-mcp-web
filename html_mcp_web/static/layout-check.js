@@ -88,6 +88,14 @@ export function createLayoutChecks(dependencies) {
     }
   }
 
+  // The first words of an svg label, for a message. A label the deck wrapped holds one
+  // tspan per line with no whitespace between, so its lines are joined with spaces here.
+  function labelWords(text) {
+    const parts = text.hasAttribute("data-wrap")
+      ? Array.from(text.childNodes).map((node) => node.textContent) : [text.textContent];
+    return parts.join(" ").trim().replace(/\s+/g, " ").slice(0, 30);
+  }
+
   function artifactLayoutErrors() {
     problemTargets.clear();
     const doc = frameDocument();
@@ -296,7 +304,7 @@ export function createLayoutChecks(dependencies) {
           }
         }
         for (const [first, second] of collisions.slice(0, 3)) {
-          const name = (node) => `"${node.textContent.trim().replace(/\s+/g, " ").slice(0, 30)}"`;
+          const name = (node) => `"${labelWords(node)}"`;
           addError(
             `page ${index + 1} ${describeElement(svg.element)} prints two labels over each other (${name(first)} / ${name(second)})`,
             svg.element);
@@ -330,9 +338,18 @@ export function createLayoutChecks(dependencies) {
             .map(([side, amount]) => `${side} by ${Math.round(amount)}`);
           if (past.length === 0 || spilled >= 3) continue;
           spilled += 1;
-          const words = label.text.textContent.trim().replace(/\s+/g, " ").slice(0, 30);
           addError(
-            `page ${index + 1} ${describeElement(svg.element)} label "${words}" runs past its box (${past.join(", ")})`,
+            `page ${index + 1} ${describeElement(svg.element)} label "${labelWords(label.text)}" runs past its box (${past.join(", ")})`,
+            svg.element);
+        }
+        // A label the deck wrapped (data-wrap) records its line count in data-lines; one
+        // that needs more lines than its box allows (data-max-lines) is reported with both.
+        for (const text of svg.element.querySelectorAll("text[data-max-lines]")) {
+          const needs = Number(text.dataset.lines);
+          const allows = Number(text.dataset.maxLines);
+          if (!(needs > allows)) continue;
+          addError(
+            `page ${index + 1} ${describeElement(svg.element)} label "${labelWords(text)}" needs ${needs} lines, box allows ${allows}`,
             svg.element);
         }
       }

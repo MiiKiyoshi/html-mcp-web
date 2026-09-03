@@ -39,7 +39,8 @@ def print_artifact_pdf(artifact_url: str, layout: str) -> bytes:
         for _ in range(50):
             done = client.execute_script(
                 "return document.readyState === 'complete' && "
-                "Array.from(document.images).every(im => im.complete)")
+                "Array.from(document.images).every(im => im.complete) && "
+                "document.fonts.status === 'loaded'")
             if done:
                 break
             time.sleep(0.2)

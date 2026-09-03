@@ -93,6 +93,8 @@ def test_shipped_slide_template_builds_every_page_kind(tmp_path: Path) -> None:
     # markers are what tell it apart from that one selector.
     assert "renderMathInElement" not in built
     assert "KaTeX_Main" not in built
+    # No wrapped svg label either, so the wrap script stays out too.
+    assert "getSubStringLength" not in built
     assert output.stat().st_size < 100_000
 
 
@@ -156,3 +158,22 @@ def test_shared_metadata_is_required(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="data-author and data-meta"):
         parse_template_content(content_file)
+
+
+def test_a_deck_with_a_wrapped_label_carries_the_wrap_script(tmp_path: Path) -> None:
+    from html_mcp_web.slides import build
+
+    content = tmp_path / "content.html"
+    content.write_text('''<!doctype html>
+<title>Wrap</title>
+<body data-author="R" data-meta="Lab">
+<section data-title="Figure"><svg viewBox="0 0 200 100"><text x="4" y="20" data-wrap="190">a label</text></svg></section>
+</body>
+''', encoding="utf-8")
+    output = tmp_path / "slides.html"
+    build(content, output, Path(__file__).resolve().parent.parent / "templates" / "neutral-slides")
+
+    built = output.read_text(encoding="utf-8")
+    # The script runs at the end of the body, like the math renderer, so the lines are
+    # in place before load fires.
+    assert built.index("getSubStringLength") > built.index("</main>")

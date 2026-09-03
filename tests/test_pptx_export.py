@@ -426,3 +426,35 @@ def test_the_page_is_carried_over_as_it_is_laid_out(tmp_path: Path) -> None:
     assert badge._r.find(qn("a:rPr")).find(qn("a:highlight")) is None
     chip = next(run for run in runs if run.text == "chip")
     assert chip._r.find(qn("a:rPr")).find(qn("a:highlight")) is not None  # a code chip still is one
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_wrapped_svg_label_keeps_its_lines_in_the_vector(tmp_path: Path) -> None:
+    """The deck breaks a data-wrap label into lines when it opens; the export serializes
+    the drawing as it stands, so the vector carries the lines and their spacing."""
+    import zipfile
+
+    from html_mcp_web.slides import build
+
+    content = tmp_path / "content.html"
+    content.write_text('''<!doctype html>
+<meta charset="utf-8">
+<title>Wrapped</title>
+<body data-author="A" data-meta="B">
+<section data-title="Diagram">
+  <svg viewBox="0 0 300 120" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="10" width="220" height="100" fill="none" stroke="#333"/><text x="22" y="30" font-size="13.5" data-wrap="196" data-align="justify">a sentence long enough to need several lines inside a narrow card, so that its lines can be counted</text></svg>
+</section>
+</body>
+''', encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, NEUTRAL)
+    out = tmp_path / "deck.pptx"
+    result = export_pptx(html.as_uri(), out, tmp_path, None)
+    assert next(p for p in result["pages"] if p["title"] == "Diagram")["vector_svgs"] == 1
+    with zipfile.ZipFile(out) as archive:
+        svg_text = archive.read(next(n for n in archive.namelist() if n.endswith(".svg"))).decode("utf-8")
+    lines = re.findall(r"<tspan[^>]*>([^<]*)</tspan>", svg_text)
+    assert len(lines) >= 3, svg_text
+    assert " ".join(lines) == ("a sentence long enough to need several lines inside a narrow card, "
+                               "so that its lines can be counted")
+    assert svg_text.count('word-spacing="') == len(lines) - 1, svg_text

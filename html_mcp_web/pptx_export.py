@@ -57,8 +57,11 @@ st.textContent = 'section.page{width:%dpx !important;height:%dpx !important;marg
 document.head.appendChild(st);
 """ % (PAGE_WIDTH_PX, PAGE_HEIGHT_PX)
 
+# A label the deck wraps is measured again when the fonts arrive, so the snapshot waits
+# for them as it waits for the images.
 JS_READY = ("return document.readyState === 'complete' && "
-            "Array.from(document.images).every(im => im.complete)")
+            "Array.from(document.images).every(im => im.complete) && "
+            "document.fonts.status === 'loaded'")
 
 JS_PAGES = "return document.querySelectorAll('section.page').length;"
 
