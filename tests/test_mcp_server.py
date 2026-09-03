@@ -89,12 +89,10 @@ async def test_stdio_mcp_starts_without_project_config(tmp_path: Path) -> None:
                 "list_comments",
                 "read_comments",
                 "reply_comments",
-                "set_comment_status",
                 "render_page",
                 "export_pptx",
                 "measure_space",
                 "wait_review",
-                "read_template_docs",
             ]
             inspected = await session.call_tool("inspect", {})
             assert inspected.isError is False
@@ -137,7 +135,7 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         # (call inspect() first, edit_file is the source, the tools that hold the rest);
         # a rule that may change rides on a tool result, and one that must hold is code.
         assert len(mcp.instructions) < 2000
-        for needed in ("wait_review()", "read_template_docs", "guide field", "refuses a resolve"):
+        for needed in ("wait_review()", "docs=True", "guide field", "refuses a resolve"):
             assert needed in mcp.instructions, needed
         for gone in ("templates/README.md", "Resolve all", "Monitor", "tells you to wait"):
             assert gone not in mcp.instructions, gone
@@ -153,18 +151,15 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
             "list_comments",
             "read_comments",
             "reply_comments",
-            "set_comment_status",
             "render_page",
             "export_pptx",
             "measure_space",
             "wait_review",
-            "read_template_docs",
         ]
-        assert set(schemas["inspect"]["properties"]) == {"artifact"}
         assert schemas["read_comments"]["required"] == ["artifact", "comment_ids"]
         assert schemas["reply_comments"]["required"] == ["artifact", "replies_text"]
         assert schemas["reply_comments"]["properties"]["replies_text"]["type"] == "string"
-        assert schemas["set_comment_status"]["required"] == ["artifact", "comment_ids", "status"]
+        assert set(schemas["inspect"]["properties"]) == {"artifact", "docs"}
         assert schemas["render_page"]["required"] == ["artifact", "page"]
         assert schemas["render_page"]["properties"]["page"]["minimum"] == 1
         assert schemas["render_page"]["properties"]["dpi"]["minimum"] == 36
@@ -356,31 +351,16 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
         assert measured["children"][0]["ref"] == "p1:0"
         assert measured["clearance"] == 12
 
-        # Closing a thread is the reviewer's act, from the page; the server holds to it,
-        # so the rule does not depend on which instructions a session happened to read.
-        # Reopening what the reviewer closed is still the agent's to do.
-        with pytest.raises(Exception, match="an agent does not resolve"):
-            asyncio.run(mcp.call_tool("set_comment_status", {
-                "artifact": "slides",
-                "comment_ids": [created["id"]],
-                "status": "resolved",
-            }))
+        # A thread's status is the reviewer's, from the page: the server refuses a resolve
+        # from an agent, and the tool that only reopened is gone with it.
         post_json(f"http://127.0.0.1:{binding._shared.port}/artifacts/slides/comments/update", {
             "comment_ids": [created["id"]], "status": "resolved", "author": "human",
         })
-        _, reopened = asyncio.run(mcp.call_tool("set_comment_status", {
-            "artifact": "slides",
-            "comment_ids": [created["id"]],
-            "status": "open",
-        }))
-        assert reopened["updated"][0]["status"] == "open"
-        _, reopened_read = asyncio.run(mcp.call_tool("read_comments", {
+        _, closed_read = asyncio.run(mcp.call_tool("read_comments", {
             "artifact": "slides",
             "comment_ids": [created["id"]],
         }))
-        reopened_comment = reopened_read["comments"][0]
-        assert reopened_comment["status"] == "open"
-        assert all(entry["text"] for entry in reopened_comment["thread"])
+        assert closed_read["comments"][0]["status"] == "resolved"
 
         first.stop()
         second.ensure()
@@ -560,9 +540,10 @@ def test_replies_are_one_text_with_a_comment_id_at_each_line_head() -> None:
             parse_replies(bad)
 
 
-def test_read_template_docs_returns_the_content_format(tmp_path: Path) -> None:
+def test_inspect_adds_the_content_format_when_asked(tmp_path: Path) -> None:
     """A client without file tools could not follow a host path in the instructions, and
-    the path leaked the contract out of the tools; the format is a tool result now."""
+    the path leaked the contract out of the tools; the format rides on inspect now, when
+    asked, rather than on a tool of its own."""
     (tmp_path / "content.html").write_text(
         '<section class="page"><h1>One</h1></section>', encoding="utf-8")
     (tmp_path / ".html-mcp-web.yaml").write_text(yaml.safe_dump({
@@ -573,7 +554,10 @@ def test_read_template_docs_returns_the_content_format(tmp_path: Path) -> None:
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        _, docs = asyncio.run(mcp.call_tool("read_template_docs", {"artifact": "slides"}))
+        _, plain = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
+        assert "docs" not in plain                    # not on every inspect
+        _, inspected = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides", "docs": True}))
+        docs = inspected["docs"]
         assert docs["template"] == "neutral-slides"
         assert "section" in docs["readme"]           # the shared content format
         assert docs["skin_readme"] is None or isinstance(docs["skin_readme"], str)
@@ -581,13 +565,13 @@ def test_read_template_docs_returns_the_content_format(tmp_path: Path) -> None:
         binding.stop()
 
 
-def test_read_template_docs_has_nothing_for_a_plain_artifact(tmp_path: Path) -> None:
+def test_inspect_has_no_docs_for_a_plain_artifact(tmp_path: Path) -> None:
     project(tmp_path)
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        _, docs = asyncio.run(mcp.call_tool("read_template_docs", {"artifact": "slides"}))
-        assert docs == {"artifact": "slides", "template": None, "readme": None, "skin_readme": None}
+        _, inspected = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides", "docs": True}))
+        assert inspected["docs"] == {"template": None, "readme": None, "skin_readme": None}
     finally:
         binding.stop()
 

@@ -51,7 +51,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "edit_file is the source; for a templated artifact main_file is build output and is not "
             "edited. Saving edit_file triggers the rebuild and bumps the revision, so build.py is never "
             "run by hand, and inspect(artifact) after it reports the new revision and how far the check "
-            "has caught up. For a templated artifact, read_template_docs(artifact) returns the content "
+            "has caught up. For a templated artifact, inspect(artifact, docs=True) adds the content "
             "format and the components. "
             "Completion is layout_check.checked_revision == revision with no errors, and each error ends "
             "with the ref of the block it is about, which measure_space(target=<ref>) and "
@@ -114,6 +114,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     @mcp.tool()
     async def inspect(
         artifact: str | None = None,
+        docs: Annotated[bool, Field(description="With an artifact: add its content format and components (the templates' README and the skin's own), read once before writing content.")] = False,
     ) -> dict[str, Any]:
         """Discover compact project state with the working guide, or inspect one artifact without comment threads."""
         try:
@@ -138,6 +139,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "review_url": f"http://127.0.0.1:{state['port']}",
             **({} if artifact is not None else {"guide": GUIDE}),
             "artifacts": result,
+            **({"docs": template_docs(artifacts[artifact])} if docs and artifact is not None else {}),
         }
 
     @mcp.tool()
@@ -204,25 +206,6 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             if "note" in result:
                 notes.append(result["note"])
         return {"updated": updated, **({"notes": notes} if notes else {})}
-
-    @mcp.tool()
-    async def set_comment_status(
-        artifact: str,
-        comment_ids: list[str],
-        status: Literal["open", "resolved"],
-        message: str = "",
-        edited_files: Annotated[list[str] | None, Field(description="Project-relative paths edited for these comments; recorded on the thread entry.")] = None,
-    ) -> dict[str, Any]:
-        """Reopen a resolved thread. A thread is resolved by the reviewer from the page, and the server refuses a resolve from an agent. A message posts to every id, so batch with one only when it fits each thread."""
-        if not comment_ids:
-            raise ValueError("comment_ids must not be empty")
-        client = binding.require_client()
-        return await client.request_json("POST", f"/artifacts/{artifact}/comments/update", {
-            "comment_ids": comment_ids,
-            "status": status,
-            "message": message,
-            **({"edited_files": edited_files} if edited_files is not None else {}),
-        })
 
     @mcp.tool()
     async def render_page(
@@ -355,27 +338,22 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             ),
         }
 
-    @mcp.tool()
-    async def read_template_docs(artifact: str) -> dict[str, Any]:
-        """The content format and the components of a templated artifact: the templates' README, and the skin's own README where it has one. An artifact with no template has nothing to read here."""
-        client = binding.require_client()
-        state = await client.request_json("GET", "/state")
-        artifacts = state["artifacts"]
-        if artifact not in artifacts:
-            raise RuntimeError(f"unknown artifact: {artifact}; available artifacts: {', '.join(artifacts)}")
-        value = artifacts[artifact]
-        if "template" not in value:
-            return {"artifact": artifact, "template": None, "readme": None, "skin_readme": None}
-        readme = Path(__file__).resolve().parent.parent / "templates" / "README.md"
-        skin_readme = Path(value["template_dir"]) / "README.md"
-        return {
-            "artifact": artifact,
-            "template": value["template"],
-            "readme": readme.read_text(encoding="utf-8") if readme.is_file() else None,
-            "skin_readme": skin_readme.read_text(encoding="utf-8") if skin_readme.is_file() else None,
-        }
-
     return mcp
+
+
+def template_docs(artifact: dict[str, Any]) -> dict[str, Any]:
+    """The content format and the components of a templated artifact: the templates' README
+    and the skin's own where it has one, as text, so a client without file tools has them
+    too. An artifact with no template has nothing to read."""
+    if "template" not in artifact:
+        return {"template": None, "readme": None, "skin_readme": None}
+    readme = Path(__file__).resolve().parent.parent / "templates" / "README.md"
+    skin_readme = Path(artifact["template_dir"]) / "README.md"
+    return {
+        "template": artifact["template"],
+        "readme": readme.read_text(encoding="utf-8") if readme.is_file() else None,
+        "skin_readme": skin_readme.read_text(encoding="utf-8") if skin_readme.is_file() else None,
+    }
 
 
 def main(start_dir: Path) -> None:
