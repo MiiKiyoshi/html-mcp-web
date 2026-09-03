@@ -162,7 +162,8 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         ]
         assert set(schemas["inspect"]["properties"]) == {"artifact"}
         assert schemas["read_comments"]["required"] == ["artifact", "comment_ids"]
-        assert schemas["reply_comments"]["required"] == ["artifact", "replies"]
+        assert schemas["reply_comments"]["required"] == ["artifact", "replies_text"]
+        assert schemas["reply_comments"]["properties"]["replies_text"]["type"] == "string"
         assert schemas["set_comment_status"]["required"] == ["artifact", "comment_ids", "status"]
         assert schemas["render_page"]["required"] == ["artifact", "page"]
         assert schemas["render_page"]["properties"]["page"]["minimum"] == 1
@@ -312,7 +313,7 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
 
         _, replied = asyncio.run(mcp.call_tool("reply_comments", {
             "artifact": "slides",
-            "replies": [{"comment_id": created["id"], "message": "Changed the wording"}],
+            "replies_text": f"{created['id']}: Changed the wording",
             "edited_files": ["slides.html"],
         }))
         assert replied["updated"][0]["status"] == "open"
@@ -528,6 +529,35 @@ def test_the_working_guide_rides_on_the_discovery_call_only(tmp_path: Path) -> N
         assert "guide" not in one
     finally:
         binding.stop()
+
+
+def test_replies_are_one_text_with_a_comment_id_at_each_line_head() -> None:
+    """An agent writing a list of objects serialized the prose inside them by hand, and
+    by habit as \\uXXXX escapes: five or six tokens a character, and twice a miscounted
+    code point that changed the word. A top-level string it writes as it is."""
+    from html_mcp_web.mcp_contract import parse_replies
+
+    parsed = parse_replies(
+        "c-1244b790: 같은 mechanism 하나를 두 파일이 다른 수준에서 다룹니다.\n"
+        "두 번째 문단도 이어집니다: 콜론이 있어도 같은 답글입니다.\n"
+        "\n"
+        "c-d1bcb60c: 맞습니다. §3.2 (2)의 첫 문장이 그렇습니다.\n")
+    assert parsed == [
+        ("c-1244b790", "같은 mechanism 하나를 두 파일이 다른 수준에서 다룹니다.\n"
+                       "두 번째 문단도 이어집니다: 콜론이 있어도 같은 답글입니다."),
+        ("c-d1bcb60c", "맞습니다. §3.2 (2)의 첫 문장이 그렇습니다."),
+    ]
+    # A blank line inside a reply belongs to it; only a line head with an id starts one.
+    assert parse_replies("c-1244b790: first paragraph.\n\nsecond paragraph.") == [
+        ("c-1244b790", "first paragraph.\n\nsecond paragraph.")]
+    for bad, why in (
+        ("just prose", "no reply"),
+        ("prose first\nc-1244b790: then a reply", "before the first"),
+        ("c-1244b790: \n", "is empty"),
+        ("c-1244b790: one\nc-1244b790: twice", "at most once"),
+    ):
+        with pytest.raises(ValueError, match=why):
+            parse_replies(bad)
 
 
 def test_read_template_docs_returns_the_content_format(tmp_path: Path) -> None:

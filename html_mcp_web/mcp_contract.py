@@ -1,5 +1,6 @@
 """Agent-facing projection of browser review state."""
 
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -52,6 +53,36 @@ def agent_comment_summary(comment: dict[str, Any]) -> dict[str, Any]:
         "thread_entries": len(comment["thread"]),
         "last_human_at": last_human_at(comment),
     }
+
+
+REPLY_HEAD = re.compile(r"^(c-[0-9a-f]{8}): ", re.MULTILINE)
+
+
+def parse_replies(text: str) -> list[tuple[str, str]]:
+    """Replies written as one text: each starts at a line head with its comment id and a
+    colon, and runs to the next such head, blank lines and all.
+
+    An agent writing a list of objects serialized the prose inside them by hand, and by
+    habit as \\uXXXX escapes: five or six tokens a character and, twice, a miscounted code
+    point that changed the word. A top-level string it writes as it is. Only a line head
+    starts a reply, so a colon in the prose is just a colon.
+    """
+    heads = list(REPLY_HEAD.finditer(text))
+    if not heads:
+        raise ValueError("replies_text holds no reply: each starts at a line head with '<comment_id>: '")
+    if text[:heads[0].start()].strip():
+        raise ValueError("replies_text has text before the first '<comment_id>: ' line head")
+    replies: list[tuple[str, str]] = []
+    for index, head in enumerate(heads):
+        end = heads[index + 1].start() if index + 1 < len(heads) else len(text)
+        message = text[head.end():end].strip()
+        if not message:
+            raise ValueError(f"the reply to {head.group(1)} is empty")
+        replies.append((head.group(1), message))
+    ids = [comment_id for comment_id, _ in replies]
+    if len(set(ids)) != len(ids):
+        raise ValueError("each comment appears at most once in replies_text")
+    return replies
 
 
 def is_unanswered(comment: dict[str, Any]) -> bool:
