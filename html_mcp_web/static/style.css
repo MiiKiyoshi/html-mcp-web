@@ -231,15 +231,17 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .page-title { overflow: hidden; color: #302e29; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 
 .filter-row { display: flex; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
-.filter-row select { flex: 1; min-width: 0; padding: 5px 8px; font-size: 12px; }
+/* A fixed width: grown to fill the row, the select stretched and shrank every time a
+   button beside it came or went, and the row jumped under the reader's eye. */
+.filter-row select { flex: none; width: 96px; padding: 5px 8px; font-size: 12px; }
 /* Wakes the agent parked on wait_review; the dot shows one is parked right now. */
-#call-agent-btn, #fold-all-btn, #pick-all-btn, #resolve-picked-btn, #reopen-picked-btn {
-  flex: none; display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 10px; font-size: 12px; white-space: nowrap;
+.icon-btn {
+  flex: none; display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 6px; font-size: 12px; line-height: 1; white-space: nowrap;
 }
-#pick-all-btn:disabled, #resolve-picked-btn:disabled, #reopen-picked-btn:disabled { opacity: .45; }
-/* The row wraps rather than squeezing the buttons, which a picked count widens. */
-.filter-row { flex-wrap: wrap; }
+.icon-btn svg { display: block; }
+.icon-btn .count:empty { display: none; }
+.icon-btn:disabled { opacity: .45; }
 .comment-pick { flex: none; margin: 0; width: 14px; height: 14px; cursor: pointer; }
 .agent-dot { width: 8px; height: 8px; border-radius: 50%; background: #3d9a52; }
 .comments-list { flex: 1; overflow: auto; padding: 10px; }
