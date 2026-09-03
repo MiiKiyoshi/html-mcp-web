@@ -757,14 +757,17 @@ def test_browser_review_contract(tmp_path: Path) -> None:
 
         def label(button):
             # The buttons are icons; the words live in aria-label.
-            return browser.execute_script(f'''
-              const button = document.querySelector("{button}");
-              return button.classList.contains("hidden") ? null : button.getAttribute("aria-label");
-            ''')
+            return browser.execute_script(
+                f'return document.querySelector("{button}").getAttribute("aria-label");')
 
-        # Nothing picked, nothing to press.
-        assert label("#resolve-picked-btn") is None
-        assert label("#reopen-picked-btn") is None
+        def enabled(button):
+            return browser.execute_script(f'return !document.querySelector("{button}").disabled;')
+
+        # Nothing picked, nothing to press: the buttons stay in place, greyed out, so the
+        # row keeps one shape rather than shifting as they come and go.
+        assert not enabled("#resolve-picked-btn") and label("#resolve-picked-btn") == "Resolve"
+        assert not enabled("#reopen-picked-btn") and label("#reopen-picked-btn") == "Reopen"
+        assert enabled("#pick-all-btn") and enabled("#fold-all-btn")
 
         def pick(comment_id):
             browser.execute_script(f'''
@@ -777,7 +780,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         steady = browser.execute_script(select_width)
         pick(still_open[0]["id"])
         pick(still_open[1]["id"])
-        assert label("#resolve-picked-btn") == "Resolve 2"
+        assert label("#resolve-picked-btn") == "Resolve 2" and enabled("#resolve-picked-btn")
         assert browser.execute_script(select_width) == steady
         # One of them is put back, so the count follows.
         pick(still_open[1]["id"])
@@ -823,7 +826,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert label("#pick-all-btn") == "Select all"
         browser.find_element("css selector", "#pick-all-btn").click()
         wait_until(lambda: label("#reopen-picked-btn") == f"Reopen {len(resolved)}")
-        assert label("#resolve-picked-btn") is None
+        assert enabled("#reopen-picked-btn") and not enabled("#resolve-picked-btn")
         assert label("#pick-all-btn") == "Clear"           # pressed again it lets go
         browser.find_element("css selector", "#reopen-picked-btn").click()
         wait_until(lambda: len(

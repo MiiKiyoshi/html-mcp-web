@@ -268,21 +268,23 @@ export function createComments(dependencies) {
     const closed = picked.filter((comment) => comment.status !== "open").map((comment) => comment.id);
     const shown = state.comments.length;
     const all = $("#pick-all-btn");
-    all.classList.toggle("hidden", shown === 0);
+    all.disabled = shown === 0;
     const clearing = picked.length === shown && shown > 0;
     all.querySelector(".icon-select").classList.toggle("hidden", clearing);
     all.querySelector(".icon-clear").classList.toggle("hidden", !clearing);
     all.setAttribute("aria-label", clearing ? "Clear" : "Select all");
     all.title = clearing ? "Let go of every picked comment" : "Pick every comment in this view";
+    // A button with nothing to do stays in place, greyed out: buttons that came and went
+    // moved everything beside them. The count shows only when there is one.
     const resolve = $("#resolve-picked-btn");
-    resolve.classList.toggle("hidden", open.length === 0);
-    resolve.querySelector(".count").textContent = String(open.length);
-    resolve.setAttribute("aria-label", `Resolve ${open.length}`);
+    resolve.disabled = open.length === 0;
+    resolve.querySelector(".count").textContent = open.length > 0 ? String(open.length) : "";
+    resolve.setAttribute("aria-label", open.length > 0 ? `Resolve ${open.length}` : "Resolve");
     resolve.dataset.ids = open.join(" ");
     const reopen = $("#reopen-picked-btn");
-    reopen.classList.toggle("hidden", closed.length === 0);
-    reopen.querySelector(".count").textContent = String(closed.length);
-    reopen.setAttribute("aria-label", `Reopen ${closed.length}`);
+    reopen.disabled = closed.length === 0;
+    reopen.querySelector(".count").textContent = closed.length > 0 ? String(closed.length) : "";
+    reopen.setAttribute("aria-label", closed.length > 0 ? `Reopen ${closed.length}` : "Reopen");
     reopen.dataset.ids = closed.join(" ");
   }
 
@@ -291,7 +293,7 @@ export function createComments(dependencies) {
   function renderFoldAction() {
     const shown = state.comments.map((comment) => comment.id);
     const button = $("#fold-all-btn");
-    button.classList.toggle("hidden", shown.length === 0);
+    button.disabled = shown.length === 0;
     const folding = shown.length > 0 && shown.every((id) => state.expanded.has(id));
     button.querySelector(".icon-expand").classList.toggle("hidden", folding);
     button.querySelector(".icon-collapse").classList.toggle("hidden", !folding);
