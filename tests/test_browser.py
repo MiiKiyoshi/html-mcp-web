@@ -2594,3 +2594,118 @@ def test_a_selection_the_browser_took_over_still_brings_the_button(tmp_path: Pat
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_long_svg_label_wraps_to_its_width(tmp_path: Path) -> None:
+    """A label written as one sentence with data-wrap comes out as lines that fit the
+    width, in the deck itself: left ragged, centred on x, justified through the spaces of
+    every line but the last, balanced to even lengths. Wrapped, it stays inside the rect
+    it sits on, and its lines are no collision. A label that needs more lines than
+    data-max-lines allows is reported by the layout check with both counts."""
+    from html_mcp_web.slides import build
+
+    sentence = ("a sentence long enough to need several lines inside a narrow card, "
+                "so that each way of breaking it can be told from the others")
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<!doctype html>\n<meta charset="utf-8">\n<title>Wrap</title>\n'
+        '<body data-author="A" data-meta="B">\n'
+        '<section data-title="Wrap">'
+        '<svg id="wrapped" viewBox="0 0 1000 400" width="1000" height="400">'
+        '<rect x="0" y="0" width="220" height="200" fill="none" stroke="#333"/>'
+        f'<text id="left" x="12" y="30" font-size="13.5" data-wrap="196">{sentence}</text>'
+        f'<text id="justify" x="262" y="30" font-size="13.5" data-wrap="196" data-align="justify">{sentence}</text>'
+        f'<text id="center" x="610" y="30" font-size="13.5" data-wrap="196" data-align="center">{sentence}</text>'
+        f'<text id="balance" x="762" y="30" font-size="13.5" data-wrap="196" data-align="balance">{sentence}</text>'
+        f'<text id="capped" x="12" y="300" font-size="13.5" data-wrap="196" data-max-lines="2">{sentence}</text>'
+        '</svg></section>\n'
+        "</body>\n", encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, Path(__file__).resolve().parents[1] / "templates" / "neutral-slides")
+
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_wrap_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(html.as_uri())
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelectorAll("text[data-lines]").length === 5'))
+        seen = browser.execute_script("""
+const lines = (id) => Array.from(document.querySelectorAll(`#${id} tspan`)).map((line) => ({
+  x: line.getAttribute("x"), dy: Number(line.getAttribute("dy")), width: line.getComputedTextLength(),
+  spacing: line.getAttribute("word-spacing"), text: line.textContent}));
+const span = (id) => { const b = document.getElementById(id).getBBox(); return [b.x, b.x + b.width]; };
+return {left: lines("left"), justify: lines("justify"), center: lines("center"), balance: lines("balance"),
+        anchor: getComputedStyle(document.getElementById("center")).textAnchor,
+        centerSpan: span("center"), leftSpan: span("left"),
+        capped: document.getElementById("capped").dataset.lines};
+""")
+        left = seen["left"]
+        assert len(left) >= 3, left
+        # Every line fits the width, starts at x, and steps down by the line height; the
+        # words, read back in order, are the sentence.
+        for lines in (left, seen["justify"], seen["balance"]):
+            assert all(line["width"] <= 196.5 for line in lines), lines
+            assert " ".join(line["text"] for line in lines) == sentence
+            assert [line["x"] for line in lines] == [lines[0]["x"]] * len(lines)
+            assert lines[0]["dy"] == 0 and all(abs(line["dy"] - 1.35 * 13.5) < 0.01 for line in lines[1:])
+        assert seen["leftSpan"][0] >= 12 and seen["leftSpan"][1] <= 208.5, seen["leftSpan"]
+        assert all(line["spacing"] is None for line in left)
+        # Justify: every line but the last is widened to the full width through its spaces.
+        justify = seen["justify"]
+        assert all(abs(line["width"] - 196) < 1 and line["spacing"] is not None for line in justify[:-1]), justify
+        assert justify[-1]["spacing"] is None
+        # Center: the anchor is the middle, so the block sits around x.
+        assert seen["anchor"] == "middle"
+        assert all(line["x"] == "610" for line in seen["center"])
+        assert abs((seen["centerSpan"][0] + seen["centerSpan"][1]) / 2 - 610) < 1, seen["centerSpan"]
+        # Balance: as many lines as left, their lengths closer together.
+        balance = seen["balance"]
+        spread = lambda lines: max(line["width"] for line in lines) - min(line["width"] for line in lines)
+        assert len(balance) == len(left)
+        assert spread(balance) < spread(left), (balance, left)
+        assert seen["capped"] == str(len(left))
+
+        # The review server's layout check: the wrapped label on the rect is inside it, its
+        # lines are no collision, and the capped label is reported with both counts.
+        state = wait_until(lambda: (
+            get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]
+            if get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]["layout_check"]["checked_revision"]
+            == get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]["revision"] else None))
+        errors = [error for error in state["layout_check"]["errors"] if "svg#wrapped" in error]
+        assert len(errors) == 1, state["layout_check"]["errors"]
+        assert re.search(
+            rf'^page 2 <svg#wrapped> label "a sentence long enough to need" needs {len(left)} lines, box allows 2 ',
+            errors[0]), errors
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()

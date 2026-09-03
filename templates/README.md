@@ -134,11 +134,24 @@ in the file, so the deck stays self-contained and prints the same as it shows; a
 with no math carries none of that. A literal dollar sign is written `\$`, since two
 plain dollars on one line would otherwise read as a formula.
 
+A long label inside an inline `<svg>` is written as one `<text>` holding the whole
+sentence, with `data-wrap="<width>"`, the width in `viewBox` units it may take. The deck
+breaks it into lines between words when it opens, measured with the skin's own font, so
+the content file carries no hand-placed lines. `x` and `y` are the start of the first
+line. `data-align` is `left` (the default), `center` (`x` is then the middle of every
+line), `justify` (every line but the last is widened to the full width through the
+spaces between its words) or `balance` (as many lines as `left`, their lengths made
+even). `data-line-height` is the step between lines in font sizes (default 1.35). The
+text is plain: a `tspan` written inside it contributes its words and nothing else. With
+`data-max-lines="<n>"`, a label that needs more lines is reported by the layout check as
+`needs N lines, box allows M`.
+
 A figure is content, not styling. CSS outside this vocabulary changes the measured
 geometry, and the review server reports what that costs: an inline `<svg>` whose shapes
 run past its `viewBox` is reported as cut off, one that leaves a quarter or more of a
-side empty is reported as holding space it does not draw in, and two labels printed
-over each other are reported as a collision.
+side empty is reported as holding space it does not draw in, two labels printed over
+each other are reported as a collision, and a label that runs past the sides of the
+rect it sits on is reported with the side and by how much.
 
 The body box carries `data-layout-guard`. Overflow is therefore reported even though
 the box clips it. A valid result requires `layout_check.checked_revision == revision`
