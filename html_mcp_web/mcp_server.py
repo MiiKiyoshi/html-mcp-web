@@ -13,28 +13,19 @@ from .mcp_contract import (
     agent_comment_summary,
     is_after,
     is_unanswered,
+    parse_replies,
 )
 
 
 try:
     from mcp.server.fastmcp import FastMCP, Image
-    from pydantic import BaseModel, ConfigDict, Field
+    from pydantic import Field
 
     from .mcp_client import ProjectBinding, ProjectSetupError
 
     HAS_MCP = True
 except ImportError:
     HAS_MCP = False
-
-
-if HAS_MCP:
-    class Reply(BaseModel):
-        """A message written for one thread."""
-
-        model_config = ConfigDict(extra="forbid")
-
-        comment_id: Annotated[str, Field(min_length=1)]
-        message: Annotated[str, Field(min_length=1, description="Write the text literally, including non-ASCII; never as \\uXXXX escapes, which cost tokens and miscount code points.")]
 
 
 def _check_dependencies() -> None:
@@ -190,20 +181,21 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     @mcp.tool()
     async def reply_comments(
         artifact: str,
-        replies: Annotated[list[Reply], Field(min_length=1, description="One entry per thread: the comment and the message written for it.")],
+        replies_text: Annotated[str, Field(min_length=1, description=(
+            "The replies as one text. Each starts at a line head with its comment id and a colon "
+            "('c-1a2b3c4d: ') and runs to the next such line head, blank lines and all; a colon "
+            "elsewhere is just a colon. Written as prose, as it is."))],
         edited_files: Annotated[list[str] | None, Field(description="Project-relative paths edited for these comments; recorded on each thread entry.")] = None,
     ) -> dict[str, Any]:
         """Reply to comments without changing their status."""
-        ids = [reply.comment_id for reply in replies]
-        if len(set(ids)) != len(ids):
-            raise ValueError("each comment appears at most once in replies")
+        replies = parse_replies(replies_text)
         client = binding.require_client()
         updated: list[dict[str, Any]] = []
         notes: list[str] = []
-        for reply in replies:
+        for comment_id, message in replies:
             result = await client.request_json("POST", f"/artifacts/{artifact}/comments/update", {
-                "comment_ids": [reply.comment_id],
-                "message": reply.message,
+                "comment_ids": [comment_id],
+                "message": message,
                 **({"edited_files": edited_files} if edited_files is not None else {}),
             })
             updated.extend(result["updated"])
@@ -218,7 +210,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         artifact: str,
         comment_ids: list[str],
         status: Literal["open", "resolved"],
-        message: Annotated[str, Field(description="Write the text literally, including non-ASCII; never as \\uXXXX escapes, which cost tokens and miscount code points.")] = "",
+        message: str = "",
         edited_files: Annotated[list[str] | None, Field(description="Project-relative paths edited for these comments; recorded on the thread entry.")] = None,
     ) -> dict[str, Any]:
         """Reopen a resolved thread. A thread is resolved by the reviewer from the page, and the server refuses a resolve from an agent. A message posts to every id, so batch with one only when it fits each thread."""
