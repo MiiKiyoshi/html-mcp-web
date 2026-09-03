@@ -269,14 +269,20 @@ export function createComments(dependencies) {
     const shown = state.comments.length;
     const all = $("#pick-all-btn");
     all.classList.toggle("hidden", shown === 0);
-    all.textContent = picked.length === shown && shown > 0 ? "Clear" : "Select all";
+    const clearing = picked.length === shown && shown > 0;
+    all.querySelector(".icon-select").classList.toggle("hidden", clearing);
+    all.querySelector(".icon-clear").classList.toggle("hidden", !clearing);
+    all.setAttribute("aria-label", clearing ? "Clear" : "Select all");
+    all.title = clearing ? "Let go of every picked comment" : "Pick every comment in this view";
     const resolve = $("#resolve-picked-btn");
     resolve.classList.toggle("hidden", open.length === 0);
-    resolve.textContent = `Resolve ${open.length}`;
+    resolve.querySelector(".count").textContent = String(open.length);
+    resolve.setAttribute("aria-label", `Resolve ${open.length}`);
     resolve.dataset.ids = open.join(" ");
     const reopen = $("#reopen-picked-btn");
     reopen.classList.toggle("hidden", closed.length === 0);
-    reopen.textContent = `Reopen ${closed.length}`;
+    reopen.querySelector(".count").textContent = String(closed.length);
+    reopen.setAttribute("aria-label", `Reopen ${closed.length}`);
     reopen.dataset.ids = closed.join(" ");
   }
 
@@ -286,8 +292,11 @@ export function createComments(dependencies) {
     const shown = state.comments.map((comment) => comment.id);
     const button = $("#fold-all-btn");
     button.classList.toggle("hidden", shown.length === 0);
-    button.textContent = shown.length > 0 && shown.every((id) => state.expanded.has(id))
-      ? "Collapse all" : "Expand all";
+    const folding = shown.length > 0 && shown.every((id) => state.expanded.has(id));
+    button.querySelector(".icon-expand").classList.toggle("hidden", folding);
+    button.querySelector(".icon-collapse").classList.toggle("hidden", !folding);
+    button.setAttribute("aria-label", folding ? "Collapse all" : "Expand all");
+    button.title = folding ? "Close every comment in this view" : "Open every comment in this view";
   }
 
   function foldAll() {

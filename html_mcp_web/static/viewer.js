@@ -1238,18 +1238,19 @@ function attachControls() {
   }
   $("#call-agent-btn").addEventListener("click", async () => {
     const button = $("#call-agent-btn");
-    const label = button.lastChild;
+    const word = $("#call-agent-word");
     button.disabled = true;
     try {
       const reply = await fetchJson("/review-request", { method: "POST" });
       // Delivered went straight to a parked agent; queued is kept by the server and
-      // answers the agent's next wait at once.
-      label.textContent = reply.delivered ? "Called ✓" : "Queued";
+      // answers the agent's next wait at once. The word shows beside the bell for a
+      // moment, which is the only time the button carries one.
+      word.textContent = reply.delivered ? "Called" : "Queued";
     } catch (error) {
-      label.textContent = "Failed";
+      word.textContent = "Failed";
       console.error(error);
     } finally {
-      setTimeout(() => { label.textContent = "Call agent"; button.disabled = false; }, 2000);
+      setTimeout(() => { word.textContent = ""; button.disabled = false; }, 2000);
     }
   });
   for (const button of document.querySelectorAll(".tab-btn")) {

@@ -756,9 +756,10 @@ def test_browser_review_contract(tmp_path: Path) -> None:
             'return document.querySelectorAll(".comment-pick").length === 3'))
 
         def label(button):
+            # The buttons are icons; the words live in aria-label.
             return browser.execute_script(f'''
               const button = document.querySelector("{button}");
-              return button.classList.contains("hidden") ? null : button.textContent;
+              return button.classList.contains("hidden") ? null : button.getAttribute("aria-label");
             ''')
 
         # Nothing picked, nothing to press.
@@ -770,9 +771,14 @@ def test_browser_review_contract(tmp_path: Path) -> None:
               document.querySelector(\'[data-comment-id="{comment_id}"] .comment-pick\').click();
             ''')
 
+        # The status select keeps its width when the count buttons come and go: grown to
+        # fill the row, it stretched and shrank every time and the row jumped.
+        select_width = 'return document.querySelector("#comment-filter").getBoundingClientRect().width;'
+        steady = browser.execute_script(select_width)
         pick(still_open[0]["id"])
         pick(still_open[1]["id"])
         assert label("#resolve-picked-btn") == "Resolve 2"
+        assert browser.execute_script(select_width) == steady
         # One of them is put back, so the count follows.
         pick(still_open[1]["id"])
         assert label("#resolve-picked-btn") == "Resolve 1"
