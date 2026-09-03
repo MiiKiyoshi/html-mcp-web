@@ -263,20 +263,35 @@ export function createLayoutChecks(dependencies) {
         // Only labels are compared, because text over a shape or a line is normal.
         // A label box carries glyph padding, so neighbouring lines touch by a few
         // pixels as a matter of course; a collision covers much of both boxes.
+        // Boxes and labels are read in the svg's own viewport space, so a group's
+        // translate counts: read in their own space, a label in a moved group was
+        // compared against one a hundred pixels away as if they shared a line.
+        const inViewport = (node) => {
+          const bbox = safeBBox(node);
+          const ctm = node.getCTM();
+          if (bbox === null || ctm === null || bbox.width === 0 || bbox.height === 0) return null;
+          const corners = [[bbox.x, bbox.y], [bbox.x + bbox.width, bbox.y],
+                           [bbox.x, bbox.y + bbox.height], [bbox.x + bbox.width, bbox.y + bbox.height]]
+            .map(([x, y]) => [ctm.a * x + ctm.c * y + ctm.e, ctm.b * x + ctm.d * y + ctm.f]);
+          return {
+            left: Math.min(...corners.map(([x]) => x)), right: Math.max(...corners.map(([x]) => x)),
+            top: Math.min(...corners.map(([, y]) => y)), bottom: Math.max(...corners.map(([, y]) => y)),
+          };
+        };
         const labels = Array.from(svg.element.querySelectorAll("text"))
           .filter((text) => text.closest("defs, symbol, clipPath, mask, pattern, marker") === null)
-          .map((text) => ({ text, box: safeBBox(text) }))
-          .filter((label) => label.box !== null && label.box.width > 0 && label.box.height > 0);
+          .map((text) => ({ text, box: inViewport(text) }))
+          .filter((label) => label.box !== null);
         const collisions = [];
         for (let first = 0; first < labels.length; first++) {
           for (let second = first + 1; second < labels.length; second++) {
             const a = labels[first].box;
             const b = labels[second].box;
-            const across = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
-            const down = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+            const across = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+            const down = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
             if (across <= 0 || down <= 0) continue;
-            if (across < Math.min(a.width, b.width) * 0.25) continue;
-            if (down < Math.min(a.height, b.height) * 0.5) continue;
+            if (across < Math.min(a.right - a.left, b.right - b.left) * 0.25) continue;
+            if (down < Math.min(a.bottom - a.top, b.bottom - b.top) * 0.5) continue;
             collisions.push([labels[first].text, labels[second].text]);
           }
         }
@@ -284,6 +299,40 @@ export function createLayoutChecks(dependencies) {
           const name = (node) => `"${node.textContent.trim().replace(/\s+/g, " ").slice(0, 30)}"`;
           addError(
             `page ${index + 1} ${describeElement(svg.element)} prints two labels over each other (${name(first)} / ${name(second)})`,
+            svg.element);
+        }
+        // A label written on a box stays inside it, and a reader pointed at every one
+        // that did not: a 14px sentence ran 30px past a 630px box, a centred 11px label
+        // 4px past its 380px box. The box a label sits in is the smallest rect of the
+        // same svg that holds the point the label is anchored at (its left edge, its
+        // middle or its right edge, by text-anchor); a label on no box is on none. Only
+        // the sides are compared: a label that runs off the box's top or bottom is caught
+        // as an overlap, or is a caption above the box.
+        const boxes = Array.from(svg.element.querySelectorAll("rect"))
+          .filter((rect) => rect.closest("defs, symbol, clipPath, mask, pattern, marker") === null)
+          .map((rect) => inViewport(rect))
+          .filter((box) => box !== null);
+        let spilled = 0;
+        for (const label of labels) {
+          const box = label.box;
+          const anchor = doc.defaultView.getComputedStyle(label.text).textAnchor;
+          const at = {
+            x: anchor === "middle" ? (box.left + box.right) / 2 : anchor === "end" ? box.right : box.left,
+            y: (box.top + box.bottom) / 2,
+          };
+          const holder = boxes
+            .filter((candidate) => candidate.left <= at.x && at.x <= candidate.right
+              && candidate.top <= at.y && at.y <= candidate.bottom)
+            .sort((a, b) => (a.right - a.left) * (a.bottom - a.top) - (b.right - b.left) * (b.bottom - b.top))[0];
+          if (holder === undefined) continue;
+          const past = [["left", holder.left - box.left], ["right", box.right - holder.right]]
+            .filter(([, amount]) => amount > 1)
+            .map(([side, amount]) => `${side} by ${Math.round(amount)}`);
+          if (past.length === 0 || spilled >= 3) continue;
+          spilled += 1;
+          const words = label.text.textContent.trim().replace(/\s+/g, " ").slice(0, 30);
+          addError(
+            `page ${index + 1} ${describeElement(svg.element)} label "${words}" runs past its box (${past.join(", ")})`,
             svg.element);
         }
       }

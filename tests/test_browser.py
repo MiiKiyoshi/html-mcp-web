@@ -94,6 +94,20 @@ def problem_html() -> str:
       <rect x="0" y="100" width="800" height="18" fill="none" stroke="#333"/>
       <text x="20" y="114" font-size="14">a label inside a box is normal</text>
     </svg>
+    <!-- Labels on boxes: the first runs past its box's right side, the second is centred
+         in a translated group and runs past both sides, the third fits, and the fourth
+         sits on no box at all. -->
+    <svg id="boxed" viewBox="0 0 400 160" width="400" height="160">
+      <rect x="10" y="10" width="120" height="30" fill="none" stroke="#333"/>
+      <text x="14" y="30" font-size="14">a sentence far too long for the box it sits in</text>
+      <g transform="translate(200, 100)">
+        <rect x="0" y="10" width="60" height="30" fill="none" stroke="#333"/>
+        <text x="30" y="30" font-size="12" text-anchor="middle">centred and wider than its box</text>
+      </g>
+      <rect x="10" y="60" width="200" height="30" fill="none" stroke="#333"/>
+      <text x="14" y="80" font-size="14">fits</text>
+      <text x="14" y="155" font-size="14">a label on no box is left alone even if long</text>
+    </svg>
     <!-- A marker parked outside the viewBox is painted where the line references it, and
          a stroke on the boundary bleeds by half its width. Neither is a cut drawing. -->
     <svg id="quiet" viewBox="0 0 400 60" width="400" height="60">
@@ -638,6 +652,14 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert len(collisions) == 1
         assert "after routing with a commercia" in collisions[0]
         assert "extracted from the real path" in collisions[0]
+        # A label on a box stays inside it. The check names the label and the side, by
+        # how much; a group's translate counts, and a label on no box is left alone.
+        boxed = [error for error in errors if "svg#boxed>" in error and "runs past its box" in error]
+        assert len(boxed) == 2, boxed
+        assert any('"a sentence far too long for th" runs past its box (right by' in error for error in boxed)
+        assert any('"centred and wider than its box" runs past its box (left by' in error
+                   and "right by" in error for error in boxed)
+        assert not any("fits" in error or "left alone" in error for error in boxed)
 
         # The page is zoomed to fit the pane, so a narrower window must not change
         # which layout problems are reported.
