@@ -233,7 +233,7 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .filter-row { display: flex; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .filter-row select { flex: 1; min-width: 0; padding: 5px 8px; font-size: 12px; }
 /* Wakes the agent parked on wait_review; the dot shows one is parked right now. */
-#call-agent-btn, #pick-all-btn, #resolve-picked-btn, #reopen-picked-btn {
+#call-agent-btn, #fold-all-btn, #pick-all-btn, #resolve-picked-btn, #reopen-picked-btn {
   flex: none; display: inline-flex; align-items: center; gap: 6px;
   padding: 5px 10px; font-size: 12px; white-space: nowrap;
 }
