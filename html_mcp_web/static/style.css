@@ -239,6 +239,9 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
   flex: none; display: inline-flex; align-items: center; gap: 4px;
   padding: 4px 6px; font-size: 12px; line-height: 1; white-space: nowrap;
 }
+/* The select at the left edge, the buttons at the right: the first button takes the room
+   between, so the buttons keep their places whatever the row's width. */
+#fold-all-btn { margin-left: auto; }
 .icon-btn svg { display: block; }
 .icon-btn .count:empty { display: none; }
 .icon-btn:disabled { opacity: .45; }
