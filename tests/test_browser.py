@@ -3052,3 +3052,72 @@ def test_a_comment_whose_text_is_gone_keeps_its_place(tmp_path: Path) -> None:
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_svg_labels_are_laid_out_in_the_drawings_own_units(tmp_path: Path) -> None:
+    """Chrome shapes an svg label's letters at the size they will appear on screen, and
+    reads that size again only when the label's own style changes. A page drawn at another
+    scale changes the page's transform, not the label's style, so the letters stayed at the
+    old scale while the boxes around them moved. Geometric precision lays the letters out
+    in the drawing's own units instead, and the deck asks for it on every svg label."""
+    from html_mcp_web.slides import build
+
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<!doctype html>\n<meta charset="utf-8">\n<title>Scale</title>\n'
+        '<body data-author="A" data-meta="B">\n'
+        '<section data-title="Drawing">'
+        '<svg id="drawn" viewBox="0 0 400 120" width="400" height="120">'
+        '<rect x="10" y="10" width="200" height="40" fill="none" stroke="#333"/>'
+        '<text id="label" x="14" y="36" font-size="14">a label on a box</text>'
+        '</svg></section>\n'
+        "</body>\n", encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, Path(__file__).resolve().parents[1] / "templates" / "neutral-slides")
+
+    profile = tempfile.mkdtemp(prefix="html_mcp_scale_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(html.as_uri())
+        wait_until(lambda: browser.execute_script('return !!document.getElementById("label")'))
+        assert browser.execute_script(
+            'return getComputedStyle(document.getElementById("label")).textRendering'
+        ).lower() == "geometricprecision"
+        # The letters keep their place in the drawing when the page is drawn larger: the
+        # label's width in the drawing's own units is the same at both scales.
+        widths = browser.execute_script("""
+          const label = document.getElementById("label");
+          const page = document.querySelector("section.page");
+          const seen = [];
+          for (const scale of [1, 2.5]) {
+            page.style.transform = `scale(${scale})`;
+            page.getBoundingClientRect();
+            seen.push(Math.round(label.getComputedTextLength() * 100) / 100);
+          }
+          page.style.transform = "";
+          return seen;
+        """)
+        assert widths[0] == widths[1], widths
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
