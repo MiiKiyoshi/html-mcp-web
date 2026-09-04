@@ -208,7 +208,10 @@ export function createComments(dependencies) {
       box,
       h("span", { class: "comment-id", text: comment.id }),
       h("span", { class: `status-pill ${comment.status}`, text: `[${comment.status}]` }),
-      state.unattached.has(comment.id) ? h("span", { class: "stale-pill", text: "[stale]" }) : null,
+      state.unattached.has(comment.id)
+        ? h("span", { class: "stale-pill", text: "[stale]",
+                      title: "The text this quotes is gone. The card opens at the dashed mark where it was written." })
+        : null,
       anchor.label === "" ? null : h("span", { class: "anchor-kind", text: anchor.label })),
     // Collapsed cards show the comment text. To see what it is attached to, click the card to jump to the source.
     expanded ? null : h("div", { class: "comment-preview", text: comment.thread[0].text })));
@@ -436,10 +439,13 @@ export function createComments(dependencies) {
     const comment = state.comments.find((value) => value.id === commentId);
     if (comment === undefined || comment.anchor.kind !== "text") return;
     const range = resolveAnchor(comment.anchor);
-    if (range === null) return;
-    const element = range.startContainer.nodeType === Node.ELEMENT_NODE
-      ? range.startContainer
-      : range.startContainer.parentElement;
+    // A comment whose text is gone is not stranded: the page carries a dashed mark where
+    // it was written, and the card opens there like any other.
+    const element = range === null
+      ? frameDocument().querySelector(`.html-mcp-lost[data-comment-id="${CSS.escape(commentId)}"]`)
+      : (range.startContainer.nodeType === Node.ELEMENT_NODE
+        ? range.startContainer
+        : range.startContainer.parentElement);
     element?.scrollIntoView({ behavior: "smooth", block: "center" });
     setTimeout(() => {
       const marks = frameDocument().querySelectorAll(`[data-comment-id="${CSS.escape(commentId)}"]`);

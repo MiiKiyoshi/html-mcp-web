@@ -2940,3 +2940,115 @@ return {short: read("short"), long: read("long"), loose: read("loose"), cramped:
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_comment_whose_text_is_gone_keeps_its_place(tmp_path: Path) -> None:
+    """Editing away the sentence a comment quotes leaves the comment with nothing to sit
+    on, and it says so. It still knows where it was written, though: the page draws a
+    dashed mark around the block it was written in, and opening the card goes there."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html("A sentence to be rewritten."), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_lost_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        base = f"http://127.0.0.1:{port}"
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(base)
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        anchor = wait_until(lambda: browser.execute_script("""
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const node = doc.querySelector("#target")?.firstChild;
+          if (!node) return null;
+          const path = [];
+          for (let current = node; current !== doc.body; current = current.parentNode) {
+            path.push(Array.prototype.indexOf.call(current.parentNode.childNodes, current));
+          }
+          path.reverse();
+          return {path, text: node.nodeValue};
+        """))
+        digest = get_json(f"{base}/state")["artifacts"]["slides"]["artifact_digest"]
+        comment = post_json(f"{base}/artifacts/slides/comments", {
+            "anchor": {"kind": "text", "quote": anchor["text"], "prefix": "", "suffix": "",
+                       "start": {"path": anchor["path"], "offset": 0},
+                       "end": {"path": anchor["path"], "offset": len(anchor["text"])},
+                       "artifact_digest": digest},
+            "text": "About this sentence",
+        })
+        wait_until(lambda: browser.execute_script("""
+          return document.querySelector("#artifact-frame").contentDocument
+            .querySelectorAll(".html-mcp-highlight").length > 0;
+        """))
+
+        # The sentence is rewritten, so the comment has nothing left to sit on.
+        slides.write_text(slides_html("Something else entirely now."), encoding="utf-8")
+        wait_until(lambda: browser.execute_script(
+            'return !!document.querySelector(".stale-pill")'))
+        marks = wait_until(lambda: browser.execute_script(f"""
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const lost = doc.querySelector('.html-mcp-lost[data-comment-id="{comment["id"]}"]');
+          if (lost === null) return null;
+          const box = lost.getBoundingClientRect();
+          return {{highlights: doc.querySelectorAll(".html-mcp-highlight").length,
+                   width: Math.round(box.width), height: Math.round(box.height),
+                   badge: doc.querySelector(".html-mcp-highlight-badge.lost")?.textContent}};
+        """))
+        # Nothing is drawn over the text any more, and the mark stands where it was written.
+        assert marks["highlights"] == 0, marks
+        assert marks["width"] > 0 and marks["height"] > 0, marks
+        assert marks["badge"] == "1", marks
+        assert browser.execute_script(
+            'return document.querySelector(".stale-pill").title.length > 0')
+
+        # Opening the card goes to the mark: it is in view afterwards, and it was not before.
+        browser.execute_script("""
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          doc.defaultView.scrollTo(0, doc.body.scrollHeight);
+        """)
+        time.sleep(0.3)
+        before = browser.execute_script(f"""
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const box = doc.querySelector('.html-mcp-lost[data-comment-id="{comment["id"]}"]').getBoundingClientRect();
+          return box.bottom > 0 && box.top < doc.defaultView.innerHeight;
+        """)
+        browser.execute_script(
+            f"""document.querySelector('[data-comment-id="{comment["id"]}"] .comment-summary').click();""")
+        seen = wait_until(lambda: browser.execute_script(f"""
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const box = doc.querySelector('.html-mcp-lost[data-comment-id="{comment["id"]}"]').getBoundingClientRect();
+          return (box.bottom > 0 && box.top < doc.defaultView.innerHeight) ? true : null;
+        """))
+        assert before is False, "the mark was already in view, so the jump proves nothing"
+        assert seen is True
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
