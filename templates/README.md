@@ -146,6 +146,20 @@ text is plain: a `tspan` written inside it contributes its words and nothing els
 `data-max-lines="<n>"`, a label that needs more lines is reported by the layout check as
 `needs N lines, box allows M`.
 
+`data-fit="<width>x<height>"` names the whole box instead of a width, and the deck picks
+the size as well: the largest half-pixel in `data-fit-range="<smallest> <largest>"` (the
+skin's own size and 8 by default) whose lines fill no more of the box's height than
+`data-line-height` gives them. Cards of a row written this way come out at the density
+their sentences allow, rather than at one size with the short ones gaping between the
+words. How far a line has to open is then reported rather than chosen for, since it
+hardly moves with the size: `data-fit-stretch` (2 by default) says that under `justify`
+a space may open to that multiple of a natural space, and otherwise that a line may fall
+to the width divided by it. A narrow column opens its spaces half again as wide as a
+matter of course, so the default names only the lines a reader would stop at; 1.5 is the
+tighter setting to ask for where a row of cards must read evenly. The layout check reports a label past it as `is loose in
+196x92 at 12px`, and one the box holds at no size in the range, which is drawn at the
+smallest, as `does not fit 196x92 at 10px`.
+
 A figure is content, not styling. CSS outside this vocabulary changes the measured
 geometry, and the review server reports what that costs: an inline `<svg>` whose shapes
 run past its `viewBox` is reported as cut off, one that leaves a quarter or more of a

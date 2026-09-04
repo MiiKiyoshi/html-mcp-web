@@ -2790,3 +2790,129 @@ def test_the_resolved_and_mixed_views_lead_with_the_latest(tmp_path: Path) -> No
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_label_given_a_box_takes_the_size_the_box_holds(tmp_path: Path) -> None:
+    """data-fit names a box, and the deck chooses the size as well: the largest in the
+    range whose lines stay inside the box's height and read tight. Cards of a row then
+    fill their boxes whatever their sentences are, instead of a short one gaping between
+    the words at one fixed size. A label no size sets tight is drawn at the largest size
+    the box holds and reported as loose; one the box holds at no size is drawn at the
+    smallest and reported as not fitting."""
+    from html_mcp_web.slides import build
+
+    short = "a card with a few words on it"
+    long_words = ("a card whose sentence keeps going for long enough to want four or five "
+                  "lines of its own inside the very same box")
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<!doctype html>\n<meta charset="utf-8">\n<title>Fit</title>\n'
+        '<body data-author="A" data-meta="B">\n'
+        '<section data-title="Fit">'
+        '<svg id="fitted" viewBox="0 0 1000 300" width="1000" height="300">'
+        f'<text id="short" x="10" y="30" data-fit="188x80" data-align="justify" data-fit-range="9 15">{short}</text>'
+        f'<text id="long" x="260" y="30" data-fit="188x80" data-align="justify" data-fit-range="9 15">{long_words}</text>'
+        '<text id="loose" x="510" y="30" data-fit="188x80" data-align="justify" data-fit-range="9 15"'
+        f' data-fit-stretch="1.02">{long_words}</text>'
+        '<text id="cramped" x="760" y="30" data-fit="100x40" data-align="justify"'
+        f' data-fit-range="12 14">{long_words}</text>'
+        '</svg></section>\n'
+        "</body>\n", encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, Path(__file__).resolve().parents[1] / "templates" / "neutral-slides")
+
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_fit_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(html.as_uri())
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelectorAll("text[data-fit-size]").length === 4'))
+        seen = browser.execute_script("""
+const naturalSpace = (text) => {
+  // A space inside a justified line has already been widened, so the natural one is
+  // measured on a label of its own at the same size.
+  const probe = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  probe.setAttribute("x", "-1000");
+  probe.setAttribute("y", "-1000");
+  probe.style.fontSize = getComputedStyle(text).fontSize;
+  probe.textContent = "a a";
+  text.ownerSVGElement.appendChild(probe);
+  const width = probe.getSubStringLength(1, 1);
+  probe.remove();
+  return width;
+};
+const read = (id) => {
+  const text = document.getElementById(id);
+  const space = naturalSpace(text);
+  const lines = Array.from(text.children).map((line) => ({
+    added: Number(line.getAttribute("word-spacing") || 0) / space,
+    width: line.getComputedTextLength(),
+  }));
+  return {size: Number(text.dataset.fitSize), fits: text.dataset.fits || "yes", lines};
+};
+return {short: read("short"), long: read("long"), loose: read("loose"), cramped: read("cramped")};
+""")
+        for name in ("short", "long", "loose"):
+            card = seen[name]
+            assert 9 <= card["size"] <= 15, (name, card)
+            # The lines stay inside the box, and no line runs past its width.
+            assert len(card["lines"]) * 1.35 * card["size"] <= 80.001, (name, card)
+            assert all(line["width"] <= 188.5 for line in card["lines"]), (name, card)
+        # The shorter sentence takes the larger size: each card fills the box it was given.
+        assert seen["short"]["size"] > seen["long"]["size"], seen
+        # The stretch is reported, not chosen for, so it moves the word but not the size:
+        # the same sentence under a stretch nothing can meet is set at the same size.
+        assert seen["loose"]["size"] == seen["long"]["size"], seen
+        # What the words mean: a label that says nothing keeps every space inside the
+        # doubling it is allowed by default, and one that says loose has a line past the
+        # stretch it was given.
+        assert seen["short"]["fits"] == "yes", seen["short"]
+        assert all(line["added"] <= 1 for line in seen["short"]["lines"][:-1]), seen["short"]
+        assert seen["loose"]["fits"] == "loose", seen["loose"]
+        assert any(line["added"] > 0.02 for line in seen["loose"]["lines"][:-1]), seen["loose"]
+        assert seen["cramped"]["fits"] == "no", seen["cramped"]
+        # A box that holds the sentence at no size in the range keeps the smallest.
+        assert seen["cramped"]["size"] == 12, seen
+        assert len(seen["cramped"]["lines"]) * 1.35 * 12 > 40, seen["cramped"]
+
+        state = wait_until(lambda: (
+            get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]
+            if get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]["layout_check"]["checked_revision"]
+            == get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]["revision"] else None))
+        errors = [error for error in state["layout_check"]["errors"] if "svg#fitted" in error]
+        assert any(f'is loose in 188x80 at {seen["loose"]["size"]}px' in error for error in errors), errors
+        assert any("does not fit 100x40 at 12px" in error for error in errors), errors
+        assert not any('"a card with a few words on it"' in error for error in errors), errors
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()

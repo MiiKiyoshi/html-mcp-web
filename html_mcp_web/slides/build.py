@@ -38,8 +38,8 @@ from ..template_content import parse_template_content
 
 HERE = Path(__file__).parent
 SKELETON = HERE / "skeleton.css"
-# Breaks a <text data-wrap> label into lines with the skin's font, in the deck; a deck
-# with no such label carries none of it.
+# Breaks a <text data-wrap> or <text data-fit> label into lines with the skin's font, in
+# the deck; a deck with no such label carries none of it.
 WRAP = HERE / "wrap.js"
 
 # A page is 1280x720 and the file may be opened in a window narrower than that. The
@@ -257,7 +257,8 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
 
     body_html = chr(10).join(pages)
     math = math_bundle() if has_math(body_html) else ("", "")
-    wrap = "\n  <script>" + WRAP.read_text(encoding="utf-8") + "</script>" if "data-wrap=" in body_html else ""
+    wraps = "data-wrap=" in body_html or "data-fit=" in body_html
+    wrap = "\n  <script>" + WRAP.read_text(encoding="utf-8") + "</script>" if wraps else ""
     document = f'''<!doctype html>
 <html lang="{skin.label("lang") or "en"}">
 <head>

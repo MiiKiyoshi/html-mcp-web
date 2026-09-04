@@ -352,6 +352,18 @@ export function createLayoutChecks(dependencies) {
             `page ${index + 1} ${describeElement(svg.element)} label "${labelWords(text)}" needs ${needs} lines, box allows ${allows}`,
             svg.element);
         }
+        // A label fitted to a box (data-fit) is set at the largest size the box holds and
+        // its lines read tight. One that no size sets tight is loose at the size it got;
+        // one the box holds at no size does not fit and is drawn at the smallest.
+        for (const text of svg.element.querySelectorAll("text[data-fits]")) {
+          const words = labelWords(text);
+          const where = `${text.dataset.fit} at ${text.dataset.fitSize}px`;
+          addError(
+            text.dataset.fits === "no"
+              ? `page ${index + 1} ${describeElement(svg.element)} label "${words}" does not fit ${where}`
+              : `page ${index + 1} ${describeElement(svg.element)} label "${words}" is loose in ${where}`,
+            svg.element);
+        }
       }
       // In-flow siblings never overlap in normal flow, so any real overlap
       // (negative margins, transforms, oversized absolute children) covers
