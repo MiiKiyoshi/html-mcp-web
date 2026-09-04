@@ -1,7 +1,7 @@
 # Templates: one engine, many skins
 
 A template directory under `templates/` (or `~/.config/html-mcp-web/templates/` for a
-private one) is a **skin**. Everything about how a page is put together lives in the
+private template) is a **skin**. Everything about how a page is put together lives in the
 engine inside the package; the skin supplies colours, chrome, and a few measurements.
 An improvement to the engine reaches every skin at once, and a skin cannot drift from
 the structure the review tools expect.
@@ -122,7 +122,7 @@ takes no part in that spread; everything after it shares the remaining height.
   it. The element takes the width it is given and stops at its `max-height`, and the
   drawing keeps the `viewBox` proportions inside that, so a `viewBox` of another shape
   leaves a band down both sides or across the top and bottom that nothing can use.
-  Give the `viewBox` the size the figure is drawn at, not a smaller one scaled up: a
+  Give the `viewBox` the size the figure is drawn at, not a smaller box scaled up: a
   browser misplaces its own selection inside an svg that scales, by the scale factor, so
   the handles a reader drags to widen a selection on a touch screen sit away from the
   letters and collapse the selection when pressed. The review page's highlight and comment
@@ -138,7 +138,7 @@ plain dollars on one line would otherwise read as a formula.
 A long label inside an inline `<svg>` is written as one `<text>` holding the whole
 sentence, with `data-wrap="<width>"`, the width in `viewBox` units it may take. The deck
 breaks it into lines when it opens, measured with the skin's own font, so the content
-file carries no hand-placed lines. The breaking is the Knuth-Plass algorithm, the one TeX
+file carries no hand-placed lines. The breaking is the Knuth-Plass algorithm, which TeX
 uses: it weighs every way of splitting the whole sentence at once, hyphenation points
 included, and takes the lines with the least total badness, which is what keeps a narrow
 column's spaces from opening to several times their width. A word broken that way keeps a
@@ -163,15 +163,15 @@ a space may open to that multiple of a natural space, and otherwise that a line 
 to the width divided by it. A narrow column opens its spaces half again as wide as a
 matter of course, so the default names only the lines a reader would stop at; 1.5 is the
 tighter setting to ask for where a row of cards must read evenly. The layout check
-reports a label past it as `is loose in 196x92 at 12px`, and one the box holds at no size
-in the range, which is drawn at the smallest, as `does not fit 196x92 at 10px`.
+reports a label past it as `is loose in 196x92 at 12px`, and a label the box holds at no
+size in the range, which is drawn at the smallest, as `does not fit 196x92 at 10px`.
 
 A figure is content, not styling. CSS outside this vocabulary changes the measured
 geometry, and the review server reports what that costs: an inline `<svg>` whose shapes
-run past its `viewBox` is reported as cut off, one that leaves a quarter or more of a
-side empty is reported as holding space it does not draw in, two labels printed over
-each other are reported as a collision, and a label that runs past the sides of the
-rect it sits on is reported with the side and by how much.
+run past its `viewBox` is reported as cut off, a drawing that leaves a quarter
+or more of a side empty is reported as holding space it does not draw in, two labels
+printed over each other are reported as a collision, and a label that runs past the
+sides of the rect it sits on is reported with the side and by how much.
 
 The body box carries `data-layout-guard`. Overflow is therefore reported even though
 the box clips it. A valid result requires `layout_check.checked_revision == revision`
@@ -213,7 +213,7 @@ to the characters decks use (`fontTools.subset` writes woff2) so two weights sta
 1 MB rather than 10.
 
 The pptx export rebuilds every deck the same way from its rendered HTML, so a skin needs
-no pptx of its own; its look already lives in `skin.css`. The one thing `skin.json` can
+no pptx of its own; its look already lives in `skin.css`. The only thing `skin.json` can
 add for pptx is the deck font, so the file renders the same on a machine that lacks it:
 
 ```json
