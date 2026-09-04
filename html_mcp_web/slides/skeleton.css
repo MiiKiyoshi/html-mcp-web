@@ -7,29 +7,10 @@
   font-family: var(--font, Inter, "Noto Sans KR", system-ui, sans-serif);
   color: var(--ink);
 
-  /* Safari measures a line of text one way when it can take its simplified path and
-     another when it cannot, and the two drift apart along the line: a paragraph carrying
-     an inline box set at another size, a subscript or a KaTeX span, opens a gap before
-     that box, 43px of it after 125 characters on a reader's screen. Any letter-spacing
-     at all sends the line down the general path, since WebKit's
-     TextUtil::canUseSimplifiedTextMeasuring refuses a font that has letter-spacing or
-     word-spacing, and a hundredth of a pixel is under what a screen can show: 1.5px
-     across a 150-character line. Turning kerning or ligatures off does not do it; those
-     change what is drawn, and the gate reads only the two spacings. */
-  letter-spacing: 0.01px;
-
   --ink: #22282c;
   --ink-soft: #4f5a60;
-  --muted: #6d777c;
   --primary: #243943;
-  --accent: #6d928d;
-  --line: #d9dfdf;
-  --paper: #fffefd;
   --panel: #f4f6f8;
-  --good: #2f756a;
-  --bad: #a24b47;
-  --mono: ui-monospace, monospace;
-  --code-bg: #ecefef;
   --code-block-bg: #f4f6f8;
 
   --tbar-height: 64px;
@@ -48,8 +29,6 @@
   --lead-gap: 8px;
 }
 
-* { box-sizing: border-box; }
-.page { position: relative; padding: 0; background: var(--paper); }
 
 /* ---- Body page: title bar, body box, footer bar ---- */
 .tbar {
@@ -212,9 +191,9 @@
 
 /* ---- Body components ---- */
 p { margin: 0 0 12px; font-size: 19px; line-height: 1.5; }
-.lead { max-width: 1120px; color: var(--ink-soft); font-size: 20px; }
-.note { margin-top: 12px; color: var(--muted); font-size: 15px; line-height: 1.5; }
-ul.notes { margin: 12px 0 0; padding-left: 20px; color: var(--muted); font-size: 15px; line-height: 1.55; }
+.lead { max-width: 1120px; font-size: 20px; }
+.note { margin-top: 12px; font-size: 15px; }
+ul.notes { margin: 12px 0 0; padding-left: 20px; font-size: 15px; }
 ul.notes li { margin-bottom: 3px; }
 .units { margin: 0 0 4px; color: var(--muted); font-size: 13px; text-align: right; }
 .feedback { margin-top: 16px; padding: 10px 0 10px 16px; border-left: 3px solid var(--accent); color: var(--ink-soft); font-size: 17px; }
@@ -227,27 +206,22 @@ ul.notes li { margin-bottom: 3px; }
 .concerns ul { margin: 0; padding-left: 20px; font-size: 17px; line-height: 1.5; }
 .concerns ul li { margin-bottom: 2px; }
 
-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 /* Text right below a table hugs the last row line without this gap. */
 table + p, table + table { margin-top: 16px; }
 /* keep-all so a cell breaks between words: CJK text otherwise wraps mid-word. */
-th, td { padding: 8px 13px; border-bottom: 1px solid var(--line); font-size: 17px; text-align: right; word-break: keep-all; }
-th:first-child, td:first-child { text-align: left; }
-th { border-bottom: 2px solid var(--accent); color: var(--primary); font-size: 14px; font-weight: 650; letter-spacing: .025em; }
+th, td { padding: 8px 13px; border-bottom: 1px solid var(--line); font-size: 17px; word-break: keep-all; }
+th { border-bottom: 2px solid var(--accent); color: var(--primary); font-size: 14px; }
 th.sep, td.sep { border-left: 1px solid var(--line); }
-.nw { white-space: nowrap; }
 tfoot td { border-top: 2px solid var(--accent); border-bottom: 0; font-weight: 700; }
 .dense th, .dense td { padding: 4px 10px; font-size: 15px; line-height: 1.25; }
 .dense th { font-size: 13px; }
 .tight th, .tight td { padding: 4px 7px; font-size: 14px; white-space: nowrap; }
 .tight th { font-size: 12.5px; }
-.pos { color: var(--good); font-weight: 650; }
-.neg { color: var(--bad); font-weight: 650; }
 
 .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 34px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .metric { min-height: 150px; padding: 25px 25px 22px; }
-.metric strong { display: block; margin-bottom: 8px; color: var(--primary); font-size: 40px; font-weight: 650; letter-spacing: -0.025em; }
-.metric span { display: block; max-width: 300px; color: var(--ink-soft); font-size: 17px; line-height: 1.4; }
+.metric strong { margin-bottom: 8px; color: var(--primary); font-size: 40px; font-weight: 650; letter-spacing: -0.025em; }
+.metric span { display: block; max-width: 300px; font-size: 17px; }
 .win strong { color: var(--good); }
 .lose strong { color: var(--bad); }
 
@@ -255,12 +229,12 @@ tfoot td { border-top: 2px solid var(--accent); border-bottom: 0; font-weight: 7
    spreads them over it the way the body spreads its own (.body > .rest above): beside a
    tall figure, a short stack of cards sat in a clump at the top and left the rest of the
    column empty. A column that is one block (a figure, a table) keeps its own height. */
-.two { display: grid; grid-template-columns: 1.15fr 1fr; gap: 36px; align-items: stretch; }
+.two { grid-template-columns: 1.15fr 1fr; gap: 36px; align-items: stretch; }
 .two > div { display: flex; flex-direction: column; justify-content: space-evenly; }
 .card { padding: 4px 0 4px 22px; border-left: 2px solid var(--accent); }
 .card h3 { margin: 0 0 9px; color: var(--primary); font-size: 21px; }
 .card p { margin: 0 0 8px; color: var(--ink-soft); font-size: 16px; }
-code { padding: 1px 6px; border-radius: 3px; background: var(--code-bg); font-family: var(--mono); font-size: .92em; }
+code { padding: 1px 6px; border-radius: 3px; }
 /* A code block is one box: the chip padding and background belong to inline code, so a
    code inside a pre gives them up. Long lines are left to overflow the box rather than
    scroll or wrap, so the layout check reports them the way it reports any other overflow. */

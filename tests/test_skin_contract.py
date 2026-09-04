@@ -2,11 +2,12 @@
 
 Content is written against the vocabulary in templates/README.md, so a class that only
 one skin styles renders bare under every other skin. This checks the rule against the
-shipped skin, and against the reader's own skins when they are installed.
+shipped skin, and against the reader's own skins when they are installed. The vocabulary
+is read from both sheets a deck is built from: components.css says what a component is,
+in whatever page it sits on, and skeleton.css where it sits on a 1280x720 one.
 
-The slide engine and the report template each carry one rule that is about the browser
-rather than about either layout, and a check here holds the two to the same account of
-why it is there.
+A rule that is about the browser rather than about a layout belongs to components.css
+with the rest, and a check here holds it to that one place.
 """
 import re
 from pathlib import Path
@@ -14,6 +15,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
+COMPONENTS = REPO / "html_mcp_web" / "components.css"
 SKELETON = REPO / "html_mcp_web" / "slides" / "skeleton.css"
 BUILD = REPO / "html_mcp_web" / "slides" / "build.py"
 NEUTRAL = REPO / "templates" / "neutral-slides" / "skin.css"
@@ -44,15 +46,16 @@ def chrome_slots() -> set[str]:
     return set(re.findall(r'skin\.slot\("[^"]+"\),\s*"([^"]+)"', source))
 
 
-def skeleton_vocabulary() -> set[str]:
+def engine_vocabulary() -> set[str]:
     known: set[str] = set()
-    for head in rule_heads(SKELETON.read_text(encoding="utf-8")):
-        known |= names(head)
+    for sheet in (COMPONENTS, SKELETON):
+        for head in rule_heads(sheet.read_text(encoding="utf-8")):
+            known |= names(head)
     return known
 
 
 def unknown_components(skin_css: Path) -> dict[str, set[str]]:
-    known = skeleton_vocabulary() | chrome_slots()
+    known = engine_vocabulary() | chrome_slots()
     offenders: dict[str, set[str]] = {}
     for head in rule_heads(skin_css.read_text(encoding="utf-8")):
         missing = names(head) - known
@@ -61,24 +64,19 @@ def unknown_components(skin_css: Path) -> dict[str, set[str]]:
     return offenders
 
 
-def rule_with_its_reason(css_path: Path) -> str:
-    """The browser rule together with the comment above it that says why it is there."""
-    lines = css_path.read_text(encoding="utf-8").split("\n")
+def test_the_browser_rule_stands_once_and_says_why() -> None:
+    """A deck and a report are read on the same browsers, so the rule that keeps Safari
+    off its faster way of measuring belongs to neither layout. It sits in components.css,
+    which both builders read, and nowhere else: a second copy is only as good as the day
+    it was made."""
+    sheets = {"components": COMPONENTS, "skeleton": SKELETON, "report": REPORT,
+              "neutral skin": NEUTRAL}
+    carrying = {name for name, sheet in sheets.items() if BROWSER_RULE in sheet.read_text(encoding="utf-8")}
+    assert carrying == {"components"}, carrying
+    lines = COMPONENTS.read_text(encoding="utf-8").split("\n")
     at = [number for number, line in enumerate(lines) if line.strip() == BROWSER_RULE]
-    assert len(at) == 1, f"{css_path} states {BROWSER_RULE!r} {len(at)} times"
-    start = at[0] - 1
-    while start >= 0 and "/*" not in lines[start]:
-        start -= 1
-    assert start >= 0, f"{css_path} states {BROWSER_RULE!r} without saying why"
-    return "\n".join(lines[start:at[0] + 1])
-
-
-def test_both_builders_give_the_browser_rule_the_same_reason() -> None:
-    """The slide engine compiles skeleton.css with a skin's own; the report compiles
-    template.css by itself. They read no stylesheet in common, so a rule that is about the
-    browser rather than about either layout stands in both, and its account has to read the
-    same in both: a copy is only as good as the day it was made."""
-    assert rule_with_its_reason(SKELETON) == rule_with_its_reason(REPORT)
+    assert len(at) == 1, f"components.css states {BROWSER_RULE!r} {len(at)} times"
+    assert "/*" in "\n".join(lines[max(0, at[0] - 12):at[0]]), "the rule stands without saying why"
 
 
 def test_chrome_slots_are_read_from_the_builder() -> None:
@@ -105,6 +103,7 @@ def test_a_skin_that_invents_a_component_is_caught(tmp_path: Path) -> None:
     skin.write_text(
         ":root { --accent: #123456; }\n"
         ".card { border-radius: 14px; }\n"          # restyling a known component is fine
+        ".nw { letter-spacing: 0; }\n"              # one that components.css alone defines
         ".tbar-logo { height: 56px; }\n"            # a chrome slot is fine
         "@media screen { .step { padding: 4px; } }\n"  # nested rules are read too
         ".sidebar-note { color: red; }\n",          # this one is not in the skeleton

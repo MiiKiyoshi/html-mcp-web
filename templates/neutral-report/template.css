@@ -2,28 +2,11 @@
   font-family: Inter, "Noto Sans KR", system-ui, sans-serif;
   color: #252b2e;
 
-  /* Safari measures a line of text one way when it can take its simplified path and
-     another when it cannot, and the two drift apart along the line: a paragraph carrying
-     an inline box set at another size, a subscript or a KaTeX span, opens a gap before
-     that box, 43px of it after 125 characters on a reader's screen. Any letter-spacing
-     at all sends the line down the general path, since WebKit's
-     TextUtil::canUseSimplifiedTextMeasuring refuses a font that has letter-spacing or
-     word-spacing, and a hundredth of a pixel is under what a screen can show: 1.5px
-     across a 150-character line. Turning kerning or ligatures off does not do it; those
-     change what is drawn, and the gate reads only the two spacings. */
-  letter-spacing: 0.01px;
-
   --ink: #252b2e;
   --ink-soft: #505b60;
-  --accent: #6d928d;
   --accent-soft: #edf2f1;
-  --line: #d9dfdf;
-  --muted: #6d777c;
-  --paper: #fffefd;
 }
 
-* { box-sizing: border-box; }
-.page { position: relative; padding: 0; background: var(--paper); }
 .page-header { height: 35mm; margin: 0 19mm; padding-top: 12mm; border-bottom: .7mm solid var(--accent); }
 .report-title { display: block; margin-bottom: 3mm; color: var(--muted); font-size: 9pt; letter-spacing: .04em; }
 .page-header h2 { margin: 0; color: var(--ink); font-size: 23pt; font-weight: 620; line-height: 1.12; letter-spacing: -.02em; }
@@ -42,32 +25,28 @@ footer span { position: absolute; left: 50%; top: 3mm; transform: translateX(-50
 
 p { margin: 0 0 4mm; font-size: 10.5pt; line-height: 1.6; }
 .lead { margin-bottom: 7mm; color: var(--ink-soft); font-size: 13pt; line-height: 1.5; }
-.note { margin-top: 4mm; color: var(--muted); font-size: 8.5pt; line-height: 1.5; }
+.note { margin-top: 4mm; font-size: 8.5pt; }
 h3 { margin: 8mm 0 3mm; color: var(--ink); font-size: 14pt; font-weight: 650; }
-ul.notes { margin: 4mm 0 0; padding-left: 6mm; color: var(--muted); font-size: 9pt; line-height: 1.55; }
+ul.notes { margin: 4mm 0 0; padding-left: 6mm; font-size: 9pt; }
 ul.notes li { margin-bottom: 1.5mm; }
 .callout { margin: 7mm 0; padding: 5mm 6mm; border-left: 1.2mm solid var(--accent); background: var(--accent-soft); color: var(--ink-soft); font-size: 10.5pt; line-height: 1.55; }
 
 .metrics { display: grid; grid-template-columns: repeat(3, 1fr); margin: 7mm 0; border-top: .3mm solid var(--line); border-bottom: .3mm solid var(--line); }
 .metric { padding: 5mm; border-left: .3mm solid var(--line); }
 .metric:first-child { border-left: 0; }
-.metric strong { display: block; margin-bottom: 2mm; color: var(--ink); font-size: 23pt; font-weight: 620; }
-.metric span { color: var(--ink-soft); font-size: 9pt; line-height: 1.4; }
+.metric strong { margin-bottom: 2mm; color: var(--ink); font-size: 23pt; font-weight: 620; }
+.metric span { font-size: 9pt; }
 
-table { width: 100%; margin: 5mm 0; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-th, td { padding: 2.7mm 3mm; border-bottom: .3mm solid var(--line); font-size: 9pt; text-align: right; }
-th:first-child, td:first-child { text-align: left; }
-th { border-bottom: .7mm solid var(--accent); color: var(--ink); font-size: 8pt; font-weight: 650; letter-spacing: .025em; }
+table { margin: 5mm 0; }
+th, td { padding: 2.7mm 3mm; border-bottom: .3mm solid var(--line); font-size: 9pt; }
+th { border-bottom: .7mm solid var(--accent); color: var(--ink); font-size: 8pt; }
 .dense th, .dense td { padding: 1.8mm 2mm; font-size: 8pt; }
-.nw { white-space: nowrap; }
-.pos { color: #2f756a; font-weight: 650; }
-.neg { color: #a24b47; font-weight: 650; }
 
-.two { display: grid; grid-template-columns: 1fr 1fr; gap: 9mm; }
+.two { grid-template-columns: 1fr 1fr; gap: 9mm; }
 figure { margin: 7mm 0; }
 figure img, figure svg { display: block; max-width: 100%; height: auto; }
 figcaption { margin-top: 2mm; color: var(--muted); font-size: 8pt; line-height: 1.45; }
-code { padding: .3mm 1.2mm; border-radius: .8mm; background: #ecefef; font-family: ui-monospace, monospace; font-size: .92em; }
+code { padding: .3mm 1.2mm; border-radius: .8mm; }
 
 @media screen { main.pages section.page { box-shadow: 0 2px 14px rgba(25, 35, 42, .09); } }
 @media print { main.pages section.page { box-shadow: none; } }

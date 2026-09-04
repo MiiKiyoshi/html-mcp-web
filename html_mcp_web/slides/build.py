@@ -2,7 +2,9 @@
 
 Usage: python -m html_mcp_web.slides <content.html> <slides.html> --skin <dir>
 
-Structure comes from skeleton.css, wrap.js and this module. A skin directory supplies:
+Components come from components.css, which a report is built from too; where they sit
+on a 1280x720 page comes from skeleton.css, wrap.js and this module. A skin directory
+supplies:
 
     skin.css     variable overrides and chrome styling (required)
     skin.json    chrome slots and footer labels (optional)
@@ -38,6 +40,9 @@ from ..template_content import parse_template_content
 
 HERE = Path(__file__).parent
 SKELETON = HERE / "skeleton.css"
+# What a component is, which a report is built from too; the skeleton says where it sits
+# on a 1280x720 page.
+COMPONENTS = HERE.parent / "components.css"
 # Breaks a <text data-wrap> or <text data-fit> label into lines with the skin's font, in
 # the deck; a deck with no such label carries none of it. The lines are chosen by TeX's
 # algorithm, which comes with its own hyphenation patterns.
@@ -271,6 +276,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
   <title>{content.title}</title>
   {skin.head_extra()}
   <style>
+{COMPONENTS.read_text(encoding="utf-8")}
 {SKELETON.read_text(encoding="utf-8")}
 /* ---- skin: {skin_dir.name} ---- */
 {skin.css}

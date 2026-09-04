@@ -7,16 +7,21 @@ Usage: python3 build.py <content.html> <report.html>
 import sys
 from pathlib import Path
 
+import html_mcp_web
 from html_mcp_web.template_content import parse_template_content
 
 
 HERE = Path(__file__).parent
+# What a component is, which a deck is built from too; this template says where it sits on
+# an A4 page.
+COMPONENTS = Path(html_mcp_web.__file__).parent / "components.css"
 
 
 def build(content_path: Path, output_path: Path) -> None:
     content = parse_template_content(content_path)
 
-    css = (HERE / "template.css").read_text(encoding="utf-8")
+    css = (COMPONENTS.read_text(encoding="utf-8") + "\n"
+           + (HERE / "template.css").read_text(encoding="utf-8"))
     metadata_html = "<br>\n        ".join(content.metadata)
     page_count = len(content.sections) + 1
     pages = [f'''    <section class="page cover">

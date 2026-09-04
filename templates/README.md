@@ -179,10 +179,11 @@ and an empty error list in `inspect()`.
 ## Writing a skin
 
 Copy `templates/neutral-slides` and edit `skin.css`. The variables a skin may set are
-listed at the top of `html_mcp_web/slides/skeleton.css`; colours (`--primary`,
-`--accent`, `--paper`, …), the title bar and body box measurements (`--tbar-height`,
-`--body-height`, `--body-padding`, …), and the footer bar. A skin restates only what it
-changes.
+listed at the top of two files: `html_mcp_web/components.css` holds the ones a deck
+shares with a report (`--accent`, `--paper`, `--line`, `--muted`, …), and
+`html_mcp_web/slides/skeleton.css` the ones only a slide has (`--primary`, the title bar
+and body box measurements `--tbar-height`, `--body-height`, `--body-padding`, …, and the
+footer bar). A skin restates only what it changes.
 
 Chrome images go through named slots declared in `skin.json`, so the builder places
 them and the skin only styles them:
