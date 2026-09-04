@@ -461,3 +461,44 @@ def test_a_wrapped_svg_label_keeps_its_lines_in_the_vector(tmp_path: Path) -> No
     assert read_back == ("a sentence long enough to need several lines inside a narrow card, "
                          "so that its lines can be counted")
     assert svg_text.count('word-spacing="') == len(lines) - 1, svg_text
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_speaker_script_becomes_the_slide_notes(tmp_path: Path) -> None:
+    """A script is hidden in the slide show and left out of print, so without this the
+    pptx would be the one copy of the deck that has lost it. PowerPoint shows a slide's
+    notes to the speaker while the deck is being presented, and each paragraph of the
+    script is a paragraph there."""
+    from html_mcp_web.slides import build
+
+    content = tmp_path / "content.html"
+    content.write_text('''<!doctype html>
+<meta charset="utf-8">
+<title>Spoken</title>
+<body data-author="A" data-meta="B">
+<aside class="script"><p>Good morning.</p><p>The cover line.</p></aside>
+<section data-title="First">
+  <p>What the page shows.</p>
+  <aside class="script"><p>What to say first.</p><p>Then the second thing.</p></aside>
+</section>
+<section data-title="Silent"><p>No script on this one.</p></section>
+</body>
+''', encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, NEUTRAL)
+    out = tmp_path / "deck.pptx"
+    result = export_pptx(html.as_uri(), out, tmp_path, None)
+
+    assert [page["notes"] for page in result["pages"]] == [2, 2, 0]
+    slides = pptx.Presentation(str(out)).slides
+    cover, first, silent = slides[0], slides[1], slides[2]
+    assert [p.text for p in cover.notes_slide.notes_text_frame.paragraphs] == [
+        "Good morning.", "The cover line."]
+    assert [p.text for p in first.notes_slide.notes_text_frame.paragraphs] == [
+        "What to say first.", "Then the second thing."]
+    # A slide with no script has nothing written on its notes, and no notes slide made
+    # for it either.
+    assert not silent.has_notes_slide
+    # The script stays out of the slide itself: it is spoken, not shown.
+    shown = " ".join(shape.text_frame.text for shape in first.shapes if shape.has_text_frame)
+    assert "What to say first" not in shown

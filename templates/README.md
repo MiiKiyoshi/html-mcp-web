@@ -52,9 +52,10 @@ carries a second cover line, such as the name of the work a review deck discusse
 An `aside.script` immediately after `body` belongs to the cover; one inside a section
 belongs to that slide. Each script is emitted as a `div.script-block` right after its
 page, so the normal flow keeps the two together at any window size; it is hidden in the
-slide show and left out of print and PDF output. Script paragraphs carry no spacing
-between them, so a break in the delivery comes from splitting the sentences rather than
-from an empty `p`.
+slide show and left out of print and PDF output. A pptx export carries it as the slide's
+speaker notes, which is where PowerPoint shows it while the deck is being presented.
+Script paragraphs carry no spacing between them, so a break in the delivery comes from
+splitting the sentences rather than from an empty `p`.
 
 Image `src` paths resolve from the project directory that holds `.html-mcp-web.yaml`,
 not from the folder the built file sits in.
