@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import html
 import json
+import logging
 import math
 import re
 import subprocess
@@ -37,6 +38,8 @@ from .space import (
     validated_space_pages,
 )
 from .watcher import Watcher
+
+logger = logging.getLogger(__name__)
 
 
 PRINT_PAGE_SIZES = {"slides": "13.333in 7.5in", "report": "A4 portrait"}
@@ -180,6 +183,11 @@ class ArtifactRuntime:
     layout_errors: list[str] = field(default_factory=list)
     layout_room: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     space_revision: int | None = None
+    # What the files looked like when this revision was made. A watcher can stop
+    # delivering events without saying so, and then everything downstream, the layout
+    # check included, goes on describing a file nobody has read since.
+    seen_content: tuple[int, int] | None = None
+    seen_main: tuple[int, int] | None = None
     space_pages: list[dict[str, Any]] = field(default_factory=list)
 
     def digest(self) -> str | None:
@@ -242,6 +250,22 @@ class ArtifactRuntime:
         self.space_revision = None
         self.space_pages = []
 
+    def stamp(self, path: Path | None) -> tuple[int, int] | None:
+        """What a file looks like from outside: when it was written and how long it is."""
+        if path is None or not path.is_file():
+            return None
+        state = path.stat()
+        return (state.st_mtime_ns, state.st_size)
+
+    def note_files(self) -> None:
+        self.seen_content = self.stamp(self.content_file)
+        self.seen_main = self.stamp(self.main_file)
+
+    def moved_on(self) -> bool:
+        """Whether either file has changed since this revision was made."""
+        return (self.stamp(self.content_file) != self.seen_content
+                or self.stamp(self.main_file) != self.seen_main)
+
     def build(self) -> None:
         builder = self.template_dir / "build.py" if self.template_dir else None
         if builder is None or not builder.is_file():
@@ -286,6 +310,8 @@ class HtmlReviewServer:
         self.review_waiters = 0
         self.closing = False
         self.headless_check = asyncio.Lock()
+        # One catch-up at a time: a rebuild takes seconds, and every state read asks.
+        self.catching_up = asyncio.Lock()
         self.artifacts = self._create_artifacts(config)
         self.watcher = self._create_watcher(config)
 
@@ -308,6 +334,7 @@ class HtmlReviewServer:
             # A missing main is reported on the artifact (state carries the error), not
             # raised: raising here took the whole server down over one artifact while the
             # reviewer was renaming its file, and blocked every healthy one with it.
+            runtime.note_files()
             runtimes[artifact_id] = runtime
         return runtimes
 
@@ -369,6 +396,7 @@ class HtmlReviewServer:
         for runtime in affected:
             runtime.revision += 1
             runtime.reset_layout()
+            runtime.note_files()
         await self.broadcast({"type": "artifacts_changed", "path": str(changed.relative_to(self.project_dir)), **self.project_state()})
 
     def static_tag(self) -> str:
@@ -544,10 +572,36 @@ class HtmlReviewServer:
             raise web.HTTPNotFound()
         return web.FileResponse(target, headers={"Cache-Control": "no-store"})
 
+    async def catch_up(self) -> None:
+        """Bring the artifacts level with what is on disk.
+
+        The watcher is how a change is normally noticed, and it is the faster way, but it
+        is an event stream: its thread can stop delivering, and nothing downstream can
+        tell that from a project nobody is editing. Everything then goes on describing the
+        file as it was, and the layout check reports a clean pass on content the server
+        has never read. So the files are asked directly whenever the state is read, which
+        costs two stats an artifact and makes a stopped watcher slow rather than silent.
+        """
+        async with self.catching_up:
+            behind = [runtime for runtime in self.artifacts.values() if runtime.moved_on()]
+            if not behind:
+                return
+            for runtime in behind:
+                logger.warning("%s changed on disk without the watcher saying so", runtime.artifact_id)
+                if runtime.content_file is not None and runtime.stamp(runtime.content_file) != runtime.seen_content:
+                    runtime.build()
+                    if runtime.build_error is None:
+                        self.generated_paths.add(runtime.main_file)
+                runtime.revision += 1
+                runtime.reset_layout()
+                runtime.note_files()
+            await self.broadcast({"type": "artifacts_changed", "path": None, **self.project_state()})
+
     async def get_state(self, request: web.Request) -> web.Response:
         # An agent reads completion off this state, and with no review UI open nothing ran
         # the check it waited for. The check is started here, one at a time, and a later
         # state carries its result.
+        await self.catch_up()
         if not self.websockets and not self.headless_check.locked():
             for runtime in self.artifacts.values():
                 if runtime.space_revision != runtime.revision and runtime.main_file.is_file():
