@@ -131,6 +131,14 @@ class HtmlFileHandler(FileSystemEventHandler):
 
 
 class Watcher:
+    # Counting no further than this keeps a runaway tree from turning a census into a wait.
+    CENSUS_CAP = 20000
+    # A watch goes on every directory, and the limit belongs to the login rather than to
+    # this server, so a tree that holds no artifact content can take thousands of watches
+    # from every other session without anyone noticing until one of them has none left.
+    # Past this many, the count is said out loud at startup instead of at the ceiling.
+    LOUD_WATCH_COUNT = 5000
+
     def __init__(
         self,
         watch_dir: Path,
@@ -169,6 +177,7 @@ class Watcher:
                 if self._watchable(entry):
                     self.observer.schedule(self.handler, str(entry), recursive=True)
             self.observer.start()
+            self._report_watch_cost()
         except BaseException as error:
             # A partially scheduled observer keeps its inotify descriptor, and its
             # watches, until it is stopped; leaking it on every failed start is how a
@@ -198,17 +207,42 @@ class Watcher:
                         break
         return total
 
+    def _census(self) -> list[tuple[int, str]]:
+        """How many directories each watched top-level entry holds, dearest first."""
+        counts = [(self._count_directories(entry, self.CENSUS_CAP), entry.name)
+                  for entry in sorted(self.watch_dir.iterdir()) if self._watchable(entry)]
+        counts.sort(reverse=True)
+        return counts
+
+    def _dearest(self, counts: list[tuple[int, str]]) -> str:
+        return ", ".join(f"{name} {'over ' if total >= self.CENSUS_CAP else ''}{total}"
+                         for total, name in counts[:5])
+
+    def _report_watch_cost(self) -> None:
+        """Say what this project costs when it is a lot.
+
+        The limit is only met at the moment a watch cannot be taken, and the session that
+        meets it is rarely the one that spent them. A project that takes thousands says so
+        while it still works, so the reader can put the trees that hold no artifact content
+        into ignore before another server has none left.
+        """
+        counts = self._census()
+        total = sum(count for count, _ in counts) + 1
+        if total < self.LOUD_WATCH_COUNT:
+            return
+        logger.warning(
+            "%s is watching %d directories, one inotify watch each, and the limit is shared "
+            "by every session of this login. Directories by cost: %s. Trees that hold no "
+            "artifact content belong in ignore in .html-mcp-web.yaml (their top-level name "
+            "is enough).",
+            self.watch_dir, total, self._dearest(counts))
+
     def _watch_limit_message(self) -> str:
         """What the reader has to know to get past a used-up limit: the watch is one per
         directory, the limit belongs to the whole login rather than this project, and which
         directories are spending it."""
-        cap = 20000
-        counts = []
-        for entry in sorted(self.watch_dir.iterdir()):
-            if self._watchable(entry):
-                counts.append((self._count_directories(entry, cap), entry.name))
-        counts.sort(reverse=True)
-        listed = ", ".join(f"{name} {'over ' if total >= cap else ''}{total}" for total, name in counts[:5])
+        counts = self._census()
+        listed = self._dearest(counts)
         return (
             "the inotify watch limit is used up, so the project cannot be watched. One watch "
             f"goes on every directory being watched ({sum(total for total, _ in counts) + 1} here) "
