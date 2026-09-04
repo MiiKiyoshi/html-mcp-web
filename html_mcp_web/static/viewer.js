@@ -307,6 +307,7 @@ const updateLayoutUi = layoutChecks.updateLayoutUi;
 const anchors = createAnchors({ frameDocument, state });
 const captureTextAnchor = anchors.captureTextAnchor;
 const resolveAnchor = anchors.resolveAnchor;
+const lastKnownPlace = anchors.lastKnownPlace;
 
 // The whole of what the reader dragged over, as one range. A drag usually leaves one, but
 // KaTeX draws a fraction or a subscript as an inline table (.vlist is a table-cell), and a
@@ -840,6 +841,9 @@ function ensureHighlightLayer(page) {
       .html-mcp-highlight { position: absolute; border-radius: 2px; background: rgba(246, 216, 74, .42); box-shadow: inset 0 -1px rgba(171, 139, 0, .28); }
       .html-mcp-highlight-badge { position: absolute; min-width: 18px; height: 18px; padding: 0 4px; border: 1px solid #8b7413; border-radius: 9px; color: #302900; background: #ffe77a; font: 11px/16px system-ui, sans-serif; pointer-events: auto; cursor: pointer; }
       .html-mcp-highlight.flash { background: rgba(255, 177, 60, .68); }
+      .html-mcp-lost { position: absolute; border-radius: 2px; border: 1px dashed rgba(150, 122, 8, .8); background: rgba(246, 216, 74, .1); }
+      .html-mcp-lost.flash { background: rgba(255, 177, 60, .4); }
+      .html-mcp-highlight-badge.lost { border-style: dashed; color: #6d6650; background: #f6f1e2; }
     `;
     doc.head.appendChild(style);
   }
@@ -884,30 +888,54 @@ function renderHighlights() {
   for (const layer of frameDocument().querySelectorAll(".html-mcp-highlight-layer")) clear(layer);
   state.unattached.clear();
   let number = 0;
+  // Both rect and page rect are viewport-relative, so scrolling cancels out in the difference.
+  const local = (frame, rect) => ({
+    left: (rect.left - frame.rect.left) / frame.ratio + frame.scrollLeft,
+    top: (rect.top - frame.rect.top) / frame.ratio + frame.scrollTop,
+    width: rect.width / frame.ratio,
+    height: rect.height / frame.ratio,
+  });
+  const numberedBadge = (comment, count, box, lost) => {
+    const badge = frameDocument().createElement("button");
+    badge.type = "button";
+    badge.className = lost ? "html-mcp-highlight-badge lost" : "html-mcp-highlight-badge";
+    badge.textContent = String(count);
+    badge.title = lost ? `${comment.thread[0].text}\n(the text this quotes is gone)` : comment.thread[0].text;
+    Object.assign(badge.style, {
+      left: `${Math.max(0, box.left - 21)}px`, top: `${Math.max(0, box.top - 1)}px`,
+    });
+    badge.addEventListener("click", () => focusComment(comment.id));
+    return badge;
+  };
   for (const comment of state.comments) {
     if (comment.status !== "open" || comment.anchor.kind !== "text") continue;
     number += 1;
     const range = resolveAnchor(comment.anchor);
-    if (range === null) {
-      state.unattached.add(comment.id);
-      continue;
-    }
-    const frame = pageFrameFor(range.startContainer);
+    const frame = range === null ? null : pageFrameFor(range.startContainer);
     if (frame === null) {
       state.unattached.add(comment.id);
+      // The quoted text is gone, so there is nothing to draw over. What the page still
+      // has is the place the comment was written at, and a dashed mark stands there: it
+      // says the comment was about this much of the page and no closer.
+      const place = lastKnownPlace(comment.anchor);
+      const placeFrame = place === null ? null : pageFrameFor(place);
+      if (placeFrame === null) continue;
+      const box = local(placeFrame, place.getBoundingClientRect());
+      const layer = ensureHighlightLayer(placeFrame.page);
+      const mark = frameDocument().createElement("div");
+      mark.className = "html-mcp-lost";
+      mark.dataset.commentId = comment.id;
+      Object.assign(mark.style, {
+        left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px`,
+      });
+      layer.appendChild(mark);
+      layer.appendChild(numberedBadge(comment, number, box, true));
       continue;
     }
-    // Both rect and page rect are viewport-relative, so scrolling cancels out in the difference.
-    const local = (rect) => ({
-      left: (rect.left - frame.rect.left) / frame.ratio + frame.scrollLeft,
-      top: (rect.top - frame.rect.top) / frame.ratio + frame.scrollTop,
-      width: rect.width / frame.ratio,
-      height: rect.height / frame.ratio,
-    });
     const layer = ensureHighlightLayer(frame.page);
     const rects = selectionRects(range);
     for (const rect of rects) {
-      const box = local(rect);
+      const box = local(frame, rect);
       const mark = frameDocument().createElement("div");
       mark.className = "html-mcp-highlight";
       mark.dataset.commentId = comment.id;
@@ -917,19 +945,7 @@ function renderHighlights() {
       layer.appendChild(mark);
     }
     const firstRect = rects[0];
-    if (firstRect !== undefined) {
-      const box = local(firstRect);
-      const badge = frameDocument().createElement("button");
-      badge.type = "button";
-      badge.className = "html-mcp-highlight-badge";
-      badge.textContent = String(number);
-      badge.title = comment.thread[0].text;
-      Object.assign(badge.style, {
-        left: `${Math.max(0, box.left - 21)}px`, top: `${Math.max(0, box.top - 1)}px`,
-      });
-      badge.addEventListener("click", () => focusComment(comment.id));
-      layer.appendChild(badge);
-    }
+    if (firstRect !== undefined) layer.appendChild(numberedBadge(comment, number, local(frame, firstRect), false));
   }
   const attachmentChanged = previousUnattached.size !== state.unattached.size
     || Array.from(previousUnattached).some((commentId) => !state.unattached.has(commentId));

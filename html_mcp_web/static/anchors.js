@@ -229,7 +229,22 @@ export function createAnchors(dependencies) {
   function resolveAnchor(anchor) {
     return rangeFromPath(anchor) ?? rangeFromQuote(anchor);
   }
-  
 
-  return { captureTextAnchor, resolveAnchor };
+  // Where the reader was pointing when they wrote a comment whose text has since gone.
+  // The stored path is walked as deep as the page still allows, so a rewritten sentence
+  // gives back the paragraph and a rewritten paragraph the block around it; a page that
+  // is gone altogether gives back nothing, since a place off the pages is no place.
+  function lastKnownPlace(anchor) {
+    const doc = frameDocument();
+    if (doc === null || doc.body === null) return null;
+    for (let depth = anchor.start.path.length; depth > 0; depth--) {
+      const node = nodeAtPath(doc.body, anchor.start.path.slice(0, depth));
+      if (node === null) continue;
+      const element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+      if (element !== null && element.closest("section.page") !== null) return element;
+    }
+    return null;
+  }
+
+  return { captureTextAnchor, resolveAnchor, lastKnownPlace };
 }
