@@ -1008,3 +1008,37 @@ async def test_the_shell_names_its_assets_under_a_tag_that_moves(client) -> None
     assert tagged.status == 200
     assert await tagged.text() == (review.static_dir / "comments.js").read_text(encoding="utf-8")
     assert (await test_client.get(f"/static/v{newest}/nothing.js")).status == 404
+
+
+async def test_a_change_the_watcher_missed_is_still_found(client) -> None:
+    """The watcher is how a change is normally noticed, and its thread can stop delivering
+    without saying so. Everything downstream then describes the file as it was, and the
+    layout check reports a clean pass on content the server has never read. Reading the
+    state asks the files themselves, so a stopped watcher makes an update late rather than
+    invisible."""
+    test_client, review = client
+    runtime = review.artifacts["slides"]
+    before = (await (await test_client.get("/state")).json())["artifacts"]["slides"]
+    assert before["revision"] == runtime.revision
+
+    # A layout result arrives for that revision: without the check below, this is what an
+    # agent would go on reading after the artifact had changed underneath it.
+    runtime.layout_revision = runtime.revision
+    runtime.layout_errors = []
+    state = (await (await test_client.get("/state")).json())["artifacts"]["slides"]
+    assert state["layout_check"]["checked_revision"] == before["revision"]
+    assert state["layout_check"]["errors"] == []
+
+    # The file is rewritten with nothing to deliver the news.
+    runtime.main_file.write_text(
+        "<!doctype html><html><head><title>Artifact</title></head>"
+        "<body><p>A different sentence.</p></body></html>", encoding="utf-8")
+    after = (await (await test_client.get("/state")).json())["artifacts"]["slides"]
+    assert after["revision"] == before["revision"] + 1, after
+    # The old result does not carry over to the new revision, so nothing reads as checked.
+    assert after["layout_check"]["checked_revision"] != after["revision"]
+    assert after["artifact_digest"] != before["artifact_digest"]
+
+    # Reading again with the file untouched changes nothing: the state settles.
+    settled = (await (await test_client.get("/state")).json())["artifacts"]["slides"]
+    assert settled["revision"] == after["revision"]
