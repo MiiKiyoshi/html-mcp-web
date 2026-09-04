@@ -1058,6 +1058,25 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
         assert opened["sideTop"] >= opened["paneBottom"] - 2    # under the artifact, not over it
         assert opened["paneWidth"] >= measured["width"] - 2     # which keeps the whole width
 
+        # The band that answers a touch is wider than the bar drawn in it, and the bar sits
+        # in the middle of the band: painted a shade apart from the sidebar, the band's edge
+        # read as a second strip laid over the bar, and the bar sat low in it.
+        drawn = browser.execute_script('''
+          const grip = document.querySelector("#sidebar-grip");
+          const bar = getComputedStyle(grip, "::before");
+          const style = getComputedStyle(grip);
+          return {band: grip.getBoundingClientRect().height,
+                  barTop: parseFloat(bar.marginTop), barHeight: parseFloat(bar.height),
+                  painted: style.backgroundImage === "none" ? style.backgroundColor : style.backgroundImage,
+                  sidebar: getComputedStyle(document.querySelector("#sidebar")).backgroundColor};
+        ''')
+        assert drawn["band"] > drawn["barHeight"] * 4, drawn
+        above = drawn["barTop"]
+        below = drawn["band"] - drawn["barTop"] - drawn["barHeight"]
+        assert abs(above - below) < 1, drawn
+        # Nothing of its own is painted over the sidebar behind it.
+        assert drawn["painted"] in ("rgba(0, 0, 0, 0)", "transparent", drawn["sidebar"]), drawn
+
         # The bar along the top of the comments drags the split, so either side can be given
         # the screen without the other going away.
         grip = browser.find_element("css selector", "#sidebar-grip")
@@ -1115,17 +1134,15 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
             'return document.querySelector(".tab-btn.active").dataset.tab;') == "pages"
         browser.execute_script(f'document.querySelector(\'.tab-btn[data-tab="{before}"]\').click();')
 
-        # A finger is wider than the bar: the gap above it answers a touch as well, and the
-        # bar is still drawn as thin as it was.
+        # A finger is wider than the bar, so the whole band answers a touch, its top edge
+        # included, while the bar stays as thin as it is drawn.
         band = browser.execute_script('''
           const grip = document.querySelector("#sidebar-grip");
           const box = grip.getBoundingClientRect();
-          const style = getComputedStyle(grip);
           const near = document.elementFromPoint(box.left + box.width / 2, box.top + 3);
-          return {height: box.height, transparentTop: style.backgroundImage.includes("gradient"),
-                  grabbedNearTop: near === grip};
+          return {height: box.height, grabbedNearTop: near === grip};
         ''')
-        assert band["height"] >= 36 and band["transparentTop"] and band["grabbedNearTop"]
+        assert band["height"] >= 36 and band["grabbedNearTop"], band
 
         # A tablet held upright has width to spare and still reads better with the comments
         # below, so the split follows the shape of the screen rather than its width.

@@ -317,13 +317,18 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   .topbar h1 { display: none; }
 }
 
+/* Shown only where the comments sit under the artifact, and dragged to divide the two.
+   A finger is wider than the bar it aims at, and a touch that fell short of the bar hit
+   the tab row underneath, so the band that answers a touch is 38px while what is drawn in
+   it is the 4px bar. The band keeps the sidebar's own colour: painted a shade apart, its
+   edge read as a second strip laid over the bar, and the bar, centred in the painted part
+   rather than in the band, sat low in it. */
 .sidebar-grip {
   display: none;
   flex: 0 0 auto;
-  height: 20px;
+  height: 38px;
   cursor: row-resize;
   touch-action: none;
-  background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
 
@@ -332,7 +337,7 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   display: block;
   width: 42px;
   height: 4px;
-  margin: 8px auto;
+  margin: 17px auto 0;
   border-radius: 2px;
   background: var(--line);
 }
@@ -348,18 +353,7 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   }
   .layout.sidebar-collapsed { grid-template-rows: minmax(0, 1fr) 0; }
   #sidebar { border-left: 0; border-top: 1px solid var(--line); }
-  /* A pointer lands where it is aimed and a finger does not, so the band to grab is wider
-     here than the bar drawn inside it. */
-  /* A finger is wider than the bar it aims at, and a touch that fell short of it hit the
-     tab row underneath. The band keeps the height it is drawn at and takes the space above
-     it as well, which is the gap between the artifact and the comments: transparent, so
-     the bar still reads as thin, and the whole of it answers a touch. */
-  .sidebar-grip {
-    display: block;
-    height: 38px;
-    background: linear-gradient(to bottom, transparent 14px, var(--bg) 14px);
-  }
-  .sidebar-grip::before { margin: 24px auto 0; }
+  .sidebar-grip { display: block; }
 }
 
 /* A narrow screen also has no room for the row of controls, which ran off the right edge
