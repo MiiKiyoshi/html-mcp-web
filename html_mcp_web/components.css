@@ -1,0 +1,50 @@
+/* What the components of templates/README.md are, in the part that holds whatever page
+   they sit on. A deck's page is 1280x720 pixels and a report's is A4, so sizes, spacing
+   and rules measured in millimetres stay with each of those; a colour, a weight, an
+   alignment and the shape of a component do not change with the paper and stand here
+   once. Both builders read this file before their own sheet, so either can override a
+   line of it, and a skin overrides both.
+
+   --ink and --ink-soft are not here: the deck and the report each set their own. */
+
+:root {
+  --accent: #6d928d;
+  --line: #d9dfdf;
+  --muted: #6d777c;
+  --paper: #fffefd;
+  --good: #2f756a;
+  --bad: #a24b47;
+  --mono: ui-monospace, monospace;
+  --code-bg: #ecefef;
+
+  /* Safari measures a line of text one way when it can take its simplified path and
+     another when it cannot, and the two drift apart along the line: a paragraph carrying
+     an inline box set at another size, a subscript or a KaTeX span, opens a gap before
+     that box, 43px of it after 125 characters on a reader's screen. Any letter-spacing
+     at all sends the line down the general path, since WebKit's
+     TextUtil::canUseSimplifiedTextMeasuring refuses a font that has letter-spacing or
+     word-spacing, and a hundredth of a pixel is under what a screen can show: 1.5px
+     across a 150-character line. Turning kerning or ligatures off does not do it; those
+     change what is drawn, and the gate reads only the two spacings. */
+  letter-spacing: 0.01px;
+}
+
+* { box-sizing: border-box; }
+.page { position: relative; padding: 0; background: var(--paper); }
+
+.lead { color: var(--ink-soft); }
+.note { color: var(--muted); line-height: 1.5; }
+ul.notes { color: var(--muted); line-height: 1.55; }
+.nw { white-space: nowrap; }
+.pos { color: var(--good); font-weight: 650; }
+.neg { color: var(--bad); font-weight: 650; }
+code { background: var(--code-bg); font-family: var(--mono); font-size: .92em; }
+
+.two { display: grid; }
+.metric strong { display: block; }
+.metric span { color: var(--ink-soft); line-height: 1.4; }
+
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th { font-weight: 650; letter-spacing: .025em; }
+th, td { text-align: right; }
+th:first-child, td:first-child { text-align: left; }
