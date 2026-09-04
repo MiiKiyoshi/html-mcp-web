@@ -32,6 +32,18 @@
 * { box-sizing: border-box; }
 .page { position: relative; padding: 0; background: var(--paper); }
 
+/* Chrome shapes the letters of an svg label at the size they will appear on screen, to
+   keep them from being stretched: LayoutSVGInlineText asks
+   calculateScreenFontSizeScalingFactor for that size and shapes the glyphs for it. The
+   size is read again when the label's own style changes, and a page drawn larger changes
+   the transform of the page, not of the label inside it, so the label went on wearing
+   letters shaped for the size before: zooming a deck left the words at one scale and the
+   boxes around them at another until something else made the label restyle. Asking for
+   geometric precision turns that off, and the letters are laid out once in the drawing's
+   own units and scaled with everything else. Plain html text never had this: it is placed
+   in css pixels and only painted at the scale. */
+svg text { text-rendering: geometricPrecision; }
+
 .lead { color: var(--ink-soft); }
 .note { color: var(--muted); line-height: 1.5; }
 ul.notes { color: var(--muted); line-height: 1.55; }
