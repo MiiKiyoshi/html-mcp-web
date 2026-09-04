@@ -243,7 +243,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         artifact: str,
         out: Annotated[str | None, Field(description="Project-relative path of the pptx to write; default export/<artifact>.pptx.")] = None,
     ) -> dict[str, Any]:
-        """Write the slides artifact as an editable pptx: text blocks become text boxes, tables become tables, images stay images, KaTeX becomes a screenshot, and inline SVG stays vector. A skin's pptx block in skin.json can name TrueType files to embed the deck font."""
+        """Write the slides artifact as an editable pptx: text blocks become text boxes, tables become tables, images stay images, KaTeX becomes a screenshot, inline SVG stays vector, and a slide's speaker script becomes its notes. A skin's pptx block in skin.json can name TrueType files to embed the deck font."""
         client = binding.require_client()
         return await client.request_json(
             "POST", f"/artifacts/{artifact}/export/pptx", {"out": out} if out is not None else {}, timeout=300.0)

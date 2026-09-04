@@ -65,6 +65,17 @@ JS_READY = ("return document.readyState === 'complete' && "
 
 JS_PAGES = "return document.querySelectorAll('section.page').length;"
 
+# A speaker script rides in a div.script-block right after its page. It is read as
+# paragraphs rather than as one run of text, since the block is hidden for the shot and a
+# hidden element's innerText loses the breaks between them.
+JS_SCRIPT = ("const page = document.querySelectorAll('section.page')[arguments[0]];"
+             "const next = page.nextElementSibling;"
+             "if (next === null || !next.classList.contains('script-block')) return [];"
+             "const parts = Array.from(next.querySelectorAll('p, li'));"
+             "const lines = parts.length ? parts.map((part) => part.textContent)"
+             "                           : [next.textContent];"
+             "return lines.map((line) => line.trim().replace(/\\s+/g, ' ')).filter(Boolean);")
+
 # Hide the marked elements on one page so the background screenshot leaves their place empty
 # for the editable shapes laid over it. A ::before decoration would go with the element, so
 # the full-bleed pass hides only plain text; a body page hides its own content blocks.
@@ -786,6 +797,20 @@ def _add_svg_picture(slide, png: bytes, svg: bytes, rect: list[float]) -> None:
     svg_blip.set(f"{{{R_NS}}}embed", rid)
 
 
+def _add_notes(slide, lines: list[str]) -> None:
+    """The speaker script, where PowerPoint shows it while the deck is being presented.
+
+    A deck's own script blocks are hidden in the slide show and left out of print, so
+    without this the pptx is the one copy of the deck that has lost them.
+    """
+    if not lines:
+        return
+    frame = slide.notes_slide.notes_text_frame
+    frame.text = lines[0]
+    for line in lines[1:]:
+        frame.add_paragraph().text = line
+
+
 def _blank_slide(prs):
     return prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -999,8 +1024,10 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
         report = []
         for index in range(page_count):
             info = client.execute_script(JS_EXTRACT, script_args=[index])
+            script = client.execute_script(JS_SCRIPT, script_args=[index])
             if not info["hasBody"]:
                 slide = _blank_slide(prs)
+                _add_notes(slide, script)
                 # A full-bleed page's plain text becomes editable text boxes; the rest (CSS
                 # decorations, background art, and text carrying a ::before mark) stays in the
                 # picture. Hiding the plain text before the shot keeps it from showing twice.
@@ -1013,9 +1040,11 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
                 _set_slide_background(slide, base64.b64decode(shot))
                 for item in overlaid:
                     _add_text(slide, item, font)
-                report.append({"page": index + 1, "title": info["title"], "shapes": len(overlaid), "screenshot": True})
+                report.append({"page": index + 1, "title": info["title"], "shapes": len(overlaid),
+                               "screenshot": True, "notes": len(script)})
                 continue
             slide = _blank_slide(prs)
+            _add_notes(slide, script)
             overlay = [item for item in info["items"] if item.get("body")]
             # An element screenshot (an svg, a KaTeX block) is taken while the element is
             # still visible; the body is then hidden so the chrome-only background does not
@@ -1060,7 +1089,8 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
                     else:
                         _add_picture(slide, shot_bytes, item["rect"])
             report.append({"page": index + 1, "title": info["title"], "shapes": len(overlay),
-                           "screenshot": True, "vector_svgs": sum(1 for item in overlay if "svg" in item)})
+                           "screenshot": True, "vector_svgs": sum(1 for item in overlay if "svg" in item),
+                           "notes": len(script)})
         client.delete_session()
         out_path.parent.mkdir(parents=True, exist_ok=True)
         prs.save(str(out_path))
