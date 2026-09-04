@@ -87,6 +87,13 @@ footer bar, so overflow is reported the same way.
 - `divider`: `data-no` is the number in the capsule, `p.label` is its text, and an
   optional `img.shot` places a picture to the right.
 
+`data-appendix` on a section, usually the `divider` that opens one, says that it and
+every page after it are an appendix: pages held back for questions rather than shown in
+order. The footer then counts the deck the audience is told to expect, cover included,
+and stops before the appendix, whose own pages read `A1 / A8`. A deck that marks no
+section counts the whole of itself, so `divider` on its own changes nothing: it parts one
+chapter from the next as often as it opens an appendix.
+
 ## Body components
 
 Blocks spread down the body rather than stacking at its top, so a page with little on it

@@ -184,3 +184,36 @@ def test_a_deck_with_a_wrapped_label_carries_the_wrap_script(tmp_path: Path) -> 
                        encoding="utf-8")
     build(content, output, Path(__file__).resolve().parent.parent / "templates" / "neutral-slides")
     assert "texLineBreak_lib" in output.read_text(encoding="utf-8")
+
+
+def test_an_appendix_is_counted_apart_from_the_deck(tmp_path: Path) -> None:
+    """An appendix is opened when a question calls for it, so the pages the audience is
+    told to expect stop before it. Its own pages carry a count of their own, since a page
+    numbered past the total reads as a mistake."""
+    from html_mcp_web.slides import build
+
+    def deck(marker: str) -> str:
+        content = tmp_path / "content.html"
+        content.write_text(f'''<!doctype html>
+<title>Counted</title>
+<body data-author="R" data-meta="Lab">
+<section data-title="First"><p>One.</p></section>
+<section data-title="Second"><p>Two.</p></section>
+<section data-layout="divider" data-no="A"{marker}><p class="label">Appendix</p></section>
+<section data-title="Held back"><p>Only if asked.</p></section>
+</body>
+''', encoding="utf-8")
+        output = tmp_path / "slides.html"
+        build(content, output, Path(__file__).resolve().parent.parent / "templates" / "neutral-slides")
+        return output.read_text(encoding="utf-8")
+
+    import re
+    marked = re.findall(r'<span class="pageno">([^<]*)</span>', deck(' data-appendix'))
+    # Cover and two pages are what the audience is shown; the divider opens the appendix.
+    assert marked == ["1 / 3", "2 / 3", "3 / 3", "A1 / A2", "A2 / A2"], marked
+
+    # The same deck without the marker counts the whole of itself: a divider parts one
+    # chapter from the next as often as it opens an appendix, so it changes nothing by
+    # itself.
+    plain = re.findall(r'<span class="pageno">([^<]*)</span>', deck(""))
+    assert plain == ["1 / 5", "2 / 5", "3 / 5", "4 / 5", "5 / 5"], plain
