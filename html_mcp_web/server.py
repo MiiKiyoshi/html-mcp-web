@@ -452,8 +452,10 @@ class HtmlReviewServer:
             raise web.HTTPBadRequest(text="pptx export applies to slides artifacts")
         if not out.is_relative_to(self.project_dir):
             raise web.HTTPBadRequest(text="out must stay inside the project directory")
-        # The print URL strips script blocks; the export drives the same firefox port as PDF.
-        url = f"http://127.0.0.1:{self.config.port}/artifacts/{runtime.artifact_id}/artifact?print=1"
+        # Not the print URL: that one strips the speaker scripts, and each becomes its
+        # slide's notes. They are hidden with CSS for the shots instead, which is enough
+        # here because the export photographs each page element rather than printing.
+        url = f"http://127.0.0.1:{self.config.port}/artifacts/{runtime.artifact_id}/artifact"
         try:
             async with self.pdf_lock:
                 return await asyncio.get_running_loop().run_in_executor(

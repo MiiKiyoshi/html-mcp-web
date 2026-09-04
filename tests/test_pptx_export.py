@@ -16,7 +16,8 @@ CONTENT = '''<!doctype html>
 <meta charset="utf-8">
 <title>Export Deck</title>
 <body data-author="Export Author" data-meta="Lab|Today" data-sub="Subtitle line">
-<section data-layout="contents" data-title="Contents"><ol><li>Numbers</li></ol></section>
+<section data-layout="contents" data-title="Contents"><ol><li>Numbers</li></ol>
+  <aside class="script"><p>What to say over the contents.</p></aside></section>
 <section data-title="Numbers">
   <p class="lead">Lead sentence with <b>bold</b> and <code>code</code>.</p>
   <ul class="notes"><li>First point<ul><li>Nested point</li></ul></li><li>Second point</li></ul>
@@ -213,6 +214,12 @@ def test_export_route_writes_inside_the_project(tmp_path: Path) -> None:
         assert result["path"] == str(tmp_path / "export" / "deck.pptx")
         assert (tmp_path / "export" / "deck.pptx").is_file()
         assert [page["screenshot"] for page in result["pages"]] == [True, True, True]
+        # The route reads the artifact the way the screen does. Reading it the way the
+        # printer does would have taken the speaker scripts out of it, and the notes with
+        # them: this test is the one that says the export sees them.
+        assert [page["notes"] for page in result["pages"]] == [0, 1, 0]
+        contents = pptx.Presentation(str(tmp_path / "export" / "deck.pptx")).slides[1]
+        assert contents.notes_slide.notes_text_frame.text == "What to say over the contents."
         with pytest.raises(urllib.error.HTTPError) as error:
             post({"out": "../outside.pptx"})
         assert error.value.code == 400
