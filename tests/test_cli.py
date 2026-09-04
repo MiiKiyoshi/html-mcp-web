@@ -132,3 +132,6 @@ def test_neutral_report_builds_a4_cover_and_guarded_pages(tmp_path: Path) -> Non
     assert output.count("data-layout-guard") == 2
     assert "Evaluation<br>" in output
     assert "3 / 3" in output
+    # A hundredth of a pixel between the letters, as the slide engine carries: it keeps
+    # Safari off the measuring path that opens a gap before an inline box of another size.
+    assert "letter-spacing: 0.01px;" in output
