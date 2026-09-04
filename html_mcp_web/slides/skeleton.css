@@ -7,6 +7,17 @@
   font-family: var(--font, Inter, "Noto Sans KR", system-ui, sans-serif);
   color: var(--ink);
 
+  /* Safari measures a line of text one way when it can take its simplified path and
+     another when it cannot, and the two drift apart along the line: a paragraph carrying
+     an inline box set at another size, a subscript or a KaTeX span, opens a gap before
+     that box, 43px of it after 125 characters on a reader's screen. Any letter-spacing
+     at all sends the line down the general path, since WebKit's
+     TextUtil::canUseSimplifiedTextMeasuring refuses a font that has letter-spacing or
+     word-spacing, and a hundredth of a pixel is under what a screen can show: 1.5px
+     across a 150-character line. Turning kerning or ligatures off does not do it; those
+     change what is drawn, and the gate reads only the two spacings. */
+  letter-spacing: 0.01px;
+
   --ink: #22282c;
   --ink-soft: #4f5a60;
   --muted: #6d777c;
