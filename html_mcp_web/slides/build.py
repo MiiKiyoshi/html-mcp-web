@@ -191,7 +191,15 @@ def script_block(script_html: str) -> str:
 def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
     content = parse_template_content(content_path)
     skin = Skin(skin_dir)
-    page_count = len(content.sections) + 1
+    # An appendix is opened when a question calls for it, so the pages an audience is
+    # told to expect stop before it. The section carrying data-appendix opens it and the
+    # rest of the deck belongs to it; those pages count as A1, A2 and so on, since a page
+    # after the total ("16 / 15") reads as a mistake and a page with no number at all
+    # leaves the speaker no way to say which one to open.
+    appendix_at = next((index for index, section in enumerate(content.sections)
+                        if "data-appendix" in section.attributes), None)
+    page_count = (len(content.sections) if appendix_at is None else appendix_at) + 1
+    appendix_count = 0 if appendix_at is None else len(content.sections) - appendix_at
     metadata_html = "<br>\n        ".join(content.metadata)
 
     subtitle_html = f'<div class="sub">{content.subtitle}</div>' if content.subtitle else ""
@@ -211,7 +219,10 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
     footer_label = skin.label("footer_label")
     for page_number, section in enumerate(content.sections, 2):
         script = script_block(section.script_html)
-        pageno = f'<span class="pageno">{page_number} / {page_count}</span>'
+        in_appendix = appendix_at is not None and page_number - 2 >= appendix_at
+        counted = (f"A{page_number - 2 - appendix_at + 1} / A{appendix_count}" if in_appendix
+                   else f"{page_number} / {page_count}")
+        pageno = f'<span class="pageno">{counted}</span>'
         if section.layout in ("contents", "divider"):
             footer = f'<footer class="bbar">{pageno}</footer>'
             art = images(skin.slot("full_art"), "full-art")
