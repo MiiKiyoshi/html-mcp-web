@@ -2716,3 +2716,77 @@ return {left: lines("left"), justify: lines("justify"), center: lines("center"),
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_the_resolved_and_mixed_views_lead_with_the_latest(tmp_path: Path) -> None:
+    """The open view keeps the order the comments were written in, the order the page they
+    sit on reads in. The resolved view and the mixed one are a record of what has
+    happened, so the comment touched last is at the top."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_order_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        base = f"http://127.0.0.1:{port}/artifacts/slides"
+        written = []
+        for word in ("first", "second", "third"):
+            written.append(post_json(f"{base}/comments", {"anchor": {"kind": "artifact"}, "text": word})["id"])
+        # The first is resolved, then the second, so the newest of the two is the one
+        # written second: the order the views are asked for is not the order they were
+        # written in, which is what tells the two orders apart.
+        post_json(f"{base}/comments/{written[0]}/resolve", {"summary": ""})
+        post_json(f"{base}/comments/{written[1]}/resolve", {"summary": ""})
+
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(f"http://127.0.0.1:{port}")
+
+        def shown(status, count):
+            # The view is asked for and then waited for by its size, since the cards of the
+            # view before it stand until the new ones arrive.
+            browser.execute_script(f"""
+              const filter = document.querySelector("#comment-filter");
+              filter.value = "{status}";
+              filter.dispatchEvent(new Event("change", {{bubbles: true}}));
+            """)
+            return wait_until(lambda: browser.execute_script(
+                'const ids = Array.from(document.querySelectorAll("[data-comment-id]"))'
+                '  .map((card) => card.dataset.commentId);'
+                f'return ids.length === {count} ? ids : null;'))
+
+        # Written first, second, third; resolved first, then second.
+        assert shown("open", 1) == [written[2]]
+        assert shown("resolved", 2) == [written[1], written[0]]
+        assert shown("all", 3) == [written[1], written[0], written[2]]
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()

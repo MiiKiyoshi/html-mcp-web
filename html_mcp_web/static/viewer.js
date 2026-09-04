@@ -1208,7 +1208,7 @@ function attachControls() {
   document.addEventListener("fullscreenchange", syncFullscreenMode);
   // A device that cannot be watched from where the code is written draws its own touch
   // record over the page when the address carries ?trace.
-  if (new URLSearchParams(window.location.search).has("trace")) import("/static/trace.js");
+  if (new URLSearchParams(window.location.search).has("trace")) import("./trace.js");
   $("#compose-form").addEventListener("submit", submitCompose);
   installComposeKeys();
   $("#compose-cancel").addEventListener("click", () => {
