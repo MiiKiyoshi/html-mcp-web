@@ -975,10 +975,15 @@ const page = document.querySelectorAll('section.page')[1];
 const size = (el) => parseFloat(getComputedStyle(el).fontSize);
 return {paragraph: size(page.querySelector('p')),
         inline: size(page.querySelector('p .katex')),
-        display: size(page.querySelector('.katex-display > .katex'))};
+        display: size(page.querySelector('.katex-display > .katex')),
+        spacing: getComputedStyle(page.querySelector('p')).letterSpacing};
 """)
         assert abs(sizes["display"] - sizes["paragraph"]) < 0.5
         assert sizes["inline"] > sizes["paragraph"] + 1  # inline keeps KaTeX's enlargement
+        # A paragraph carries a hundredth of a pixel between its letters. That is what
+        # keeps Safari off the measuring path that opens a gap before an inline box set at
+        # another size, which a paragraph with maths in it is.
+        assert sizes["spacing"] == "0.01px", sizes
     finally:
         if browser is not None:
             try:
