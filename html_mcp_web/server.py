@@ -371,11 +371,28 @@ class HtmlReviewServer:
             runtime.reset_layout()
         await self.broadcast({"type": "artifacts_changed", "path": str(changed.relative_to(self.project_dir)), **self.project_state()})
 
-    async def index(self, request: web.Request) -> web.FileResponse:
-        return web.FileResponse(self.static_dir / "index.html", headers=NO_CACHE)
+    def static_tag(self) -> str:
+        """The newest change among the files the page loads, as one path segment.
+
+        It rides in the path rather than in a query because those files are modules: a
+        relative import resolves against its module's URL with the query dropped, so a
+        viewer.js named with a fresh query still pulled the stylesheet and the sidebar
+        the browser already held. Safari served a sidebar several versions old however
+        often the page was reloaded.
+        """
+        newest = max((path.stat().st_mtime for path in self.static_dir.iterdir() if path.is_file()), default=0)
+        return f"v{int(newest)}"
+
+    async def index(self, request: web.Request) -> web.Response:
+        page = (self.static_dir / "index.html").read_text(encoding="utf-8")
+        return web.Response(text=page.replace('"/static/', f'"/static/{self.static_tag()}/'),
+                            content_type="text/html", charset="utf-8",
+                            headers={"Cache-Control": "no-store"})
 
     async def static(self, request: web.Request) -> web.FileResponse:
-        target = (self.static_dir / request.match_info["name"]).resolve()
+        # The tag names a moment rather than a directory: the file beneath it is the one
+        # in the static directory, whatever tag was asked for.
+        target = (self.static_dir / re.sub(r"^v\d+/", "", request.match_info["name"])).resolve()
         if not target.is_relative_to(self.static_dir.resolve()) or not target.is_file():
             raise web.HTTPNotFound()
         return web.FileResponse(target, headers=NO_CACHE)

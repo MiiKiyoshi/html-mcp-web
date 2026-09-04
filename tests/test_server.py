@@ -988,3 +988,23 @@ async def test_presses_survive_a_server_restart(client, tmp_path: Path) -> None:
         assert (third.review_calls, third.review_consumed) == (1, 1)
     finally:
         await second_client.close()
+
+
+async def test_the_shell_names_its_assets_under_a_tag_that_moves(client) -> None:
+    """A reader on Safari reloaded the page for a day and kept the sidebar they had. The
+    shell is never stored, and it names every asset under a tag taken from the newest of
+    them, so a file that changed is a URL the browser has never seen. The tag sits in the
+    path, since a module's relative imports drop a query and would stay on the old copy."""
+    test_client, review = client
+    response = await test_client.get("/")
+    text = await response.text()
+    assert response.headers["Cache-Control"] == "no-store"
+    newest = max(int(path.stat().st_mtime) for path in review.static_dir.iterdir() if path.is_file())
+    assert f'src="/static/v{newest}/viewer.js"' in text
+    assert f'href="/static/v{newest}/style.css"' in text
+    assert '"/static/viewer.js"' not in text and '"/static/style.css"' not in text
+    # The tag names a moment, not a directory: under it the files themselves are served.
+    tagged = await test_client.get(f"/static/v{newest}/comments.js")
+    assert tagged.status == 200
+    assert await tagged.text() == (review.static_dir / "comments.js").read_text(encoding="utf-8")
+    assert (await test_client.get(f"/static/v{newest}/nothing.js")).status == 404

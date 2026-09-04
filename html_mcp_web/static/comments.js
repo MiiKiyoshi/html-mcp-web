@@ -57,7 +57,12 @@ export function createComments(dependencies) {
   async function refreshComments() {
     const ui = captureCommentUi();
     const payload = await fetchJson(filteredCommentsPath());
-    state.comments = payload.comments;
+    // The open view keeps the order the comments were written in, which is the order the
+    // page they sit on reads in. The other two views are a record of what has happened,
+    // so they lead with what happened last.
+    state.comments = $("#comment-filter").value === "open" ? payload.comments
+      : [...payload.comments].sort((first, second) => (first.updated < second.updated ? 1
+        : first.updated > second.updated ? -1 : 0));
     renderComments();
     renderHighlights();
     restoreCommentUi(ui);
