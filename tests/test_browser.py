@@ -2619,6 +2619,8 @@ def test_a_long_svg_label_wraps_to_its_width(tmp_path: Path) -> None:
         f'<text id="center" x="610" y="30" font-size="13.5" data-wrap="196" data-align="center">{sentence}</text>'
         f'<text id="balance" x="762" y="30" font-size="13.5" data-wrap="196" data-align="balance">{sentence}</text>'
         f'<text id="capped" x="12" y="300" font-size="13.5" data-wrap="196" data-max-lines="2">{sentence}</text>'
+        '<text id="hyphen" x="520" y="300" font-size="13.5" data-wrap="120" data-align="justify">'
+        'the intermediate representation carries the leakage optimisation</text>'
         '</svg></section>\n'
         "</body>\n", encoding="utf-8")
     html = tmp_path / "slides.html"
@@ -2647,13 +2649,21 @@ def test_a_long_svg_label_wraps_to_its_width(tmp_path: Path) -> None:
         browser.start_session()
         browser.navigate(html.as_uri())
         wait_until(lambda: browser.execute_script(
-            'return document.querySelectorAll("text[data-lines]").length === 5'))
+            'return document.querySelectorAll("text[data-lines]").length === 6'))
+
+        def read_back(lines):
+            # A word broken across lines keeps its hyphen on the first of them, so the
+            # sentence comes back by dropping that hyphen instead of adding a space.
+            words = [line["text"] for line in lines]
+            return "".join(word[:-1] if word.endswith("-") else word + " " for word in words).strip()
+
         seen = browser.execute_script("""
 const lines = (id) => Array.from(document.querySelectorAll(`#${id} tspan`)).map((line) => ({
   x: line.getAttribute("x"), dy: Number(line.getAttribute("dy")), width: line.getComputedTextLength(),
   spacing: line.getAttribute("word-spacing"), text: line.textContent}));
 const span = (id) => { const b = document.getElementById(id).getBBox(); return [b.x, b.x + b.width]; };
 return {left: lines("left"), justify: lines("justify"), center: lines("center"), balance: lines("balance"),
+        hyphen: lines("hyphen"),
         anchor: getComputedStyle(document.getElementById("center")).textAnchor,
         centerSpan: span("center"), leftSpan: span("left"),
         capped: document.getElementById("capped").dataset.lines};
@@ -2664,7 +2674,7 @@ return {left: lines("left"), justify: lines("justify"), center: lines("center"),
         # words, read back in order, are the sentence.
         for lines in (left, seen["justify"], seen["balance"]):
             assert all(line["width"] <= 196.5 for line in lines), lines
-            assert " ".join(line["text"] for line in lines) == sentence
+            assert read_back(lines) == sentence
             assert [line["x"] for line in lines] == [lines[0]["x"]] * len(lines)
             assert lines[0]["dy"] == 0 and all(abs(line["dy"] - 1.35 * 13.5) < 0.01 for line in lines[1:])
         assert seen["leftSpan"][0] >= 12 and seen["leftSpan"][1] <= 208.5, seen["leftSpan"]
@@ -2690,6 +2700,13 @@ return {left: lines("left"), justify: lines("justify"), center: lines("center"),
             widths = [natural(line) for line in lines]
             assert min(widths) >= 0.6 * sum(widths) / len(widths), lines
         assert seen["capped"] == str(len(left))
+        # TeX's algorithm breaks a word at a hyphenation point when that spares the lines
+        # around it: in a column this narrow, without it a line of two words would have to
+        # open its spaces several times their width.
+        hyphen = seen["hyphen"]
+        assert any(line["text"].endswith("-") for line in hyphen), hyphen
+        assert read_back(hyphen) == "the intermediate representation carries the leakage optimisation"
+        assert all(line["width"] <= 120.5 for line in hyphen), hyphen
 
         # The review server's layout check: the wrapped label on the rect is inside it, its
         # lines are no collision, and the capped label is reported with both counts.

@@ -455,6 +455,9 @@ def test_a_wrapped_svg_label_keeps_its_lines_in_the_vector(tmp_path: Path) -> No
         svg_text = archive.read(next(n for n in archive.namelist() if n.endswith(".svg"))).decode("utf-8")
     lines = re.findall(r"<tspan[^>]*>([^<]*)</tspan>", svg_text)
     assert len(lines) >= 3, svg_text
-    assert " ".join(lines) == ("a sentence long enough to need several lines inside a narrow card, "
-                               "so that its lines can be counted")
+    # A word the breaking split across two lines keeps its hyphen on the first of them, so
+    # the sentence comes back by dropping that hyphen rather than adding a space.
+    read_back = "".join(line[:-1] if line.endswith("-") else line + " " for line in lines).strip()
+    assert read_back == ("a sentence long enough to need several lines inside a narrow card, "
+                         "so that its lines can be counted")
     assert svg_text.count('word-spacing="') == len(lines) - 1, svg_text

@@ -174,12 +174,13 @@ def test_a_deck_with_a_wrapped_label_carries_the_wrap_script(tmp_path: Path) -> 
     build(content, output, Path(__file__).resolve().parent.parent / "templates" / "neutral-slides")
 
     built = output.read_text(encoding="utf-8")
-    # The script runs at the end of the body, like the math renderer, so the lines are
-    # in place before load fires.
-    assert built.index("getSubStringLength") > built.index("</main>")
+    # The breaker and the script that drives it run at the end of the body, like the math
+    # renderer, so the lines are in place before load fires.
+    assert built.index("texLineBreak_lib") > built.index("</main>")
+    assert built.index("texLineBreak_hyphens_en-us") > built.index("</main>")
 
-    # A label given a box instead of a width brings the script along the same way.
+    # A label given a box instead of a width brings them along the same way.
     content.write_text(content.read_text(encoding="utf-8").replace('data-wrap="190"', 'data-fit="190x40"'),
                        encoding="utf-8")
     build(content, output, Path(__file__).resolve().parent.parent / "templates" / "neutral-slides")
-    assert "getSubStringLength" in output.read_text(encoding="utf-8")
+    assert "texLineBreak_lib" in output.read_text(encoding="utf-8")
