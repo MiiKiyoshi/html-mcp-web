@@ -1,0 +1,10 @@
+tex-linebreak v0.9.0, MIT (package.json; the repository ships no LICENSE file), by Robert
+Knight. Vendored files: dist/lib.js, dist/hyphens_en-us.js, each with its sourceMappingURL
+line removed. Source: https://github.com/robertknight/tex-linebreak
+
+lib.js implements the Knuth-Plass line-breaking algorithm ("Breaking paragraphs into
+lines", Softw. Pract. Exp. 11(11), 1981) and carries a copy of hypher, the hyphenation
+engine. hyphens_en-us.js holds the American English hyphenation patterns, which its own
+header traces to the TeX hyphenation collection at tug.org. Both are UMD bundles: loaded
+in a browser they leave texLineBreak_lib and texLineBreak_hyphens_en-us on the window,
+which is how a deck uses them without a bundler.

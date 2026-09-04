@@ -136,12 +136,17 @@ plain dollars on one line would otherwise read as a formula.
 
 A long label inside an inline `<svg>` is written as one `<text>` holding the whole
 sentence, with `data-wrap="<width>"`, the width in `viewBox` units it may take. The deck
-breaks it into lines between words when it opens, measured with the skin's own font, so
-the content file carries no hand-placed lines. `x` and `y` are the start of the first
-line. `data-align` is `left` (the default), `center` (`x` is then the middle of every
-line), `justify` (every line but the last is widened to the full width through the
-spaces between its words) or `balance` (as many lines as `left`, their lengths made
-even). `data-line-height` is the step between lines in font sizes (default 1.35). The
+breaks it into lines when it opens, measured with the skin's own font, so the content
+file carries no hand-placed lines. The breaking is the Knuth-Plass algorithm, the one TeX
+uses: it weighs every way of splitting the whole sentence at once, hyphenation points
+included, and takes the lines with the least total badness, which is what keeps a narrow
+column's spaces from opening to several times their width. A word broken that way keeps a
+hyphen at the end of its line. `x` and `y` are the start of the first line. `data-align`
+is `left` (the default), `center` (`x` is then the middle of every line), `justify`
+(every line but the last is widened to the full width through the spaces between its
+words) or `balance` (the same lines at the narrowest width that still needs no more of
+them, so the last line is no shorter than the rest). `data-line-height` is the step
+between lines in font sizes (default 1.35). The
 text is plain: a `tspan` written inside it contributes its words and nothing else. With
 `data-max-lines="<n>"`, a label that needs more lines is reported by the layout check as
 `needs N lines, box allows M`.
@@ -156,9 +161,9 @@ hardly moves with the size: `data-fit-stretch` (2 by default) says that under `j
 a space may open to that multiple of a natural space, and otherwise that a line may fall
 to the width divided by it. A narrow column opens its spaces half again as wide as a
 matter of course, so the default names only the lines a reader would stop at; 1.5 is the
-tighter setting to ask for where a row of cards must read evenly. The layout check reports a label past it as `is loose in
-196x92 at 12px`, and one the box holds at no size in the range, which is drawn at the
-smallest, as `does not fit 196x92 at 10px`.
+tighter setting to ask for where a row of cards must read evenly. The layout check
+reports a label past it as `is loose in 196x92 at 12px`, and one the box holds at no size
+in the range, which is drawn at the smallest, as `does not fit 196x92 at 10px`.
 
 A figure is content, not styling. CSS outside this vocabulary changes the measured
 geometry, and the review server reports what that costs: an inline `<svg>` whose shapes

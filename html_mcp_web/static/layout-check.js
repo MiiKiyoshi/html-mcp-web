@@ -91,9 +91,15 @@ export function createLayoutChecks(dependencies) {
   // The first words of an svg label, for a message. A label the deck wrapped holds one
   // tspan per line with no whitespace between, so its lines are joined with spaces here.
   function labelWords(text) {
-    const parts = text.hasAttribute("data-wrap")
-      ? Array.from(text.childNodes).map((node) => node.textContent) : [text.textContent];
-    return parts.join(" ").trim().replace(/\s+/g, " ").slice(0, 30);
+    if (!text.hasAttribute("data-wrap") && !text.hasAttribute("data-fit")) {
+      return text.textContent.trim().replace(/\s+/g, " ").slice(0, 30);
+    }
+    // One tspan per line, with no whitespace between them, and a word broken across two
+    // lines keeps its hyphen on the first: that line joins the next without a space.
+    const lines = Array.from(text.childNodes).map((node) => node.textContent);
+    const words = lines.map((line, index) =>
+      index < lines.length - 1 && !line.endsWith("-") ? `${line} ` : line).join("");
+    return words.trim().replace(/\s+/g, " ").slice(0, 30);
   }
 
   function artifactLayoutErrors() {

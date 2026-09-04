@@ -39,8 +39,10 @@ from ..template_content import parse_template_content
 HERE = Path(__file__).parent
 SKELETON = HERE / "skeleton.css"
 # Breaks a <text data-wrap> or <text data-fit> label into lines with the skin's font, in
-# the deck; a deck with no such label carries none of it.
+# the deck; a deck with no such label carries none of it. The lines are chosen by TeX's
+# algorithm, which comes with its own hyphenation patterns.
 WRAP = HERE / "wrap.js"
+TEX_LINEBREAK = HERE / "vendor" / "tex-linebreak"
 
 # A page is 1280x720 and the file may be opened in a window narrower than that. The
 # skeleton scales it by --deck-fit; only the number needs measuring, and only when the
@@ -258,7 +260,9 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
     body_html = chr(10).join(pages)
     math = math_bundle() if has_math(body_html) else ("", "")
     wraps = "data-wrap=" in body_html or "data-fit=" in body_html
-    wrap = "\n  <script>" + WRAP.read_text(encoding="utf-8") + "</script>" if wraps else ""
+    wrap = "".join(
+        "\n  <script>" + path.read_text(encoding="utf-8") + "</script>"
+        for path in (TEX_LINEBREAK / "lib.js", TEX_LINEBREAK / "hyphens_en-us.js", WRAP)) if wraps else ""
     document = f'''<!doctype html>
 <html lang="{skin.label("lang") or "en"}">
 <head>
