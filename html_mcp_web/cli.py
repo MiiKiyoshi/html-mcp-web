@@ -69,6 +69,12 @@ def cmd_config(args: argparse.Namespace) -> int:
 
 
 def cmd_mcp(args: argparse.Namespace) -> int:
+    if args.check:
+        from .mcp_server import check
+
+        tools = check(Path.cwd())
+        print(f"html-mcp: {len(tools)} tools ({', '.join(tools)})")
+        return 0
     from .mcp_server import main as run_mcp
 
     run_mcp(Path.cwd())
@@ -93,6 +99,9 @@ def build_parser() -> argparse.ArgumentParser:
     config.set_defaults(handler=cmd_config)
 
     mcp = subcommands.add_parser("mcp")
+    mcp.add_argument("--check", action="store_true",
+                     help="build the server and list its tools instead of serving, so a "
+                          "broken install is found before it is registered")
     mcp.set_defaults(handler=cmd_mcp)
     return parser
 

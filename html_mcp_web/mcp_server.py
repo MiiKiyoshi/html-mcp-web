@@ -1,5 +1,6 @@
 """MCP tools for reviewing project HTML artifacts."""
 
+import asyncio
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,16 +24,34 @@ try:
 
     from .mcp_client import ProjectBinding, ProjectSetupError
 
-    HAS_MCP = True
-except ImportError:
-    HAS_MCP = False
+    MISSING_MCP: ImportError | None = None
+except ImportError as error:
+    # The error is kept, not just the fact of it. An install that had mcp 2.x failed
+    # this import with a message naming the rename and the pin that fixes it, and the
+    # line printed in its place said the package was not installed; a reader who
+    # believed that reinstalled the package and got the same line back.
+    MISSING_MCP = error
 
 
 def _check_dependencies() -> None:
-    if HAS_MCP:
+    if MISSING_MCP is None:
         return
-    print("html-mcp requires the mcp and httpx packages. Install html-mcp-web[mcp].", file=sys.stderr)
+    print(f"html-mcp cannot import its MCP dependencies: {MISSING_MCP}\n"
+          "Install html-mcp-web[mcp] into this interpreter.", file=sys.stderr)
     raise SystemExit(1)
+
+
+def check(start_dir: Path) -> list[str]:
+    """Build the server the way stdio would and return the names of its tools.
+
+    The registered command is only ever judged by whether a client connects to it, and a
+    server that dies at import is found out after it is registered. This is the same
+    server, built the same way, without a transport: it fails where that would, and with
+    the same message.
+    """
+    _check_dependencies()
+    server = create_server(ProjectBinding(start_dir))
+    return sorted(tool.name for tool in asyncio.run(server.list_tools()))
 
 
 def create_server(binding: "ProjectBinding") -> "FastMCP":

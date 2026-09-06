@@ -28,6 +28,21 @@ python -m venv .venv
 .venv/bin/pip install -e '.[mcp]'
 ```
 
+Clone it somewhere that stays: the install is editable, and the server reads its
+built-in templates from this checkout, so the directory is part of the running program
+rather than a build step. A clone in a scratch directory works until that directory goes.
+
+Before registering, ask the venv's own executable to build the server and name its
+tools:
+
+```bash
+.venv/bin/html-mcp --check
+```
+
+It prints the tool list when the install is whole, and the error it would otherwise die
+with at startup. A registration is only ever judged by whether a client connects, so a
+server that dies at import is found out after it is registered.
+
 Register the MCP server once, using the executable inside the venv so it resolves without activation. Run this from the repository directory:
 
 Claude Code:
