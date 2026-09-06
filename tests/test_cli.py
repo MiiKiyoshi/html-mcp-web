@@ -135,3 +135,33 @@ def test_neutral_report_builds_a4_cover_and_guarded_pages(tmp_path: Path) -> Non
     # A hundredth of a pixel between the letters, as the slide engine carries: it keeps
     # Safari off the measuring path that opens a gap before an inline box of another size.
     assert "letter-spacing: 0.01px;" in output
+
+
+def test_mcp_check_names_the_tools_without_serving(tmp_path: Path, monkeypatch, capsys) -> None:
+    """A registration is only ever judged by whether a client connects, so a server that
+    dies at import is found out after it is registered. --check builds the same server
+    the same way and names its tools, from a directory with no project in it."""
+    from html_mcp_web.cli import main
+
+    monkeypatch.chdir(tmp_path)
+    assert main(["mcp", "--check"]) == 0
+    said = capsys.readouterr().out
+    assert said.startswith("html-mcp: 8 tools ("), said
+    for tool in ("inspect", "list_comments", "reply_comments", "wait_review"):
+        assert tool in said
+
+
+def test_a_missing_mcp_import_is_reported_as_it_failed(monkeypatch, capsys) -> None:
+    """An install that had mcp 2.x failed the import with a message naming the rename and
+    the pin that fixes it, and the line printed in its place said the package was not
+    installed. The error is reported as it failed, so that message reaches the reader."""
+    from html_mcp_web import mcp_server
+
+    monkeypatch.setattr(mcp_server, "MISSING_MCP", ImportError(
+        "No module named 'mcp.server.fastmcp'. This is mcp 2.x, where FastMCP was renamed"))
+    with pytest.raises(SystemExit) as stopped:
+        mcp_server._check_dependencies()
+    assert stopped.value.code == 1
+    said = capsys.readouterr().err
+    assert "This is mcp 2.x, where FastMCP was renamed" in said, said
+    assert "html-mcp-web[mcp]" in said
