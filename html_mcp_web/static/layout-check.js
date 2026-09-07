@@ -482,6 +482,12 @@ export function createLayoutChecks(dependencies) {
   async function checkArtifactLayout() {
     if (state.slideShow) return;
     const revision = state.revision;
+    // Only the document of the revision being reported is measured. The one before an
+    // edit stays on show until the next has loaded, and a check scheduled on it ran
+    // after the new revision was announced: it reported the old document under the
+    // new revision, and then marked the frame settled, so the real check never ran.
+    const doc = frameDocument();
+    if (doc.documentElement.dataset.htmlMcpRevision !== String(revision)) return;
     const body = JSON.stringify({
       revision,
       // The code this page runs: the server records a result only from the code it serves.
@@ -497,6 +503,9 @@ export function createLayoutChecks(dependencies) {
         headers: { "Content-Type": "application/json" },
         body,
       });
+      if (doc.fonts.status === "loaded" && Array.from(doc.images).every((image) => image.complete)) {
+        $("#artifact-frame").dataset.settled = String(revision);
+      }
     } catch (error) {
       state.layoutCheckError =
         `the layout check ran but could not be reported (${String(error.message || error)}); `
@@ -507,11 +516,24 @@ export function createLayoutChecks(dependencies) {
     state.layoutCheckError = null;
     if (state.revision !== revision) return;
     state.artifact = payload;
+    // The project state is what the next tab switch reads the artifact back from. Left
+    // as it was, it still said the artifact was unchecked, and a frame kept across the
+    // switch, which is checked and does not check again, showed "checking" for good.
+    state.project.artifacts[state.artifactId] = payload;
     updateLayoutUi();
   }
   
   function scheduleLayoutCheck() {
     if (state.slideShow) return;
+    // A frame that has been measured with its fonts in and its images complete has
+    // nothing more to say for that revision, and is left alone. The check walks every
+    // block of every page, and it was scheduled on every resize, the split being dragged
+    // included, as well as on load and on each font and image arriving, so a deck was
+    // measured over and over on a tablet that had nothing to learn from it. The mark is
+    // the frame's own, taken at the check: the server holding a result is not enough,
+    // since the first check runs before the fonts arrive and the one after them is what
+    // corrects it.
+    if ($("#artifact-frame").dataset.settled === String(state.revision)) return;
     const win = frameWindow();
     if (state.layoutFrame !== null) win.cancelAnimationFrame(state.layoutFrame);
     state.layoutFrame = win.requestAnimationFrame(() => {

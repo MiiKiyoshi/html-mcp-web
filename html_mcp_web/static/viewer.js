@@ -22,10 +22,15 @@ const state = {
   editingEntry: null,
   unattached: new Set(),
   pendingView: null,
-  // Where each artifact was left, by id: scroll and zoom. The tabs sit over one frame,
-  // and a frame given another document starts it at the top; a tab that forgets where
-  // the reader was is a link, not a tab.
-  views: {},
+  // One frame per artifact, by id, kept with its document: a tab shows its own frame
+  // and hides the others. Loading the next artifact into the one frame there was
+  // fetched and parsed the whole deck again, fonts and all, ran the layout check over
+  // it again, and started it at the top; a switch took seconds and lost the place.
+  frames: {},
+  // The zoom each artifact was left at. The frame keeps its own scroll and the scale
+  // it is drawn at; the number the zoom handlers and the reset control work from is
+  // this one, and it is put back with the frame.
+  zooms: {},
   ws: null,
   renderFrame: null,
   layoutFrame: null,
@@ -64,15 +69,52 @@ function renderArtifactTabs() {
   }
 }
 
-function rememberView() {
-  const win = $("#artifact-frame").contentWindow;
-  if (!state.artifactId || win === null || state.loadedRevision === null) return;
-  state.views[state.artifactId] = { x: win.scrollX, y: win.scrollY, zoom: state.artifactZoom };
+// The frame that holds an artifact. The frame the page starts with is taken by the
+// first artifact shown; every artifact after that gets a frame of its own. The active
+// one carries the id everything else looks the frame up by.
+function frameFor(artifactId) {
+  let frame = state.frames[artifactId];
+  if (frame !== undefined) return frame;
+  const pane = $("#artifact-pane");
+  const spare = pane.querySelector(".artifact-frame:not([data-artifact])");
+  frame = spare ?? document.createElement("iframe");
+  if (spare === null) {
+    frame.className = "artifact-frame";
+    frame.title = "Agent-generated HTML artifact";
+    frame.tabIndex = -1;
+    const last = Array.from(pane.querySelectorAll(".artifact-frame")).pop();
+    last.after(frame);
+  }
+  frame.dataset.artifact = artifactId;
+  frame.addEventListener("load", () => attachArtifactEvents(frame));
+  state.frames[artifactId] = frame;
+  return frame;
+}
+
+function showFrame(frame) {
+  for (const other of Object.values(state.frames)) {
+    const active = other === frame;
+    other.classList.toggle("active", active);
+    if (active) other.id = "artifact-frame";
+    else other.removeAttribute("id");
+  }
+}
+
+// A frame shown again is already loaded: what the switch has to do is set the page up
+// for it. The check schedules itself only for a frame not yet measured with its fonts in.
+function showLoadedArtifact(frame) {
+  showFrame(frame);
+  applyArtifactZoom();
+  renderHighlights();
+  state.currentPage = visiblePageNumber();
+  renderPages();
+  updateLayoutUi();
+  scheduleLayoutCheck();
 }
 
 async function selectArtifact(artifactId) {
   if (artifactId === state.artifactId) return;
-  rememberView();
+  if (state.artifactId) state.zooms[state.artifactId] = state.artifactZoom;
   state.artifactId = artifactId;
   localStorage.setItem("htmlMcpArtifact", artifactId);
   state.artifact = state.project.artifacts[artifactId];
@@ -82,16 +124,16 @@ async function selectArtifact(artifactId) {
   state.expanded.clear();
   state.unattached.clear();
   state.currentPage = null;
-  // Back to a tab is back to its place: the zoom is set before the document loads, so
-  // the page is fitted at it, and the scroll is put back once the document is there.
-  const view = state.views[artifactId];
-  state.artifactZoom = view === undefined ? 1 : view.zoom;
-  state.pendingView = view === undefined ? null : { x: view.x, y: view.y };
+  const frame = frameFor(artifactId);
+  // The frame says what revision it shows; the artifact says which is current.
+  state.loadedRevision = frame.dataset.revision === undefined ? null : Number(frame.dataset.revision);
+  state.artifactZoom = state.zooms[artifactId] ?? 1;
   renderArtifactTabs();
   updateArtifactLinks();
   updateLayoutUi();
   await refreshComments();
-  loadArtifact(false);
+  if (state.loadedRevision === state.revision) showLoadedArtifact(frame);
+  else loadArtifact(false);
 }
 
 function updateArtifactLinks() {
@@ -1001,9 +1043,20 @@ function applyScriptVisibility() {
   button.disabled = !hasScripts;
 }
 
-function attachArtifactEvents() {
+function attachArtifactEvents(frame) {
+  // A frame that finished loading after the reader had moved to another tab is not the
+  // one the page is set up for. It forgets what it shows, so coming back loads it again
+  // and sets the page up then.
+  if (frame.id !== "artifact-frame") {
+    delete frame.dataset.revision;
+    return;
+  }
   const doc = frameDocument();
   const win = frameWindow();
+  // The document says which revision it is, so a check knows whether it is looking at
+  // the one it would report: a check scheduled on the document before an edit ran after
+  // the new revision was announced and reported that document's result under it.
+  doc.documentElement.dataset.htmlMcpRevision = frame.dataset.revision;
   // Page geometry exists before anchors are measured.
   installArtifactLayout();
   applyScriptVisibility();
@@ -1095,13 +1148,16 @@ function attachArtifactEvents() {
 }
 
 function loadArtifact(preserveView) {
+  const iframe = frameFor(state.artifactId);
+  showFrame(iframe);
   if (state.loadedRevision === state.revision) return;
-  const iframe = $("#artifact-frame");
   if (preserveView && iframe.contentWindow !== null) {
     state.pendingView = { x: iframe.contentWindow.scrollX, y: iframe.contentWindow.scrollY };
   }
   hideSelectionButton();
   state.loadedRevision = state.revision;
+  iframe.dataset.revision = String(state.revision);
+  delete iframe.dataset.settled;
   iframe.src = `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}`;
 }
 
@@ -1232,7 +1288,6 @@ function connectWebSocket() {
 }
 
 function attachControls() {
-  $("#artifact-frame").addEventListener("load", attachArtifactEvents);
   $("#selection-comment-btn").addEventListener("click", () => {
     if (state.selectionAnchor !== null) openCompose(state.selectionAnchor);
   });
