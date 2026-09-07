@@ -385,6 +385,12 @@ class HtmlReviewServer:
             return
         affected: list[ArtifactRuntime] = []
         for runtime in self.artifacts.values():
+            # The state read compares the files with what was noted and takes a change it
+            # finds, and the watcher reports the same change a debounce later. Both moved
+            # the revision, so one write cost two reloads and two checks. A change already
+            # taken leaves the files as noted, and is not taken again.
+            if changed in (runtime.content_file, runtime.main_file) and not runtime.moved_on():
+                continue
             if runtime.content_file is not None and changed == runtime.content_file:
                 previous_mtime = runtime.main_file.stat().st_mtime_ns if runtime.main_file.is_file() else None
                 runtime.build()
@@ -394,7 +400,11 @@ class HtmlReviewServer:
                 affected.append(runtime)
             elif changed == runtime.main_file:
                 affected.append(runtime)
-        if not affected:
+        if not affected and changed not in {path for runtime in self.artifacts.values()
+                                            for path in (runtime.content_file, runtime.main_file)}:
+            # A watched file that is no artifact's own, a stylesheet or an image, is taken
+            # to touch them all; a change to an artifact's own file that was already taken
+            # touches none.
             affected = list(self.artifacts.values())
         for runtime in affected:
             runtime.revision += 1
