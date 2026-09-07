@@ -82,9 +82,12 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 /* One frame per artifact, all the size of the pane and stacked in it; the active one is
    the one seen. The others are hidden, not removed from layout: a frame with no layout
    loses its scroll and measures nothing, and coming back to a tab would start it over. */
-.artifact-frame { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; background: #faf8f2; }
-/* The frames of the other tabs stay painted underneath the active one: a frame hidden
-   with visibility and shown again came back blank in Safari until the reader scrolled. */
+/* The frames of the other tabs stay painted underneath the active one, and each keeps a
+   compositing layer of its own, so that a switch only reorders layers. WebKit composites
+   a frame hidden with visibility no more (its bug 272727), and a frame raised over the
+   others after a spell underneath came back blank in Safari as well, until the reader
+   scrolled inside it. */
+.artifact-frame { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; background: #faf8f2; will-change: transform; }
 .artifact-frame.active { z-index: 1; }
 .artifact-frame:not(.active) { z-index: 0; pointer-events: none; }
 #artifact-pane:fullscreen { width: 100vw; height: 100vh; background: #111; }
