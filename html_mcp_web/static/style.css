@@ -79,7 +79,11 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .layout.sidebar-collapsed #sidebar { display: none; }
 
 #artifact-pane { position: relative; min-width: 0; background: #faf8f2; }
-#artifact-frame { display: block; width: 100%; height: 100%; border: 0; background: #faf8f2; }
+/* One frame per artifact, all the size of the pane and stacked in it; the active one is
+   the one seen. The others are hidden, not removed from layout: a frame with no layout
+   loses its scroll and measures nothing, and coming back to a tab would start it over. */
+.artifact-frame { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; background: #faf8f2; }
+.artifact-frame:not(.active) { visibility: hidden; pointer-events: none; }
 #artifact-pane:fullscreen { width: 100vw; height: 100vh; background: #111; }
 
 .presentation-controls {

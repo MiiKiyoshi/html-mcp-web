@@ -3260,10 +3260,12 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path) ->
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
-    """The artifact tabs sit over one frame, and a frame given another document starts it
-    at the top: switching away and back lost the reader's place, which is what a tab is
-    for keeping. Each artifact's scroll and zoom are kept by id and put back on return;
-    a tab never visited opens at the top at the natural size."""
+    """The artifact tabs sat over one frame, and a switch loaded the next document into
+    it: the whole deck fetched and parsed again, fonts and all, the layout check run
+    over it again, and the reader's place lost, which is what a tab is for keeping. Each
+    artifact now keeps a frame of its own, so a switch back is the document the reader
+    left, scrolled and zoomed as it was; a tab never visited opens at the top at the
+    natural size."""
     (tmp_path / "first.html").write_text(slides_html("First deck."), encoding="utf-8")
     (tmp_path / "second.html").write_text(slides_html("Second deck."), encoding="utf-8")
     port = available_port()
@@ -3333,6 +3335,9 @@ def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
             return seen if seen["zoom"] > 1.05 and seen["y"] > 0 else None
 
         left = wait_until(moved)
+        # A mark on the document itself: a reload would come back without it.
+        browser.execute_script(
+            'document.querySelector("#artifact-frame").contentDocument.body.dataset.kept = "yes";')
 
         # Away to the second, which opens at its own top at the natural size...
         second = switch_to(1, "Second deck.")
@@ -3345,6 +3350,102 @@ def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
 
         back = wait_until(returned)
         assert abs(back["zoom"] - left["zoom"]) < 0.01, (left, back)
+        assert browser.execute_script(
+            'return document.querySelector("#artifact-frame").contentDocument.body.dataset.kept') == "yes"
+        # The other frame is still there, hidden, holding its own document.
+        assert browser.execute_script("""
+          const frames = document.querySelectorAll(".artifact-frame");
+          return [frames.length, document.querySelectorAll(".artifact-frame.active").length,
+                  Array.from(frames).filter((frame) => frame.id === "artifact-frame").length];
+        """) == [2, 1, 1]
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_settled_frame_is_not_measured_again_on_every_resize(tmp_path: Path) -> None:
+    """The layout check walks every block of every page, and it was scheduled on every
+    resize, the split being dragged included, as well as on load and on each font and
+    image arriving: a deck measured with its fonts in was measured over and over. A frame
+    measured with fonts in and images complete is left alone; a new revision is measured
+    and, once settled, left alone in turn."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_gate_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "1000", "-height", "600", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=1000, height=600)
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        base = f"http://127.0.0.1:{port}"
+        first = get_json(f"{base}/state")["artifacts"]["slides"]
+        assert first["layout_check"]["checked_revision"] == first["revision"]
+
+        # Every posting of a layout result is counted, from the browser's own record of the
+        # requests it made.
+        browser.execute_script("""
+          document.body.dataset.layoutPosts = "0";
+          new PerformanceObserver((list) => {
+            const posts = list.getEntries().filter((entry) => entry.name.endsWith("/layout")).length;
+            document.body.dataset.layoutPosts = String(Number(document.body.dataset.layoutPosts) + posts);
+          }).observe({type: "resource", buffered: false});
+        """)
+        posts = lambda: int(browser.execute_script("return document.body.dataset.layoutPosts"))
+
+        def resize_about():
+            # The window changes size a few times, which resizes the frame each time.
+            for width in (900, 1000, 950, 1000):
+                browser.set_window_rect(width=width, height=600)
+                time.sleep(0.25)
+            time.sleep(1.0)
+
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-frame").dataset.settled') == str(first["revision"]))
+        resize_about()
+        assert posts() == 0
+
+        # A new revision is measured, and once its fonts and images are in, measured no more.
+        slides.write_text(slides_html("Edited sentence."), encoding="utf-8")
+        wait_until(lambda: get_json(f"{base}/state")["artifacts"]["slides"]["layout_check"]["checked_revision"]
+                   == first["revision"] + 1)
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-frame").dataset.settled') == str(first["revision"] + 1))
+        measured = posts()
+        assert measured >= 1, measured
+        resize_about()
+        assert posts() == measured, (measured, posts())
     finally:
         if browser is not None:
             try:
