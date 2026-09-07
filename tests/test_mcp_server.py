@@ -337,8 +337,11 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
         assert unanswered["comments"][0]["request"] == "Still wrong"
 
         revision = inspected["artifacts"]["slides"]["revision"]
+        with urllib.request.urlopen(f"{base}/state", timeout=3) as response:
+            served = json.loads(response.read().decode("utf-8"))["static"]
         post_json(f"{base}/artifacts/slides/layout", {
             "revision": revision,
+            "static": served,
             "errors": [],
             "space": space_snapshot(),
         })

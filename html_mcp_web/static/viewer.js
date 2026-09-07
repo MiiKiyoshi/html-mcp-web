@@ -1086,8 +1086,23 @@ function loadArtifact(preserveView) {
   iframe.src = `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}`;
 }
 
+// The tag of the code this page was built with, stamped into it by the server.
+const servedStatic = () => document.querySelector('meta[name="html-mcp-static"]')?.content ?? null;
+
+// A state from a server serving other code than this page runs: the page reloads and
+// gets that code, since the modules it loaded stay what they were however the server
+// changes. Every state, whether asked for or sent, passes through here.
+function adoptProject(project) {
+  if ((project.static ?? null) !== servedStatic()) {
+    location.reload();
+    return false;
+  }
+  state.project = project;
+  return true;
+}
+
 async function refreshState() {
-  state.project = await fetchJson("/state");
+  if (!adoptProject(await fetchJson("/state"))) return;
   const ids = Object.keys(state.project.artifacts);
   // ?artifact= names the artifact to open: a shareable link, and how the server's own
   // headless browser is pointed at the artifact whose layout it has to check.
@@ -1146,7 +1161,7 @@ async function handleSocketMessage(message) {
     return;
   }
   if (message.type === "state") {
-    state.project = message;
+    if (!adoptProject(message)) return;
     if (message.review !== undefined) showAgentWaiting(message.review.waiters);
     const artifact = message.artifacts[state.artifactId];
     if (artifact !== undefined && state.revision !== artifact.revision) {
@@ -1162,7 +1177,7 @@ async function handleSocketMessage(message) {
     return;
   }
   if (["artifacts_changed", "config_reloaded"].includes(message.type)) {
-    state.project = message;
+    if (!adoptProject(message)) return;
     if (state.project.artifacts[state.artifactId] === undefined) {
       state.artifactId = Object.keys(state.project.artifacts)[0];
       state.loadedRevision = null;

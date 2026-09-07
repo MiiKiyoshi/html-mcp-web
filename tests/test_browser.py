@@ -3184,3 +3184,75 @@ def test_a_short_last_line_is_a_fault_on_a_slide_and_prose_on_a_page(tmp_path: P
         assert tails["paper"] == [], seen["paper"]["layout_check"]["errors"]
     finally:
         shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path) -> None:
+    """A page keeps the modules it loaded however the server changes under it, and the
+    server runs no check of its own while a page is connected. So a page left open across
+    a restart on newer code went on checking a deck with the rules from before. The page
+    is stamped with the tag of the code it was built with, every state carries the tag
+    being served, and the page reloads on the first state that names another."""
+    import os
+    import time as clock
+
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_reload_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    static_dir = Path(__file__).resolve().parents[1] / "html_mcp_web" / "static"
+    moved = static_dir / "trace.js"
+    kept = moved.stat()
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        stamped = browser.execute_script(
+            'return document.querySelector(\'meta[name="html-mcp-static"]\').content')
+        assert stamped == get_json(f"http://127.0.0.1:{port}/state")["static"]
+        browser.execute_script('document.body.dataset.sameLoad = "yes";')
+
+        # The code moves on: a static file is newer than the page's tag. A change to the
+        # deck then reaches the page as a state carrying the new tag.
+        later = max(clock.time(), kept.st_mtime + 1.5)
+        os.utime(moved, (later, later))
+        assert get_json(f"http://127.0.0.1:{port}/state")["static"] != stamped
+        slides.write_text(slides_html("Another sentence."), encoding="utf-8")
+        reloaded = wait_until(lambda: browser.execute_script(
+            'const meta = document.querySelector(\'meta[name="html-mcp-static"]\');'
+            'return meta && document.body.dataset.sameLoad !== "yes" ? meta.content : null;'))
+        assert reloaded == get_json(f"http://127.0.0.1:{port}/state")["static"]
+        assert reloaded != stamped
+    finally:
+        os.utime(moved, (kept.st_atime, kept.st_mtime))
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()

@@ -343,6 +343,9 @@ class HtmlReviewServer:
 
     def project_state(self) -> dict[str, Any]:
         return {
+            # The tag of the code being served. A page stamped with another one is running
+            # code this server no longer serves, and reloads itself on seeing this.
+            "static": self.static_tag(),
             "config_path": str(self.config.config_path),
             "project_dir": str(self.project_dir),
             "port": self.config.port,
@@ -412,8 +415,15 @@ class HtmlReviewServer:
         return f"v{int(newest)}"
 
     async def index(self, request: web.Request) -> web.Response:
+        tag = self.static_tag()
         page = (self.static_dir / "index.html").read_text(encoding="utf-8")
-        return web.Response(text=page.replace('"/static/', f'"/static/{self.static_tag()}/'),
+        # The page carries the tag it was built with. A server restarted on newer code
+        # sends a state with another tag, and the page, still running the modules it
+        # loaded, reloads rather than going on: an open review page kept checking a deck
+        # with the layout rules from before a restart and posting the results.
+        page = page.replace('<meta charset="utf-8">',
+                            f'<meta charset="utf-8">\n  <meta name="html-mcp-static" content="{tag}">', 1)
+        return web.Response(text=page.replace('"/static/', f'"/static/{tag}/'),
                             content_type="text/html", charset="utf-8",
                             headers={"Cache-Control": "no-store"})
 
@@ -633,12 +643,20 @@ class HtmlReviewServer:
         data = await request.json()
         try:
             revision = int(data["revision"])
+            produced_by = str(data["static"])
             errors = data["errors"]
             if not isinstance(errors, list) or not all(isinstance(value, str) and value for value in errors):
                 raise ValueError("errors must be a list of non-empty strings")
             space_pages = validated_space_pages(data["space"])
         except (KeyError, TypeError, ValueError) as error:
             raise web.HTTPBadRequest(text=str(error)) from error
+        # A result from a page running other code than this server serves is not this
+        # server's check: a page left open across a restart went on posting results made
+        # with the rules from before it, and they were recorded against new revisions.
+        if produced_by != self.static_tag():
+            raise web.HTTPConflict(
+                text=f"layout result comes from page code {produced_by}; this server serves "
+                     f"{self.static_tag()}. Reload the review page.")
         if revision != runtime.revision:
             raise web.HTTPConflict(text=f"layout revision {revision} does not match current revision {runtime.revision}")
         runtime.layout_revision = revision
