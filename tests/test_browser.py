@@ -3361,8 +3361,9 @@ def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
           return [frames.length, active.length, frames.filter((frame) => frame.id === "artifact-frame").length,
                   frames.every((frame) => getComputedStyle(frame).visibility === "visible"),
                   others.every((frame) => Number(getComputedStyle(frame).zIndex) < Number(getComputedStyle(active[0]).zIndex)),
-                  others.every((frame) => frame.hasAttribute("inert"))];
-        """) == [2, 1, 1, True, True, True]
+                  others.every((frame) => frame.hasAttribute("inert")),
+                  frames.every((frame) => getComputedStyle(frame).willChange === "transform")];
+        """) == [2, 1, 1, True, True, True, True]
     finally:
         if browser is not None:
             try:
