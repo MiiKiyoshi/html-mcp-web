@@ -107,10 +107,14 @@ html[data-html-mcp-presentation="slides"] body > main.pages {
 html[data-html-mcp-presentation="slides"] body > main.pages > section.page {
   grid-area: 1 / 1 !important;
   display: block !important;
-  /* One page fills the screen here and the cell centres it, so it scales about its middle
-     and needs none of the room given back. */
+  /* One page fills the screen here and the cell centres it, scaled about its middle. The
+     margins make the laid-out box the size of the drawn one, so it never overflows the
+     cell: Safari puts an item larger than its cell at the cell's corner, not its centre,
+     and the scale about the middle then left the slide pushed inward by half of what the
+     scale took off, cut off at the screen's far edge. */
   transform-origin: center center !important;
-  margin: 0 !important;
+  margin: calc(var(--html-mcp-page-height) * (var(--html-mcp-page-scale, 1) - 1) / 2)
+          calc(var(--html-mcp-page-width) * (var(--html-mcp-page-scale, 1) - 1) / 2) !important;
   visibility: hidden !important;
   pointer-events: none !important;
 }

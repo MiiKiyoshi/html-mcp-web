@@ -1716,7 +1716,11 @@ def test_two_fingers_in_the_slide_show_carry_nothing(tmp_path: Path) -> None:
     left where they had dragged it, at its right size and cut off at the screen's edge.
     Two fingers are still taken from the browser, and carry nothing."""
     slides = tmp_path / "slides.html"
-    slides.write_text(slides_html(), encoding="utf-8")
+    # Pages wider than the screen, so that the show scales them down and the box they are
+    # laid out in would overflow the cell that centres them.
+    slides.write_text(slides_html().replace(
+        "<html>", '<html style="--html-mcp-page-width: 2000px; --html-mcp-page-height: 1125px">', 1),
+        encoding="utf-8")
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
@@ -1750,6 +1754,32 @@ def test_two_fingers_in_the_slide_show_carry_nothing(tmp_path: Path) -> None:
             .hasAttribute("data-html-mcp-presentation");
         """))
 
+        # The page is drawn in the middle of the screen, and the box it is laid out in is
+        # the size it is drawn at: Safari puts a box larger than the cell at the cell's
+        # corner rather than its centre, and the slide sat pushed off the screen's far edge.
+        placed = browser.execute_script("""
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const win = frame.contentWindow;
+          const page = doc.querySelector("section.page.html-mcp-current-page");
+          const style = win.getComputedStyle(page);
+          const box = page.getBoundingClientRect();
+          const cell = page.parentElement.getBoundingClientRect();
+          const laidOut = {
+            left: page.offsetLeft - parseFloat(style.marginLeft),
+            width: page.offsetWidth + parseFloat(style.marginLeft) + parseFloat(style.marginRight),
+            top: page.offsetTop - parseFloat(style.marginTop),
+            height: page.offsetHeight + parseFloat(style.marginTop) + parseFloat(style.marginBottom),
+          };
+          return {
+            centred: Math.abs(box.left + box.width / 2 - cell.width / 2) < 1
+              && Math.abs(box.top + box.height / 2 - cell.height / 2) < 1,
+            fits: laidOut.left >= -0.5 && laidOut.top >= -0.5
+              && laidOut.left + laidOut.width <= cell.width + 0.5
+              && laidOut.top + laidOut.height <= cell.height + 0.5,
+          };
+        """)
+        assert placed == {"centred": True, "fits": True}, placed
         result = browser.execute_script("""
           const frame = document.querySelector("#artifact-frame");
           const doc = frame.contentDocument;
