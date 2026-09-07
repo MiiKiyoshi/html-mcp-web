@@ -153,7 +153,8 @@ async def test_layout_result_is_accepted_when_the_deck_measures_past_a_megabyte(
         }
         pages.append({"number": number, "bbox": [0, 0, 1280, 720],
                       "children": [f"p{number}:0"], "nodes": nodes})
-    payload = {"revision": review.artifacts["slides"].revision, "errors": [], "space": pages}
+    payload = {"revision": review.artifacts["slides"].revision, "static": review.static_tag(),
+               "errors": [], "space": pages}
     assert len(json.dumps(payload)) > 1024 * 1024
     response = await test_client.post("/artifacts/slides/layout", json=payload)
     assert response.status == 200
@@ -167,6 +168,7 @@ async def test_layout_result_tracks_current_revision(client) -> None:
         "/artifacts/slides/layout",
         json={
             "revision": review.artifacts["slides"].revision,
+            "static": review.static_tag(),
             "errors": ["page 1 exceeds the slides height"],
             "space": space_snapshot(),
         },
@@ -180,6 +182,7 @@ async def test_layout_result_tracks_current_revision(client) -> None:
     assert state["space_revision"] == review.artifacts["slides"].revision
     stale = await test_client.post("/artifacts/slides/layout", json={
         "revision": review.artifacts["slides"].revision - 1,
+        "static": review.static_tag(),
         "errors": [],
         "space": space_snapshot(),
     })
@@ -191,7 +194,7 @@ async def test_space_measurement_is_revision_scoped_and_drills_into_one_block(cl
     revision = review.artifacts["slides"].revision
     posted = await test_client.post(
         "/artifacts/slides/layout",
-        json={"revision": revision, "errors": [], "space": space_snapshot()},
+        json={"revision": revision, "static": review.static_tag(), "errors": [], "space": space_snapshot()},
     )
     assert posted.status == 200
 
@@ -749,7 +752,7 @@ async def test_render_page_crops_to_a_target_block(client, monkeypatch) -> None:
     revision = review.artifacts["slides"].revision
     posted = await test_client.post(
         "/artifacts/slides/layout",
-        json={"revision": revision, "errors": [], "space": space_snapshot()},
+        json={"revision": revision, "static": review.static_tag(), "errors": [], "space": space_snapshot()},
     )
     assert posted.status == 200
 
@@ -833,8 +836,8 @@ async def test_one_broken_artifact_does_not_take_the_server_down(tmp_path: Path)
         # the layout measured from the deleted file stayed on offer as current.
         posted = await test_client.post(
             "/artifacts/good/layout",
-            json={"revision": review.artifacts["good"].revision, "errors": [],
-                  "space": space_snapshot()},
+            json={"revision": review.artifacts["good"].revision, "static": review.static_tag(),
+                  "errors": [], "space": space_snapshot()},
         )
         assert posted.status == 200
         (tmp_path / "good.html").unlink()
@@ -1042,3 +1045,32 @@ async def test_a_change_the_watcher_missed_is_still_found(client) -> None:
     # Reading again with the file untouched changes nothing: the state settles.
     settled = (await (await test_client.get("/state")).json())["artifacts"]["slides"]
     assert settled["revision"] == after["revision"]
+
+
+async def test_a_layout_result_from_other_code_than_the_server_serves_is_refused(client) -> None:
+    """A review page left open across a restart keeps the modules it loaded and goes on
+    checking with them, and the server runs no check of its own while a page is
+    connected. Its results were recorded against new revisions, made with rules from
+    before the restart. A result names the code that made it, and only the served code
+    counts; the page itself reloads on the first state it sees from other code."""
+    test_client, review = client
+    served = (await (await test_client.get("/state")).json())["static"]
+    assert served == review.static_tag()
+    # The page is stamped with the tag it was built with, which is what it compares.
+    page = await (await test_client.get("/")).text()
+    assert f'<meta name="html-mcp-static" content="{served}">' in page
+
+    from_before = await test_client.post("/artifacts/slides/layout", json={
+        "revision": review.artifacts["slides"].revision, "static": "v1",
+        "errors": [], "space": space_snapshot(),
+    })
+    assert from_before.status == 409
+    assert "Reload the review page" in await from_before.text()
+    state = (await (await test_client.get("/state")).json())["artifacts"]["slides"]
+    assert state["layout_check"]["checked_revision"] != state["revision"]
+
+    # Without saying what code made it, a result is not read at all.
+    unsigned = await test_client.post("/artifacts/slides/layout", json={
+        "revision": review.artifacts["slides"].revision, "errors": [], "space": space_snapshot(),
+    })
+    assert unsigned.status == 400

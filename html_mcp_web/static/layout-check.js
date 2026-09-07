@@ -484,6 +484,8 @@ export function createLayoutChecks(dependencies) {
     const revision = state.revision;
     const body = JSON.stringify({
       revision,
+      // The code this page runs: the server records a result only from the code it serves.
+      static: document.querySelector('meta[name="html-mcp-static"]')?.content ?? null,
       errors: artifactLayoutErrors(),
       // Space is reported in page pixels, so it is read at the page's own scale too.
       space: unzoomed(() => measureArtifactSpace(frameDocument())),
