@@ -3256,3 +3256,106 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path) ->
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
+    """The artifact tabs sit over one frame, and a frame given another document starts it
+    at the top: switching away and back lost the reader's place, which is what a tab is
+    for keeping. Each artifact's scroll and zoom are kept by id and put back on return;
+    a tab never visited opens at the top at the natural size."""
+    (tmp_path / "first.html").write_text(slides_html("First deck."), encoding="utf-8")
+    (tmp_path / "second.html").write_text(slides_html("Second deck."), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {
+            "first": {"label": "First", "layout": "slides", "main": "first.html"},
+            "second": {"label": "Second", "layout": "slides", "main": "second.html"},
+        },
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_tabs_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "1000", "-height", "700", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=1000, height=700)
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+
+        def shown():
+            return browser.execute_script('''
+              const frame = document.querySelector("#artifact-frame");
+              const root = frame.contentDocument.documentElement;
+              return {tab: document.querySelector(".artifact-tab.active").textContent.trim(),
+                      title: frame.contentDocument.querySelector("#target")?.textContent ?? null,
+                      y: Math.round(frame.contentWindow.scrollY),
+                      zoom: Number(root.style.getPropertyValue("--html-mcp-zoom") || 1)};
+            ''')
+
+        def switch_to(index, title):
+            browser.execute_script(f'document.querySelectorAll(".artifact-tab")[{index}].click();')
+
+            def loaded():
+                seen = shown()
+                return seen if seen["title"] == title else None
+
+            wait_until(loaded)
+            time.sleep(0.4)
+            return shown()
+
+        first = switch_to(0, "First deck.")
+        assert first["y"] == 0 and abs(first["zoom"] - 1) < 0.01, first
+
+        # The reader scrolls down the first deck and zooms in on it.
+        browser.execute_script('''
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          frame.contentWindow.scrollTo(0, 500);
+          doc.dispatchEvent(new frame.contentWindow.WheelEvent("wheel", {
+            deltaY: -240, ctrlKey: true, bubbles: true, cancelable: true, clientX: 400, clientY: 300}));
+        ''')
+        def moved():
+            seen = shown()
+            return seen if seen["zoom"] > 1.05 and seen["y"] > 0 else None
+
+        left = wait_until(moved)
+
+        # Away to the second, which opens at its own top at the natural size...
+        second = switch_to(1, "Second deck.")
+        assert second["y"] == 0 and abs(second["zoom"] - 1) < 0.01, second
+
+        # ...and back to the first, which is where it was left.
+        def returned():
+            seen = switch_to(0, "First deck.")
+            return seen if abs(seen["y"] - left["y"]) <= 2 else None
+
+        back = wait_until(returned)
+        assert abs(back["zoom"] - left["zoom"]) < 0.01, (left, back)
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
