@@ -3138,3 +3138,49 @@ def test_svg_labels_are_laid_out_in_the_drawings_own_units(tmp_path: Path) -> No
             except subprocess.TimeoutExpired:
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_short_last_line_is_a_fault_on_a_slide_and_prose_on_a_page(tmp_path: Path) -> None:
+    """A block whose last line holds a few words wastes a line a slide needed, so a deck
+    is told. A report is flowing prose, every paragraph ends with a partial line, and
+    filling a tail there means changing a sentence for no reason of its own, so a report
+    is not told. Overflow is a fault in both and still is."""
+    page = (
+        '<!doctype html><html><head><meta charset="utf-8"><title>Tail</title></head><body>'
+        '<main class="pages"><section class="page" style="width: 700px; height: 400px">'
+        '<div data-layout-guard style="width: 600px; height: 380px; font: 16px sans-serif">'
+        "<p>A paragraph whose last line holds two characters and nothing else, so that a slide "
+        "counts the line as wasted while a page reads it as the end of a paragraph:<br>ok.</p>"
+        "</div></section></main></body></html>"
+    )
+    (tmp_path / "deck.html").write_text(page, encoding="utf-8")
+    (tmp_path / "paper.html").write_text(page, encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {
+            "deck": {"label": "Deck", "layout": "slides", "main": "deck.html"},
+            "paper": {"label": "Paper", "layout": "report", "main": "paper.html"},
+        },
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    try:
+        shared.ensure()
+
+        def checked():
+            state = get_json(f"http://127.0.0.1:{port}/state")["artifacts"]
+            done = {name: artifact for name, artifact in state.items()
+                    if artifact["layout_check"]["checked_revision"] == artifact["revision"]}
+            return done if len(done) == 2 else None
+
+        # With no review page open, the server runs the check itself, one artifact at a time.
+        seen = wait_until(checked, timeout=90)
+        tails = {name: [error for error in artifact["layout_check"]["errors"] if "wastes its last line" in error]
+                 for name, artifact in seen.items()}
+        assert len(tails["deck"]) == 1, seen["deck"]["layout_check"]["errors"]
+        assert tails["paper"] == [], seen["paper"]["layout_check"]["errors"]
+    finally:
+        shared.stop()
