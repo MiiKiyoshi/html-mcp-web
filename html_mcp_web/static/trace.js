@@ -1,8 +1,10 @@
 // A record of what the artifact's touches do, drawn over the page for a device that
 // cannot be watched from where the code is written. Loaded only when the address carries
 // ?trace. Each line: seconds since load, the event, the fingers, whether the page took
-// the event (dp), then the artifact window's scroll, zoom, the holder's transform, the
-// visual viewport (scale@offset size), the client size and the scroll size.
+// the event (dp), then the artifact window's scroll, zoom, the holder's transform and
+// will-change (a gesture in flight sets it), the current page's box in the slide show,
+// the frame's box in the viewer, the visual viewport (scale@offset size), the client
+// size and the scroll size.
 const lines = [];
 const box = document.createElement("pre");
 Object.assign(box.style, {
@@ -11,7 +13,9 @@ Object.assign(box.style, {
   background: "rgba(0, 0, 0, .82)", color: "#9f9", font: "9px/1.25 ui-monospace, monospace",
   pointerEvents: "none", whiteSpace: "pre-wrap", wordBreak: "break-all",
 });
-document.body.appendChild(box);
+// Inside the pane, which is the fullscreen element: hung off the body it was outside the
+// fullscreen and showed nothing there.
+document.querySelector("#artifact-pane").appendChild(box);
 const started = performance.now();
 
 function log(text) {
@@ -22,6 +26,8 @@ function log(text) {
 // The viewer's own scripts write here too, when there is something to record: the
 // comment list's reveal of an opened card, among them.
 window.htmlMcpTrace = log;
+// The state of the frame traced last, for a line written outside a frame's own events.
+let describe = () => "-";
 
 function install() {
   const frame = document.querySelector("#artifact-frame");
@@ -35,9 +41,15 @@ function install() {
     const holder = doc.querySelector("main.pages");
     const vv = win.visualViewport;
     const transform = holder === null ? "-" : (holder.style.transform || "-");
+    const current = doc.querySelector("main.pages > section.page.html-mcp-current-page");
+    const page = current === null ? null : current.getBoundingClientRect();
+    const shown = frame.getBoundingClientRect();
     return `s=${Math.round(win.scrollX)},${Math.round(win.scrollY)}`
       + ` z=${root.style.getPropertyValue("--html-mcp-zoom") || "?"}`
       + ` tf=${transform.replace(/px/g, "").replace(/(\.\d)\d+/g, "$1").slice(0, 36)}`
+      + ` wc=${holder === null ? "-" : (holder.style.willChange || "-")}`
+      + (page === null ? "" : ` cp=${Math.round(page.left)},${Math.round(page.top)} ${Math.round(page.width)}x${Math.round(page.height)}`)
+      + ` fr=${Math.round(shown.left)},${Math.round(shown.top)} ${Math.round(shown.width)}x${Math.round(shown.height)}`
       + ` vv=${vv ? `${vv.scale.toFixed(2)}@${Math.round(vv.offsetLeft)},${Math.round(vv.offsetTop)} ${Math.round(vv.width)}x${Math.round(vv.height)}` : "-"}`
       + ` cw=${root.clientWidth}x${root.clientHeight} sw=${root.scrollWidth}x${root.scrollHeight}`;
   };
@@ -62,6 +74,8 @@ function install() {
       log(`${kind} scale=${event.scale?.toFixed(2)} dp=${event.defaultPrevented ? 1 : 0}`);
     }, { passive: true });
   }
+  describe = state;
+  win.addEventListener("resize", () => log(`resize ${state()}`), { passive: true });
   let lastScroll = 0;
   win.addEventListener("scroll", () => {
     if (performance.now() - lastScroll < 150) return;
@@ -85,6 +99,21 @@ function install() {
   log(`ready ${state()}`);
 }
 
-const frame = document.querySelector("#artifact-frame");
-frame.addEventListener("load", () => setTimeout(install, 300));
+document.addEventListener("fullscreenchange", () => {
+  const doc = document.querySelector("#artifact-frame").contentDocument;
+  const show = doc.documentElement.dataset.htmlMcpPresentation || "-";
+  log(`fullscreen=${document.fullscreenElement === null ? 0 : 1} show=${show}`);
+  setTimeout(() => {
+    install();
+    log(`+300ms ${describe()}`);
+  }, 300);
+});
+// Every frame, the ones the tabs keep included: a load does not bubble, but it is seen on
+// the way down; and a tab switch shows a frame that loaded long ago.
+document.addEventListener("load", (event) => {
+  if (event.target?.classList?.contains("artifact-frame")) setTimeout(install, 300);
+}, true);
+document.addEventListener("click", (event) => {
+  if (event.target?.closest?.(".artifact-tab") !== null) setTimeout(install, 300);
+});
 setTimeout(install, 300);
