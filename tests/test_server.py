@@ -537,6 +537,9 @@ async def test_artifact_content_change_does_not_invalidate_sibling(tmp_path: Pat
     review = HtmlReviewServer(config)
     review.artifacts["report"].build = lambda: None
 
+    # A watcher event follows a change on disk; a file that reads as it was noted has
+    # been taken already, by the state read, and is not taken twice.
+    (tmp_path / "report-content.html").write_text("<p>artifact, edited</p>", encoding="utf-8")
     await review.on_project_change(str(tmp_path / "report-content.html"))
 
     assert review.artifacts["slides"].revision == 1
