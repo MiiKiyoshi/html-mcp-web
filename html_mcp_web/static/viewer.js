@@ -514,6 +514,14 @@ function zoomFromWheel(event, point) {
 // distance whenever the browser had begun a scroll of its own before we took over.
 function handleArtifactTouch(event) {
   const touches = Array.from(event.touches);
+  // In the slide show the stylesheet fits the page and centres it, and a carried holder
+  // has no layout to settle into: two fingers are taken from the browser, as the wheel
+  // and the gesture are there, and carry nothing. A gesture still in flight is settled.
+  if (state.slideShow) {
+    if (state.pinch !== null) settlePinch();
+    if (touches.length >= 2) event.preventDefault();
+    return;
+  }
   if (event.type === "touchstart") state.settledScroll = null;
   if (event.type === "touchend" || event.type === "touchcancel") {
     if (touches.length < 2 && state.pinch !== null) settlePinch();

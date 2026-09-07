@@ -1710,6 +1710,85 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_two_fingers_in_the_slide_show_carry_nothing(tmp_path: Path) -> None:
+    """In the slide show the stylesheet fits the page and centres it. Two fingers there
+    carried the holder of the pages after them all the same, and on a tablet the slide was
+    left where they had dragged it, at its right size and cut off at the screen's edge.
+    Two fingers are still taken from the browser, and carry nothing."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_show_touch_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n'
+        'user_pref("dom.w3c_touch_events.enabled", 1);\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "900", "-height", "1200", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=900, height=1200)
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        browser.find_element("css selector", "#fullscreen-btn").click()
+        wait_until(lambda: browser.execute_script("""
+          return document.querySelector("#artifact-frame").contentDocument.documentElement
+            .hasAttribute("data-html-mcp-presentation");
+        """))
+
+        result = browser.execute_script("""
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const target = doc.querySelector("section.page.html-mcp-current-page");
+          const holder = doc.querySelector("main.pages");
+          const before = target.getBoundingClientRect();
+          const touch = (id, x, y) => new view.Touch({identifier: id, target, clientX: x, clientY: y});
+          const send = (type, touches) => {
+            const event = new view.TouchEvent(type, {
+              touches, targetTouches: touches, changedTouches: touches,
+              bubbles: true, cancelable: true});
+            target.dispatchEvent(event);
+            return event.defaultPrevented;
+          };
+          const taken = send("touchstart", [touch(1, 300, 400), touch(2, 400, 400)]);
+          send("touchmove", [touch(1, 250, 350), touch(2, 450, 450)]);
+          const carried = holder.style.transform;
+          send("touchend", []);
+          const after = target.getBoundingClientRect();
+          return {taken, carried, settled: holder.style.transform,
+                  moved: Math.abs(after.left - before.left) + Math.abs(after.top - before.top)};
+        """)
+        assert result["taken"] is True, result
+        assert result["carried"] == "", result
+        assert result["settled"] == "", result
+        assert result["moved"] < 1, result
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+        shared.stop()
+        shutil.rmtree(profile, ignore_errors=True)
+
+
 def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None:
     """Two fingers on the artifact zoom the artifact alone, and what they zoom is the size
     the pages are laid out at, not a transform laid over them: a transform creates no
