@@ -113,6 +113,16 @@ function showLoadedArtifact(frame) {
   renderPages();
   updateLayoutUi();
   scheduleLayoutCheck();
+  scrollToRepaint(frameWindow());
+}
+
+// Safari draws a frame come back from underneath in part or not at all until it is
+// scrolled, whatever the frame's visibility or layer meanwhile. So the scroll is done
+// here: one pixel, and back at the next frame, which leaves the reader where they were.
+function scrollToRepaint(win) {
+  const { scrollX, scrollY } = win;
+  win.scrollTo({ left: scrollX, top: scrollY + (scrollY > 0 ? -1 : 1), behavior: "instant" });
+  requestAnimationFrame(() => win.scrollTo({ left: scrollX, top: scrollY, behavior: "instant" }));
 }
 
 async function selectArtifact(artifactId) {
