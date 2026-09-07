@@ -22,6 +22,10 @@ const state = {
   editingEntry: null,
   unattached: new Set(),
   pendingView: null,
+  // Where each artifact was left, by id: scroll and zoom. The tabs sit over one frame,
+  // and a frame given another document starts it at the top; a tab that forgets where
+  // the reader was is a link, not a tab.
+  views: {},
   ws: null,
   renderFrame: null,
   layoutFrame: null,
@@ -60,8 +64,15 @@ function renderArtifactTabs() {
   }
 }
 
+function rememberView() {
+  const win = $("#artifact-frame").contentWindow;
+  if (!state.artifactId || win === null || state.loadedRevision === null) return;
+  state.views[state.artifactId] = { x: win.scrollX, y: win.scrollY, zoom: state.artifactZoom };
+}
+
 async function selectArtifact(artifactId) {
   if (artifactId === state.artifactId) return;
+  rememberView();
   state.artifactId = artifactId;
   localStorage.setItem("htmlMcpArtifact", artifactId);
   state.artifact = state.project.artifacts[artifactId];
@@ -71,6 +82,11 @@ async function selectArtifact(artifactId) {
   state.expanded.clear();
   state.unattached.clear();
   state.currentPage = null;
+  // Back to a tab is back to its place: the zoom is set before the document loads, so
+  // the page is fitted at it, and the scroll is put back once the document is there.
+  const view = state.views[artifactId];
+  state.artifactZoom = view === undefined ? 1 : view.zoom;
+  state.pendingView = view === undefined ? null : { x: view.x, y: view.y };
   renderArtifactTabs();
   updateArtifactLinks();
   updateLayoutUi();
@@ -1055,6 +1071,9 @@ function attachArtifactEvents() {
     scheduleLayoutCheck();
     scheduleCurrentPage();
   });
+  // The zoom the document is shown at is the artifact's own, and the reset control
+  // follows it; a scroll put back means the same only at the zoom it was taken at.
+  applyArtifactZoom();
   if (state.pendingView !== null) {
     const view = state.pendingView;
     state.pendingView = null;
