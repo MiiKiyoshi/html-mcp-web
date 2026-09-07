@@ -91,10 +91,13 @@ function frameFor(artifactId) {
   return frame;
 }
 
+// The active frame is raised over the others, which stay painted underneath and are
+// inert there: out of the tab order, out of find-in-page, silent to a screen reader.
 function showFrame(frame) {
   for (const other of Object.values(state.frames)) {
     const active = other === frame;
     other.classList.toggle("active", active);
+    other.toggleAttribute("inert", !active);
     if (active) other.id = "artifact-frame";
     else other.removeAttribute("id");
   }

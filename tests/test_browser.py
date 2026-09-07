@@ -3352,12 +3352,17 @@ def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
         assert abs(back["zoom"] - left["zoom"]) < 0.01, (left, back)
         assert browser.execute_script(
             'return document.querySelector("#artifact-frame").contentDocument.body.dataset.kept') == "yes"
-        # The other frame is still there, hidden, holding its own document.
+        # The other frame is still there, painted underneath and inert, holding its own
+        # document: hidden with visibility it came back blank in Safari until a scroll.
         assert browser.execute_script("""
-          const frames = document.querySelectorAll(".artifact-frame");
-          return [frames.length, document.querySelectorAll(".artifact-frame.active").length,
-                  Array.from(frames).filter((frame) => frame.id === "artifact-frame").length];
-        """) == [2, 1, 1]
+          const frames = Array.from(document.querySelectorAll(".artifact-frame"));
+          const active = frames.filter((frame) => frame.classList.contains("active"));
+          const others = frames.filter((frame) => !frame.classList.contains("active"));
+          return [frames.length, active.length, frames.filter((frame) => frame.id === "artifact-frame").length,
+                  frames.every((frame) => getComputedStyle(frame).visibility === "visible"),
+                  others.every((frame) => Number(getComputedStyle(frame).zIndex) < Number(getComputedStyle(active[0]).zIndex)),
+                  others.every((frame) => frame.hasAttribute("inert"))];
+        """) == [2, 1, 1, True, True, True]
     finally:
         if browser is not None:
             try:
