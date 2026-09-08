@@ -13,6 +13,8 @@ html[data-html-mcp-layout="report"] {
 }
 
 html[data-html-mcp-layout] { background: #faf8f2 !important; }
+/* A sideways wheel with nothing to scroll is not a step back through history. */
+html[data-html-mcp-layout] { overscroll-behavior-x: none !important; }
 
 /* The page is laid out at one fixed size and only then drawn smaller, so a reader that
    enlarges text by itself has nothing to gain here. On a phone it left the drawings at

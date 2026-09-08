@@ -1819,6 +1819,82 @@ def test_two_fingers_in_the_slide_show_carry_nothing(tmp_path: Path) -> None:
         shutil.rmtree(profile, ignore_errors=True)
 
 
+def test_a_sideways_wheel_stays_in_the_artifact(tmp_path: Path) -> None:
+    """Safari starts its swipe back on the first wheel event of a gesture that is mostly
+    sideways when nothing under the pointer scrolls that way, and a deck fitted to its
+    width never does: two fingers that set off a little sideways left the artifact for
+    the page before. A sideways wheel nothing can follow is taken; one that something
+    under the pointer can follow, and an upright one, are left to the browser."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_wheel_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "900", "-height", "1200", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=900, height=1200)
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+
+        taken = browser.execute_script("""
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const page = doc.querySelector("section.page");
+          const send = (target, win, deltaX, deltaY) => {
+            const event = new win.WheelEvent("wheel", {deltaX, deltaY, bubbles: true, cancelable: true});
+            target.dispatchEvent(event);
+            return event.defaultPrevented;
+          };
+          const wrapper = doc.createElement("div");
+          wrapper.style.cssText = "width: 200px; overflow-x: auto";
+          wrapper.innerHTML = '<div style="width: 600px; height: 10px"></div>';
+          page.appendChild(wrapper);
+          wrapper.scrollLeft = 100;
+          const result = {
+            back: send(page, view, -40, 3),
+            forward: send(page, view, 40, 3),
+            upright: send(page, view, 3, 40),
+            inside: send(wrapper.firstChild, view, -40, 3),
+            onward: send(wrapper.firstChild, view, 40, 3),
+            viewer: send(document.querySelector("#sidebar"), window, -40, 3),
+          };
+          wrapper.scrollLeft = 0;
+          result.atStart = send(wrapper.firstChild, view, -40, 3);
+          wrapper.remove();
+          return result;
+        """)
+        assert taken == {"back": True, "forward": True, "upright": False, "inside": False,
+                         "onward": False, "viewer": True, "atStart": True}, taken
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+        shared.stop()
+        shutil.rmtree(profile, ignore_errors=True)
+
+
 def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None:
     """Two fingers on the artifact zoom the artifact alone, and what they zoom is the size
     the pages are laid out at, not a transform laid over them: a transform creates no
