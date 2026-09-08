@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from html_mcp_web.comments import CommentStore, DomPosition, PageAnchor, TextAnchor, anchor_from_dict
+from html_mcp_web.comments import Comment, CommentStore, DomPosition, PageAnchor, TextAnchor, anchor_from_dict
 
 
 def anchor() -> TextAnchor:
@@ -99,3 +99,23 @@ def test_silent_close_flips_status_without_thread_entry(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="empty"):
         store.reply(created.id, "   ", "agent")
+
+
+def test_a_close_leaves_its_time_and_a_reopen_takes_it_back(tmp_path: Path) -> None:
+    """The resolved view leads with the comment closed last, and the time it was last
+    touched cannot say which that was: a reply after the close moves that too."""
+    store = CommentStore(tmp_path / "comments.json")
+    created = store.add(anchor(), "Please verify this claim")
+    assert created.resolved is None
+    closed = store.resolve(created.id, "", "human")
+    assert closed.resolved == closed.updated
+    replied = store.reply(created.id, "A word after the close", "agent")
+    assert replied.resolved == closed.resolved
+    assert CommentStore(tmp_path / "comments.json").get(created.id).resolved == closed.resolved
+    assert store.reopen(created.id, "", "human").resolved is None
+
+    # A record stored before the field carries none.
+    stored = closed.to_dict()
+    del stored["resolved"]
+    assert Comment.from_dict(stored).resolved is None
+

@@ -138,6 +138,10 @@ class Comment:
     status: Status
     created: str
     updated: str
+    # When the comment was last closed; none while it is open. The resolved view leads
+    # with the comment closed last, and "updated" cannot say which that was: a reply
+    # after the close moves it too.
+    resolved: str | None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -147,6 +151,7 @@ class Comment:
             "status": self.status,
             "created": self.created,
             "updated": self.updated,
+            "resolved": self.resolved,
         }
 
     @classmethod
@@ -158,6 +163,9 @@ class Comment:
             status=data["status"],
             created=str(data["created"]),
             updated=str(data["updated"]),
+            # A store written before the field carries none: its closed comments keep
+            # the order they were written in.
+            resolved=str(data["resolved"]) if "resolved" in data and data["resolved"] is not None else None,
         )
 
 
@@ -234,6 +242,7 @@ class CommentStore:
             status="open",
             created=now,
             updated=now,
+            resolved=None,
         )
         with self._locked():
             comments = self._all()
@@ -283,6 +292,8 @@ class CommentStore:
                         ThreadEntry(author=author, at=now, text=text.strip(), edits=list(edits) if edits is not None else [])
                     )
                 if status is not None:
+                    if status != comment.status:
+                        comment.resolved = now if status == "resolved" else None
                     comment.status = status
                 comment.updated = now
                 comments[index] = comment
