@@ -2945,8 +2945,9 @@ return {left: lines("left"), justify: lines("justify"), center: lines("center"),
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_the_resolved_and_mixed_views_lead_with_the_latest(tmp_path: Path) -> None:
     """The open view keeps the order the comments were written in, the order the page they
-    sit on reads in. The resolved view and the mixed one lead with the comment written
-    last, which is not the one touched last: closing a comment touches it."""
+    sit on reads in. The resolved view leads with the comment closed last, the one the
+    reader has just closed. The mixed view leads with the comment written last, which is
+    not the one touched last: closing a comment touches it."""
     slides = tmp_path / "slides.html"
     slides.write_text(slides_html(), encoding="utf-8")
     port = available_port()
@@ -2970,9 +2971,9 @@ def test_the_resolved_and_mixed_views_lead_with_the_latest(tmp_path: Path) -> No
         written = []
         for word in ("first", "second", "third"):
             written.append(post_json(f"{base}/comments", {"anchor": {"kind": "artifact"}, "text": word})["id"])
-        # The first is resolved last of all, so it is the comment touched most recently
-        # while being the one written first. That tells the two orders apart: by when it
-        # was touched it would lead both views, and by when it was written it trails them.
+        # The first is resolved last of all, so it is the comment closed most recently
+        # while being the one written first. That tells the orders apart: by when it was
+        # closed it leads the resolved view, and by when it was written it trails the mixed.
         post_json(f"{base}/comments/{written[1]}/resolve", {"summary": ""})
         post_json(f"{base}/comments/{written[0]}/resolve", {"summary": ""})
 
@@ -2998,7 +2999,7 @@ def test_the_resolved_and_mixed_views_lead_with_the_latest(tmp_path: Path) -> No
 
         # Written first, second, third; resolved second, then first.
         assert shown("open", 1) == [written[2]]
-        assert shown("resolved", 2) == [written[1], written[0]]
+        assert shown("resolved", 2) == [written[0], written[1]]
         # The third was written last and never touched again, so it leads the mixed view
         # over two comments that were resolved after it was written.
         assert shown("all", 3) == [written[2], written[1], written[0]]

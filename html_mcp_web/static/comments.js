@@ -58,13 +58,18 @@ export function createComments(dependencies) {
     const ui = captureCommentUi();
     const payload = await fetchJson(filteredCommentsPath());
     // The open view keeps the order the comments were written in, which is the order the
-    // page they sit on reads in. The other two views lead with the one written last, by
-    // when it was written and not by when it was last touched: closing a comment touches
-    // it, so by that measure every closed comment stood above every open one and a
-    // comment written a minute ago sat below a dozen closed ones.
-    state.comments = $("#comment-filter").value === "open" ? payload.comments
-      : [...payload.comments].sort((first, second) => (first.created < second.created ? 1
-        : first.created > second.created ? -1 : 0));
+    // page they sit on reads in. The resolved view leads with the comment closed last,
+    // the one the reader has just closed and looks for. The mixed view leads with the
+    // one written last, by when it was written and not by when it was last touched:
+    // closing a comment touches it, so by that measure every closed comment stood above
+    // every open one and a comment written a minute ago sat below a dozen closed ones.
+    const view = $("#comment-filter").value;
+    const moment = view === "resolved"
+      ? (comment) => comment.resolved ?? comment.created
+      : (comment) => comment.created;
+    state.comments = view === "open" ? payload.comments
+      : [...payload.comments].sort((first, second) => (moment(first) < moment(second) ? 1
+        : moment(first) > moment(second) ? -1 : 0));
     renderComments();
     renderHighlights();
     restoreCommentUi(ui);
