@@ -459,13 +459,38 @@ function zoomFromGesture(event, point) {
 // mouse sends under the key each desktop zooms with: ctrl on Windows and Linux, command
 // on a Mac. The pointer is the fixed point, as the point between two fingers is.
 function handleArtifactWheel(event) {
+  keepSidewaysWheel(event);
   zoomFromWheel(event, { x: event.clientX, y: event.clientY });
+}
+
+// Safari starts its swipe back or forward on the first wheel event of a gesture that is
+// mostly sideways when nothing under the pointer scrolls that way, and is told not to
+// at that event alone, by the event being taken. There is no page to go back to here,
+// and a deck fitted to its width scrolls sideways nowhere, so two fingers that set off
+// a little sideways left the artifact for the page before: a sideways wheel that nothing
+// under the pointer can follow is taken, and the fingers stay in the artifact.
+function keepSidewaysWheel(event) {
+  if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+  for (let node = event.target; node !== null && node.nodeType === 1; node = node.parentElement) {
+    if (scrollsSideways(node, event.deltaX)) return;
+  }
+  event.preventDefault();
+}
+
+function scrollsSideways(node, deltaX) {
+  const doc = node.ownerDocument;
+  if (node !== doc.scrollingElement) {
+    const overflow = doc.defaultView.getComputedStyle(node).overflowX;
+    if (overflow !== "auto" && overflow !== "scroll") return false;
+  }
+  return deltaX < 0 ? node.scrollLeft > 0 : node.scrollLeft + node.clientWidth < node.scrollWidth - 1;
 }
 
 // Over the rest of the viewer, the comments or the bar, the same pinch zooms the artifact
 // about its middle. Left to the browser there, it zoomed the whole page, comments and
 // all, while the artifact kept a zoom of its own, and the two ran side by side.
 function handleViewerWheel(event) {
+  keepSidewaysWheel(event);
   if (frameDocument() === null) return;
   const frame = $("#artifact-frame").getBoundingClientRect();
   zoomFromWheel(event, { x: frame.width / 2, y: frame.height / 2 });

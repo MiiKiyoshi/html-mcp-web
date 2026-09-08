@@ -16,7 +16,8 @@
 * { box-sizing: border-box; }
 
 html, body, #app { width: 100%; height: 100%; margin: 0; }
-body { overflow: hidden; }
+/* A sideways wheel with nothing to scroll is not a step back through history. */
+html, body { overflow: hidden; overscroll-behavior-x: none; }
 button, select, textarea { font: inherit; }
 #app { display: flex; flex-direction: column; }
 
