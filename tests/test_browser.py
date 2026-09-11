@@ -939,6 +939,124 @@ return {tall: [box(tall).top, box(tall).bottom], column: [box(stack).top, box(st
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_takeaway_keeps_lead_typography_and_body_geometry_across_skins(tmp_path: Path) -> None:
+    """A final takeaway uses the lead's face while the body keeps its opening and spread.
+
+    The same content is built with two skins so this checks the shared engine contract,
+    rather than one skin's cascade. The second page also exercises the no-lead branch.
+    """
+    from html_mcp_web.slides import build
+
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<!doctype html>\n<meta charset="utf-8"><title>Takeaway</title>\n'
+        '<body data-author="A" data-meta="B">\n'
+        '<section data-title="With lead">'
+        '<p class="lead">Opening result.</p>'
+        '<div class="middle" style="height: 30px">middle one</div>'
+        '<div class="middle" style="height: 30px">middle two</div>'
+        '<div class="middle" style="height: 30px">middle three</div>'
+        '<p class="takeaway">The decision is ready.</p>'
+        '</section>\n'
+        '<section data-title="Without lead">'
+        '<div class="middle" style="height: 30px">middle one</div>'
+        '<div class="middle" style="height: 30px">middle two</div>'
+        '<p class="takeaway">The decision still holds.</p>'
+        '</section>\n'
+        '</body>\n', encoding="utf-8")
+
+    skins = []
+    for name, font, size, width in (
+        ("skin-a", '"Courier New", monospace', "23px", "1000px"),
+        ("skin-b", 'Georgia, serif', "27px", "1050px"),
+    ):
+        skin = tmp_path / name
+        skin.mkdir()
+        (skin / "skin.css").write_text(
+            f":root {{ --font: {font}; }}\n.lead {{ font-family: {font}; font-size: {size}; max-width: {width}; }}\n",
+            encoding="utf-8")
+        skins.append((name, skin))
+
+    profile = tempfile.mkdtemp(prefix="html_mcp_takeaway_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "about:blank"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        rendered = {}
+        for name, skin in skins:
+            html = tmp_path / f"{name}.html"
+            build(content, html, skin)
+            browser.navigate(html.as_uri())
+            wait_until(lambda: browser.execute_script("return !!document.querySelector('.body')"))
+            page = browser.find_element("css selector", "section.page:nth-of-type(2)")
+            with (tmp_path / f"{name}.png").open("wb") as screenshot:
+                browser.save_screenshot(screenshot, element=page, full=False)
+            rendered[name] = browser.execute_script("""
+const pages = document.querySelectorAll('section.page');
+const read = (page) => {
+  const body = page.querySelector('.body');
+  const lead = page.querySelector('.body > p.lead:not(.takeaway)');
+  const takeaway = page.querySelector('.body > p.takeaway');
+  const middle = [...page.querySelectorAll('.body > .rest > .middle')];
+  const box = (el) => { const r = el.getBoundingClientRect();
+    return {top: r.top, bottom: r.bottom, left: r.left, right: r.right}; };
+  return {body: box(body), lead: lead && box(lead), takeaway: box(takeaway),
+          middle: middle.map(box), leadStyle: lead && {
+            font: getComputedStyle(lead).fontFamily,
+            size: getComputedStyle(lead).fontSize},
+          takeawayStyle: {font: getComputedStyle(takeaway).fontFamily,
+                          size: getComputedStyle(takeaway).fontSize},
+          scroll: [body.scrollWidth, body.clientWidth, body.scrollHeight, body.clientHeight]};
+};
+return {withLead: read(pages[1]), withoutLead: read(pages[2])};
+""")
+
+            for page in rendered[name].values():
+                assert page["scroll"][0] <= page["scroll"][1]
+                assert page["scroll"][2] <= page["scroll"][3]
+                for child in ([page["lead"]] if page["lead"] else []) + [page["takeaway"]] + page["middle"]:
+                    assert page["body"]["left"] - 1 <= child["left"] <= child["right"] <= page["body"]["right"] + 1
+                    assert page["body"]["top"] - 1 <= child["top"] <= child["bottom"] <= page["body"]["bottom"] + 1
+
+            with_lead = rendered[name]["withLead"]
+            assert with_lead["leadStyle"] == with_lead["takeawayStyle"]
+            assert abs(with_lead["lead"]["left"] - with_lead["takeaway"]["left"]) < 1
+            assert abs(with_lead["lead"]["right"] - with_lead["takeaway"]["right"]) < 1
+            assert with_lead["lead"]["top"] < with_lead["body"]["top"] + 40
+            assert with_lead["takeaway"]["bottom"] > with_lead["body"]["bottom"] - 45
+            gaps = ([with_lead["middle"][0]["top"] - with_lead["lead"]["bottom"]]
+                    + [b["top"] - a["bottom"] for a, b in zip(with_lead["middle"], with_lead["middle"][1:])]
+                    + [with_lead["takeaway"]["top"] - with_lead["middle"][-1]["bottom"]])
+            assert min(gaps) > 35, gaps
+            assert max(gaps[1:-1]) - min(gaps[1:-1]) < 4, gaps
+            assert abs(gaps[0] - gaps[-1]) < 20, gaps
+            assert rendered[name]["withoutLead"]["lead"] is None
+            assert rendered[name]["withoutLead"]["takeaway"]["bottom"] > rendered[name]["withoutLead"]["body"]["bottom"] - 45
+
+        assert rendered["skin-a"]["withLead"]["leadStyle"] != rendered["skin-b"]["withLead"]["leadStyle"]
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_display_math_matches_its_paragraph(tmp_path: Path) -> None:
     """KaTeX enlarges maths to 1.21em. That suits inline maths in a line of text, but a
     display equation standing alone then overpowers the body, so it takes the paragraph's

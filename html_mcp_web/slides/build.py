@@ -36,7 +36,7 @@ import re
 import sys
 from pathlib import Path
 
-from ..template_content import parse_template_content
+from ..template_content import ContentParser, Element, parse_template_content
 
 HERE = Path(__file__).parent
 SKELETON = HERE / "skeleton.css"
@@ -255,11 +255,28 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
     </section>{script}''')
             continue
 
-        # An opening summary keeps its place under the title; everything after it shares
-        # the height that is left.
+        # Opening and closing summaries bound the body; only the content between them
+        # shares the remaining height. The closing summary uses the skin's lead styling.
         lead = re.match(r'\s*<p class="lead">.*?</p>', section.body_html, re.S)
         opening = lead.group(0).strip() if lead is not None else ""
         rest = section.body_html[lead.end():] if lead is not None else section.body_html
+        body = ContentParser()
+        body.feed(rest)
+        body.close()
+        blocks = [child for child in body.root.children if isinstance(child, Element)]
+        takeaways = [child for child in blocks
+                     if "class" in child.attributes and "takeaway" in child.attributes["class"].split()]
+        takeaway = ""
+        if takeaways:
+            if len(takeaways) != 1 or takeaways[0] is not blocks[-1] or takeaways[0].tag != "p":
+                raise ValueError("a body takeaway must be one final p.takeaway")
+            closing = takeaways[0]
+            classes = closing.attributes["class"].split()
+            if "lead" not in classes:
+                classes.insert(0, "lead")
+            closing.attributes["class"] = " ".join(classes)
+            takeaway = closing.to_html()
+            rest = body.root.inner_html({id(closing)})
         footer = f'<footer class="bbar">{pageno}{label_html(footer_label)}</footer>'
         pages.append(f'''    <section class="page">
       <header class="tbar"><h2>{section.title}</h2>{images(skin.slot("tbar_logo"), "tbar-logo")}</header>
@@ -268,6 +285,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
         <div class="rest">
 {rest.strip()}
         </div>
+{takeaway}
       </div>
       {stack(skin.slot("page_bottom_left"), "page-bottom-left")}
       {footer}
