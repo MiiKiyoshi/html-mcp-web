@@ -97,7 +97,9 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "run by hand, and inspect(artifact) after it reports the new revision and how far the check "
             "has caught up. For a templated artifact, inspect(artifact, docs=True) adds the content "
             "format and the components. "
-            "Completion is layout_check.checked_revision == revision with no errors, and each error ends "
+            "Layout passes when layout_check.checked_revision == revision with no errors. "
+            "Before replying, read the affected rendered page as its intended reader; the requested "
+            "understanding must follow from the visible content. Each error ends "
             "with the ref of the block it is about, which measure_space(target=<ref>) and "
             "render_page(target=<ref>) both take. Make the edit, reply with what changed and why, and "
             "record edited_files; a thread is closed by the reviewer from the page, and the server "
@@ -137,7 +139,11 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "(figure placement, a crop, colour). render_page(target=<ref>) crops to one block for a fraction "
             "of a page's tokens, dpi=150 shows fine detail, and save=True writes a png for the user to look "
             "at without the image entering the transcript. Run it when what it carries changed and once "
-            "before hand-off, not after each edit."
+            "before hand-off, not after each edit. "
+            "For comprehension feedback, repair the connected explanation, not only the anchor. "
+            "Check shared referents and missing relationships before adding detail. If the same "
+            "misunderstanding survives a revision, rebuild the affected explanation within scope. "
+            "Verify the page without mentally supplying source knowledge; reuse unchanged renders."
         ),
         "review": (
             "After handing a revision over, call wait_review() and do what its result says; the waiter "
