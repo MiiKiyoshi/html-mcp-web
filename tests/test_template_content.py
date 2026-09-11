@@ -160,6 +160,43 @@ def test_shared_metadata_is_required(tmp_path: Path) -> None:
         parse_template_content(content_file)
 
 
+@pytest.mark.parametrize("opening", ["", '<p class="lead">Opening.</p>'])
+def test_takeaway_is_outside_the_spread_and_uses_skin_lead_style(tmp_path: Path, opening: str) -> None:
+    from html_mcp_web.slides import build
+    from lxml import html
+
+    content = tmp_path / "content.html"
+    content.write_text(f'''<title>Deck</title><body data-author="R" data-meta="Date">
+<section data-title="Result">{opening}<div><p>Evidence.</p></div>
+<p id="conclusion" class="takeaway"><strong>Result</strong> &amp; meaning.</p>
+<!-- A source note after the last block. --></section></body>''', encoding="utf-8")
+    output = tmp_path / "slides.html"
+    build(content, output, REPO / "templates" / "neutral-slides")
+    body = html.fromstring(output.read_text()).find('.//div[@class="body"]')
+    closing = body[-1]
+    assert closing.tag == "p" and closing.attrib["id"] == "conclusion"
+    assert closing.attrib["class"] == "lead takeaway"
+    assert closing.text_content() == "Result & meaning."
+    rest = body.find('div[@class="rest"]')
+    assert not rest.xpath('.//*[@id="conclusion"]')
+    assert "Evidence." in rest.text_content()
+
+
+@pytest.mark.parametrize("content_html", [
+    '<p class="takeaway">Conclusion.</p><p>Later body.</p>',
+    '<p class="takeaway">One.</p><p class="takeaway">Two.</p>',
+    '<div class="takeaway">Conclusion.</div>',
+])
+def test_takeaway_requires_one_final_paragraph(tmp_path: Path, content_html: str) -> None:
+    from html_mcp_web.slides import build
+
+    content = tmp_path / "content.html"
+    content.write_text(f'<title>Deck</title><body data-author="R" data-meta="Date">'
+                       f'<section data-title="Result">{content_html}</section></body>', encoding="utf-8")
+    with pytest.raises(ValueError, match="one final p.takeaway"):
+        build(content, tmp_path / "slides.html", REPO / "templates" / "neutral-slides")
+
+
 def test_a_deck_with_a_wrapped_label_carries_the_wrap_script(tmp_path: Path) -> None:
     from html_mcp_web.slides import build
 

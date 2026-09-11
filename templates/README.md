@@ -98,9 +98,15 @@ chapter from the next as often as it opens an appendix.
 
 Blocks spread down the body rather than stacking at its top, so a page with little on it
 does not leave a dead band above the footer. A first `p.lead` stays with the title and
-takes no part in that spread; everything after it shares the remaining height.
+an optional final `p.takeaway` stays at the bottom of the body. Neither participates in
+the spread; only the content between them shares the remaining height.
 
 - `p.lead` is the one-line summary under the title; normal `p` carries prose
+- `p.takeaway` is the concluding line at the bottom. Put at most one as the last direct
+  paragraph of a body section, after its figure, table, or other content. It works with
+  or without a lead. The common builder applies the skin's `lead` class to it, so both
+  lines share the same typography, width, and horizontal alignment in every skin.
+  Write `<p class="takeaway">The concluding statement.</p>`; skins only style its appearance.
 - `p.note` is a single footnote, `ul.notes` takes over once two or more independent
   remarks pile up, one per `li`
 - `p.units` sits directly above a measurement table and states the units once
