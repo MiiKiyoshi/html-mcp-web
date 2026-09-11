@@ -1037,10 +1037,10 @@ return {withLead: read(pages[1]), withoutLead: read(pages[2])};
                 key: with_lead["takeawayStyle"][key] for key in ("font", "size")}
             assert with_lead["leadStyle"]["align"] == "start"
             assert with_lead["takeawayStyle"]["align"] == "center"
-            assert abs(with_lead["lead"]["left"] - with_lead["takeaway"]["left"]) < 1
-            assert abs(with_lead["lead"]["right"] - with_lead["takeaway"]["right"]) < 1
+            assert abs((with_lead["takeaway"]["left"] + with_lead["takeaway"]["right"])
+                       / 2 - (with_lead["body"]["left"] + with_lead["body"]["right"]) / 2) < 1
             assert abs((with_lead["takeawayText"]["left"] + with_lead["takeawayText"]["right"])
-                       / 2 - (with_lead["takeaway"]["left"] + with_lead["takeaway"]["right"]) / 2) < 1
+                       / 2 - (with_lead["body"]["left"] + with_lead["body"]["right"]) / 2) < 1
             assert with_lead["lead"]["top"] < with_lead["body"]["top"] + 40
             assert with_lead["takeaway"]["bottom"] > with_lead["body"]["bottom"] - 45
             gaps = ([with_lead["middle"][0]["top"] - with_lead["lead"]["bottom"]]
