@@ -19,7 +19,7 @@ from .mcp_contract import (
 
 
 try:
-    from mcp.server.fastmcp import FastMCP, Image
+    from mcp.server.fastmcp import Context, FastMCP, Image
     from pydantic import Field
 
     from .mcp_client import ProjectBinding, ProjectSetupError
@@ -52,6 +52,30 @@ def check(start_dir: Path) -> list[str]:
     _check_dependencies()
     server = create_server(ProjectBinding(start_dir))
     return sorted(tool.name for tool in asyncio.run(server.list_tools()))
+
+
+def _wait_method(ctx: "Context") -> str:
+    name = ctx.session.client_params.clientInfo.name.casefold()
+    if "claude" in name:
+        return (
+            "Run the script with Monitor(command=<script>, persistent=true, "
+            "timeout_ms=3600000), then end the turn. Keep the monitor for subsequent events."
+        )
+    if "codex" in name:
+        return (
+            "Run the script path, quoted for the shell, with exec_command. Retain its "
+            "session_id and read output with write_stdin using empty chars. Keep the turn "
+            "active while waiting; if a read returns no output, wait again on the same "
+            "session. Do not send a final answer expecting background output to start a "
+            "new turn. After handling an event, resume waiting on the same process."
+        )
+    return (
+        "Run the script with your shell tool and read its output. If the tool returns a "
+        "running session, retain it and use the tool that reads subsequent output. Keep "
+        "the turn active while waiting unless your client explicitly supports resuming "
+        "a completed turn from background output. After handling an event, resume "
+        "waiting on the same process."
+    )
 
 
 def create_server(binding: "ProjectBinding") -> "FastMCP":
@@ -110,12 +134,12 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         "review": (
             "After handing a revision over, call wait_review() and do what its result says; the waiter "
             "it returns is started once and serves every press of the session. When the reviewer tells "
-            "you to wait, in any words, that is this: start the waiter if it is not running and end the "
-            "turn; a reply that only says you are waiting is not waiting. Presses made while nobody "
+            "you to wait, in any words, start the waiter if it is not running and follow the "
+            "client-specific instructions returned by wait_review(); a reply that only says you "
+            "are waiting is not waiting. Presses made while nobody "
             "waits are kept, presses that pile up coalesce into one wake-up carrying the latest press "
             "number, and a wake-up can repeat if its delivery could not be confirmed, so treat one as "
-            "'there is something to read', not as a count. Waiting costs no tokens, so prefer it to "
-            "polling."
+            "'there is something to read', not as a count."
         ),
         "images": (
             "Link images with a relative src into a project folder; do not embed them as base64, so content "
@@ -296,8 +320,12 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         return await client.request_json("GET", f"/artifacts/{artifact}/space?{urlencode(query)}", timeout=75.0)
 
     @mcp.tool()
-    async def wait_review() -> dict[str, Any]:
-        """Return at once with a waiter script for the reviewer's Call agent button. Start that script once as a persistent background monitor (Claude Code: Monitor with persistent=true) and end the turn; it prints one line each time the reviewer presses the button, at once if a press is already waiting, and keeps waiting for the next, so each line is a wake-up and the script is never started again. Being told to wait, in any words, means this. Costs nothing while waiting."""
+    async def wait_review(ctx: Context) -> dict[str, Any]:
+        """Return a script and client-specific instructions for waiting on Call agent.
+
+        Run the returned script using the how field, selected for the connected
+        client. Reuse the process after handling each review event.
+        """
         client = binding.require_client()
         state = await client.request_json("GET", "/state")
         port = state["port"]
@@ -346,14 +374,11 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         return {
             "script": str(target),
             "how": (
-                "Run the script once with the harness's persistent background monitor and end the turn: on "
-                "Claude Code, Monitor(command=<script>, description='waiting for the reviewer', "
-                "persistent=true, timeout_ms=3600000). It waits silently as long as it takes and prints "
-                "one line per press without exiting: [review] means comments are ready, so continue with "
-                "list_comments(unanswered=True) and leave the monitor running for the next press. [gone] "
-                "means the review server is unreachable and the script keeps trying, [back] that it "
-                "answered again; neither needs anything from you. Without a background facility, "
-                "running it with a shell tool blocks until the button is pressed."
+                _wait_method(ctx)
+                + " Start another copy only after the previous process has ended. "
+                "On [review], read list_comments(unanswered=True) for the reported artifact and handle the review. "
+                "[gone] means the review server is unreachable; the script keeps retrying. "
+                "[back] means it is reachable again."
             ),
         }
 

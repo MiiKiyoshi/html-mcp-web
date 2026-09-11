@@ -9,6 +9,7 @@ import sys
 import time
 import urllib.request
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -579,13 +580,16 @@ def test_inspect_has_no_docs_for_a_plain_artifact(tmp_path: Path) -> None:
         binding.stop()
 
 
-def test_wait_review_writes_a_waiter_script_carrying_port_and_press_count(tmp_path: Path) -> None:
+def test_wait_review(tmp_path: Path, monkeypatch) -> None:
     # The tool returns at once with a script for the harness to watch in the background;
     # blocking here would freeze the agent, which is what the button exists to avoid.
     project(tmp_path)
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
+        context = SimpleNamespace(session=SimpleNamespace(client_params=SimpleNamespace(
+            clientInfo=SimpleNamespace(name="claude-code"))))
+        monkeypatch.setattr(mcp, "get_context", lambda: context)
         unstructured, told = asyncio.run(mcp.call_tool("wait_review", {}))
         assert json.loads(unstructured[0].text) == told
         script = Path(told["script"])
@@ -602,6 +606,14 @@ def test_wait_review_writes_a_waiter_script_carrying_port_and_press_count(tmp_pa
         assert body.index("printf '%s\\n' \"$out\"") < body.index("/wait-review/ack")
         assert "[gone]" in body and "timeout" not in body
         assert "Monitor" in told["how"] and "persistent=true" in told["how"]
+        assert "write_stdin" not in told["how"]
+        for name in ("codex-mcp-client", "other-client"):
+            context.session.client_params.clientInfo.name = name
+            _, selected = asyncio.run(mcp.call_tool("wait_review", {}))
+            assert "Monitor" not in selected["how"]
+            assert ("write_stdin" in selected["how"]) == (name == "codex-mcp-client")
+        tool = next(t for t in asyncio.run(mcp.list_tools()) if t.name == "wait_review")
+        assert "ctx" not in tool.inputSchema["properties"]
         # One monitor serves the whole session: a press is printed, not exited on.
         assert "exit 0" not in body
 
