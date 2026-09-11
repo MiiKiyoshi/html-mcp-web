@@ -101,7 +101,10 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "with the ref of the block it is about, which measure_space(target=<ref>) and "
             "render_page(target=<ref>) both take. Make the edit, reply with what changed and why, and "
             "record edited_files; a thread is closed by the reviewer from the page, and the server "
-            "refuses a resolve from an agent. After handing a revision over, call wait_review() and do "
+            "refuses a resolve from an agent. "
+            "After replying in the review thread, do not repeat the same reply in chat; use chat for "
+            "blockers, questions, or other context that needs a separate answer. "
+            "After handing a revision over, call wait_review() and do "
             "what its result says."
         ),
     )
