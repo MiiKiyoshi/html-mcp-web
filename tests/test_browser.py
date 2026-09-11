@@ -1007,12 +1007,19 @@ const read = (page) => {
   const middle = [...page.querySelectorAll('.body > .rest > .middle')];
   const box = (el) => { const r = el.getBoundingClientRect();
     return {top: r.top, bottom: r.bottom, left: r.left, right: r.right}; };
+  const textBox = (el) => {
+    const range = document.createRange(); range.selectNodeContents(el);
+    return box(range);
+  };
   return {body: box(body), lead: lead && box(lead), takeaway: box(takeaway),
+          takeawayText: textBox(takeaway),
           middle: middle.map(box), leadStyle: lead && {
             font: getComputedStyle(lead).fontFamily,
-            size: getComputedStyle(lead).fontSize},
+            size: getComputedStyle(lead).fontSize,
+            align: getComputedStyle(lead).textAlign},
           takeawayStyle: {font: getComputedStyle(takeaway).fontFamily,
-                          size: getComputedStyle(takeaway).fontSize},
+                          size: getComputedStyle(takeaway).fontSize,
+                          align: getComputedStyle(takeaway).textAlign},
           scroll: [body.scrollWidth, body.clientWidth, body.scrollHeight, body.clientHeight]};
 };
 return {withLead: read(pages[1]), withoutLead: read(pages[2])};
@@ -1026,9 +1033,14 @@ return {withLead: read(pages[1]), withoutLead: read(pages[2])};
                     assert page["body"]["top"] - 1 <= child["top"] <= child["bottom"] <= page["body"]["bottom"] + 1
 
             with_lead = rendered[name]["withLead"]
-            assert with_lead["leadStyle"] == with_lead["takeawayStyle"]
+            assert {key: with_lead["leadStyle"][key] for key in ("font", "size")} == {
+                key: with_lead["takeawayStyle"][key] for key in ("font", "size")}
+            assert with_lead["leadStyle"]["align"] == "start"
+            assert with_lead["takeawayStyle"]["align"] == "center"
             assert abs(with_lead["lead"]["left"] - with_lead["takeaway"]["left"]) < 1
             assert abs(with_lead["lead"]["right"] - with_lead["takeaway"]["right"]) < 1
+            assert abs((with_lead["takeawayText"]["left"] + with_lead["takeawayText"]["right"])
+                       / 2 - (with_lead["takeaway"]["left"] + with_lead["takeaway"]["right"]) / 2) < 1
             assert with_lead["lead"]["top"] < with_lead["body"]["top"] + 40
             assert with_lead["takeaway"]["bottom"] > with_lead["body"]["bottom"] - 45
             gaps = ([with_lead["middle"][0]["top"] - with_lead["lead"]["bottom"]]
