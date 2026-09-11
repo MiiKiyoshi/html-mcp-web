@@ -129,6 +129,8 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
     try:
         mcp = create_server(binding)
         assert "reusing results while revision is unchanged" in mcp.instructions
+        assert "without asking for a second fix instruction" in mcp.instructions
+        assert "Explicit read-only, discussion-only, and separate-permission limits still control" in mcp.instructions
         # A client cuts these instructions off: Claude Code delivered about 2,300 of 3,336
         # characters, and the last 29% (the whole wait_review workflow among it) reached no
         # agent. And they are read once, at connect: a session that began before a rule
