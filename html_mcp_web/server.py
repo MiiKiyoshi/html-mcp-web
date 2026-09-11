@@ -291,6 +291,7 @@ class HtmlReviewServer:
         self.project_dir = get_project_dir(config).resolve()
         self.static_dir = Path(__file__).parent / "static"
         self.websockets: set[web.WebSocketResponse] = set()
+        self.websocket_artifacts: dict[web.WebSocketResponse, str | None] = {}
         self.pdf_lock = asyncio.Lock()
         self.generated_paths: set[Path] = set()
         # The reviewer's call button. Presses are a monotonic count and the server keeps
@@ -371,6 +372,10 @@ class HtmlReviewServer:
                 dead.append(socket)
         for socket in dead:
             self.websockets.discard(socket)
+            self.websocket_artifacts.pop(socket, None)
+
+    def has_review_ui(self, artifact_id: str) -> bool:
+        return artifact_id in self.websocket_artifacts.values()
 
     async def on_project_change(self, path: str) -> None:
         changed = Path(path).resolve()
@@ -618,13 +623,14 @@ class HtmlReviewServer:
             await self.broadcast({"type": "artifacts_changed", "path": None, **self.project_state()})
 
     async def get_state(self, request: web.Request) -> web.Response:
-        # An agent reads completion off this state, and with no review UI open nothing ran
-        # the check it waited for. The check is started here, one at a time, and a later
-        # state carries its result.
+        # An agent reads completion off this state, and an artifact outside every review
+        # tab had nothing that ran the check it waited for. The check is started here, one
+        # at a time, and a later state carries its result.
         await self.catch_up()
-        if not self.websockets and not self.headless_check.locked():
+        if not self.headless_check.locked():
             for runtime in self.artifacts.values():
-                if runtime.space_revision != runtime.revision and runtime.main_file.is_file():
+                if (runtime.space_revision != runtime.revision and runtime.main_file.is_file()
+                        and not self.has_review_ui(runtime.artifact_id)):
                     asyncio.ensure_future(self._ensure_layout_checked(runtime, request.host))
                     break
         return web.json_response(self.project_state())
@@ -677,19 +683,19 @@ class HtmlReviewServer:
         return web.json_response(runtime.state())
 
     async def _ensure_layout_checked(self, runtime: ArtifactRuntime, host: str) -> None:
-        """Run the layout check ourselves when no review UI is open to run it.
+        """Run the layout check ourselves when no review UI is viewing this artifact.
 
         The check is browser work (the page's own scripts measure it and post the result
         back), and with no browser on the page checked_revision sat at null and every
         measurement 409'd until someone opened the UI. The measurers only need a browser,
         not a reader: a headless one pointed at this server's own page runs the same
-        scripts and posts the same result. A connected UI is left to do it instead, and
-        one check runs at a time.
+        scripts and posts the same result. A UI viewing this artifact is left to do it
+        instead, and one check runs at a time.
         """
         import shutil as _shutil
         import tempfile
 
-        if runtime.space_revision == runtime.revision or self.websockets:
+        if runtime.space_revision == runtime.revision or self.has_review_ui(runtime.artifact_id):
             return
         if _shutil.which("firefox") is None:
             return
@@ -1069,13 +1075,25 @@ class HtmlReviewServer:
         socket = web.WebSocketResponse(heartbeat=30)
         await socket.prepare(request)
         self.websockets.add(socket)
+        self.websocket_artifacts[socket] = None
         await socket.send_json({"type": "state", **self.project_state()})
         try:
             async for message in socket:
                 if message.type == WSMsgType.ERROR:
                     break
+                if message.type == WSMsgType.TEXT:
+                    try:
+                        event = json.loads(message.data)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(event, dict):
+                        continue
+                    artifact_id = event.get("artifact") if event.get("type") == "active_artifact" else None
+                    if artifact_id in self.artifacts:
+                        self.websocket_artifacts[socket] = artifact_id
         finally:
             self.websockets.discard(socket)
+            self.websocket_artifacts.pop(socket, None)
         return socket
 
     async def start_watcher(self, app: web.Application) -> None:

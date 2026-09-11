@@ -234,6 +234,9 @@ async def test_comment_and_agent_reply_round_trip(client) -> None:
     socket = await test_client.ws_connect("/ws")
     state_message = await socket.receive_json()
     assert state_message["type"] == "state"
+    await socket.send_json({"type": "active_artifact", "artifact": "slides"})
+    await asyncio.sleep(0.01)
+    assert review.has_review_ui("slides")
 
     response = await test_client.post(
         "/artifacts/slides/comments",
@@ -260,6 +263,23 @@ async def test_comment_and_agent_reply_round_trip(client) -> None:
     assert saved["thread"][-1]["author"] == "agent"
     assert saved["thread"][-1]["edits"] == ["artifact.html"]
     await socket.close()
+
+
+async def test_headless_check_runs_while_a_different_artifact_is_reviewed(client, monkeypatch) -> None:
+    """A viewer on one tab cannot leave every other artifact unchecked forever."""
+    test_client, review = client
+    other_viewer = object()
+    review.websockets.add(other_viewer)
+    review.websocket_artifacts[other_viewer] = "other"
+    scheduled: list[str] = []
+
+    async def checked(runtime, host):
+        scheduled.append(runtime.artifact_id)
+
+    monkeypatch.setattr(review, "_ensure_layout_checked", checked)
+    await test_client.get("/state")
+    await asyncio.sleep(0)
+    assert scheduled == ["slides"]
 
 
 async def test_editing_a_thread_entry_rewrites_it_in_place(client) -> None:
@@ -783,9 +803,12 @@ async def test_render_page_crops_to_a_target_block(client, monkeypatch) -> None:
     # an unknown ref is not found, and without a fresh measurement the place is unknown.
     assert (await test_client.get("/artifacts/slides/render/page?page=2&dpi=96&target=p1%3A0")).status == 400
     assert (await test_client.get("/artifacts/slides/render/page?page=1&dpi=96&target=p1%3A9")).status == 404
-    # With a review UI connected the server leaves the checking to it, so a target whose
-    # measurement has gone stale is refused rather than measured behind the reviewer's back.
-    review.websockets.add(object())
+    # With this artifact open in the review UI, the server leaves checking to it, so a
+    # target whose measurement has gone stale is refused rather than measured behind the
+    # reviewer's back.
+    viewer = object()
+    review.websockets.add(viewer)
+    review.websocket_artifacts[viewer] = "slides"
     review.artifacts["slides"].revision += 1
     stale = await test_client.get("/artifacts/slides/render/page?page=1&dpi=96&target=p1%3A0")
     assert stale.status == 409

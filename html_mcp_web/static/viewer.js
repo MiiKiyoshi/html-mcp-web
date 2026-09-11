@@ -129,6 +129,7 @@ async function selectArtifact(artifactId) {
   if (artifactId === state.artifactId) return;
   if (state.artifactId) state.zooms[state.artifactId] = state.artifactZoom;
   state.artifactId = artifactId;
+  announceActiveArtifact();
   localStorage.setItem("htmlMcpArtifact", artifactId);
   state.artifact = state.project.artifacts[artifactId];
   state.revision = state.artifact.revision;
@@ -1323,7 +1324,10 @@ function connectWebSocket() {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   const socket = new WebSocket(`${protocol}//${location.host}/ws`);
   state.ws = socket;
-  socket.onopen = updateLayoutUi;
+  socket.onopen = () => {
+    announceActiveArtifact();
+    updateLayoutUi();
+  };
   socket.onmessage = (event) => {
     handleSocketMessage(JSON.parse(event.data)).catch((error) => console.error(error));
   };
@@ -1331,6 +1335,12 @@ function connectWebSocket() {
     $("#artifact-status").textContent = "reconnecting";
     setTimeout(connectWebSocket, 1500);
   };
+}
+
+function announceActiveArtifact() {
+  if (state.ws?.readyState === WebSocket.OPEN && state.artifactId !== null) {
+    state.ws.send(JSON.stringify({ type: "active_artifact", artifact: state.artifactId }));
+  }
 }
 
 function attachControls() {
