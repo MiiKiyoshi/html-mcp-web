@@ -580,7 +580,8 @@ def test_inspect_has_no_docs_for_a_plain_artifact(tmp_path: Path) -> None:
         binding.stop()
 
 
-def test_wait_review(tmp_path: Path, monkeypatch) -> None:
+@pytest.mark.parametrize("codex", [False, True])
+def test_wait_review(tmp_path: Path, monkeypatch, codex) -> None:
     # The tool returns at once with a script for the harness to watch in the background;
     # blocking here would freeze the agent, which is what the button exists to avoid.
     project(tmp_path)
@@ -603,7 +604,7 @@ def test_wait_review(tmp_path: Path, monkeypatch) -> None:
         assert "since" not in body
         assert f":{binding._shared.port}/wait-review\"" in body
         assert f":{binding._shared.port}/wait-review/ack?upto=$press" in body
-        assert body.index("printf '%s\\n' \"$out\"") < body.index("/wait-review/ack")
+        assert body.index('deliver "$out"') < body.index("/wait-review/ack")
         assert "[gone]" in body and "timeout" not in body
         assert "Monitor" in told["how"] and "persistent=true" in told["how"]
         assert "write_stdin" not in told["how"]
@@ -611,7 +612,7 @@ def test_wait_review(tmp_path: Path, monkeypatch) -> None:
             context.session.client_params.clientInfo.name = name
             _, selected = asyncio.run(mcp.call_tool("wait_review", {}))
             assert "Monitor" not in selected["how"]
-            assert ("write_stdin" in selected["how"]) == (name == "codex-mcp-client")
+            assert ("codex queue" in selected["how"]) == (name == "codex-mcp-client")
         tool = next(t for t in asyncio.run(mcp.list_tools()) if t.name == "wait_review")
         assert "ctx" not in tool.inputSchema["properties"]
         # One monitor serves the whole session: a press is printed, not exited on.
@@ -629,10 +630,27 @@ def test_wait_review(tmp_path: Path, monkeypatch) -> None:
             with urllib.request.urlopen(f"{base}/state") as reply:
                 return json.loads(reply.read().decode("utf-8"))["review"]
 
+        args = []
+        if codex:
+            stub = tmp_path / "codex"
+            stub.write_text("#!/bin/sh\n"
+                            '[ "$1" = queue ] && [ "$2" = --thread ] && [ "$3" = test-thread ] && [ "$4" = --message ] || exit 2\n'
+                            '[ -f "$0.ready" ] || { touch "$0.failed"; exit 1; }\n'
+                            'printf "%s\\n" "$5" | tail -n +2\n')
+            stub.chmod(0o755)
+            monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+            args = ["--codex", "test-thread"]
         press()
-        waiter = subprocess.Popen(["/bin/sh", str(script)],
+        waiter = subprocess.Popen(["/bin/sh", str(script), *args],
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
+            if codex:
+                deadline = time.monotonic() + 5
+                while not (tmp_path / "codex.failed").exists() and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                assert (tmp_path / "codex.failed").exists()
+                assert review()["consumed"] == 0
+                (tmp_path / "codex.ready").touch()
             pending = b""
 
             def line(timeout):
