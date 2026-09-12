@@ -84,7 +84,15 @@ async def test_stdio_mcp_starts_without_project_config(tmp_path: Path) -> None:
     )
     async with stdio_client(server, errlog=sys.stderr) as (read, write):
         async with ClientSession(read, write) as session:
-            await session.initialize()
+            initialized = await session.initialize()
+            assert initialized.instructions is not None
+            assert (
+                "Before editing a reader-facing unit, define the reader’s prior knowledge, intended "
+                "understanding, visible structure, and exclusions; reuse exact keys and order across "
+                "comparison and result units, keep preliminary units to prerequisites while preserving "
+                "and annotating source examples, and rebuild after two related comprehension failures."
+                in initialized.instructions
+            )
             tools = await session.list_tools()
             assert [tool.name for tool in tools.tools] == [
                 "inspect",
@@ -141,7 +149,6 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
             "exactly once",
             "Monitor",
             "tells you to wait",
-            "reader-facing unit",
         ):
             assert gone not in mcp.instructions, gone
         assert "no arguments first" in mcp.instructions
@@ -502,17 +509,10 @@ def test_the_working_guide_rides_on_the_discovery_call_only(tmp_path: Path) -> N
         mcp = create_server(binding)
         _, discovered = asyncio.run(mcp.call_tool("inspect", {}))
         guide = discovered["guide"]
+        assert "reader-facing unit" not in json.dumps(discovered, ensure_ascii=False)
         assert set(guide) == {
-            "layout_check", "measure_space", "render_page", "reader_unit", "review", "images",
-            "watching", "editing",
+            "layout_check", "measure_space", "render_page", "review", "images", "watching", "editing",
         }
-        assert guide["reader_unit"] == (
-            "Before editing a reader-facing unit, fix what the reader knows, what they must learn, the "
-            "visible structure, and what is excluded. Adjacent comparison and result units reuse the same "
-            "keys, labels, and order. A preliminary unit contains only the prerequisite; preserve and "
-            "annotate source examples when they are the subject. After two related comprehension failures, "
-            "rebuild the unit instead of patching sentences."
-        )
         assert "wait_review()" in guide["review"]
         # Told to wait, an agent answered that it was waiting and started nothing; the
         # words have to be named as the waiter.
