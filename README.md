@@ -99,6 +99,8 @@ Select text and press **Comment**; the anchor reattaches to the quote after edit
 
 The agent reads the comments, edits the source, and replies or resolves each one. The review page also flags anything off the page, clipped SVG drawings, and overlapping labels at the artifact's fixed size, and reports them to the agent so it can fix them. Comments are stored in `.html-mcp-web/comments/<artifact>.json`, which holds selected text, so whether to track it in git is a privacy choice.
 
+At the start of every new MCP connection, including after a client or server restart, the agent calls `wait_review()` once and starts the returned script exactly once using its instructions. It does not poll, start a duplicate, or assume an earlier waiter survived. An unacknowledged **Call agent** press stays queued and wakes the reconnected waiter.
+
 ## Templates
 
 A template compiles a small content file into the artifact, so you edit content while the cover, bars, and page numbers stay consistent:
