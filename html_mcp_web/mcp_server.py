@@ -130,6 +130,13 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "misunderstanding survives a revision, rebuild the affected explanation within scope. "
             "Verify the page without mentally supplying source knowledge; reuse unchanged renders."
         ),
+        "reader_unit": (
+            "Before editing a reader-facing unit, fix what the reader knows, what they must learn, the "
+            "visible structure, and what is excluded. Adjacent comparison and result units reuse the same "
+            "keys, labels, and order. A preliminary unit contains only the prerequisite; preserve and "
+            "annotate source examples when they are the subject. After two related comprehension failures, "
+            "rebuild the unit instead of patching sentences."
+        ),
         "review": (
             "After handing a revision over, call wait_review() and do what its result says; the waiter "
             "it returns is started once and serves every press of the session. When the reviewer tells "
