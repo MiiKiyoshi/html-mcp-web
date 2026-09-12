@@ -151,7 +151,7 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
             "tells you to wait",
         ):
             assert gone not in mcp.instructions, gone
-        assert "no arguments first" in mcp.instructions
+        assert "no arguments once" in mcp.instructions
         assert "Pass page" in mcp.instructions
         tools = asyncio.run(mcp.list_tools())
         schemas = {tool.name: tool.inputSchema for tool in tools}
@@ -500,28 +500,17 @@ def test_the_lock_names_its_holder(tmp_path: Path) -> None:
         dying.wait(timeout=10)
 
 
-def test_the_working_guide_rides_on_the_discovery_call_only(tmp_path: Path) -> None:
-    """The rules a client's truncation used to swallow live here instead, on the call every
-    agent starts with. A later inspect(artifact) is made many times and carries none of it."""
+def test_discovery_contains_project_state_without_static_instructions(tmp_path: Path) -> None:
     project(tmp_path)
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
         _, discovered = asyncio.run(mcp.call_tool("inspect", {}))
-        guide = discovered["guide"]
-        assert "reader-facing unit" not in json.dumps(discovered, ensure_ascii=False)
-        assert set(guide) == {
-            "layout_check", "measure_space", "render_page", "review", "images", "watching", "editing",
+        assert set(discovered) == {
+            "config_path", "project_dir", "review_url", "guideline", "artifacts",
         }
-        assert "wait_review()" in guide["review"]
-        # Told to wait, an agent answered that it was waiting and started nothing; the
-        # words have to be named as the waiter.
-        assert "tells you to wait" in guide["review"]
-        assert "Pass page" in guide["layout_check"]
-        assert "edit_file" in guide["editing"]
-        assert "min_no_wrap_width" in guide["measure_space"]
-        assert "inotify watch limit reached" in guide["watching"]
-        assert "base64" in guide["images"]
+        assert "guide" not in discovered
+        assert "reader-facing unit" not in json.dumps(discovered, ensure_ascii=False)
 
         _, one = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
         assert "guide" not in one

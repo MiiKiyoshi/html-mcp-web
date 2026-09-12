@@ -117,7 +117,8 @@ overlapping labels at the artifact's fixed size, and reports them to the agent s
 them. Comments are stored in `.html-mcp-web/comments/<artifact>.json`, which holds selected
 text, so whether to track it in git is a privacy choice.
 
-The first `inspect()` call discovers artifact paths and the working guide. Later
+The first `inspect()` call discovers artifact paths and configured project references. The
+server's initialization instructions carry the shared workflow once per connection. Later
 `inspect(artifact=<id>)` calls return compact revision, build, comment, and layout-count
 state. Pass `page=<number>` only when that page's layout errors and available-room regions
 are needed. For a templated artifact, pass `docs=True` once before authoring to read its

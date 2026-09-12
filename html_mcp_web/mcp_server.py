@@ -86,83 +86,23 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     guideline_resource_uri = "html-mcp://guideline/configured"
     mcp = FastMCP(
         "html-mcp-web",
-        # A client may cut this text off: Claude Code delivers about 2,300 characters, and
-        # the rest reached no agent at all. What stays here is what is needed before the
-        # first call; the rest is one field of the inspect() an agent starts with anyway.
+        # Keep static operating rules in initialization. inspect() is called repeatedly
+        # for project state and must not carry the same guide in every discovery result.
         instructions=(
-            "Call inspect() with no arguments first and follow its guide. It returns stable artifact paths "
-            "and any configured guideline. If the user mentions that guideline, or authoring requires it, "
-            "read its path once; a client without filesystem access reads its resource_uri. On the first "
-            "templated-artifact authoring call use docs=True; later state checks omit docs. Pass page to "
-            "inspect only for that page's layout errors and room. Process comments within explicit "
-            "permission, verify rendered edits, and reply in their threads. On each new connection call "
-            "wait_review() and follow how; do not poll or duplicate its waiter. Before editing a "
+            "Call inspect() with no arguments once to discover stable artifact paths and any configured "
+            "guideline; later use inspect(artifact=...) for dynamic state. If the user mentions the "
+            "guideline or authoring requires it, read its path once; a client without filesystem access "
+            "reads its resource_uri. For the first templated-artifact authoring call use docs=True, then "
+            "omit docs. Pass page only for that page's layout errors and room. Within explicit permission, "
+            "process comments by reading requests, editing, verifying the rendered result, and replying in "
+            "their threads. On each new connection call wait_review() and follow how; do not poll or "
+            "duplicate its waiter. Before editing a "
             "reader-facing unit, define the reader’s prior knowledge, intended understanding, visible "
             "structure, and exclusions; reuse exact keys and order across comparison and result units, "
             "keep preliminary units to prerequisites while preserving and annotating source examples, "
             "and rebuild after two related comprehension failures."
         ),
     )
-
-    # The working rules, kept here rather than in the server instructions because a client
-    # may cut those off before the end. They ride on the discovery call, which is made once,
-    # and stay off every later inspect(artifact).
-    GUIDE = {
-        "layout_check": (
-            "layout_error_count == 0 is the fit bar; null means this revision is still being checked, so "
-            "inspect the artifact again shortly. Pass page only when that page's errors and room are needed. "
-            "An error ends with its block ref; a block "
-            "not tied to its column (a footnote, a shared definition, a "
-            "result line) moves there before anything is trimmed. The check is run by the review page; "
-            "with no review page open, inspect(artifact) starts it on the server."
-        ),
-        "measure_space": (
-            "No errors is not the same as a page that reads well. measure_space(target=<ref>) on the block "
-            "that fills most of the page settles the rest: line_count and last_line_right_space are the "
-            "pixels to trim or add, edge_space is the gap to each side of the block, a table adds "
-            "min_no_wrap_width, and unused_ratio is the share of the block's box nothing is drawn in."
-        ),
-        "render_page": (
-            "The check does not judge whether a drawing is right: that a wire reaches the part it is drawn "
-            "to, that a curve matches the formula beside it. render_page carries what numbers do not "
-            "(figure placement, a crop, colour). render_page(target=<ref>) crops to one block for a fraction "
-            "of a page's tokens, dpi=150 shows fine detail, and save=True writes a png for the user to look "
-            "at without the image entering the transcript. Run it when what it carries changed and once "
-            "before hand-off, not after each edit. "
-            "For comprehension feedback, repair the connected explanation, not only the anchor. "
-            "Check shared referents and missing relationships before adding detail. If the same "
-            "misunderstanding survives a revision, rebuild the affected explanation within scope. "
-            "Verify the page without mentally supplying source knowledge; reuse unchanged renders."
-        ),
-        "review": (
-            "After handing a revision over, call wait_review() and do what its result says; the waiter "
-            "it returns is started once and serves every press of the session. When the reviewer tells "
-            "you to wait, in any words, start the waiter if it is not running and follow the "
-            "client-specific instructions returned by wait_review(); a reply that only says you "
-            "are waiting is not waiting. Presses made while nobody "
-            "waits are kept, presses that pile up coalesce into one wake-up carrying the latest press "
-            "number, and a wake-up can repeat if its delivery could not be confirmed, so treat one as "
-            "'there is something to read', not as a count."
-        ),
-        "images": (
-            "Link images with a relative src into a project folder; do not embed them as base64, so content "
-            "stays small and editable."
-        ),
-        "watching": (
-            "The project is watched with inotify, one watch per directory under it, and the per-user watch "
-            "limit is shared by every session on the host. A large tree that holds no artifact content "
-            "(checkpoints, a baseline dump, a dataset) goes in the config's ignore list by its top-level "
-            "directory name, or the project server fails to start with 'inotify watch limit reached' for "
-            "this session and every other one."
-        ),
-        "editing": (
-            "Discovery returns edit_file, the source to change; a templated artifact's main_file is build "
-            "output. Saving edit_file rebuilds and bumps revision, so do not run build.py. Within an "
-            "authorized editing task, inspect a concrete review problem, make and verify the scoped fix, "
-            "then reply with edited_files; the reviewer resolves it. Explicit read-only or separate-"
-            "permission limits still control."
-        ),
-    }
 
     @mcp.resource(
         guideline_resource_uri,
@@ -183,7 +123,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         docs: Annotated[bool, Field(description="With an artifact: add its content format and components (the templates' README and the skin's own), read once before writing content.")] = False,
         page: Annotated[int | None, Field(ge=1, description="With an artifact: add only this page's layout errors and available-room regions.")] = None,
     ) -> dict[str, Any]:
-        """Discover compact project state with the working guide, or inspect one artifact without comment threads."""
+        """Discover compact project state, or inspect one artifact without comment threads."""
         try:
             client = binding.connect()
         except ProjectSetupError as error:
@@ -205,7 +145,6 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 "review_url": f"http://127.0.0.1:{state['port']}",
                 "guideline": ({**guideline, "resource_uri": guideline_resource_uri}
                               if guideline is not None else None),
-                "guide": GUIDE,
                 "artifacts": {
                     artifact_id: agent_artifact_summary(artifact_id, value, project_dir)
                     for artifact_id, value in artifacts.items()
