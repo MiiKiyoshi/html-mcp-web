@@ -1805,6 +1805,7 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
           return document.querySelector("#artifact-frame").contentDocument
             .querySelectorAll(".html-mcp-highlight-badge").length > 0;
         """))
+
         browser.execute_script("""
           const layout = document.querySelector(".layout");
           layout.classList.add("sidebar-collapsed");
@@ -1828,6 +1829,12 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
         assert from_badge["sidebarOpen"], from_badge
         assert from_badge["overhang"] <= 2, from_badge
         assert from_badge["above"] <= 2, from_badge
+        browser.execute_script("""
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          doc.querySelector(".html-mcp-highlight-badge").click();
+        """)
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector(".layout").classList.contains("sidebar-collapsed")'))
     finally:
         if browser is not None:
             try:
