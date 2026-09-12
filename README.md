@@ -2,7 +2,13 @@
 
 Review an AI agent's HTML slides or report from the rendered page while Claude Code or Codex edits the source.
 
-![The review page: a slide on the left with a highlighted sentence, and the comment thread on the right where a reviewer's question is answered by the agent.](docs/hero.png)
+**Slides**
+
+![A rendered slide with a numbered text highlight and its open review thread.](docs/hero.png)
+
+**Reports**
+
+![A rendered report page with a numbered text highlight and its open review thread.](docs/report.png)
 
 You open the artifact in a local review page, select rendered text, and comment on it. The agent reads the comment over MCP, edits the HTML, and replies in the same thread. Because you point at the rendered page, you never hunt for the source, and saving a file refreshes only the artifact frame, so your scroll position and drafts stay put.
 
