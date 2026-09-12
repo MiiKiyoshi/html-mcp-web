@@ -136,7 +136,13 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
             assert needed in mcp.instructions, needed
         for needed in ("new connection", "do not poll", "duplicate"):
             assert needed in mcp.instructions.lower(), needed
-        for gone in ("templates/README.md", "exactly once", "Monitor", "tells you to wait"):
+        for gone in (
+            "templates/README.md",
+            "exactly once",
+            "Monitor",
+            "tells you to wait",
+            "reader-facing unit",
+        ):
             assert gone not in mcp.instructions, gone
         assert "no arguments first" in mcp.instructions
         assert "Pass page" in mcp.instructions
@@ -497,8 +503,16 @@ def test_the_working_guide_rides_on_the_discovery_call_only(tmp_path: Path) -> N
         _, discovered = asyncio.run(mcp.call_tool("inspect", {}))
         guide = discovered["guide"]
         assert set(guide) == {
-            "layout_check", "measure_space", "render_page", "review", "images", "watching", "editing",
+            "layout_check", "measure_space", "render_page", "reader_unit", "review", "images",
+            "watching", "editing",
         }
+        assert guide["reader_unit"] == (
+            "Before editing a reader-facing unit, fix what the reader knows, what they must learn, the "
+            "visible structure, and what is excluded. Adjacent comparison and result units reuse the same "
+            "keys, labels, and order. A preliminary unit contains only the prerequisite; preserve and "
+            "annotate source examples when they are the subject. After two related comprehension failures, "
+            "rebuild the unit instead of patching sentences."
+        )
         assert "wait_review()" in guide["review"]
         # Told to wait, an agent answered that it was waiting and started nothing; the
         # words have to be named as the waiter.
