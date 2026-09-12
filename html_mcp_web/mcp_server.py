@@ -96,7 +96,11 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "templated-artifact authoring call use docs=True; later state checks omit docs. Pass page to "
             "inspect only for that page's layout errors and room. Process comments within explicit "
             "permission, verify rendered edits, and reply in their threads. On each new connection call "
-            "wait_review() and follow how; do not poll or duplicate its waiter."
+            "wait_review() and follow how; do not poll or duplicate its waiter. Before editing a "
+            "reader-facing unit, define the reader’s prior knowledge, intended understanding, visible "
+            "structure, and exclusions; reuse exact keys and order across comparison and result units, "
+            "keep preliminary units to prerequisites while preserving and annotating source examples, "
+            "and rebuild after two related comprehension failures."
         ),
     )
 
@@ -129,13 +133,6 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "Check shared referents and missing relationships before adding detail. If the same "
             "misunderstanding survives a revision, rebuild the affected explanation within scope. "
             "Verify the page without mentally supplying source knowledge; reuse unchanged renders."
-        ),
-        "reader_unit": (
-            "Before editing a reader-facing unit, fix what the reader knows, what they must learn, the "
-            "visible structure, and what is excluded. Adjacent comparison and result units reuse the same "
-            "keys, labels, and order. A preliminary unit contains only the prerequisite; preserve and "
-            "annotate source examples when they are the subject. After two related comprehension failures, "
-            "rebuild the unit instead of patching sentences."
         ),
         "review": (
             "After handing a revision over, call wait_review() and do what its result says; the waiter "
