@@ -841,11 +841,11 @@ async def test_one_broken_artifact_does_not_take_the_server_down(tmp_path: Path)
     # The error reaches the agent, not only the raw state: dropped in the contract, a
     # missing artifact looked exactly like a healthy unchecked one.
     from html_mcp_web.mcp_contract import agent_artifact, agent_artifact_summary
-    summary = agent_artifact_summary("gone", state["artifacts"]["gone"])
+    summary = agent_artifact_summary("gone", state["artifacts"]["gone"], tmp_path)
     assert "not found" in summary["error"]
-    detailed = agent_artifact("gone", state["artifacts"]["gone"], tmp_path)
+    detailed = agent_artifact(state["artifacts"]["gone"])
     assert "not found" in detailed["error"]
-    assert "error" not in agent_artifact_summary("good", state["artifacts"]["good"])
+    assert "error" not in agent_artifact_summary("good", state["artifacts"]["good"], tmp_path)
 
     app = review.create_app()
     app.on_startup.clear()

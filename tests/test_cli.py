@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from html_mcp_web import config as config_module
 from html_mcp_web.cli import main
 
 REPO = Path(__file__).resolve().parents[1]
@@ -33,6 +34,21 @@ def test_init_declares_template_pair(tmp_path: Path, monkeypatch, capsys) -> Non
     text = (tmp_path / ".html-mcp-web.yaml").read_text(encoding="utf-8")
     assert "    template: neutral-slides" in text
     assert "    content: content.html" in text
+
+
+def test_init_and_config_accept_a_named_guideline(tmp_path: Path, monkeypatch) -> None:
+    user_config = tmp_path / "user-config"
+    for name in ("first", "second"):
+        path = user_config / "guidelines" / name / "GUIDELINE.md"
+        path.parent.mkdir(parents=True)
+        path.write_text(f"# {name}\n", encoding="utf-8")
+    monkeypatch.setattr(config_module, "USER_CONFIG_DIR", user_config)
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["init", "--layout", "slides", "--guideline", "first"]) == 0
+    assert "guideline: first" in (tmp_path / ".html-mcp-web.yaml").read_text(encoding="utf-8")
+    assert main(["config", "guideline", "second"]) == 0
+    assert "guideline: second" in (tmp_path / ".html-mcp-web.yaml").read_text(encoding="utf-8")
 
 
 def test_config_changes_port(tmp_path: Path, monkeypatch) -> None:

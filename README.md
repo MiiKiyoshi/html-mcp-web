@@ -91,13 +91,31 @@ port: 8765
 
 `artifacts` maps an id to its label, `layout` (`slides` is 16:9, `report` is A4), and `main` file, where every `section.page` is one printed page. `watch` refreshes on save, `ignore` is checked first, and `port` is the local address. Agent sessions that find the same config share one server, comments, and revisions.
 
+An optional top-level `guideline` names
+`~/.config/html-mcp-web/guidelines/<name>/GUIDELINE.md`. For example, use
+`html-mcp-web init --layout slides --main artifact.html --guideline eda-domain-meeting`,
+or add `guideline: eda-domain-meeting` to an existing config. The file must exist.
+`inspect()` returns its resolved name and path, not its text. An agent reads that file once
+when the user mentions the guideline or the configured guideline is needed for authoring.
+A client without filesystem access can read the returned `resource_uri` instead.
+
 ## Use it
 
 Select text and press **Comment**; the anchor reattaches to the quote after edits. Use **+ Note** for a whole-artifact comment, the **Pages** tab to jump between pages, and the **Edit** link to fix your own message in place. **Resolve** closes a comment in one click. Then ask the agent:
 
 > Process the open html-mcp-web comments.
 
-The agent reads the comments, edits the source, and replies or resolves each one. The review page also flags anything off the page, clipped SVG drawings, and overlapping labels at the artifact's fixed size, and reports them to the agent so it can fix them. Comments are stored in `.html-mcp-web/comments/<artifact>.json`, which holds selected text, so whether to track it in git is a privacy choice.
+The agent reads the comments, edits the source, and replies to each one; the reviewer resolves
+the thread. The review page also flags anything off the page, clipped SVG drawings, and
+overlapping labels at the artifact's fixed size, and reports them to the agent so it can fix
+them. Comments are stored in `.html-mcp-web/comments/<artifact>.json`, which holds selected
+text, so whether to track it in git is a privacy choice.
+
+The first `inspect()` call discovers artifact paths and the working guide. Later
+`inspect(artifact=<id>)` calls return compact revision, build, comment, and layout-count
+state. Pass `page=<number>` only when that page's layout errors and available-room regions
+are needed. For a templated artifact, pass `docs=True` once before authoring to read its
+content format; later state checks omit it.
 
 At the start of every new MCP connection, including after a client or server restart, the agent calls `wait_review()` once and starts the returned script exactly once using its instructions. It does not poll, start a duplicate, or assume an earlier waiter survived. An unacknowledged **Call agent** press stays queued and wakes the reconnected waiter.
 
@@ -124,7 +142,7 @@ html-mcp-web config port 8766
 html-mcp-web config watch '*.html,assets/**'
 ```
 
-`init` also takes `--port` and, for a templated artifact, `--template <name> --content <file>`. Config changes apply on the next save; a port change takes effect when the agent restarts.
+`init` also takes `--port`, `--guideline`, and, for a templated artifact, `--template <name> --content <file>`. Config changes apply on the next save; a port change takes effect when the agent restarts.
 
 ## Security
 

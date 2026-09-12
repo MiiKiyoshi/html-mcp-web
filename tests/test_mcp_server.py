@@ -16,6 +16,7 @@ import yaml
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+from html_mcp_web import config as config_module
 from html_mcp_web.config import load_config
 from html_mcp_web.mcp_client import ProjectBinding
 from html_mcp_web.mcp_server import create_server
@@ -99,10 +100,12 @@ async def test_stdio_mcp_starts_without_project_config(tmp_path: Path) -> None:
             assert inspected.isError is False
             assert inspected.structuredContent["setup_required"]["project_dir"] == str(tmp_path)
             config = project(tmp_path)
-            connected = await session.call_tool("inspect", {"artifact": "slides"})
+            connected = await session.call_tool("inspect", {})
             assert connected.isError is False
             assert connected.structuredContent["config_path"] == str(config.config_path)
             assert connected.structuredContent["review_url"] == f"http://127.0.0.1:{config.port}"
+            compact = await session.call_tool("inspect", {"artifact": "slides"})
+            assert set(compact.structuredContent) == {"artifacts"}
 
 
 @pytest.mark.asyncio
@@ -128,27 +131,15 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        assert "reusing results while revision is unchanged" in mcp.instructions
-        assert "without asking for a second fix instruction" in mcp.instructions
-        assert "Explicit read-only, discussion-only, and separate-permission limits still control" in mcp.instructions
-        # A client cuts these instructions off: Claude Code delivered about 2,300 of 3,336
-        # characters, and the last 29% (the whole wait_review workflow among it) reached no
-        # agent. And they are read once, at connect: a session that began before a rule
-        # changed kept the old one all day. So they carry what an agent cannot find out
-        # (call inspect() first, edit_file is the source, the tools that hold the rest);
-        # a rule that may change rides on a tool result, and one that must hold is code.
-        assert len(mcp.instructions) < 2000
-        for needed in ("wait_review()", "docs=True", "guide field", "refuses a resolve"):
+        assert len(mcp.instructions) < 1000
+        for needed in ("wait_review()", "docs=True", "configured guideline", "resource_uri"):
             assert needed in mcp.instructions, needed
-        for needed in ("new MCP connection", "exactly once", "Do not poll", "stay queued"):
-            assert needed in mcp.instructions, needed
-        for gone in ("templates/README.md", "Resolve all", "Monitor", "tells you to wait"):
+        for needed in ("new connection", "do not poll", "duplicate"):
+            assert needed in mcp.instructions.lower(), needed
+        for gone in ("templates/README.md", "exactly once", "Monitor", "tells you to wait"):
             assert gone not in mcp.instructions, gone
-        # The guide rides on the discovery call alone, so the instructions have to say which
-        # call carries it: an agent that already knows its artifact would otherwise call
-        # inspect(artifact) first and never learn the guide exists.
         assert "no arguments first" in mcp.instructions
-        assert "inspect(artifact) leaves out" in mcp.instructions
+        assert "Pass page" in mcp.instructions
         tools = asyncio.run(mcp.list_tools())
         schemas = {tool.name: tool.inputSchema for tool in tools}
         assert list(schemas) == [
@@ -164,7 +155,8 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         assert schemas["read_comments"]["required"] == ["artifact", "comment_ids"]
         assert schemas["reply_comments"]["required"] == ["artifact", "replies_text"]
         assert schemas["reply_comments"]["properties"]["replies_text"]["type"] == "string"
-        assert set(schemas["inspect"]["properties"]) == {"artifact", "docs"}
+        assert set(schemas["inspect"]["properties"]) == {"artifact", "docs", "page"}
+        assert schemas["inspect"]["properties"]["page"]["anyOf"][0]["minimum"] == 1
         assert schemas["render_page"]["required"] == ["artifact", "page"]
         assert schemas["render_page"]["properties"]["page"]["minimum"] == 1
         assert schemas["render_page"]["properties"]["dpi"]["minimum"] == 36
@@ -187,10 +179,12 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         }
 
         config = project(tmp_path)
-        _, inspected = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
+        _, inspected = asyncio.run(mcp.call_tool("inspect", {}))
         assert inspected["config_path"] == str(config.config_path)
         assert inspected["project_dir"] == str(tmp_path)
         assert inspected["review_url"] == f"http://127.0.0.1:{config.port}"
+        _, compact = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
+        assert set(compact) == {"artifacts"}
     finally:
         binding.stop()
 
@@ -250,9 +244,8 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
             assert response.status == 200
 
         mcp = create_server(binding)
-        # Closing its own comment hides the agent's reasoning from the reviewer who has to
-        # judge the fix; the server refuses it, and the instructions say so.
-        assert "refuses a resolve from an agent" in mcp.instructions
+        _, discovered = asyncio.run(mcp.call_tool("inspect", {}))
+        assert discovered["artifacts"]["slides"]["edit_file"] == str(tmp_path / "slides.html")
 
         base = f"http://127.0.0.1:{config.port}"
         created = post_json(f"{base}/artifacts/slides/comments", {
@@ -273,7 +266,7 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
         })
         _, inspected = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
         artifact = inspected["artifacts"]["slides"]
-        assert artifact["edit_file"] == str(tmp_path / "slides.html")
+        assert set(artifact) == {"revision", "layout_error_count", "comment_counts"}
         assert artifact["comment_counts"]["open"] == 2
         assert "comments" not in artifact
         assert "artifact_digest" not in artifact
@@ -503,12 +496,15 @@ def test_the_working_guide_rides_on_the_discovery_call_only(tmp_path: Path) -> N
         mcp = create_server(binding)
         _, discovered = asyncio.run(mcp.call_tool("inspect", {}))
         guide = discovered["guide"]
-        assert set(guide) == {"layout_check", "measure_space", "render_page", "review", "images", "watching"}
+        assert set(guide) == {
+            "layout_check", "measure_space", "render_page", "review", "images", "watching", "editing",
+        }
         assert "wait_review()" in guide["review"]
         # Told to wait, an agent answered that it was waiting and started nothing; the
         # words have to be named as the waiter.
         assert "tells you to wait" in guide["review"]
-        assert "layout_check.room" in guide["layout_check"]
+        assert "Pass page" in guide["layout_check"]
+        assert "edit_file" in guide["editing"]
         assert "min_no_wrap_width" in guide["measure_space"]
         assert "inotify watch limit reached" in guide["watching"]
         assert "base64" in guide["images"]
@@ -580,6 +576,73 @@ def test_inspect_has_no_docs_for_a_plain_artifact(tmp_path: Path) -> None:
         mcp = create_server(binding)
         _, inspected = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides", "docs": True}))
         assert inspected["docs"] == {"template": None, "readme": None, "skin_readme": None}
+    finally:
+        binding.stop()
+
+
+def test_inspect_returns_only_requested_page_layout_detail(tmp_path: Path) -> None:
+    config = project(tmp_path)
+    binding = ProjectBinding(tmp_path)
+    try:
+        mcp = create_server(binding)
+        _, initial = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
+        revision = initial["artifacts"]["slides"]["revision"]
+        with urllib.request.urlopen(f"http://127.0.0.1:{config.port}/state") as response:
+            static = json.loads(response.read().decode("utf-8"))["static"]
+        post_json(f"http://127.0.0.1:{config.port}/artifacts/slides/layout", {
+            "revision": revision,
+            "static": static,
+            "errors": [
+                "page 1 exceeds the slides height at p1:0",
+                "page 2 exceeds the slides height at p2:0",
+            ],
+            "space": space_snapshot(),
+        })
+
+        _, compact = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
+        assert compact["artifacts"]["slides"] == {
+            "revision": revision,
+            "layout_error_count": 2,
+            "comment_counts": {"open": 0, "resolved": 0},
+        }
+        _, detailed = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides", "page": 1}))
+        page = detailed["artifacts"]["slides"]["page"]
+        assert page["number"] == 1
+        assert page["errors"] == ["page 1 exceeds the slides height at p1:0"]
+        assert page["room"]
+        assert "page 2" not in json.dumps(detailed)
+    finally:
+        binding.stop()
+
+
+def test_guideline_discovery_returns_a_reference_and_resource_not_inline_text(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    user_config = tmp_path / "user-config"
+    guideline_path = user_config / "guidelines" / "eda-domain-meeting" / "GUIDELINE.md"
+    guideline_path.parent.mkdir(parents=True)
+    guideline_text = "# EDA domain meeting\n\nNever inline this marker in discovery.\n"
+    guideline_path.write_text(guideline_text, encoding="utf-8")
+    monkeypatch.setattr(config_module, "USER_CONFIG_DIR", user_config)
+    config = project(tmp_path)
+    data = yaml.safe_load(config.config_path.read_text(encoding="utf-8"))
+    data["guideline"] = "eda-domain-meeting"
+    config.config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    binding = ProjectBinding(tmp_path)
+    try:
+        mcp = create_server(binding)
+        _, discovered = asyncio.run(mcp.call_tool("inspect", {}))
+        assert discovered["guideline"] == {
+            "name": "eda-domain-meeting",
+            "path": str(guideline_path),
+            "resource_uri": "html-mcp://guideline/configured",
+        }
+        assert "Never inline this marker" not in json.dumps(discovered)
+        resources = asyncio.run(mcp.list_resources())
+        assert [str(resource.uri) for resource in resources] == ["html-mcp://guideline/configured"]
+        contents = list(asyncio.run(mcp.read_resource("html-mcp://guideline/configured")))
+        assert contents[0].content == guideline_text
     finally:
         binding.stop()
 

@@ -3,7 +3,15 @@ from pathlib import Path
 import pytest
 
 from html_mcp_web import config as config_module
-from html_mcp_web.config import Config, create_config, find_config, get_main_file, get_template_dir, load_config
+from html_mcp_web.config import (
+    Config,
+    create_config,
+    find_config,
+    get_guideline_file,
+    get_main_file,
+    get_template_dir,
+    load_config,
+)
 
 
 def test_missing_config_explains_project_setup(tmp_path: Path, monkeypatch) -> None:
@@ -95,6 +103,35 @@ def test_artifact_main_files_are_unique() -> None:
 def test_template_name_is_validated() -> None:
     with pytest.raises(ValueError, match="directory name"):
         Config.from_dict({"artifacts": {"slides": artifact(template="../evil", content="content.html")}})
+
+
+def test_guideline_is_a_named_user_file(tmp_path: Path, monkeypatch) -> None:
+    user_config = tmp_path / ".config" / "html-mcp-web"
+    guideline = user_config / "guidelines" / "eda-domain-meeting" / "GUIDELINE.md"
+    guideline.parent.mkdir(parents=True)
+    guideline.write_text("# EDA domain meeting\n", encoding="utf-8")
+    monkeypatch.setattr(config_module, "USER_CONFIG_DIR", user_config)
+
+    config = Config.from_dict({
+        "artifacts": {"slides": artifact()},
+        "guideline": "eda-domain-meeting",
+    })
+    assert get_guideline_file(config) == guideline
+    assert config.to_dict()["guideline"] == "eda-domain-meeting"
+    with pytest.raises(ValueError, match="directory name"):
+        Config.from_dict({"artifacts": {"slides": artifact()}, "guideline": "../private"})
+
+
+def test_load_config_rejects_a_missing_guideline(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(config_module, "USER_CONFIG_DIR", tmp_path / "user-config")
+    path = tmp_path / ".html-mcp-web.yaml"
+    path.write_text(
+        "artifacts:\n  slides:\n    label: Slides\n    layout: slides\n    main: artifact.html\n"
+        "guideline: missing\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(FileNotFoundError, match="configured guideline not found"):
+        load_config(path)
 
 
 def test_user_template_takes_priority_over_public_template(tmp_path: Path, monkeypatch) -> None:

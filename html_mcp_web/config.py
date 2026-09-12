@@ -68,6 +68,7 @@ class ArtifactConfig:
 @dataclass
 class Config:
     artifacts: dict[str, ArtifactConfig]
+    guideline: str | None = None
     watch: list[str] = field(default_factory=lambda: list(DEFAULT_WATCH))
     ignore: list[str] = field(default_factory=list)
     port: int = DEFAULT_PORT
@@ -75,7 +76,7 @@ class Config:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], config_path: Path | None = None) -> "Config":
-        unknown = set(data) - {"artifacts", "watch", "ignore", "port"}
+        unknown = set(data) - {"artifacts", "guideline", "watch", "ignore", "port"}
         if unknown:
             raise ValueError(f"unknown configuration keys: {', '.join(sorted(unknown))}")
         if "artifacts" not in data or not isinstance(data["artifacts"], dict) or not data["artifacts"]:
@@ -90,20 +91,29 @@ class Config:
         main_files = [artifact.main for artifact in artifacts.values()]
         if len(set(main_files)) != len(main_files):
             raise ValueError("artifact main files must be unique")
+        guideline = data.get("guideline")
+        if guideline is not None and (
+            not isinstance(guideline, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", guideline)
+        ):
+            raise ValueError("guideline must be a directory name under guidelines/")
         watch = [str(value) for value in data["watch"]] if "watch" in data else list(DEFAULT_WATCH)
         ignore = [str(value) for value in data["ignore"]] if "ignore" in data else []
         port = int(data["port"]) if "port" in data else DEFAULT_PORT
         if not 1 <= port <= 65535:
             raise ValueError("port must be between 1 and 65535")
-        return cls(artifacts=artifacts, watch=watch, ignore=ignore, port=port, config_path=config_path)
+        return cls(artifacts=artifacts, guideline=guideline, watch=watch, ignore=ignore,
+                   port=port, config_path=config_path)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data = {
             "artifacts": {artifact_id: artifact.to_dict() for artifact_id, artifact in self.artifacts.items()},
             "watch": list(self.watch),
             "ignore": list(self.ignore),
             "port": self.port,
         }
+        if self.guideline is not None:
+            data["guideline"] = self.guideline
+        return data
 
 
 def find_config(start_dir: Path | None = None) -> Path | None:
@@ -128,7 +138,11 @@ def load_config(path: Path | None = None) -> Config:
     loaded = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     if not isinstance(loaded, dict):
         raise ValueError(f"{config_path} must contain a YAML mapping")
-    return Config.from_dict(loaded, config_path=config_path.resolve())
+    config = Config.from_dict(loaded, config_path=config_path.resolve())
+    guideline = get_guideline_file(config)
+    if guideline is not None and not guideline.is_file():
+        raise FileNotFoundError(f"configured guideline not found: {guideline}")
+    return config
 
 
 def create_config(
@@ -140,6 +154,7 @@ def create_config(
     output_path: Path | None = None,
     template: str | None = None,
     content: str | None = None,
+    guideline: str | None = None,
 ) -> Path:
     target = output_path if output_path is not None else Path.cwd() / DEFAULT_CONFIG_NAME
     if target.exists():
@@ -152,12 +167,16 @@ def create_config(
     config = Config.from_dict(
         {
             "artifacts": {artifact_id: artifact},
+            **({"guideline": guideline} if guideline is not None else {}),
             "watch": list(watch) if watch is not None else list(DEFAULT_WATCH),
             "ignore": list(ignore) if ignore is not None else [],
             "port": port,
         },
         config_path=target,
     )
+    guideline_file = get_guideline_file(config)
+    if guideline_file is not None and not guideline_file.is_file():
+        raise FileNotFoundError(f"configured guideline not found: {guideline_file}")
     target.write_text(yaml.safe_dump(config.to_dict(), sort_keys=False), encoding="utf-8")
     return target
 
@@ -175,6 +194,12 @@ def get_main_file(config: Config, artifact_id: str) -> Path:
 def get_content_file(config: Config, artifact_id: str) -> Path | None:
     content = config.artifacts[artifact_id].content
     return None if content is None else get_project_dir(config) / content
+
+
+def get_guideline_file(config: Config) -> Path | None:
+    if config.guideline is None:
+        return None
+    return (USER_CONFIG_DIR / "guidelines" / config.guideline / "GUIDELINE.md").resolve()
 
 
 def get_template_dir(config: Config, artifact_id: str) -> Path | None:
