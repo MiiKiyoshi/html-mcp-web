@@ -83,37 +83,20 @@ def _wait_method(ctx: "Context") -> str:
 
 def create_server(binding: "ProjectBinding") -> "FastMCP":
     _check_dependencies()
+    guideline_resource_uri = "html-mcp://guideline/configured"
     mcp = FastMCP(
         "html-mcp-web",
         # A client may cut this text off: Claude Code delivers about 2,300 characters, and
         # the rest reached no agent at all. What stays here is what is needed before the
         # first call; the rest is one field of the inspect() an agent starts with anyway.
         instructions=(
-            "Call inspect() with no arguments first: it returns a guide field with the rules for reading "
-            "a layout check, measuring space, rendering, and writing content, which inspect(artifact) "
-            "leaves out. Read only the artifact, comments and pages needed, reusing results while revision "
-            "is unchanged, and find new comments with list_comments(unanswered=True) or "
-            "list_comments(since=<the largest last_human_at already handled>). "
-            "edit_file is the source; for a templated artifact main_file is build output and is not "
-            "edited. Saving edit_file triggers the rebuild and bumps the revision, so build.py is never "
-            "run by hand, and inspect(artifact) after it reports the new revision and how far the check "
-            "has caught up. For a templated artifact, inspect(artifact, docs=True) adds the content "
-            "format and the components. "
-            "Layout passes when layout_check.checked_revision == revision with no errors. "
-            "Before replying, read the affected rendered page as its intended reader; the requested "
-            "understanding must follow from the visible content. Each error ends "
-            "with the ref of the block it is about, which measure_space(target=<ref>) and "
-            "render_page(target=<ref>) both take. Make the edit, reply with what changed and why, and "
-            "record edited_files; a thread is closed by the reviewer from the page, and the server "
-            "refuses a resolve from an agent. "
-            "Within an already authorized document-editing task, treat a review question that identifies "
-            "a concrete problem as a request to inspect; if it holds, make and verify the scoped correction "
-            "and reply in its thread without asking for a second fix instruction. Explicit read-only, "
-            "discussion-only, and separate-permission limits still control. "
-            "After replying in the review thread, do not repeat the same reply in chat; use chat for "
-            "blockers, questions, or other context that needs a separate answer. "
-            "Each new MCP connection or restart calls wait_review() once and runs its script exactly "
-            "once. Do not poll or duplicate it; unacknowledged presses stay queued."
+            "Call inspect() with no arguments first and follow its guide. It returns stable artifact paths "
+            "and any configured guideline. If the user mentions that guideline, or authoring requires it, "
+            "read its path once; a client without filesystem access reads its resource_uri. On the first "
+            "templated-artifact authoring call use docs=True; later state checks omit docs. Pass page to "
+            "inspect only for that page's layout errors and room. Process comments within explicit "
+            "permission, verify rendered edits, and reply in their threads. On each new connection call "
+            "wait_review() and follow how; do not poll or duplicate its waiter."
         ),
     )
 
@@ -122,12 +105,12 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     # and stay off every later inspect(artifact).
     GUIDE = {
         "layout_check": (
-            "checked_revision == revision and no errors is the fit bar. An error names the block that "
-            "spills and ends with its ref; where the page still has room comes back beside the errors as "
-            "layout_check.room, and a block not tied to its column (a footnote, a shared definition, a "
+            "layout_error_count == 0 is the fit bar; null means this revision is still being checked, so "
+            "inspect the artifact again shortly. Pass page only when that page's errors and room are needed. "
+            "An error ends with its block ref; a block "
+            "not tied to its column (a footnote, a shared definition, a "
             "result line) moves there before anything is trimmed. The check is run by the review page; "
-            "with no review page open, inspect(artifact) starts it on the server and a later inspect "
-            "carries the result, so a checked_revision behind the revision means ask again shortly."
+            "with no review page open, inspect(artifact) starts it on the server."
         ),
         "measure_space": (
             "No errors is not the same as a page that reads well. measure_space(target=<ref>) on the block "
@@ -168,12 +151,33 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "directory name, or the project server fails to start with 'inotify watch limit reached' for "
             "this session and every other one."
         ),
+        "editing": (
+            "Discovery returns edit_file, the source to change; a templated artifact's main_file is build "
+            "output. Saving edit_file rebuilds and bumps revision, so do not run build.py. Within an "
+            "authorized editing task, inspect a concrete review problem, make and verify the scoped fix, "
+            "then reply with edited_files; the reviewer resolves it. Explicit read-only or separate-"
+            "permission limits still control."
+        ),
     }
+
+    @mcp.resource(
+        guideline_resource_uri,
+        name="configured-guideline",
+        description="The guideline configured for this HTML project, read only when needed.",
+        mime_type="text/markdown",
+    )
+    async def configured_guideline() -> str:
+        state = await binding.require_client().request_json("GET", "/state")
+        guideline = state.get("guideline")
+        if guideline is None:
+            raise RuntimeError("this project has no configured guideline")
+        return Path(guideline["path"]).read_text(encoding="utf-8")
 
     @mcp.tool()
     async def inspect(
         artifact: str | None = None,
         docs: Annotated[bool, Field(description="With an artifact: add its content format and components (the templates' README and the skin's own), read once before writing content.")] = False,
+        page: Annotated[int | None, Field(ge=1, description="With an artifact: add only this page's layout errors and available-room regions.")] = None,
     ) -> dict[str, Any]:
         """Discover compact project state with the working guide, or inspect one artifact without comment threads."""
         try:
@@ -186,19 +190,26 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         artifacts = state["artifacts"]
         if artifact is not None and artifact not in artifacts:
             raise RuntimeError(f"unknown artifact: {artifact}; available artifacts: {', '.join(artifacts)}")
+        if artifact is None and (docs or page is not None):
+            raise ValueError("docs and page require artifact")
         project_dir = Path(state["project_dir"])
-        result = (
-            {artifact: agent_artifact(artifact, artifacts[artifact], project_dir)}
-            if artifact is not None
-            else {artifact_id: agent_artifact_summary(artifact_id, value) for artifact_id, value in artifacts.items()}
-        )
+        if artifact is None:
+            guideline = state.get("guideline")
+            return {
+                "config_path": state["config_path"],
+                "project_dir": state["project_dir"],
+                "review_url": f"http://127.0.0.1:{state['port']}",
+                "guideline": ({**guideline, "resource_uri": guideline_resource_uri}
+                              if guideline is not None else None),
+                "guide": GUIDE,
+                "artifacts": {
+                    artifact_id: agent_artifact_summary(artifact_id, value, project_dir)
+                    for artifact_id, value in artifacts.items()
+                },
+            }
         return {
-            "config_path": state["config_path"],
-            "project_dir": state["project_dir"],
-            "review_url": f"http://127.0.0.1:{state['port']}",
-            **({} if artifact is not None else {"guide": GUIDE}),
-            "artifacts": result,
-            **({"docs": template_docs(artifacts[artifact])} if docs and artifact is not None else {}),
+            "artifacts": {artifact: agent_artifact(artifacts[artifact], page)},
+            **({"docs": template_docs(artifacts[artifact])} if docs else {}),
         }
 
     @mcp.tool()

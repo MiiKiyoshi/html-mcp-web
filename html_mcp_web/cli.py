@@ -11,6 +11,7 @@ from .config import (
     DEFAULT_CONFIG_NAME,
     Config,
     create_config,
+    get_guideline_file,
     load_config,
 )
 
@@ -19,8 +20,8 @@ def cmd_init(args: argparse.Namespace) -> int:
     target = Path.cwd() / DEFAULT_CONFIG_NAME
     try:
         created = create_config(layout=args.layout, main=args.main, port=args.port, output_path=target,
-                                template=args.template, content=args.content)
-    except (FileExistsError, ValueError) as error:
+                                template=args.template, content=args.content, guideline=args.guideline)
+    except (FileExistsError, FileNotFoundError, ValueError) as error:
         print(str(error), file=sys.stderr)
         return 1
     print(created)
@@ -49,7 +50,7 @@ def cmd_config(args: argparse.Namespace) -> int:
             return 1
         target = target[part]
     leaf = parts[-1]
-    if leaf not in target:
+    if leaf not in target and not (args.key == "guideline" and args.value is not None):
         print(f"unknown configuration key: {args.key}", file=sys.stderr)
         return 1
     if args.value is None:
@@ -63,6 +64,10 @@ def cmd_config(args: argparse.Namespace) -> int:
     else:
         target[leaf] = args.value
     validated = Config.from_dict(data, config.config_path)
+    guideline_file = get_guideline_file(validated)
+    if guideline_file is not None and not guideline_file.is_file():
+        print(f"configured guideline not found: {guideline_file}", file=sys.stderr)
+        return 1
     config.config_path.write_text(yaml.safe_dump(validated.to_dict(), sort_keys=False), encoding="utf-8")
     print(config.config_path)
     return 0
@@ -91,6 +96,7 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--port", type=int, default=8765)
     init.add_argument("--template", help="template directory name; --content is then required")
     init.add_argument("--content", help="content file the template compiles into --main")
+    init.add_argument("--guideline", help="directory name under ~/.config/html-mcp-web/guidelines")
     init.set_defaults(handler=cmd_init)
 
     config = subcommands.add_parser("config")
