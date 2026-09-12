@@ -140,6 +140,8 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         assert len(mcp.instructions) < 2000
         for needed in ("wait_review()", "docs=True", "guide field", "refuses a resolve"):
             assert needed in mcp.instructions, needed
+        for needed in ("new MCP connection", "exactly once", "Do not poll", "stay queued"):
+            assert needed in mcp.instructions, needed
         for gone in ("templates/README.md", "Resolve all", "Monitor", "tells you to wait"):
             assert gone not in mcp.instructions, gone
         # The guide rides on the discovery call alone, so the instructions have to say which
@@ -615,6 +617,7 @@ def test_wait_review(tmp_path: Path, monkeypatch, codex) -> None:
             _, selected = asyncio.run(mcp.call_tool("wait_review", {}))
             assert "Monitor" not in selected["how"]
             assert ("codex queue" in selected["how"]) == (name == "codex-mcp-client")
+            assert ('sandbox_permissions="require_escalated"' in selected["how"]) == (name == "codex-mcp-client")
         tool = next(t for t in asyncio.run(mcp.list_tools()) if t.name == "wait_review")
         assert "ctx" not in tool.inputSchema["properties"]
         # One monitor serves the whole session: a press is printed, not exited on.
