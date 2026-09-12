@@ -1806,6 +1806,9 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
             .querySelectorAll(".html-mcp-highlight-badge").length > 0;
         """))
         browser.execute_script("""
+          const layout = document.querySelector(".layout");
+          layout.classList.add("sidebar-collapsed");
+          localStorage.setItem("htmlMcpSidebarCollapsed", "1");
           const doc = document.querySelector("#artifact-frame").contentDocument;
           doc.querySelector(".html-mcp-highlight-badge").click();
         """)
@@ -1816,11 +1819,13 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
           const listBox = list.getBoundingClientRect();
           const cardBox = card.getBoundingClientRect();
           return {expanded: card.querySelector(".comment-body") !== null,
+                  sidebarOpen: !document.querySelector(".layout").classList.contains("sidebar-collapsed"),
                   overhang: cardBox.bottom - listBox.bottom, above: listBox.top - cardBox.top,
                   tall: cardBox.height > listBox.height / 2};
         """, script_args=[f'[data-comment-id="{badged["id"]}"]'])
         assert from_badge["tall"], from_badge          # the case where centring falls short
         assert from_badge["expanded"], from_badge
+        assert from_badge["sidebarOpen"], from_badge
         assert from_badge["overhang"] <= 2, from_badge
         assert from_badge["above"] <= 2, from_badge
     finally:

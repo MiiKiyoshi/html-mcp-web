@@ -463,6 +463,11 @@ export function createComments(dependencies) {
   // and at the foot of the box when it sits at the foot of the list. Centred, a tall card
   // at the foot was cut off below and the reader scrolled after every open.
   function focusComment(commentId) {
+    const layout = $(".layout");
+    if (layout.classList.contains("sidebar-collapsed")) {
+      layout.classList.remove("sidebar-collapsed");
+      localStorage.setItem("htmlMcpSidebarCollapsed", "0");
+    }
     state.focusedCommentId = commentId;
     state.expanded.add(commentId);
     renderComments();
