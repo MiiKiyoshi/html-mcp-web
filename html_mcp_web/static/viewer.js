@@ -1009,7 +1009,16 @@ function renderHighlights() {
     Object.assign(badge.style, {
       left: `${Math.max(0, box.left - 21)}px`, top: `${Math.max(0, box.top - 1)}px`,
     });
-    badge.addEventListener("click", () => focusComment(comment.id));
+    badge.addEventListener("click", () => {
+      const layout = $(".layout");
+      if (!layout.classList.contains("sidebar-collapsed")
+        && state.focusedCommentId === comment.id) {
+        layout.classList.add("sidebar-collapsed");
+        localStorage.setItem("htmlMcpSidebarCollapsed", "1");
+        return;
+      }
+      focusComment(comment.id);
+    });
     return badge;
   };
   for (const comment of state.comments) {
