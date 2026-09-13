@@ -245,7 +245,7 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 /* A fixed width: grown to fill the row, the select stretched and shrank every time a
    button beside it came or went, and the row jumped under the reader's eye. */
 .filter-row select { flex: none; width: 96px; padding: 5px 8px; font-size: 12px; }
-/* Wakes the agent parked on wait_review; the dot shows one is parked right now. */
+/* Green reaches a parked waiter now; red queues the call for the next waiter. */
 .icon-btn {
   flex: none; display: inline-flex; align-items: center; gap: 4px;
   padding: 4px 6px; font-size: 12px; line-height: 1; white-space: nowrap;
@@ -257,7 +257,11 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .icon-btn .count:empty { display: none; }
 .icon-btn:disabled { opacity: .45; }
 .comment-pick { flex: none; margin: 0; width: 14px; height: 14px; cursor: pointer; }
-.agent-dot { width: 8px; height: 8px; border-radius: 50%; background: #3d9a52; }
+.agent-dot { width: 8px; height: 8px; border-radius: 50%; }
+#call-agent-btn.agent-ready { color: #327a43; border-color: #78ad83; background: #eef7ef; }
+#call-agent-btn.agent-ready .agent-dot { background: #3d9a52; }
+#call-agent-btn.agent-offline { color: #a6403b; border-color: #cf918c; background: #faeeee; }
+#call-agent-btn.agent-offline .agent-dot { background: #b44a43; }
 .comments-list { flex: 1; overflow: auto; padding: 10px; }
 
 .comment-card {
