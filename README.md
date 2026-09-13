@@ -13,9 +13,9 @@ Review an AI agent's HTML slides or report from the rendered page while Claude C
 You open the artifact in a local review page, select rendered text, and comment on it. The agent reads the comment over MCP, edits the HTML, and replies in the same thread. Because you point at the rendered page, you never hunt for the source, and saving a file refreshes only the artifact frame, so your scroll position and drafts stay put.
 
 ```
-you:    select text on the page -> write a comment
+you:    select text -> write a comment -> press Call agent
                   |
-agent:  read comments -> edit HTML -> reply or resolve
+agent:  read comments -> edit HTML -> reply
                   |
 you:    read the refreshed page -> comment again
 ```
@@ -72,7 +72,11 @@ cd examples
 # Start Claude Code or Codex here, with the html-mcp server enabled.
 ```
 
-Ask the agent to call `inspect()`. The review page opens at [http://localhost:8766](http://localhost:8766), with tabs for the neutral slides and report examples. Select some text, press **Comment**, and ask the agent to process the comments.
+Tell the agent:
+
+> Open the review page and listen for **Call agent**.
+
+The agent opens [http://localhost:8766](http://localhost:8766) and starts listening. The page has tabs for the neutral slides and report examples. Select some text, press **Comment**, then press **Call agent**; the agent receives the request and handles the comment.
 
 ## Set up your own artifact
 
@@ -82,7 +86,7 @@ In the directory that holds your artifact, create one project and pick a layout:
 html-mcp-web init --layout slides --main artifact.html
 ```
 
-Then ask the agent to call `inspect()`; the same session starts the review page at the configured port. `init` writes `.html-mcp-web.yaml`:
+Then tell the agent to open the review page and listen for **Call agent**; the same session starts the review page at the configured port. `init` writes `.html-mcp-web.yaml`:
 
 ```yaml
 artifacts:
@@ -107,9 +111,7 @@ A client without filesystem access can read the returned `resource_uri` instead.
 
 ## Use it
 
-Select text and press **Comment**; the anchor reattaches to the quote after edits. Use **+ Note** for a whole-artifact comment, the **Pages** tab to jump between pages, and the **Edit** link to fix your own message in place. **Resolve** closes a comment in one click. Then ask the agent:
-
-> Process the open html-mcp-web comments.
+Select text and press **Comment**; the anchor reattaches to the quote after edits. Use **+ Note** for a whole-artifact comment, the **Pages** tab to jump between pages, and the **Edit** link to fix your own message in place. Press **Call agent** when the comments are ready. **Resolve** closes a comment in one click.
 
 The agent reads the comments, edits the source, and replies to each one; the reviewer resolves
 the thread. The review page also flags anything off the page, clipped SVG drawings, and
