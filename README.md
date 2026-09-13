@@ -34,20 +34,7 @@ python -m venv .venv
 .venv/bin/pip install -e '.[mcp]'
 ```
 
-Clone it somewhere that stays: the install is editable, and the server reads its
-built-in templates from this checkout, so the directory is part of the running program
-rather than a build step. A clone in a scratch directory works until that directory goes.
-
-Before registering, ask the venv's own executable to build the server and name its
-tools:
-
-```bash
-.venv/bin/html-mcp --check
-```
-
-It prints the tool list when the install is whole, and the error it would otherwise die
-with at startup. A registration is only ever judged by whether a client connects, so a
-server that dies at import is found out after it is registered.
+Keep this checkout after installation; the installed commands and built-in templates use it.
 
 Register the MCP server once, using the executable inside the venv so it resolves without activation. Run this from the repository directory:
 
@@ -105,9 +92,7 @@ An optional top-level `guideline` names
 `~/.config/html-mcp-web/guidelines/<name>/GUIDELINE.md`. For example, use
 `html-mcp-web init --layout slides --main artifact.html --guideline eda-domain-meeting`,
 or add `guideline: eda-domain-meeting` to an existing config. The file must exist.
-`inspect()` returns its resolved name and path, not its text. An agent reads that file once
-when the user mentions the guideline or the configured guideline is needed for authoring.
-A client without filesystem access can read the returned `resource_uri` instead.
+The agent uses the configured guideline when writing your artifact.
 
 ## Use it
 
@@ -119,14 +104,7 @@ overlapping labels at the artifact's fixed size, and reports them to the agent s
 them. Comments are stored in `.html-mcp-web/comments/<artifact>.json`, which holds selected
 text, so whether to track it in git is a privacy choice.
 
-The first `inspect()` call discovers artifact paths and configured project references. The
-server's initialization instructions carry the shared workflow once per connection. Later
-`inspect(artifact=<id>)` calls return compact revision, build, comment, and layout-count
-state. Pass `page=<number>` only when that page's layout errors and available-room regions
-are needed. For a templated artifact, pass `docs=True` once before authoring to read its
-content format; later state checks omit it.
-
-At the start of every new MCP connection, including after a client or server restart, the agent calls `wait_review()` once and starts the returned script exactly once using its instructions. It does not poll, start a duplicate, or assume an earlier waiter survived. An unacknowledged **Call agent** press stays queued and wakes the reconnected waiter.
+If the agent restarts or stops receiving calls, ask it to listen for **Call agent** again. Calls made while it is disconnected stay queued.
 
 ## Templates
 
