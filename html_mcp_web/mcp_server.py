@@ -92,7 +92,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "resource_uri. Use inspect(artifact=..., page=...) for current state. "
             "Read list_comments(unanswered=True), then read_comments only for needed IDs; reuse unchanged "
             "threads. Within the user's editing scope, edit, render affected pages, and reply in the "
-            "threads; the reviewer resolves them. For review notifications, call wait_review() on each "
+            "threads; the reviewer resolves them. For review notifications, call listen() on each "
             "new connection and follow how; reuse its process, do not poll or duplicate it."
         ),
     )
@@ -298,8 +298,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         return await client.request_json("GET", f"/artifacts/{artifact}/space?{urlencode(query)}", timeout=75.0)
 
     @mcp.tool()
-    async def wait_review(ctx: Context) -> dict[str, Any]:
-        """Return a script and client-specific instructions for waiting on Call agent.
+    async def listen(ctx: Context) -> dict[str, Any]:
+        """Return a script and client-specific instructions for listening for Call agent.
 
         Run the returned script using the how field, selected for the connected
         client. Reuse the process after handling each review event.
