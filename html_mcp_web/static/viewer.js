@@ -1607,6 +1607,22 @@ function attachSplitResize() {
     grip.setAttribute("aria-orientation", stacked.matches ? "horizontal" : "vertical");
     requestAnimationFrame(finish);
   };
+  // With the panes stacked, the comments' bar under them changes the height the split
+  // divides, and a ratio kept through that drag carried the split's bar up the screen
+  // with it. The drag holds the bar where it was by moving the ratio instead.
+  state.split = {
+    holdable: () => stacked.matches && $(".layout").classList.contains("view-split"),
+    centerY: () => {
+      const box = grip.getBoundingClientRect();
+      return box.top + box.height / 2;
+    },
+    holdAt: (y) => {
+      const top = $("#artifact-pane").getBoundingClientRect().top;
+      const rows = workspace.getBoundingClientRect().bottom - top - 10;
+      apply((y - top - 5) / Math.max(1, rows));
+    },
+    keep: () => localStorage.setItem("htmlMcpSplitRatio", String(ratio)),
+  };
   apply(ratio);
   orientation();
   stacked.addEventListener("change", orientation);
@@ -1780,12 +1796,15 @@ function attachControls() {
     // One height per frame is all a drag can show, and the height is kept once, on release.
     // The edge the height is measured from cannot move during the drag, so it is read once.
     const bottom = layout.getBoundingClientRect().bottom;
+    // A split stacked above keeps its bar where it is on the screen while this one moves.
+    const splitY = state.split.holdable() ? state.split.centerY() : null;
     let pointerY = null;
     let frame = null;
     let height = null;
     const apply = () => {
       frame = null;
       height = setPanelHeight(bottom - pointerY);
+      if (splitY !== null) state.split.holdAt(splitY);
     };
     const move = (moved) => {
       pointerY = moved.clientY;
@@ -1793,7 +1812,7 @@ function attachControls() {
     };
     const done = (ended) => {
       if (frame !== null) cancelAnimationFrame(frame);
-      if (pointerY !== null) height = setPanelHeight(bottom - pointerY);
+      if (pointerY !== null) apply();
       if (ended?.cancelable) ended.preventDefault();
       if (pointerY !== null) state.panelDraggedAt = performance.now();
       state.draggingPanel = false;
@@ -1801,6 +1820,7 @@ function attachControls() {
       grip.removeEventListener("pointerup", done);
       grip.removeEventListener("pointercancel", done);
       if (height !== null) localStorage.setItem("htmlMcpPanelHeight", String(height));
+      if (splitY !== null) state.split.keep();
       updatePageScale();
       scheduleHighlights();
       scheduleLayoutCheck();
