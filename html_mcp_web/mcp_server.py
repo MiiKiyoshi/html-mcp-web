@@ -14,6 +14,7 @@ from .mcp_contract import (
     agent_comment_summary,
     is_after,
     is_unanswered,
+    parse_entry_edits,
     parse_replies,
 )
 
@@ -212,10 +213,18 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "elsewhere is just a colon. Written as prose, as it is."))] = None,
         edited_files: Annotated[list[str] | None, Field(description="Project-relative paths edited for these comments; recorded on each thread entry.")] = None,
         replies_file: str | None = None,
+        edits_text: Annotated[str | None, Field(description=(
+            "Rewrites of your own earlier entries, as one text: each starts at a line head with "
+            "the entry id, @, the comment's updated stamp as read, and a colon "
+            "('e-1a2b3c4d@2026-01-01T00:00:00+00:00: ') and runs to the next such head. "
+            "Refused if the thread changed since."))] = None,
     ) -> dict[str, Any]:
-        """Reply without changing status. Use replies_text or a saved draft's replies_file, exclusively."""
-        if (replies_text is None) == (replies_file is None):
-            raise ValueError("provide exactly one of replies_text or replies_file")
+        """Reply without changing status, or rewrite your own entries. Use replies_text and/or
+        edits_text, or a saved draft's replies_file (which carries both) on its own."""
+        if replies_file is not None and (replies_text is not None or edits_text is not None):
+            raise ValueError("replies_file carries replies and edits itself; give it alone")
+        if replies_file is None and replies_text is None and edits_text is None:
+            raise ValueError("provide replies_text, edits_text or replies_file")
         if replies_file is not None:
             client = binding.require_client()
             result = await client.request_json("POST", f"/artifacts/{artifact}/comments/update", {
@@ -223,10 +232,17 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 **({"edited_files": edited_files} if edited_files is not None else {}),
             })
             return {"updated": result["updated"], **({"notes": [result["note"]]} if "note" in result else {})}
-        replies = parse_replies(replies_text)
         client = binding.require_client()
         updated: list[dict[str, Any]] = []
         notes: list[str] = []
+        if edits_text is not None:
+            rewrites = parse_entry_edits(edits_text)
+            result = await client.request_json("POST", f"/artifacts/{artifact}/comments/update", {
+                "entry_edits": [{"entry": entry_id, "updated": stamp, "text": body}
+                                for entry_id, stamp, body in rewrites],
+            })
+            updated.extend(result["updated"])
+        replies = parse_replies(replies_text) if replies_text is not None else []
         for comment_id, message in replies:
             result = await client.request_json("POST", f"/artifacts/{artifact}/comments/update", {
                 "comment_ids": [comment_id],

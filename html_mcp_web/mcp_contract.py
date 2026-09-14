@@ -28,9 +28,11 @@ def agent_anchor(anchor: dict[str, Any]) -> dict[str, Any]:
 def agent_comment(comment: dict[str, Any]) -> dict[str, Any]:
     thread = []
     for entry in comment["thread"]:
-        shaped = {"author": entry["author"], "at": entry["at"], "text": entry["text"]}
+        shaped = {"id": entry["id"], "author": entry["author"], "at": entry["at"], "text": entry["text"]}
         if "edits" in entry:
             shaped["edited_files"] = entry["edits"]
+        if "updated_at" in entry:
+            shaped["updated_at"] = entry["updated_at"]
         thread.append(shaped)
     return {
         "id": comment["id"],
@@ -98,6 +100,31 @@ def parse_replies(text: str) -> list[tuple[str, str]]:
     if len(set(ids)) != len(ids):
         raise ValueError("each comment appears at most once in replies_text")
     return replies
+
+
+EDIT_HEAD = re.compile(r"^(e-[0-9a-f]{8})@(\S+): ", re.MULTILINE)
+
+
+def parse_entry_edits(text: str) -> list[tuple[str, str, str]]:
+    """Rewrites of the agent's own entries, written as one text: each starts at a line
+    head with the entry id, an @, the comment's updated stamp as read, and a colon
+    ('e-1a2b3c4d@2026-...: '), and runs to the next such head. The stamp is the check
+    that the thread has not moved on since it was read."""
+    heads = list(EDIT_HEAD.finditer(text))
+    if not heads:
+        raise ValueError("edits_text holds no edit: each starts at a line head with '<entry_id>@<updated>: '")
+    if text[:heads[0].start()].strip():
+        raise ValueError("edits_text has text before the first '<entry_id>@<updated>: ' line head")
+    found: list[tuple[str, str, str]] = []
+    for index, head in enumerate(heads):
+        end = heads[index + 1].start() if index + 1 < len(heads) else len(text)
+        body = text[head.end():end].strip()
+        if not body:
+            raise ValueError(f"the new text for {head.group(1)} is empty")
+        found.append((head.group(1), head.group(2), body))
+    if len({entry_id for entry_id, _, _ in found}) != len(found):
+        raise ValueError("each entry appears at most once in edits_text")
+    return found
 
 
 def is_unanswered(comment: dict[str, Any]) -> bool:
