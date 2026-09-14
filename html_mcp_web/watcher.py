@@ -133,11 +133,6 @@ class HtmlFileHandler(FileSystemEventHandler):
 class Watcher:
     # Counting no further than this keeps a runaway tree from turning a census into a wait.
     CENSUS_CAP = 20000
-    # A watch goes on every directory, and the limit belongs to the login rather than to
-    # this server, so a tree that holds no artifact content can take thousands of watches
-    # from every other session without anyone noticing until one of them has none left.
-    # Past this many, the count is said out loud at startup instead of at the ceiling.
-    LOUD_WATCH_COUNT = 5000
 
     def __init__(
         self,
@@ -145,15 +140,33 @@ class Watcher:
         watch_patterns: list[str],
         ignore_patterns: list[str],
         on_change: Callable[[str], Coroutine[Any, Any, None]],
+        roots: list[Path],
         debounce_seconds: float = 0.25,
     ):
-        self.watch_dir = watch_dir
+        self.watch_dir = watch_dir.resolve()
         self.watch_patterns = watch_patterns
         self.ignore_patterns = ignore_patterns
         self.on_change = on_change
+        # The directories that hold artifact content, watched recursively; every other
+        # tree under the project is never enumerated, so what it costs in inotify watches
+        # and in a cold walk of the disk is never spent here.
+        self.roots = self._merge_roots(roots)
         self.debounce_seconds = debounce_seconds
         self.observer: Any = None
         self.handler: HtmlFileHandler | None = None
+
+    def _merge_roots(self, roots: list[Path]) -> list[Path]:
+        """Roots below the project, an ancestor standing in for the roots below it.
+
+        The project root itself is never one: an artifact kept at the top level is
+        covered by the flat watch, and watching the whole project recursively for it
+        would walk every unrelated tree beside it."""
+        inside = sorted({root.resolve() for root in roots if self.watch_dir in root.resolve().parents})
+        merged: list[Path] = []
+        for root in inside:
+            if not any(kept == root or kept in root.parents for kept in merged):
+                merged.append(root)
+        return merged
 
     def start(self, loop: asyncio.AbstractEventLoop) -> None:
         self.handler = HtmlFileHandler(
@@ -166,18 +179,16 @@ class Watcher:
             self._watch_new_directory,
         )
         self.observer = Observer()
-        # One recursive watch on the project root costs an inotify watch per directory
-        # underneath it, ignored trees included; a large ignored tree (checkpoints, a
-        # baseline dump) exhausts the per-user limit. The root is watched flat and each
-        # top-level entry that is not ignored is watched on its own, so ignoring a top-level
-        # directory removes its whole tree from inotify.
+        # A watch goes on every directory under a recursive root, and the limit belongs to
+        # the login rather than to this server. Only the roots that hold artifact content
+        # are watched recursively; the project root is watched flat, for the config file,
+        # for artifacts kept at the top level, and for a root that appears later.
         try:
             self.observer.schedule(self.handler, str(self.watch_dir), recursive=False)
-            for entry in sorted(self.watch_dir.iterdir()):
-                if self._watchable(entry):
-                    self.observer.schedule(self.handler, str(entry), recursive=True)
+            for root in self.roots:
+                if root.is_dir():
+                    self.observer.schedule(self.handler, str(root), recursive=True)
             self.observer.start()
-            self._report_watch_cost()
         except BaseException as error:
             # A partially scheduled observer keeps its inotify descriptor, and its
             # watches, until it is stopped; leaking it on every failed start is how a
@@ -208,34 +219,15 @@ class Watcher:
         return total
 
     def _census(self) -> list[tuple[int, str]]:
-        """How many directories each watched top-level entry holds, dearest first."""
-        counts = [(self._count_directories(entry, self.CENSUS_CAP), entry.name)
-                  for entry in sorted(self.watch_dir.iterdir()) if self._watchable(entry)]
+        """How many directories each watched root holds, dearest first."""
+        counts = [(self._count_directories(root, self.CENSUS_CAP), root.relative_to(self.watch_dir).as_posix())
+                  for root in self.roots if root.is_dir()]
         counts.sort(reverse=True)
         return counts
 
     def _dearest(self, counts: list[tuple[int, str]]) -> str:
         return ", ".join(f"{name} {'over ' if total >= self.CENSUS_CAP else ''}{total}"
                          for total, name in counts[:5])
-
-    def _report_watch_cost(self) -> None:
-        """Say what this project costs when it is a lot.
-
-        The limit is only met at the moment a watch cannot be taken, and the session that
-        meets it is rarely the one that spent them. A project that takes thousands says so
-        while it still works, so the reader can put the trees that hold no artifact content
-        into ignore before another server has none left.
-        """
-        counts = self._census()
-        total = sum(count for count, _ in counts) + 1
-        if total < self.LOUD_WATCH_COUNT:
-            return
-        logger.warning(
-            "%s is watching %d directories, one inotify watch each, and the limit is shared "
-            "by every session of this login. Directories by cost: %s. Trees that hold no "
-            "artifact content belong in ignore in .html-mcp-web.yaml (their top-level name "
-            "is enough).",
-            self.watch_dir, total, self._dearest(counts))
 
     def _watch_limit_message(self) -> str:
         """What the reader has to know to get past a used-up limit: the watch is one per
@@ -245,37 +237,23 @@ class Watcher:
         listed = self._dearest(counts)
         return (
             "the inotify watch limit is used up, so the project cannot be watched. One watch "
-            f"goes on every directory being watched ({sum(total for total, _ in counts) + 1} here) "
+            f"goes on every directory under the artifact directories ({sum(total for total, _ in counts) + 1} here) "
             "and the limit is shared by every session of this login, not per project. Directories "
-            f"by cost: {listed}. Put the trees that hold no artifact content into ignore in "
-            ".html-mcp-web.yaml (their top-level name is enough), or raise "
+            f"by cost: {listed}. Move unrelated trees out of the artifact directories, or raise "
             "fs.inotify.max_user_watches."
         )
 
-    def _watchable(self, entry: Path) -> bool:
-        """A top-level directory whose tree this watcher takes inotify watches for.
-
-        A symlink is left out: an event under it carries a path that resolves outside the
-        project, which the handler drops, so watching through one spends the per-user limit
-        on events that can never be acted on.
-        """
-        if entry.is_symlink() or not entry.is_dir() or entry.name == ".html-mcp-web":
-            return False
-        # The name, not the resolved path: a link into another repository has no form
-        # relative to the project, and matching by name is what the config's list means.
-        return self.handler is not None and not self.handler.ignores(entry.name)
-
     def _watch_new_directory(self, path: str) -> None:
-        """A directory that appeared under the root after the watch began.
+        """A root that appeared under the project after the watch began.
 
-        The root is watched flat so that ignoring a top-level directory frees its whole
-        tree, and that means a directory created later gets no watch of its own: files
-        written into it would never reach the artifact until the server restarted.
+        The project root is watched flat, so a root created later (an artifact directory
+        written by a build) gets no watch of its own until it is scheduled here.
         """
         entry = Path(path)
-        if self.observer is None or entry.parent.resolve() != self.watch_dir.resolve():
+        if self.observer is None or entry.parent.resolve() != self.watch_dir:
             return
-        if not self._watchable(entry):
+        entry = entry.resolve()
+        if entry not in self.roots or entry.is_symlink():
             return
         try:
             self.observer.schedule(self.handler, str(entry), recursive=True)

@@ -346,7 +346,12 @@ class HtmlReviewServer:
         return runtimes
 
     def _create_watcher(self, config: Config) -> Watcher:
-        return Watcher(self.project_dir, config.watch, config.ignore, self.on_project_change)
+        # Only the directories that hold artifact files are watched recursively; the
+        # templates live outside the project, and the rest of the project is not walked.
+        roots = [runtime.main_file.parent for runtime in self.artifacts.values()]
+        roots += [runtime.content_file.parent for runtime in self.artifacts.values()
+                  if runtime.content_file is not None]
+        return Watcher(self.project_dir, config.watch, config.ignore, self.on_project_change, roots)
 
     def project_state(self) -> dict[str, Any]:
         guideline = get_guideline_file(self.config)

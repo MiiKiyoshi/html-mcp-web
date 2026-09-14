@@ -1,5 +1,5 @@
 import asyncio
-import logging
+import time
 from pathlib import Path
 
 from html_mcp_web.watcher import HtmlFileHandler, Watcher
@@ -32,39 +32,68 @@ def test_config_triggers_reload_and_comment_storage_does_not(tmp_path: Path) -> 
     assert not value._should_process(str(tmp_path / ".html-mcp-web" / "comments.json"))
 
 
-def test_a_project_that_takes_many_watches_says_so(tmp_path: Path, caplog) -> None:
-    """A watch goes on every directory and the limit belongs to the login, so a tree that
-    holds no artifact content spends other sessions' watches. The limit itself is only met
-    at the moment a watch cannot be taken, and by a session that spent none of them, so the
-    count is said while the project still works."""
+def _watches(watcher: Watcher) -> set[tuple[str, bool]]:
+    return {(watch.path, watch.is_recursive) for watch in watcher.observer._watches}
+
+
+def _started(tmp_path: Path, roots: list[Path]) -> Watcher:
+    watcher = Watcher(tmp_path, ["*.html"], [], _unused_change, roots)
+    watcher.start(asyncio.new_event_loop())
+    return watcher
+
+
+def test_only_artifact_roots_are_watched_and_the_rest_is_never_walked(tmp_path: Path) -> None:
+    """A watch goes on every directory under a recursive root and the limit belongs to the
+    login, and a cold walk of a big tree takes longer than the server has to start. Trees
+    that hold no artifact are neither scheduled nor enumerated."""
     (tmp_path / "html").mkdir()
-    for number in range(12):
-        (tmp_path / "vendor" / f"pkg{number}").mkdir(parents=True)
-    watcher = Watcher(tmp_path, ["*.html"], [], _unused_change)
-    watcher.LOUD_WATCH_COUNT = 10
-    loop = asyncio.new_event_loop()
+    for number in range(300):
+        (tmp_path / "sites" / f"run{number}" / "out").mkdir(parents=True)
+    watcher = _started(tmp_path, [tmp_path / "html"])
     try:
-        with caplog.at_level(logging.WARNING):
-            watcher.start(loop)
+        assert _watches(watcher) == {(str(tmp_path), False), (str(tmp_path / "html"), True)}
+        assert watcher._census() == [(1, "html")]
     finally:
         watcher.stop()
-        loop.close()
-    said = "\n".join(record.getMessage() for record in caplog.records)
-    assert "watching 15 directories" in said, said
-    assert "vendor 13" in said and "ignore" in said, said
 
-    # A project of the ordinary size says nothing: a warning every reader learns to skip
-    # is worth less than the silence it replaces.
-    quiet = Watcher(tmp_path, ["*.html"], [], _unused_change)
-    caplog.clear()
-    loop = asyncio.new_event_loop()
+
+def test_roots_are_merged_and_confined_to_the_project(tmp_path: Path) -> None:
+    for name in ("html", "html/nested", "src"):
+        (tmp_path / name).mkdir()
+    watcher = Watcher(tmp_path, ["*.html"], [], _unused_change,
+                      [tmp_path / "html" / "nested", tmp_path / "html", tmp_path / "src",
+                       tmp_path.parent / "elsewhere"])
+    assert watcher.roots == [tmp_path / "html", tmp_path / "src"]
+
+
+def test_an_artifact_at_the_top_level_is_watched_flat_only(tmp_path: Path) -> None:
+    """The project root is never a recursive root: an artifact kept there is covered by
+    the flat watch, and a huge tree beside it is not walked for it."""
+    (tmp_path / "slides.html").write_text("<html></html>", encoding="utf-8")
+    for number in range(300):
+        (tmp_path / "runs" / f"run{number}" / "out").mkdir(parents=True)
+    (tmp_path / "docs").mkdir()
+    at_root = _started(tmp_path, [tmp_path, tmp_path / "docs"])
     try:
-        with caplog.at_level(logging.WARNING):
-            quiet.start(loop)
+        assert at_root.roots == [tmp_path / "docs"]
+        assert _watches(at_root) == {(str(tmp_path), False), (str(tmp_path / "docs"), True)}
+        assert not [watch for watch in _watches(at_root) if watch[1] and watch[0] == str(tmp_path)]
     finally:
-        quiet.stop()
-        loop.close()
-    assert caplog.records == []
+        at_root.stop()
+
+
+def test_a_root_that_appears_later_is_watched(tmp_path: Path) -> None:
+    watcher = _started(tmp_path, [tmp_path / "html"])
+    try:
+        assert _watches(watcher) == {(str(tmp_path), False)}
+        (tmp_path / "html").mkdir()
+        (tmp_path / "other").mkdir()
+        deadline = time.monotonic() + 3
+        while _watches(watcher) != {(str(tmp_path), False), (str(tmp_path / "html"), True)}:
+            assert time.monotonic() < deadline, _watches(watcher)
+            time.sleep(0.05)
+    finally:
+        watcher.stop()
 
 
 async def _unused_change(path: str) -> None:
