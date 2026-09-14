@@ -28,7 +28,10 @@ def agent_anchor(anchor: dict[str, Any]) -> dict[str, Any]:
 def agent_comment(comment: dict[str, Any]) -> dict[str, Any]:
     thread = []
     for entry in comment["thread"]:
-        shaped = {"id": entry["id"], "author": entry["author"], "at": entry["at"], "text": entry["text"]}
+        shaped = {"author": entry["author"], "at": entry["at"], "text": entry["text"]}
+        # Only the agent's own entries can be rewritten, so only those carry the id to name them by.
+        if entry["author"] == "agent":
+            shaped = {"id": entry["id"], **shaped}
         if "edits" in entry:
             shaped["edited_files"] = entry["edits"]
         if "updated_at" in entry:
@@ -39,6 +42,8 @@ def agent_comment(comment: dict[str, Any]) -> dict[str, Any]:
         "anchor": agent_anchor(comment["anchor"]),
         "thread": thread,
         "status": comment["status"],
+        # The stamp a rewrite of an entry must quote; it moves with every change to the thread.
+        "updated": comment["updated"],
     }
 
 
@@ -102,27 +107,27 @@ def parse_replies(text: str) -> list[tuple[str, str]]:
     return replies
 
 
-EDIT_HEAD = re.compile(r"^(e-[0-9a-f]{8})@(\S+): ", re.MULTILINE)
+EDIT_HEAD = re.compile(r"^(c-[0-9a-f]{8})/(e-[0-9a-f]{8})@(\S+): ", re.MULTILINE)
 
 
-def parse_entry_edits(text: str) -> list[tuple[str, str, str]]:
+def parse_entry_edits(text: str) -> list[tuple[str, str, str, str]]:
     """Rewrites of the agent's own entries, written as one text: each starts at a line
-    head with the entry id, an @, the comment's updated stamp as read, and a colon
-    ('e-1a2b3c4d@2026-...: '), and runs to the next such head. The stamp is the check
-    that the thread has not moved on since it was read."""
+    head with the comment id, a slash, the entry id, an @, the comment's updated stamp as
+    read, and a colon ('c-1a2b3c4d/e-5e6f7a8b@2026-...: '), and runs to the next such
+    head. The stamp is the check that the thread has not moved on since it was read."""
     heads = list(EDIT_HEAD.finditer(text))
     if not heads:
-        raise ValueError("edits_text holds no edit: each starts at a line head with '<entry_id>@<updated>: '")
+        raise ValueError("edits_text holds no edit: each starts at a line head with '<comment_id>/<entry_id>@<updated>: '")
     if text[:heads[0].start()].strip():
-        raise ValueError("edits_text has text before the first '<entry_id>@<updated>: ' line head")
-    found: list[tuple[str, str, str]] = []
+        raise ValueError("edits_text has text before the first '<comment_id>/<entry_id>@<updated>: ' line head")
+    found: list[tuple[str, str, str, str]] = []
     for index, head in enumerate(heads):
         end = heads[index + 1].start() if index + 1 < len(heads) else len(text)
         body = text[head.end():end].strip()
         if not body:
-            raise ValueError(f"the new text for {head.group(1)} is empty")
-        found.append((head.group(1), head.group(2), body))
-    if len({entry_id for entry_id, _, _ in found}) != len(found):
+            raise ValueError(f"the new text for {head.group(2)} is empty")
+        found.append((head.group(1), head.group(2), head.group(3), body))
+    if len({entry_id for _, entry_id, _, _ in found}) != len(found):
         raise ValueError("each entry appears at most once in edits_text")
     return found
 
