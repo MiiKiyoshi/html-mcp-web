@@ -1032,6 +1032,8 @@ class HtmlReviewServer:
                 raise ValueError("status must be open, resolved or reference")
             if author == "agent" and status == "resolved":
                 raise ValueError(AGENT_CLOSE_REFUSED)
+            if author == "agent" and status == "reference":
+                raise ValueError(AGENT_REFERENCE_REFUSED)
             if edited_files is not None and (
                 not isinstance(edited_files, list) or not all(isinstance(value, str) for value in edited_files)
             ):
@@ -1046,8 +1048,6 @@ class HtmlReviewServer:
         except KeyError as error:
             raise web.HTTPNotFound(text=str(error)) from error
         except (TypeError, ValueError) as error:
-            if author == "agent" and status == "reference":
-                raise ValueError(AGENT_REFERENCE_REFUSED)
             raise web.HTTPBadRequest(text=str(error)) from error
         result: dict[str, Any] = {
             "updated": [
@@ -1255,6 +1255,7 @@ class HtmlReviewServer:
         app.router.add_post(f"{base}/comments/{{comment_id}}/reply", self.reply_comment)
         app.router.add_post(f"{base}/comments/{{comment_id}}/resolve", self.resolve_comment)
         app.router.add_post(f"{base}/comments/{{comment_id}}/reopen", self.reopen_comment)
+        app.router.add_post(f"{base}/comments/{{comment_id}}/reference", self.reference_comment)
         app.router.add_post(f"{base}/comments/{{comment_id}}/edit", self.edit_comment_entry)
         app.router.add_delete(f"{base}/comments/{{comment_id}}", self.delete_comment)
         app.router.add_post("/review-request", self.request_review)
@@ -1273,7 +1274,6 @@ class HtmlReviewServer:
         # once and finds the port closed.
         self.closing = True
         self.review_called.set()
-        app.router.add_post(f"{base}/comments/{{comment_id}}/reference", self.reference_comment)
 
 
 def run_server(config: Config, host: str = "127.0.0.1") -> None:
