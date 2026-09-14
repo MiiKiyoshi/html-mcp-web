@@ -86,7 +86,7 @@ ignore: []
 port: 8765
 ```
 
-`artifacts` maps an id to its label, `layout` (`slides` is 16:9, `report` is A4), and `main` file. Its body contains `main.pages`, with one `section.page` per printed page. `watch` refreshes on save, `ignore` is checked first, and `port` is the local address. Agent sessions that find the same config share one server, comments, and revisions.
+`artifacts` maps an id to its label, `layout` (`slides` is 16:9, `report` is A4), and `main` file. Its body contains `main.pages`, with one `section.page` per printed page. Only the directories that hold artifact files are watched, together with the project root for this config; within them `watch` refreshes on save, `ignore` is checked first, and `port` is the local address. Agent sessions that find the same config share one server, comments, and revisions.
 
 An optional top-level `guideline` names
 `~/.config/html-mcp-web/guidelines/<name>/GUIDELINE.md`. For example, use

@@ -735,7 +735,7 @@ def test_a_formula_counts_as_one_obstacle_when_room_is_measured():
     assert room["1"]  # and the room under them is still reported
 
 
-def started_watcher(root: Path, ignore: list[str]):
+def started_watcher(root: Path, roots: list[Path]):
     """A watcher started against a stand-in observer, with the paths it asked to watch."""
     import html_mcp_web.watcher as module
     from html_mcp_web.watcher import Watcher
@@ -752,7 +752,7 @@ def started_watcher(root: Path, ignore: list[str]):
     async def on_change(path):
         pass
 
-    watcher = Watcher(root, ["*.html"], ignore, on_change)
+    watcher = Watcher(root, ["*.html"], [], on_change, roots)
     original = module.Observer
     module.Observer = FakeObserver
     try:
@@ -762,16 +762,17 @@ def started_watcher(root: Path, ignore: list[str]):
     return watcher, scheduled
 
 
-def test_watcher_skips_ignored_top_level_directories(tmp_path):
+def test_watcher_schedules_only_the_artifact_roots(tmp_path):
     (tmp_path / "docs").mkdir()
     (tmp_path / "baselines" / "run1").mkdir(parents=True)
     (tmp_path / ".html-mcp-web").mkdir()
     outside = tmp_path.parent / (tmp_path.name + "-outside")
     outside.mkdir()
-    # Not in the ignore list: an event under a link resolves outside the project and the
-    # handler drops it, so watching through one spends the limit for nothing.
+    # A tree that holds no artifact, and a link that resolves outside the project, are
+    # neither scheduled nor walked: the root is watched flat, the artifact directory alone
+    # recursively.
     (tmp_path / "engine").symlink_to(outside)
-    watcher, scheduled = started_watcher(tmp_path, ["baselines"])
+    watcher, scheduled = started_watcher(tmp_path, [tmp_path / "docs"])
     assert scheduled == [(tmp_path.name, False), ("docs", True)]
 
 
@@ -800,7 +801,7 @@ def test_watcher_names_the_costly_directories_when_the_limit_is_used_up(tmp_path
     async def on_change(path):
         pass
 
-    watcher = Watcher(tmp_path, ["*.html"], [], on_change)
+    watcher = Watcher(tmp_path, ["*.html"], [], on_change, [tmp_path / "baselines", tmp_path / "docs"])
     original = module.Observer
     module.Observer = FullObserver
     try:
@@ -811,7 +812,7 @@ def test_watcher_names_the_costly_directories_when_the_limit_is_used_up(tmp_path
     message = str(failure.value)
     assert "inotify watch limit is used up" in message
     assert "baselines 5" in message  # the tree that costs the most, counted
-    assert "ignore" in message and "max_user_watches" in message
+    assert "artifact directories" in message and "max_user_watches" in message
     assert watcher.observer is None  # the partly scheduled observer was dropped
 
 
@@ -820,7 +821,7 @@ def test_watcher_reports_deletions_and_both_ends_of_a_rename(tmp_path):
     measured from the old file stayed on offer as current."""
     from watchdog.events import FileDeletedEvent, FileMovedEvent
 
-    watcher, _ = started_watcher(tmp_path, [])
+    watcher, _ = started_watcher(tmp_path, [tmp_path])
     seen: list[str] = []
     watcher.handler._schedule = lambda path: seen.append(Path(path).name)
 
@@ -831,20 +832,20 @@ def test_watcher_reports_deletions_and_both_ends_of_a_rename(tmp_path):
     assert seen == ["slides.html", "old.html", "new.html"]
 
 
-def test_watcher_follows_a_directory_created_after_it_started(tmp_path):
-    """The root is watched flat so that ignoring a top-level directory frees its tree, and
-    that leaves a directory made later without a watch of its own."""
+def test_watcher_follows_an_artifact_root_created_after_it_started(tmp_path):
+    """The project root is watched flat, so an artifact directory made later (by a build,
+    say) gets its watch only when it appears."""
     from watchdog.events import DirCreatedEvent
 
     (tmp_path / "docs").mkdir()
-    watcher, scheduled = started_watcher(tmp_path, ["baselines"])
+    watcher, scheduled = started_watcher(tmp_path, [tmp_path / "docs", tmp_path / "figs"])
     assert scheduled == [(tmp_path.name, False), ("docs", True)]
 
     (tmp_path / "figs").mkdir()
     watcher.handler.on_created(DirCreatedEvent(str(tmp_path / "figs")))
     assert scheduled[-1] == ("figs", True)
 
-    # A directory the config leaves out stays out, however it arrives.
+    # A directory that holds no artifact stays out, however it arrives.
     (tmp_path / "baselines").mkdir()
     watcher.handler.on_created(DirCreatedEvent(str(tmp_path / "baselines")))
     # A directory deeper in the tree is already covered by its parent's recursive watch.
