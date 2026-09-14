@@ -422,9 +422,10 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
 /* Shown only where the comments sit under the artifact, and dragged to divide the two.
    A finger is wider than the bar it aims at, and a touch that fell short of the bar hit
    the tab row underneath, so the band that answers a touch is 38px while what is drawn in
-   it is the 4px bar. The band keeps the sidebar's own colour: painted a shade apart, its
-   edge read as a second strip laid over the bar, and the bar, centred in the painted part
-   rather than in the band, sat low in it. */
+   it is a bar as thin as the split's, 3px, centred in the band. The band keeps the
+   sidebar's own colour: painted a shade apart, its edge read as a second strip laid over
+   the bar, and the bar, centred in the painted part rather than in the band, sat low in
+   it. */
 .sidebar-grip {
   display: none;
   flex: 0 0 auto;
@@ -438,8 +439,8 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   content: "";
   display: block;
   width: 42px;
-  height: 4px;
-  margin: 17px auto 0;
+  height: 3px;
+  margin: 17.5px auto 0;
   border-radius: 2px;
   background: var(--line);
 }

@@ -1320,6 +1320,48 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
         assert upright["paneWidth"] >= upright["width"] - 2
         assert upright["sideTop"] >= upright["paneBottom"] - 2
 
+        # Upright, the split stacks its panes above the comments, and the comments' bar
+        # changes the height those panes share: the split's own bar was carried up the
+        # screen with it. It stays where it was, and the ratio that keeps it there is what
+        # the split remembers.
+        browser.execute_script('document.querySelector(".view-tab[data-view=split]").click()')
+        wait_until(lambda: browser.execute_script(
+            'return getComputedStyle(document.querySelector("#split-grip")).display') != "none")
+        split_center = '''
+          const r = document.querySelector("#split-grip").getBoundingClientRect();
+          return r.top + r.height / 2;'''
+        split_ratio = 'return document.querySelector("#split-grip").getAttribute("aria-valuenow")'
+        held = browser.execute_script(split_center)
+        ratio_before = browser.execute_script(split_ratio)
+        side_before = browser.execute_script(
+            'return document.querySelector("#sidebar").getBoundingClientRect().height')
+        box = browser.execute_script(
+            'const r = document.querySelector("#sidebar-grip").getBoundingClientRect();'
+            'return {x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2)};')
+        drag = browser.actions.sequence("pointer", "mouse", {"pointerType": "mouse"})
+        drag.pointer_move(box["x"], box["y"]).pointer_down()
+        for step in range(1, 5):
+            drag.pointer_move(box["x"], box["y"] - 40 * step, duration=30)
+        drag.pointer_up().perform()
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#sidebar").getBoundingClientRect().height') > side_before + 120)
+        assert abs(browser.execute_script(split_center) - held) <= 2
+        ratio_after = browser.execute_script(split_ratio)
+        assert ratio_after != ratio_before
+        stored = browser.execute_script('return Number(localStorage.getItem("htmlMcpSplitRatio"))')
+        assert round(stored * 100) == int(ratio_after)
+        # The two bars are drawn alike, and the band around the comments' bar still answers
+        # a finger.
+        bars = browser.execute_script('''
+          const split = getComputedStyle(document.querySelector("#split-grip"), "::after");
+          const grip = document.querySelector("#sidebar-grip");
+          return {split: split.height, side: getComputedStyle(grip, "::before").height,
+                  band: grip.getBoundingClientRect().height};
+        ''')
+        assert bars["split"] == bars["side"] == "3px", bars
+        assert bars["band"] >= 36, bars
+        browser.execute_script('document.querySelector(".view-tab[data-view=preview]").click()')
+
         # A phone that enlarges text on its own doubled the labels inside the drawings while
         # the drawings kept their size, which put the numbers off the wires they name. The
         # page is drawn at one size and asks to keep it, down to the text in an svg.
