@@ -84,7 +84,37 @@ class PageAnchor:
         return {"kind": self.kind, "number": self.number, "title": self.title}
 
 
-Anchor = TextAnchor | ArtifactAnchor | PageAnchor
+@dataclass
+class SourceAnchor:
+    """Exact selected source characters with enough context to reattach after edits."""
+
+    file: str
+    quote: str
+    prefix: str
+    suffix: str
+    line_start: int
+    line_end: int
+    column_start: int
+    column_end: int
+    stale: bool = False
+    kind: Literal["source"] = "source"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "kind": self.kind,
+            "file": self.file,
+            "quote": self.quote,
+            "prefix": self.prefix,
+            "suffix": self.suffix,
+            "line_start": self.line_start,
+            "line_end": self.line_end,
+            "column_start": self.column_start,
+            "column_end": self.column_end,
+            "stale": self.stale,
+        }
+
+
+Anchor = TextAnchor | ArtifactAnchor | PageAnchor | SourceAnchor
 
 
 def anchor_from_dict(data: dict[str, Any]) -> Anchor:
@@ -108,7 +138,106 @@ def anchor_from_dict(data: dict[str, Any]) -> Anchor:
         if number < 1:
             raise ValueError("page anchor number must be 1 or greater")
         return PageAnchor(number=number, title=str(data["title"]))
+    if kind == "source":
+        anchor = SourceAnchor(
+            file=str(data["file"]),
+            quote=str(data["quote"]),
+            prefix=str(data["prefix"]),
+            suffix=str(data["suffix"]),
+            line_start=int(data["line_start"]),
+            line_end=int(data["line_end"]),
+            column_start=int(data["column_start"]),
+            column_end=int(data["column_end"]),
+            stale=bool(data.get("stale", False)),
+        )
+        if not anchor.file or not anchor.quote:
+            raise ValueError("source anchor file and quote must not be empty")
+        if anchor.line_start < 1 or anchor.line_end < anchor.line_start:
+            raise ValueError("source anchor lines are out of bounds")
+        if anchor.column_start < 0 or anchor.column_end < 0:
+            raise ValueError("source anchor columns must be nonnegative")
+        if (anchor.line_start, anchor.column_start) >= (anchor.line_end, anchor.column_end):
+            raise ValueError("source selection must be nonempty and ordered")
+        return anchor
     raise ValueError(f"unknown anchor kind: {kind!r}")
+
+
+def source_offset(text: str, line: int, column: int) -> int:
+    """Convert a 1-based line and 0-based UTF-16 editor column to a Python offset."""
+    lines = text.split("\n")
+    if line < 1 or line > len(lines) or column < 0:
+        raise ValueError("source position is out of bounds")
+    encoded = lines[line - 1].encode("utf-16-le")
+    if column * 2 > len(encoded):
+        raise ValueError("source column is out of bounds")
+    try:
+        prefix = encoded[:column * 2].decode("utf-16-le")
+    except UnicodeDecodeError as error:
+        raise ValueError("source column splits a character") from error
+    return sum(len(value) + 1 for value in lines[:line - 1]) + len(prefix)
+
+
+def _source_coordinate(text: str, offset: int) -> tuple[int, int]:
+    before = text[:offset]
+    return before.count("\n") + 1, len(before.rsplit("\n", 1)[-1].encode("utf-16-le")) // 2
+
+
+def capture_source_anchor(
+    path: Path,
+    file_name: str,
+    line_start: int,
+    line_end: int,
+    column_start: int,
+    column_end: int,
+) -> SourceAnchor:
+    """Capture only the selected characters; surrounding text is relocation context."""
+    text = path.read_text(encoding="utf-8")
+    start = source_offset(text, line_start, column_start)
+    end = source_offset(text, line_end, column_end)
+    if end <= start:
+        raise ValueError("source selection must be nonempty and ordered")
+    return SourceAnchor(
+        file=file_name,
+        quote=text[start:end],
+        prefix=text[max(0, start - 80):start],
+        suffix=text[end:end + 80],
+        line_start=line_start,
+        line_end=line_end,
+        column_start=column_start,
+        column_end=column_end,
+    )
+
+
+def relocate_source_anchor(anchor: SourceAnchor, path: Path) -> SourceAnchor:
+    """Relocate one exact selection. Changed or ambiguous selections become stale."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        anchor.stale = True
+        return anchor
+    positions: list[int] = []
+    cursor = 0
+    while anchor.quote:
+        found = text.find(anchor.quote, cursor)
+        if found < 0:
+            break
+        positions.append(found)
+        cursor = found + 1
+    if len(positions) > 1:
+        positions = [
+            start for start in positions
+            if text[:start].endswith(anchor.prefix)
+            and text[start + len(anchor.quote):].startswith(anchor.suffix)
+        ]
+    if len(positions) != 1:
+        anchor.stale = True
+        return anchor
+    start = positions[0]
+    end = start + len(anchor.quote)
+    anchor.line_start, anchor.column_start = _source_coordinate(text, start)
+    anchor.line_end, anchor.column_end = _source_coordinate(text, end)
+    anchor.stale = False
+    return anchor
 
 
 @dataclass
@@ -224,6 +353,17 @@ class CommentStore:
     def list(self, status: Status | None = None) -> list[Comment]:
         comments = self._all()
         return comments if status is None else [comment for comment in comments if comment.status == status]
+
+    def refresh_source_anchors(self, path: Path, file_name: str) -> None:
+        """Reattach exact source selections after their editable file changes."""
+        with self._locked():
+            comments = self._all()
+            before = [comment.to_dict() for comment in comments]
+            for comment in comments:
+                if isinstance(comment.anchor, SourceAnchor) and comment.anchor.file == file_name:
+                    relocate_source_anchor(comment.anchor, path)
+            if before != [comment.to_dict() for comment in comments]:
+                self._save(comments)
 
     def get(self, comment_id: str) -> Comment:
         for comment in self._all():

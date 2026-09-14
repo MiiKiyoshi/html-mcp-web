@@ -14,6 +14,14 @@ def agent_anchor(anchor: dict[str, Any]) -> dict[str, Any]:
             "prefix": anchor["prefix"],
             "suffix": anchor["suffix"],
         }
+    if anchor["kind"] == "source":
+        return {
+            key: anchor[key]
+            for key in (
+                "kind", "file", "quote", "line_start", "line_end",
+                "column_start", "column_end", "stale",
+            )
+        }
     return dict(anchor)
 
 
@@ -45,6 +53,13 @@ def agent_comment_summary(comment: dict[str, Any]) -> dict[str, Any]:
     if anchor["kind"] == "page":
         anchor_summary["number"] = anchor["number"]
         anchor_summary["title"] = anchor["title"]
+    elif anchor["kind"] == "source":
+        anchor_summary.update(
+            file=anchor["file"],
+            line_start=anchor["line_start"],
+            line_end=anchor["line_end"],
+            stale=anchor["stale"],
+        )
     return {
         "id": comment["id"],
         "status": comment["status"],
@@ -102,7 +117,7 @@ def agent_artifact_summary(
     project_dir: Path,
 ) -> dict[str, Any]:
     layout_check = artifact["layout_check"]
-    edit_name = artifact["content_file"] if "content_file" in artifact else artifact["main_file"]
+    edit_name = artifact["edit_file"]
     result = {
         "id": artifact_id,
         "label": artifact["label"],

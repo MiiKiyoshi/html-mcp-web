@@ -51,6 +51,9 @@ button:disabled { cursor: default; opacity: .6; }
 .artifact-tabs { display: flex; align-self: stretch; gap: 2px; padding-left: .75rem; border-left: 1px solid var(--line); }
 .artifact-tab { min-width: 72px; padding: .1rem .8rem; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: .82rem; }
 .artifact-tab.active { border-bottom-color: var(--accent); background: var(--accent-soft); color: #302e29; font-weight: 600; }
+.view-tabs { display: flex; align-self: stretch; }
+.view-tab { min-width: 58px; padding: .1rem .6rem; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: .82rem; }
+.view-tab.active { border-bottom-color: var(--accent); background: var(--accent-soft); color: #302e29; }
 .main-file { padding-right: .75rem; color: var(--muted); font-family: ui-monospace, monospace; font-size: .82rem; }
 .artifact-status { align-self: stretch; display: flex; align-items: center; padding-left: .75rem; border-left: 1px solid var(--line); color: var(--muted); font-size: .82rem; }
 .artifact-status.error { color: #a23f34; }
@@ -79,7 +82,66 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .layout.sidebar-collapsed { grid-template-columns: minmax(0, 1fr) 0; }
 .layout.sidebar-collapsed #sidebar { display: none; }
 
-#artifact-pane { position: relative; min-width: 0; background: #faf8f2; }
+#workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+#artifact-pane { position: relative; min-width: 0; min-height: 0; background: #faf8f2; }
+.layout.view-preview #source-pane { display: none; }
+.layout.view-source #artifact-pane { display: none; }
+#split-grip { display: none; }
+.layout.view-split #workspace {
+  grid-template-columns: minmax(0, var(--split-first, 1fr)) 10px minmax(0, var(--split-second, 1fr));
+}
+.layout.view-split #split-grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  touch-action: none;
+  background: var(--bg);
+}
+#split-grip::after { content: ""; width: 3px; height: 32px; border-radius: 2px; background: var(--line); }
+#split-grip:hover::after, #split-grip:focus-visible::after { background: var(--accent); }
+#source-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  background: var(--paper);
+}
+.source-toolbar {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  min-height: 36px;
+  padding: .3rem .5rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.source-file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: .8rem ui-monospace, monospace; }
+.source-status { flex: 1; color: var(--muted); text-align: right; white-space: nowrap; font: .78rem ui-monospace, monospace; }
+.source-status.dirty { color: #9a6b0d; }
+.source-status.conflict { color: #a23f34; }
+.source-toolbar button { padding: .2rem .55rem; border-radius: 3px; white-space: nowrap; }
+#source-editor { flex: 1; min-height: 0; font-family: ui-monospace, monospace; }
+#source-editor .ace_marker-layer .source-comment-highlight { position: absolute; background: rgba(246, 216, 74, .32); }
+#source-editor .ace_gutter-cell.source-comment-line::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border: 1px solid #9e8210;
+  border-radius: 50%;
+  background: var(--yellow);
+  transform: translateY(-50%);
+}
+#source-editor .ace_gutter-cell.source-comment-line { cursor: pointer; }
 /* One frame per artifact, all the size of the pane and stacked in it; the active one is
    the one seen. The others are hidden, not removed from layout: a frame with no layout
    loses its scroll and measures nothing, and coming back to a tab would start it over. */
@@ -332,6 +394,21 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   .topbar h1 { display: none; }
 }
 
+@media (max-width: 950px) {
+  .layout.view-split #workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, var(--split-first, 1fr)) 10px minmax(0, var(--split-second, 1fr));
+  }
+  .layout.view-split #split-grip { cursor: row-resize; }
+  .layout.view-split #split-grip::after { width: 32px; height: 3px; }
+  .layout.view-split #source-pane { border-left: 0; border-top: 1px solid var(--line); }
+}
+
+@media (max-width: 1100px) {
+  .artifact-meta { display: none; }
+  .artifact-tabs { padding-left: 0; border-left: 0; }
+}
+
 /* Shown only where the comments sit under the artifact, and dragged to divide the two.
    A finger is wider than the bar it aims at, and a touch that fell short of the bar hit
    the tab row underneath, so the band that answers a touch is 38px while what is drawn in
@@ -377,7 +454,11 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   .topbar { flex-wrap: wrap; gap: .4rem .6rem; padding: .3rem .5rem; }
   .topbar h1, .artifact-meta { display: none; }
   .artifact-tabs { padding-left: 0; border-left: 0; }
+  .view-tabs { order: 1; }
   .topbar-actions { margin-left: auto; flex-wrap: wrap; }
+  .source-toolbar { flex-wrap: wrap; }
+  .source-file { flex: 1 1 12rem; }
+  .source-status { order: 2; flex: 1 0 100%; text-align: left; }
 }
 
 
