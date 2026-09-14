@@ -47,8 +47,9 @@ the spread; only the content between them shares the remaining height.
 - `p.takeaway` is the concluding line at the bottom. Put at most one as the last direct
   paragraph of a body section, after its figure, table, or other content. It works with
   or without a lead. The common builder applies the skin's `lead` class to it, so both
-  lines share the same typography and width in every skin. The takeaway's paragraph
-  and text are centred in the body; the lead keeps its own alignment.
+  lines share the same typography in every skin. The takeaway spans the body width so
+  PowerPoint has room for minor font-metric differences; its text is centred, while the
+  lead keeps its own alignment and width.
   Write `<p class="takeaway">The concluding statement.</p>`; skins only style its appearance.
 - `p.note` is a single footnote, `ul.notes` takes over once two or more independent
   remarks pile up, one per `li`

@@ -1030,6 +1030,7 @@ def test_takeaway_keeps_lead_typography_and_body_geometry_across_skins(tmp_path:
 const pages = document.querySelectorAll('section.page');
 const read = (page) => {
   const body = page.querySelector('.body');
+  const bodyStyle = getComputedStyle(body);
   const lead = page.querySelector('.body > p.lead:not(.takeaway)');
   const takeaway = page.querySelector('.body > p.takeaway');
   const middle = [...page.querySelectorAll('.body > .rest > .middle')];
@@ -1039,7 +1040,9 @@ const read = (page) => {
     const range = document.createRange(); range.selectNodeContents(el);
     return box(range);
   };
-  return {body: box(body), lead: lead && box(lead), takeaway: box(takeaway),
+  return {body: box(body), bodyContentWidth: body.clientWidth - parseFloat(bodyStyle.paddingLeft)
+            - parseFloat(bodyStyle.paddingRight),
+          lead: lead && box(lead), takeaway: box(takeaway),
           takeawayText: textBox(takeaway),
           middle: middle.map(box), leadStyle: lead && {
             font: getComputedStyle(lead).fontFamily,
@@ -1069,6 +1072,8 @@ return {withLead: read(pages[1]), withoutLead: read(pages[2])};
                        / 2 - (with_lead["body"]["left"] + with_lead["body"]["right"]) / 2) < 1
             assert abs((with_lead["takeawayText"]["left"] + with_lead["takeawayText"]["right"])
                        / 2 - (with_lead["body"]["left"] + with_lead["body"]["right"]) / 2) < 1
+            assert abs((with_lead["takeaway"]["right"] - with_lead["takeaway"]["left"])
+                       - with_lead["bodyContentWidth"]) < 1
             assert with_lead["lead"]["top"] < with_lead["body"]["top"] + 40
             assert with_lead["takeaway"]["bottom"] > with_lead["body"]["bottom"] - 45
             gaps = ([with_lead["middle"][0]["top"] - with_lead["lead"]["bottom"]]
