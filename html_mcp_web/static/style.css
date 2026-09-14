@@ -51,7 +51,7 @@ button:disabled { cursor: default; opacity: .6; }
 .artifact-tabs { display: flex; align-self: stretch; gap: 2px; padding-left: .75rem; border-left: 1px solid var(--line); }
 .artifact-tab { min-width: 72px; padding: .1rem .8rem; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: .82rem; }
 .artifact-tab.active { border-bottom-color: var(--accent); background: var(--accent-soft); color: #302e29; font-weight: 600; }
-.view-tabs { display: flex; align-self: stretch; }
+.view-tabs { display: flex; align-self: stretch; margin-left: auto; }
 .view-tab { min-width: 58px; padding: .1rem .6rem; border: 0; border-top: 1px solid transparent; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: .82rem; }
 .view-tab.active { border-bottom-color: var(--accent); background: var(--accent-soft); color: #302e29; }
 .main-file { padding-right: .75rem; color: var(--muted); font-family: ui-monospace, monospace; font-size: .82rem; }
