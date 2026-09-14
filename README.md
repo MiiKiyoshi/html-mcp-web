@@ -98,7 +98,7 @@ The agent uses the configured guideline when writing your artifact.
 
 Use **Preview**, **Source**, or **Split** to review the rendered artifact and edit its source in one page. A plain artifact opens its main HTML file; a templated artifact opens its smaller content file. Select exact characters in either view and add a comment. Source comments highlight only the selected characters, including selections that wrap visually across lines, and reattach when surrounding source moves. Drag the divider in Split view to resize the panes.
 
-Use **+ Note** for a whole-artifact comment, the **Pages** tab to jump between pages, and the **Edit** link to fix your own message in place. Press **Call agent** when the comments are ready. **Resolve** closes a comment in one click.
+Use **+ Note** for a whole-artifact comment, the **Pages** tab to jump between pages, and the **Edit** link to fix your own message in place. Press **Call agent** when the comments are ready. **Resolve** closes a comment in one click, and **Reference** sets a thread aside to read again: it stays out of the open and resolved lists, still takes replies, and goes back to either with **Reopen** or **Resolve**.
 
 The agent reads the comments, edits the source, and replies to each one; the reviewer resolves
 the thread. The review page also flags anything off the page, clipped SVG drawings, and

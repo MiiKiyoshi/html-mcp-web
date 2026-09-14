@@ -166,7 +166,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     @mcp.tool()
     async def list_comments(
         artifact: str,
-        status: Literal["open", "resolved", "all"] = "open",
+        status: Literal["open", "resolved", "reference", "all"] = "open",
         unanswered: Annotated[bool, Field(description="Only comments whose latest thread entry is the human's: not yet answered, or written to again after the agent's reply.")] = False,
         since: Annotated[str | None, Field(description="ISO 8601 time; only comments whose latest human entry is after it. Pass the largest last_human_at seen so far.")] = None,
     ) -> dict[str, Any]:
