@@ -154,6 +154,32 @@ class Watcher:
         self.debounce_seconds = debounce_seconds
         self.observer: Any = None
         self.handler: HtmlFileHandler | None = None
+        self._watches: dict[Path, Any] = {}
+
+    def set_roots(self, roots: list[Path]) -> tuple[list[Path], list[Path]]:
+        """Make these the recursive roots (a config reload moved or added an artifact);
+        return (added, dropped). The set is exact: a directory no artifact lives in any
+        more gives its watches back."""
+        wanted = self._merge_roots(roots)
+        added = [root for root in wanted if root not in self.roots]
+        dropped = [root for root in self.roots if root not in wanted]
+        self.roots = wanted
+        if self.observer is not None:
+            for root in dropped:
+                watch = self._watches.pop(root, None)
+                if watch is not None:
+                    self.observer.unschedule(watch)
+            for root in added:
+                self._schedule(root)
+        return added, dropped
+
+    def _schedule(self, root: Path) -> None:
+        if not root.is_dir():
+            return
+        try:
+            self._watches[root] = self.observer.schedule(self.handler, str(root), recursive=True)
+        except OSError as error:
+            logger.error("Cannot watch %s: %s", root, error)
 
     def _merge_roots(self, roots: list[Path]) -> list[Path]:
         """Roots below the project, an ancestor standing in for the roots below it.
@@ -179,6 +205,7 @@ class Watcher:
             self._watch_new_directory,
         )
         self.observer = Observer()
+        self._watches = {}
         # A watch goes on every directory under a recursive root, and the limit belongs to
         # the login rather than to this server. Only the roots that hold artifact content
         # are watched recursively; the project root is watched flat, for the config file,
@@ -187,7 +214,7 @@ class Watcher:
             self.observer.schedule(self.handler, str(self.watch_dir), recursive=False)
             for root in self.roots:
                 if root.is_dir():
-                    self.observer.schedule(self.handler, str(root), recursive=True)
+                    self._watches[root] = self.observer.schedule(self.handler, str(root), recursive=True)
             self.observer.start()
         except BaseException as error:
             # A partially scheduled observer keeps its inotify descriptor, and its
@@ -207,15 +234,15 @@ class Watcher:
         stack = [root]
         while stack and total < cap:
             try:
-                entries = list(os.scandir(stack.pop()))
+                with os.scandir(stack.pop()) as entries:
+                    for entry in entries:
+                        if entry.is_dir(follow_symlinks=False):
+                            total += 1
+                            stack.append(Path(entry.path))
+                            if total >= cap:
+                                break
             except OSError:
                 continue
-            for entry in entries:
-                if entry.is_dir(follow_symlinks=False):
-                    total += 1
-                    stack.append(Path(entry.path))
-                    if total >= cap:
-                        break
         return total
 
     def _census(self) -> list[tuple[int, str]]:
@@ -252,13 +279,11 @@ class Watcher:
         entry = Path(path)
         if self.observer is None or entry.parent.resolve() != self.watch_dir:
             return
-        entry = entry.resolve()
-        if entry not in self.roots or entry.is_symlink():
+        if entry.is_symlink():
             return
-        try:
-            self.observer.schedule(self.handler, str(entry), recursive=True)
-        except OSError as error:
-            logger.error("Cannot watch new directory %s: %s", entry, error)
+        entry = entry.resolve()
+        if entry in self.roots and entry not in self._watches:
+            self._schedule(entry)
 
     def stop(self) -> None:
         if self.handler is not None and self.handler.pending_task is not None:
