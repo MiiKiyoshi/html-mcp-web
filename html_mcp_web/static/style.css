@@ -85,9 +85,21 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 #workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
 }
+.workspace-toolbar {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 .5rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+#artifact-pane, #source-pane, #split-grip { grid-row: 2; }
 #artifact-pane { position: relative; min-width: 0; min-height: 0; background: #faf8f2; }
 .layout.view-preview #source-pane { display: none; }
 .layout.view-source #artifact-pane { display: none; }
@@ -199,18 +211,11 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 
 .selection-comment:hover { color: white; background: #506277; }
 
-/* Only while the artifact is held at something other than the size the pane fits, and
-   out of the way at the top, where the deck's own margin is. The left corner: on a touch
-   screen the comment button holds the right one. */
 .zoom-reset {
-  position: absolute;
-  z-index: 20;
-  top: 8px;
-  left: 10px;
-  padding: 4px 10px;
+  margin-left: auto;
+  padding: .2rem .55rem;
   font-size: 12px;
   background: var(--paper);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, .16);
 }
 
 /* A touch screen answers a long press with a bar of its own (copy, look up, share) drawn
@@ -397,8 +402,11 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
 @media (max-width: 950px) {
   .layout.view-split #workspace {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, var(--split-first, 1fr)) 10px minmax(0, var(--split-second, 1fr));
+    grid-template-rows: auto minmax(0, var(--split-first, 1fr)) 10px minmax(0, var(--split-second, 1fr));
   }
+  .layout.view-split #artifact-pane { grid-row: 2; }
+  .layout.view-split #split-grip { grid-row: 3; }
+  .layout.view-split #source-pane { grid-row: 4; }
   .layout.view-split #split-grip { cursor: row-resize; }
   .layout.view-split #split-grip::after { width: 32px; height: 3px; }
   .layout.view-split #source-pane { border-left: 0; border-top: 1px solid var(--line); }
@@ -454,7 +462,6 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   .topbar { flex-wrap: wrap; gap: .4rem .6rem; padding: .3rem .5rem; }
   .topbar h1, .artifact-meta { display: none; }
   .artifact-tabs { padding-left: 0; border-left: 0; }
-  .view-tabs { order: 1; }
   .topbar-actions { margin-left: auto; flex-wrap: wrap; }
   .source-toolbar { flex-wrap: wrap; }
   .source-file { flex: 1 1 12rem; }
