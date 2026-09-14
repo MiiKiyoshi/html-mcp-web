@@ -15,11 +15,6 @@
         <span id="artifact-status" class="artifact-status">connecting</span>
       </div>
       <nav id="artifact-tabs" class="artifact-tabs" aria-label="Artifacts"></nav>
-      <nav class="view-tabs" aria-label="Workspace view">
-        <button class="view-tab active" type="button" data-view="preview">Preview</button>
-        <button class="view-tab" type="button" data-view="source">Source</button>
-        <button class="view-tab" type="button" data-view="split">Split</button>
-      </nav>
       <div class="topbar-actions">
         <button id="print-btn" type="button">Print</button>
         <a id="download-pdf-btn" class="download-btn" download>PDF</a>
@@ -39,11 +34,18 @@
 
     <main class="layout view-preview">
       <div id="workspace">
+        <div class="workspace-toolbar">
+          <nav class="view-tabs" aria-label="Workspace view">
+            <button class="view-tab active" type="button" data-view="preview">Preview</button>
+            <button class="view-tab" type="button" data-view="source">Source</button>
+            <button class="view-tab" type="button" data-view="split">Split</button>
+          </nav>
+          <button id="zoom-reset-btn" class="zoom-reset hidden" type="button"
+                  title="Back to the size the pane fits">Fit</button>
+        </div>
         <section id="artifact-pane">
           <iframe id="artifact-frame" class="artifact-frame active" title="Agent-generated HTML artifact" tabindex="-1"></iframe>
           <button id="selection-comment-btn" class="selection-comment hidden" type="button">Comment</button>
-          <button id="zoom-reset-btn" class="zoom-reset hidden" type="button"
-                  title="Back to the size the pane fits">Fit</button>
           <div id="presentation-controls" class="presentation-controls" aria-label="Slide show controls">
             <button id="presentation-prev-btn" type="button" aria-label="Previous slide">←</button>
             <span id="presentation-page" aria-live="polite"></span>

@@ -77,6 +77,23 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        placement = browser.execute_script('''
+          const tabs = document.querySelector(".view-tabs");
+          const toolbar = document.querySelector(".workspace-toolbar");
+          return {
+            inTopbar: document.querySelector(".topbar").contains(tabs),
+            inWorkspace: document.querySelector("#workspace").contains(tabs),
+            toolbarAboveArtifact: toolbar.getBoundingClientRect().bottom <=
+              document.querySelector("#artifact-pane").getBoundingClientRect().top + 1,
+            fitInToolbar: toolbar.contains(document.querySelector("#zoom-reset-btn")),
+          };
+        ''')
+        assert placement == {
+            "inTopbar": False,
+            "inWorkspace": True,
+            "toolbarAboveArtifact": True,
+            "fitInToolbar": True,
+        }
 
         browser.find_element("css selector", '[data-view="source"]').click()
         wait_until(lambda: browser.execute_script(

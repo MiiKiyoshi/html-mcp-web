@@ -2800,9 +2800,8 @@ def test_a_phone_gives_an_opened_comment_the_room_it_needs(tmp_path: Path) -> No
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_touch_screen_keeps_the_two_buttons_in_their_corners(tmp_path: Path) -> None:
     """A phone answers a long press with a bar of its own drawn over the words, so a
-    comment button placed by the selection sits under it however it is placed. On a touch
-    screen it keeps the top right, the way back from a zoom keeps the top left, and
-    neither is where the phone draws anything."""
+    comment button placed by the selection sits under it however it is placed. The comment
+    action keeps the preview's top right, while Fit stays in the workspace toolbar above it."""
     slides = tmp_path / "slides.html"
     slides.write_text(slides_html(), encoding="utf-8")
     port = available_port()
@@ -2870,19 +2869,17 @@ def test_a_touch_screen_keeps_the_two_buttons_in_their_corners(tmp_path: Path) -
         assert placed["fromTop"] <= 12, placed           # the button is not
         assert placed["fromRight"] <= 14, placed         # and it holds the right corner
 
-        # The way back from a zoom takes the other corner, so the two never overlap.
+        # Fit belongs to the workspace controls, outside the artifact where selections live.
         reset = browser.execute_script("""
           const pane = document.querySelector("#artifact-pane").getBoundingClientRect();
+          const toolbar = document.querySelector(".workspace-toolbar").getBoundingClientRect();
           const fit = document.querySelector("#zoom-reset-btn");
           fit.classList.remove("hidden");   // it shows itself only while the artifact is zoomed
           const box = fit.getBoundingClientRect();
-          const button = document.querySelector("#selection-comment-btn").getBoundingClientRect();
-          return {fromLeft: box.left - pane.left, fromTop: box.top - pane.top,
-                  gap: button.left - box.right};
+          return {insideToolbar: box.top >= toolbar.top && box.bottom <= toolbar.bottom,
+                  abovePane: box.bottom <= pane.top};
         """)
-        assert reset["fromLeft"] <= 14, reset
-        assert reset["fromTop"] <= 12, reset
-        assert reset["gap"] > 0, reset
+        assert reset == {"insideToolbar": True, "abovePane": True}
     finally:
         if browser is not None:
             try:
