@@ -181,3 +181,65 @@ def test_a_missing_mcp_import_is_reported_as_it_failed(monkeypatch, capsys) -> N
     said = capsys.readouterr().err
     assert "This is mcp 2.x, where FastMCP was renamed" in said, said
     assert "html-mcp-web[mcp]" in said
+
+
+@pytest.mark.parametrize("layout, width, height", [("slides", "1280px", "720px"), ("report", "210mm", "297mm")])
+def test_init_creates_a_viewable_plain_document(tmp_path, monkeypatch, layout, width, height):
+    from html_mcp_web.template_content import ContentParser, Element
+    monkeypatch.chdir(tmp_path)
+    assert main(["init", "--layout", layout, "--main", "html/brief.html"]) == 0
+    text = (tmp_path / "html/brief.html").read_text()
+    parser = ContentParser()
+    parser.feed(text)
+    parser.close()
+    html = next(x for x in parser.root.children if isinstance(x, Element) and x.tag == "html")
+    body = next(x for x in html.children if isinstance(x, Element) and x.tag == "body")
+    children = [x for x in body.children if isinstance(x, Element)]
+    assert len(children) == 1 and children[0].tag == "main" and children[0].attributes["class"] == "pages"
+    pages = [x for x in children[0].children if isinstance(x, Element)]
+    assert len(pages) == 1 and pages[0].tag == "section" and pages[0].attributes["class"] == "page"
+    assert width in text and height in text
+
+
+@pytest.mark.parametrize("layout", ["slides", "report"])
+def test_init_builds_missing_template_output(tmp_path, monkeypatch, layout):
+    from html_mcp_web.template_content import parse_template_content
+    monkeypatch.chdir(tmp_path)
+    assert main(["init", "--layout", layout, "--main", "output/main.html",
+                 "--template", f"neutral-{layout}", "--content", "source/content.html"]) == 0
+    parsed = parse_template_content(tmp_path / "source/content.html")
+    assert len(parsed.sections) == 1
+    output = (tmp_path / "output/main.html").read_text()
+    assert '<main class="pages">' in output
+    assert output.count('<section class="page') == 2
+
+
+def test_init_preserves_existing_sources_and_outputs(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    main_file = tmp_path / "main.html"
+    main_file.write_bytes(b"existing main")
+    assert main(["init", "--layout", "slides", "--main", "main.html"]) == 0
+    assert main_file.read_bytes() == b"existing main"
+    (tmp_path / ".html-mcp-web.yaml").unlink()
+    (tmp_path / "content.html").write_bytes(b"existing content")
+    assert main(["init", "--layout", "slides", "--main", "main.html",
+                 "--template", "neutral-slides", "--content", "content.html"]) == 0
+    assert main_file.read_bytes() == b"existing main"
+    assert (tmp_path / "content.html").read_bytes() == b"existing content"
+
+
+def test_init_refuses_to_pair_new_content_with_existing_output(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "main.html").write_text("existing main")
+    assert main(["init", "--layout", "slides", "--main", "main.html",
+                 "--template", "neutral-slides", "--content", "content.html"]) == 1
+    assert not (tmp_path / ".html-mcp-web.yaml").exists()
+    assert not (tmp_path / "content.html").exists()
+    assert (tmp_path / "main.html").read_text() == "existing main"
+
+
+def test_init_rejects_missing_template_before_creating_files(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert main(["init", "--layout", "slides", "--template", "missing-template",
+                 "--content", "content.html"]) == 1
+    assert list(tmp_path.iterdir()) == []

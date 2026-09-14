@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -12,6 +13,9 @@ from .config import (
     Config,
     create_config,
     get_guideline_file,
+    get_content_file,
+    get_main_file,
+    get_template_dir,
     load_config,
 )
 
@@ -19,9 +23,62 @@ from .config import (
 def cmd_init(args: argparse.Namespace) -> int:
     target = Path.cwd() / DEFAULT_CONFIG_NAME
     try:
+        if args.template is not None and args.content is not None:
+            proposed = Config.from_dict({"artifacts": {args.layout: {
+                "layout": args.layout, "main": args.main,
+                "template": args.template, "content": args.content,
+            }}}, config_path=target)
+            builder = get_template_dir(proposed, args.layout) / "build.py"
+            if not builder.is_file():
+                raise FileNotFoundError(f"template builder not found: {builder}")
+            if Path(args.main).exists() and not Path(args.content).exists():
+                raise ValueError("existing main file requires an existing template content file")
         created = create_config(layout=args.layout, main=args.main, port=args.port, output_path=target,
                                 template=args.template, content=args.content, guideline=args.guideline)
-    except (FileExistsError, FileNotFoundError, ValueError) as error:
+        config = load_config(created)
+        main = get_main_file(config, args.layout)
+        content = get_content_file(config, args.layout)
+        source = content if content is not None else main
+        main.parent.mkdir(parents=True, exist_ok=True)
+        source.parent.mkdir(parents=True, exist_ok=True)
+        if not source.exists():
+            if content is not None:
+                document = '''<!doctype html>
+<meta charset="utf-8">
+<title>Untitled</title>
+<body data-author="" data-meta="">
+<section data-title="Untitled">
+  <p class="lead">Add your content here.</p>
+</section>
+</body>
+'''
+            else:
+                width, height = ("1280px", "720px") if args.layout == "slides" else ("210mm", "297mm")
+                document = f'''<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Untitled</title>
+  <style>
+    body {{ margin: 0; font-family: sans-serif; }}
+    .page {{ box-sizing: border-box; width: {width}; height: {height}; padding: 40px; }}
+  </style>
+</head>
+<body>
+  <main class="pages">
+    <section class="page"><h1>Untitled</h1></section>
+  </main>
+</body>
+</html>
+'''
+            with source.open("x", encoding="utf-8") as stream:
+                stream.write(document)
+        if content is not None and not main.exists():
+            result = subprocess.run([sys.executable, str(builder), str(content), str(main)],
+                                    capture_output=True, text=True, timeout=120)
+            if result.returncode:
+                raise ValueError(f"template build failed: {(result.stderr or result.stdout).strip()}")
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
         print(str(error), file=sys.stderr)
         return 1
     print(created)

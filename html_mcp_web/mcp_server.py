@@ -86,21 +86,14 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     guideline_resource_uri = "html-mcp://guideline/configured"
     mcp = FastMCP(
         "html-mcp-web",
-        # Keep static operating rules in initialization. inspect() is called repeatedly
-        # for project state and must not carry the same guide in every discovery result.
         instructions=(
-            "Call inspect() with no arguments once to discover stable artifact paths and any configured "
-            "guideline; later use inspect(artifact=...) for dynamic state. If the user mentions the "
-            "guideline or authoring requires it, read its path once; a client without filesystem access "
-            "reads its resource_uri. For the first templated-artifact authoring call use docs=True, then "
-            "omit docs. Pass page only for that page's layout errors and room. Within explicit permission, "
-            "process comments by reading requests, editing, verifying the rendered result, and replying in "
-            "their threads. On each new connection call wait_review() and follow how; do not poll or "
-            "duplicate its waiter. Before editing a "
-            "reader-facing unit, define the reader’s prior knowledge, intended understanding, visible "
-            "structure, and exclusions; reuse exact keys and order across comparison and result units, "
-            "keep preliminary units to prerequisites while preserving and annotating source examples, "
-            "and rebuild after two related comprehension failures."
+            "Call inspect() once for paths and document references; reuse them until configuration changes. "
+            "Read authoring, template notes and any configured guideline only when needed, by path or "
+            "resource_uri. Use inspect(artifact=..., page=...) for current state. "
+            "Read list_comments(unanswered=True), then read_comments only for needed IDs; reuse unchanged "
+            "threads. Within the user's editing scope, edit, render affected pages, and reply in the "
+            "threads; the reviewer resolves them. For review notifications, call wait_review() on each "
+            "new connection and follow how; reuse its process, do not poll or duplicate it."
         ),
     )
 
@@ -117,13 +110,28 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             raise RuntimeError("this project has no configured guideline")
         return Path(guideline["path"]).read_text(encoding="utf-8")
 
+    @mcp.resource("html-mcp://docs/{document}", mime_type="text/markdown")
+    async def authoring_document(document: str) -> str:
+        """Read the authoring guide or component reference when needed."""
+        names = {"authoring": "README.md", "components": "COMPONENTS.md"}
+        return (Path(__file__).resolve().parent.parent / "templates" / names[document]).read_text(encoding="utf-8")
+
+    @mcp.resource("html-mcp://templates/{artifact}", mime_type="text/markdown")
+    async def template_document(artifact: str) -> str:
+        """Read the configured artifact's template-specific notes."""
+        state = await binding.require_client().request_json("GET", "/state")
+        return (Path(state["artifacts"][artifact]["template_dir"]) / "README.md").read_text(encoding="utf-8")
+
     @mcp.tool()
     async def inspect(
         artifact: str | None = None,
-        docs: Annotated[bool, Field(description="With an artifact: add its content format and components (the templates' README and the skin's own), read once before writing content.")] = False,
         page: Annotated[int | None, Field(ge=1, description="With an artifact: add only this page's layout errors and available-room regions.")] = None,
     ) -> dict[str, Any]:
-        """Discover compact project state, or inspect one artifact without comment threads."""
+        """Discover paths and document references, or inspect current artifact state.
+
+        layout_error_count is null until the current revision is checked; zero means
+        that revision has no layout errors. Pass page for local errors and room.
+        """
         try:
             client = binding.connect()
         except ProjectSetupError as error:
@@ -134,8 +142,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         artifacts = state["artifacts"]
         if artifact is not None and artifact not in artifacts:
             raise RuntimeError(f"unknown artifact: {artifact}; available artifacts: {', '.join(artifacts)}")
-        if artifact is None and (docs or page is not None):
-            raise ValueError("docs and page require artifact")
+        if artifact is None and page is not None:
+            raise ValueError("page requires artifact")
         project_dir = Path(state["project_dir"])
         if artifact is None:
             guideline = state.get("guideline")
@@ -145,6 +153,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 "review_url": f"http://127.0.0.1:{state['port']}",
                 "guideline": ({**guideline, "resource_uri": guideline_resource_uri}
                               if guideline is not None else None),
+                "documents": document_references(artifacts),
                 "artifacts": {
                     artifact_id: agent_artifact_summary(artifact_id, value, project_dir)
                     for artifact_id, value in artifacts.items()
@@ -152,7 +161,6 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             }
         return {
             "artifacts": {artifact: agent_artifact(artifacts[artifact], page)},
-            **({"docs": template_docs(artifacts[artifact])} if docs else {}),
         }
 
     @mcp.tool()
@@ -371,18 +379,22 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     return mcp
 
 
-def template_docs(artifact: dict[str, Any]) -> dict[str, Any]:
-    """The content format and the components of a templated artifact: the templates' README
-    and the skin's own where it has one, as text, so a client without file tools has them
-    too. An artifact with no template has nothing to read."""
-    if "template" not in artifact:
-        return {"template": None, "readme": None, "skin_readme": None}
-    readme = Path(__file__).resolve().parent.parent / "templates" / "README.md"
-    skin_readme = Path(artifact["template_dir"]) / "README.md"
+def document_references(artifacts: dict[str, Any]) -> dict[str, Any]:
+    """Discover each shared document once, without loading its text."""
+    directory = Path(__file__).resolve().parent.parent / "templates"
+    templates = {}
+    for artifact_id, artifact in artifacts.items():
+        if "template" not in artifact:
+            continue
+        path = Path(artifact["template_dir"]) / "README.md"
+        if path.is_file():
+            templates[artifact["template"]] = {
+                "path": str(path), "resource_uri": f"html-mcp://templates/{artifact_id}",
+            }
     return {
-        "template": artifact["template"],
-        "readme": readme.read_text(encoding="utf-8") if readme.is_file() else None,
-        "skin_readme": skin_readme.read_text(encoding="utf-8") if skin_readme.is_file() else None,
+        "authoring": {"path": str(directory / "README.md"), "resource_uri": "html-mcp://docs/authoring"},
+        "components": {"path": str(directory / "COMPONENTS.md"), "resource_uri": "html-mcp://docs/components"},
+        "templates": templates,
     }
 
 
