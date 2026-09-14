@@ -453,6 +453,10 @@ class CommentStore:
     def reopen(self, comment_id: str, text: str, author: Author) -> Comment:
         return self._append(comment_id, author, text, status="open")
 
+    def keep_as_reference(self, comment_id: str, author: Author) -> Comment:
+        """Set the thread aside to be read again; its entries stay as they are."""
+        return self._append(comment_id, author, "", status="reference")
+
     def edit_entry(self, comment_id: str, index: int, text: str, author: Author) -> Comment:
         """Rewrite one thread entry in place, keeping its author and time."""
         if not text.strip():
@@ -473,10 +477,6 @@ class CommentStore:
                 self._save(comments)
                 return comment
         raise KeyError(f"comment {comment_id!r} not found")
-
-    def keep_as_reference(self, comment_id: str, author: Author) -> Comment:
-        """Set the thread aside to be read again; its entries stay as they are."""
-        return self._append(comment_id, author, "", status="reference")
 
     def delete(self, comment_id: str) -> None:
         with self._locked():
