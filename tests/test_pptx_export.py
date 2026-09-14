@@ -436,6 +436,30 @@ def test_the_page_is_carried_over_as_it_is_laid_out(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_takeaway_pptx_textbox_uses_the_body_width(tmp_path: Path) -> None:
+    """PowerPoint text metrics differ slightly, so a tight takeaway box wraps a line that
+    fits in HTML. The exported box keeps the body's available width as breathing room."""
+    from html_mcp_web.slides import build
+
+    content = tmp_path / "content.html"
+    content.write_text('''<!doctype html>
+<meta charset="utf-8"><title>Takeaway width</title>
+<body data-author="A" data-meta="B">
+<section data-title="Result"><p>Evidence.</p>
+<p class="takeaway">A concluding line stays on one line after PowerPoint lays it out.</p>
+</section></body>
+''', encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, NEUTRAL)
+    out = tmp_path / "deck.pptx"
+    export_pptx(html.as_uri(), out, tmp_path, None)
+    slide = pptx.Presentation(str(out)).slides[1]
+    takeaway = next(shape for shape in slide.shapes
+                    if shape.has_text_frame and shape.text.startswith("A concluding line"))
+    assert takeaway.width / 9525 > 1100
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_wrapped_svg_label_keeps_its_lines_in_the_vector(tmp_path: Path) -> None:
     """The deck breaks a data-wrap label into lines when it opens; the export serializes
     the drawing as it stands, so the vector carries the lines and their spacing."""
