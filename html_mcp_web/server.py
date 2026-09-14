@@ -1083,6 +1083,9 @@ class HtmlReviewServer:
     async def reopen_comment(self, request: web.Request) -> web.Response:
         return await self._thread_mutation(request, "reopen")
 
+    async def reference_comment(self, request: web.Request) -> web.Response:
+        return await self._thread_mutation(request, "reference")
+
     async def edit_comment_entry(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         data = await request.json()
@@ -1100,9 +1103,6 @@ class HtmlReviewServer:
         return web.json_response(comment.to_dict())
 
     async def delete_comment(self, request: web.Request) -> web.Response:
-    async def reference_comment(self, request: web.Request) -> web.Response:
-        return await self._thread_mutation(request, "reference")
-
         runtime = self.runtime(request)
         comment_id = request.match_info["comment_id"]
         try:
