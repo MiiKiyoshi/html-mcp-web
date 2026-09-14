@@ -186,8 +186,8 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
             "listen",
         ]
         assert schemas["read_comments"]["required"] == ["artifact", "comment_ids"]
-        assert schemas["reply_comments"]["required"] == ["artifact", "replies_text"]
-        assert schemas["reply_comments"]["properties"]["replies_text"]["type"] == "string"
+        assert schemas["reply_comments"]["required"] == ["artifact"]
+        assert schemas["reply_comments"]["properties"]["replies_text"]["anyOf"][0]["type"] == "string"
         assert set(schemas["inspect"]["properties"]) == {"artifact", "page"}
         assert schemas["inspect"]["properties"]["page"]["anyOf"][0]["minimum"] == 1
         assert schemas["render_page"]["required"] == ["artifact", "page"]

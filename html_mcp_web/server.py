@@ -1011,11 +1011,25 @@ class HtmlReviewServer:
         except FileNotFoundError:
             return False
 
+    async def export_comments(self, request: web.Request) -> web.Response:
+        runtime = self.runtime(request)
+        data = await request.json()
+        try:
+            ids = data["comment_ids"]
+            if not isinstance(ids, list) or not all(isinstance(key, str) for key in ids):
+                raise ValueError("comment_ids must be a list of strings")
+            return web.json_response(runtime.store.export_comments(ids))
+        except KeyError as error:
+            raise web.HTTPNotFound(text=str(error)) from error
+        except (OSError, TypeError, ValueError) as error:
+            raise web.HTTPBadRequest(text=str(error)) from error
+
     async def update_comments(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         data = await request.json()
         try:
-            comment_ids = data["comment_ids"]
+            replies_file = data.get("replies_file")
+            comment_ids = data["comment_ids"] if replies_file is None else []
             message = data["message"] if "message" in data else ""
             status = data["status"] if "status" in data else None
             edited_files = data["edited_files"] if "edited_files" in data else None
@@ -1038,13 +1052,16 @@ class HtmlReviewServer:
                 not isinstance(edited_files, list) or not all(isinstance(value, str) for value in edited_files)
             ):
                 raise ValueError("edited_files must be a list of strings")
-            comments = runtime.store.update_many(
-                comment_ids,
-                author,
-                message,
-                status=status,
-                edits=edited_files,
-            )
+            if replies_file is not None:
+                if not isinstance(replies_file, str) or author != "agent" or any(
+                    key in data for key in ("comment_ids", "message", "status")
+                ):
+                    raise ValueError("replies_file excludes inline updates and requires agent author")
+                comments = runtime.store.reply_file(replies_file, edits=edited_files)
+            else:
+                comments = runtime.store.update_many(
+                    comment_ids, author, message, status=status, edits=edited_files,
+                )
         except KeyError as error:
             raise web.HTTPNotFound(text=str(error)) from error
         except (TypeError, ValueError) as error:
@@ -1252,6 +1269,7 @@ class HtmlReviewServer:
         app.router.add_get(f"{base}/comments/{{comment_id}}", self.get_comment)
         app.router.add_post(f"{base}/comments", self.add_comment)
         app.router.add_post(f"{base}/comments/update", self.update_comments)
+        app.router.add_post(f"{base}/comments/export", self.export_comments)
         app.router.add_post(f"{base}/comments/{{comment_id}}/reply", self.reply_comment)
         app.router.add_post(f"{base}/comments/{{comment_id}}/resolve", self.resolve_comment)
         app.router.add_post(f"{base}/comments/{{comment_id}}/reopen", self.reopen_comment)
