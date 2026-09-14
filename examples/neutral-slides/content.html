@@ -1,32 +1,56 @@
 <!doctype html>
 <meta charset="utf-8">
 <title>Evaluation Review</title>
-<body data-author="Systems Research Group" data-meta="Internal evaluation|13 August 2026">
-<aside class="script"><p>Welcome. This review covers the current evaluation result and the remaining verification.</p></aside>
-<section data-title="Decision">
-  <p class="lead">Keep the current method while the remaining input cases are verified.</p>
-  <div class="grid3">
-    <div class="metric"><strong>18.4%</strong><span>runtime reduction</span></div>
-    <div class="metric"><strong>0.7%</strong><span>score change</span></div>
-    <div class="metric"><strong>3</strong><span>unverified cases</span></div>
-  </div>
-  <aside class="script"><p>The measured runtime fell while the score stayed nearly unchanged. Three input cases still need verification before the decision is closed.</p></aside>
-</section>
-<section data-title="Next Evaluation">
+<body data-author="Systems Research Group" data-meta="Internal evaluation|13 August 2026"
+      data-sub="Runtime and quality after the current change">
+<aside class="script"><p>Welcome. This review covers the measured result and the final verification gate.</p></aside>
+<section data-title="Runtime improves while quality holds">
+  <p class="lead">The current method cuts evaluation time with no material score change.</p>
   <div class="two">
+    <svg viewBox="0 0 620 350" role="img" aria-label="Runtime and quality comparison">
+      <rect x="0" y="0" width="620" height="350" rx="16" fill="#f4f6f8"/>
+      <text x="36" y="45" fill="#243943" font-size="20" font-weight="650">Measured comparison</text>
+      <text x="36" y="76" fill="#6d777c" font-size="14">runtime · same workload · lower is better</text>
+      <line x1="60" y1="280" x2="574" y2="280" stroke="#cfd8d7" stroke-width="2"/>
+      <rect x="100" y="112" width="126" height="168" rx="7" fill="#b9c7c5"/>
+      <rect x="270" y="143" width="126" height="137" rx="7" fill="#6d928d"/>
+      <text x="163" y="101" text-anchor="middle" fill="#4f5a60" font-size="24" font-weight="650">12.5 min</text>
+      <text x="333" y="132" text-anchor="middle" fill="#2f756a" font-size="24" font-weight="650">10.2 min</text>
+      <text x="163" y="312" text-anchor="middle" fill="#4f5a60" font-size="16">Baseline</text>
+      <text x="333" y="312" text-anchor="middle" fill="#243943" font-size="16" font-weight="650">Current</text>
+      <rect x="438" y="108" width="136" height="92" rx="10" fill="#ffffff" stroke="#d9dfdf"/>
+      <text x="456" y="137" fill="#6d777c" font-size="13">RUNTIME</text>
+      <text x="456" y="178" fill="#2f756a" font-size="32" font-weight="650">−18.4%</text>
+      <rect x="438" y="214" width="136" height="92" rx="10" fill="#ffffff" stroke="#d9dfdf"/>
+      <text x="456" y="243" fill="#6d777c" font-size="13">SCORE</text>
+      <text x="456" y="284" fill="#243943" font-size="32" font-weight="650">−0.1</text>
+    </svg>
     <div>
-      <h3>Run now</h3>
-      <ul class="notes">
-        <li>Inspect the unresolved inputs.</li>
-        <li>Repeat the comparison.</li>
-        <li>Record runtime and score together.</li>
-      </ul>
-    </div>
-    <div>
-      <h3>Decision condition</h3>
-      <p>Keep the method when corrected inputs preserve the runtime reduction without lowering the score.</p>
+      <div class="card">
+        <h3>Faster evaluation</h3>
+        <p>Runtime falls from 12.5 to 10.2 minutes on the same workload.</p>
+      </div>
+      <div class="card">
+        <h3>Stable quality</h3>
+        <p>The score moves from 91.6 to 91.5, inside the 0.5-point tolerance.</p>
+      </div>
+      <div class="card">
+        <h3>Final verification</h3>
+        <p>Three unresolved inputs still need the same comparison.</p>
+      </div>
     </div>
   </div>
-  <aside class="script"><p>The next run checks the unresolved inputs first, then repeats the same comparison and records runtime and score together.</p></aside>
+  <p class="takeaway">Adopt after the three remaining inputs pass verification.</p>
+  <aside class="script"><p>The current method is faster while measured quality remains stable. The decision waits only for the three unresolved inputs.</p></aside>
+</section>
+<section data-title="Close the remaining evidence gap">
+  <div class="flow">
+    <div class="step"><strong>Inspect</strong>Check the three unresolved inputs.</div>
+    <div class="step"><strong>Repeat</strong>Run the baseline again.</div>
+    <div class="step"><strong>Record</strong>Capture both measures.</div>
+    <div class="step"><strong>Decide</strong>Adopt when all three pass.</div>
+  </div>
+  <p class="takeaway">The decision rule is fixed before the final run.</p>
+  <aside class="script"><p>The final run follows one fixed rule: all three unresolved inputs must preserve the runtime gain without a material score loss.</p></aside>
 </section>
 </body>
