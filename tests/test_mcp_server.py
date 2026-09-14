@@ -83,6 +83,7 @@ def test_source_comments_are_compact_until_the_agent_reads_detail() -> None:
             "stale": False,
         },
         "thread": [{"id": "e-00000001", "author": "human", "at": "2026-09-14T00:00:00+00:00", "text": "Revise this"}],
+        "updated": "2026-09-14T00:00:00+00:00",
         "status": "open",
         "created": "2026-09-14T00:00:00+00:00",
     }
@@ -806,4 +807,4 @@ def test_reply_comments_takes_edits_of_the_agents_own_entries(tmp_path: Path) ->
     schemas = {tool.name: tool.inputSchema for tool in asyncio.run(mcp.list_tools())}
     assert set(schemas["reply_comments"]["properties"]) == {
         "artifact", "replies_text", "edited_files", "replies_file", "edits_text"}
-    assert "entry id, @, the comment's updated stamp" in schemas["reply_comments"]["properties"]["edits_text"]["description"]
+    assert "the comment id, /, the entry id, @, the comment's updated stamp" in schemas["reply_comments"]["properties"]["edits_text"]["description"]

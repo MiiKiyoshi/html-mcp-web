@@ -1060,25 +1060,20 @@ class HtmlReviewServer:
                     raise ValueError("replies_file excludes inline updates and requires agent author")
                 comments = runtime.store.reply_file(replies_file, edits=edited_files)
             elif entry_edits is not None:
-                # Rewrites of the agent's own entries: {entry, updated, text} each, the
-                # updated stamp being the comment's as the agent read it.
+                # Rewrites of the agent's own entries: {comment, entry, updated, text} each,
+                # the updated stamp being the comment's as the agent read it.
                 if author != "agent" or any(key in data for key in ("comment_ids", "message", "status")):
                     raise ValueError("entry_edits excludes other updates and requires agent author")
                 if not isinstance(entry_edits, list) or not all(
-                    isinstance(item, dict) and isinstance(item.get("entry"), str)
+                    isinstance(item, dict) and isinstance(item.get("comment"), str)
+                    and isinstance(item.get("entry"), str)
                     and isinstance(item.get("updated"), str) and isinstance(item.get("text"), str)
                     for item in entry_edits
                 ):
-                    raise ValueError("entry_edits must be a list of {entry, updated, text}")
-                by_entry = {item["entry"]: item for item in entry_edits}
-                stamps = {}
-                store_entries = {entry.id: comment.id for comment in runtime.store.list() for entry in comment.thread}
-                for item in entry_edits:
-                    comment_id = store_entries.get(item["entry"])
-                    if comment_id is not None:
-                        stamps[comment_id] = item["updated"]
+                    raise ValueError("entry_edits must be a list of {comment, entry, updated, text}")
                 comments = runtime.store.edit_agent_entries(
-                    [(item["entry"], item["text"]) for item in entry_edits], stamps)
+                    [(item["comment"], item["entry"], item["text"]) for item in entry_edits],
+                    {item["comment"]: item["updated"] for item in entry_edits})
             else:
                 comments = runtime.store.update_many(
                     comment_ids, author, message, status=status, edits=edited_files,

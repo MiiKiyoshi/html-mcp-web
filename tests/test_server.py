@@ -1237,24 +1237,31 @@ async def test_an_agent_rewrites_its_own_entries_through_the_batch_update(client
         "/artifacts/slides/comments", json={"anchor": text_anchor(digest), "text": "Check"})).json()
     replied = await (await test_client.post("/artifacts/slides/comments/update", json={
         "comment_ids": [comment["id"]], "message": "first answer"})).json()
-    thread = (await (await test_client.get(f"/artifacts/slides/comments/{comment['id']}")).json())["thread"]
-    human, agent = thread
+    stored = await (await test_client.get(f"/artifacts/slides/comments/{comment['id']}")).json()
+    human, agent = stored["thread"]
     assert human["id"].startswith("e-") and agent["author"] == "agent"
+    stamp = stored["updated"]
+    assert stamp == replied["updated"][0]["updated"]
+    other = await (await test_client.post(
+        "/artifacts/slides/comments", json={"anchor": text_anchor(digest), "text": "Other"})).json()
 
     refused = await test_client.post("/artifacts/slides/comments/update", json={
-        "entry_edits": [{"entry": human["id"], "updated": replied["updated"][0]["updated"], "text": "x"}]})
+        "entry_edits": [{"comment": comment["id"], "entry": human["id"], "updated": stamp, "text": "x"}]})
     assert refused.status == 400, await refused.text()
     assert "written by human" in await refused.text()
     refused = await test_client.post("/artifacts/slides/comments/update", json={
-        "entry_edits": [{"entry": agent["id"], "updated": "stale", "text": "x"}]})
+        "entry_edits": [{"comment": comment["id"], "entry": agent["id"], "updated": "stale", "text": "x"}]})
     assert refused.status == 400 and "stale" in await refused.text()
     refused = await test_client.post("/artifacts/slides/comments/update", json={
-        "entry_edits": [{"entry": agent["id"], "updated": replied["updated"][0]["updated"], "text": "x"}],
+        "entry_edits": [{"comment": other["id"], "entry": agent["id"], "updated": other["updated"], "text": "x"}]})
+    assert refused.status == 404          # right entry, wrong thread
+    refused = await test_client.post("/artifacts/slides/comments/update", json={
+        "entry_edits": [{"comment": comment["id"], "entry": agent["id"], "updated": stamp, "text": "x"}],
         "author": "human"})
     assert refused.status == 400
 
     rewritten = await (await test_client.post("/artifacts/slides/comments/update", json={
-        "entry_edits": [{"entry": agent["id"], "updated": replied["updated"][0]["updated"], "text": "better answer"}]})).json()
+        "entry_edits": [{"comment": comment["id"], "entry": agent["id"], "updated": stamp, "text": "better answer"}]})).json()
     assert [entry["id"] for entry in rewritten["updated"]] == [comment["id"]]
     stored = await (await test_client.get(f"/artifacts/slides/comments/{comment['id']}")).json()
     assert stored["thread"][1]["text"] == "better answer" and stored["thread"][1]["at"] == agent["at"]

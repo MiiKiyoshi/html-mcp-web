@@ -215,8 +215,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         replies_file: str | None = None,
         edits_text: Annotated[str | None, Field(description=(
             "Rewrites of your own earlier entries, as one text: each starts at a line head with "
-            "the entry id, @, the comment's updated stamp as read, and a colon "
-            "('e-1a2b3c4d@2026-01-01T00:00:00+00:00: ') and runs to the next such head. "
+            "the comment id, /, the entry id, @, the comment's updated stamp as read, and a colon "
+            "('c-1a2b3c4d/e-5e6f7a8b@2026-01-01T00:00:00+00:00: ') and runs to the next such head. "
             "Refused if the thread changed since."))] = None,
     ) -> dict[str, Any]:
         """Reply without changing status, or rewrite your own entries. Use replies_text and/or
@@ -238,8 +238,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         if edits_text is not None:
             rewrites = parse_entry_edits(edits_text)
             result = await client.request_json("POST", f"/artifacts/{artifact}/comments/update", {
-                "entry_edits": [{"entry": entry_id, "updated": stamp, "text": body}
-                                for entry_id, stamp, body in rewrites],
+                "entry_edits": [{"comment": comment_id, "entry": entry_id, "updated": stamp, "text": body}
+                                for comment_id, entry_id, stamp, body in rewrites],
             })
             updated.extend(result["updated"])
         replies = parse_replies(replies_text) if replies_text is not None else []
