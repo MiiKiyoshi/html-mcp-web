@@ -81,23 +81,35 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
           const tabs = document.querySelector(".view-tabs");
           const toolbar = document.querySelector(".workspace-toolbar");
           const topbar = document.querySelector(".topbar");
+          const fit = document.querySelector("#zoom-reset-btn");
+          fit.classList.remove("hidden");
+          const toolbarBox = toolbar.getBoundingClientRect();
+          const tabsBox = tabs.getBoundingClientRect();
+          const fitBox = fit.getBoundingClientRect();
           return {
             inTopbar: topbar.contains(tabs),
             inWorkspace: document.querySelector("#workspace").contains(tabs),
-            toolbarAboveArtifact: toolbar.getBoundingClientRect().bottom <=
+            toolbarAboveArtifact: toolbarBox.bottom <=
               document.querySelector("#artifact-pane").getBoundingClientRect().top + 1,
-            fitInToolbar: toolbar.contains(document.querySelector("#zoom-reset-btn")),
-            toolbarHeight: toolbar.getBoundingClientRect().height,
+            fitInToolbar: toolbar.contains(fit),
+            fitBeforeTabs: fitBox.right < tabsBox.left,
+            tabsAtRight: Math.abs(
+              toolbarBox.right - tabsBox.right - parseFloat(getComputedStyle(toolbar).paddingRight)
+            ) < 1,
+            toolbarHeight: toolbarBox.height,
             topbarHeight: topbar.getBoundingClientRect().height,
           };
         ''')
         assert {key: placement[key] for key in (
-            "inTopbar", "inWorkspace", "toolbarAboveArtifact", "fitInToolbar"
+            "inTopbar", "inWorkspace", "toolbarAboveArtifact", "fitInToolbar",
+            "fitBeforeTabs", "tabsAtRight",
         )} == {
             "inTopbar": False,
             "inWorkspace": True,
             "toolbarAboveArtifact": True,
             "fitInToolbar": True,
+            "fitBeforeTabs": True,
+            "tabsAtRight": True,
         }
         assert abs(placement["toolbarHeight"] - placement["topbarHeight"]) < 0.5, placement
 
