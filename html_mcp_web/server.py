@@ -346,12 +346,16 @@ class HtmlReviewServer:
         return runtimes
 
     def _create_watcher(self, config: Config) -> Watcher:
+        return Watcher(self.project_dir, config.watch, config.ignore, self.on_project_change,
+                       self._artifact_roots())
+
+    def _artifact_roots(self) -> list[Path]:
         # Only the directories that hold artifact files are watched recursively; the
         # templates live outside the project, and the rest of the project is not walked.
         roots = [runtime.main_file.parent for runtime in self.artifacts.values()]
         roots += [runtime.content_file.parent for runtime in self.artifacts.values()
                   if runtime.content_file is not None]
-        return Watcher(self.project_dir, config.watch, config.ignore, self.on_project_change, roots)
+        return roots
 
     def project_state(self) -> dict[str, Any]:
         guideline = get_guideline_file(self.config)
@@ -735,6 +739,7 @@ class HtmlReviewServer:
         self.config = config
         self.artifacts = replacements
         self.watcher.update_patterns(config.watch, config.ignore)
+        self.watcher.set_roots(self._artifact_roots())
         state = self.project_state()
         await self.broadcast({"type": "config_reloaded", **state})
 
