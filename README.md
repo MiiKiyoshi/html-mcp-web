@@ -73,7 +73,7 @@ In the directory that holds your artifact, create one project and pick a layout:
 html-mcp-web init --layout slides --main artifact.html
 ```
 
-Then tell the agent to open the review page and listen for **Call agent**; the same session starts the review page at the configured port. `init` writes `.html-mcp-web.yaml`:
+Then tell the agent to open the review page and listen for **Call agent**; the same session starts the review page at the configured port. `init` creates missing source files and writes `.html-mcp-web.yaml`:
 
 ```yaml
 artifacts:
@@ -86,7 +86,7 @@ ignore: []
 port: 8765
 ```
 
-`artifacts` maps an id to its label, `layout` (`slides` is 16:9, `report` is A4), and `main` file, where every `section.page` is one printed page. `watch` refreshes on save, `ignore` is checked first, and `port` is the local address. Agent sessions that find the same config share one server, comments, and revisions.
+`artifacts` maps an id to its label, `layout` (`slides` is 16:9, `report` is A4), and `main` file. Its body contains `main.pages`, with one `section.page` per printed page. `watch` refreshes on save, `ignore` is checked first, and `port` is the local address. Agent sessions that find the same config share one server, comments, and revisions.
 
 An optional top-level `guideline` names
 `~/.config/html-mcp-web/guidelines/<name>/GUIDELINE.md`. For example, use
@@ -114,11 +114,11 @@ A template compiles a small content file into the artifact, so you edit content 
 html-mcp-web init --layout slides --main slides.html --template neutral-slides --content content.html
 ```
 
-The build reruns on every content save. This repo ships [`templates/neutral-slides/`](templates/neutral-slides/) and [`templates/neutral-report/`](templates/neutral-report/); the content format is in [`templates/README.md`](templates/README.md). Your own templates go in `~/.config/html-mcp-web/templates/<name>/` and stay out of this repository.
+Initialization builds a missing main file; the build then reruns on every content save. Existing source files are preserved. This repo ships [`templates/neutral-slides/`](templates/neutral-slides/) and [`templates/neutral-report/`](templates/neutral-report/); the content format is in [`templates/README.md`](templates/README.md). Your own templates go in `~/.config/html-mcp-web/templates/<name>/` and stay out of this repository.
 
 ## Export
 
-The topbar exports each artifact as a file. **PDF** prints every page at the layout's fixed size through headless Firefox. **PPTX** (slides only) builds an editable deck: text stays editable text, tables stay tables, inline SVG stays vector, and math becomes an image. A skin can name TrueType files to embed the deck font; see [`templates/README.md`](templates/README.md#writing-a-skin).
+The topbar exports each artifact as a file. **PDF** prints every page at the layout's fixed size through headless Firefox. **PPTX** (slides only) builds an editable deck: text stays editable text, tables stay tables, inline SVG stays vector, and math becomes an image. A skin can name TrueType files to embed the deck font; see [`templates/SKINS.md`](templates/SKINS.md).
 
 ## Configuration
 

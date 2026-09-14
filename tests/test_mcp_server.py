@@ -86,13 +86,7 @@ async def test_stdio_mcp_starts_without_project_config(tmp_path: Path) -> None:
         async with ClientSession(read, write) as session:
             initialized = await session.initialize()
             assert initialized.instructions is not None
-            assert (
-                "Before editing a reader-facing unit, define the reader’s prior knowledge, intended "
-                "understanding, visible structure, and exclusions; reuse exact keys and order across "
-                "comparison and result units, keep preliminary units to prerequisites while preserving "
-                "and annotating source examples, and rebuild after two related comprehension failures."
-                in initialized.instructions
-            )
+            assert "reuse unchanged threads" in initialized.instructions
             tools = await session.list_tools()
             assert [tool.name for tool in tools.tools] == [
                 "inspect",
@@ -104,6 +98,7 @@ async def test_stdio_mcp_starts_without_project_config(tmp_path: Path) -> None:
                 "measure_space",
                 "wait_review",
             ]
+            assert all(initialized.instructions not in (tool.description or "") for tool in tools.tools)
             inspected = await session.call_tool("inspect", {})
             assert inspected.isError is False
             assert inspected.structuredContent["setup_required"]["project_dir"] == str(tmp_path)
@@ -140,7 +135,7 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
     try:
         mcp = create_server(binding)
         assert len(mcp.instructions) < 1000
-        for needed in ("wait_review()", "docs=True", "configured guideline", "resource_uri"):
+        for needed in ("wait_review()", "document references", "configured guideline", "resource_uri"):
             assert needed in mcp.instructions, needed
         for needed in ("new connection", "do not poll", "duplicate"):
             assert needed in mcp.instructions.lower(), needed
@@ -151,8 +146,8 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
             "tells you to wait",
         ):
             assert gone not in mcp.instructions, gone
-        assert "no arguments once" in mcp.instructions
-        assert "Pass page" in mcp.instructions
+        assert "Call inspect() once" in mcp.instructions
+        assert "page=..." in mcp.instructions
         tools = asyncio.run(mcp.list_tools())
         schemas = {tool.name: tool.inputSchema for tool in tools}
         assert list(schemas) == [
@@ -168,7 +163,7 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         assert schemas["read_comments"]["required"] == ["artifact", "comment_ids"]
         assert schemas["reply_comments"]["required"] == ["artifact", "replies_text"]
         assert schemas["reply_comments"]["properties"]["replies_text"]["type"] == "string"
-        assert set(schemas["inspect"]["properties"]) == {"artifact", "docs", "page"}
+        assert set(schemas["inspect"]["properties"]) == {"artifact", "page"}
         assert schemas["inspect"]["properties"]["page"]["anyOf"][0]["minimum"] == 1
         assert schemas["render_page"]["required"] == ["artifact", "page"]
         assert schemas["render_page"]["properties"]["page"]["minimum"] == 1
@@ -507,7 +502,7 @@ def test_discovery_contains_project_state_without_static_instructions(tmp_path: 
         mcp = create_server(binding)
         _, discovered = asyncio.run(mcp.call_tool("inspect", {}))
         assert set(discovered) == {
-            "config_path", "project_dir", "review_url", "guideline", "artifacts",
+            "config_path", "project_dir", "review_url", "guideline", "documents", "artifacts",
         }
         assert "guide" not in discovered
         assert "reader-facing unit" not in json.dumps(discovered, ensure_ascii=False)
@@ -547,40 +542,40 @@ def test_replies_are_one_text_with_a_comment_id_at_each_line_head() -> None:
             parse_replies(bad)
 
 
-def test_inspect_adds_the_content_format_when_asked(tmp_path: Path) -> None:
-    """A client without file tools could not follow a host path in the instructions, and
-    the path leaked the contract out of the tools; the format rides on inspect now, when
-    asked, rather than on a tool of its own."""
-    (tmp_path / "content.html").write_text(
-        '<section class="page"><h1>One</h1></section>', encoding="utf-8")
-    (tmp_path / ".html-mcp-web.yaml").write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html",
-                                 "template": "neutral-slides", "content": "content.html"}},
-        "port": available_port(),
-    }, sort_keys=False), encoding="utf-8")
+def test_discovery_references_documents_and_resources_serve_exact_text(tmp_path: Path, monkeypatch) -> None:
+    from html_mcp_web.cli import main
+    monkeypatch.chdir(tmp_path)
+    assert main(["init", "--layout", "slides", "--template", "neutral-slides",
+                 "--content", "content.html", "--port", str(available_port())]) == 0
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        _, plain = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
-        assert "docs" not in plain                    # not on every inspect
-        _, inspected = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides", "docs": True}))
-        docs = inspected["docs"]
-        assert docs["template"] == "neutral-slides"
-        assert "section" in docs["readme"]           # the shared content format
-        assert docs["skin_readme"] is None or isinstance(docs["skin_readme"], str)
+        _, discovered = asyncio.run(mcp.call_tool("inspect", {}))
+        docs = discovered["documents"]
+        refs = [docs["authoring"], docs["components"], docs["templates"]["neutral-slides"]]
+        for ref in refs:
+            assert set(ref) == {"path", "resource_uri"}
+            text = Path(ref["path"]).read_text(encoding="utf-8")
+            resource = list(asyncio.run(mcp.read_resource(ref["resource_uri"])))
+            assert resource[0].content == text
+            assert text not in json.dumps(discovered)
+        _, inspected = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
+        assert set(inspected) == {"artifacts"}
+        assert "docs" not in next(t for t in asyncio.run(mcp.list_tools()) if t.name == "inspect").inputSchema["properties"]
     finally:
         binding.stop()
 
 
-def test_inspect_has_no_docs_for_a_plain_artifact(tmp_path: Path) -> None:
-    project(tmp_path)
-    binding = ProjectBinding(tmp_path)
-    try:
-        mcp = create_server(binding)
-        _, inspected = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides", "docs": True}))
-        assert inspected["docs"] == {"template": None, "readme": None, "skin_readme": None}
-    finally:
-        binding.stop()
+def test_discovery_deduplicates_templates_and_handles_plain_artifacts(tmp_path: Path) -> None:
+    from html_mcp_web.mcp_server import document_references
+    template_dir = tmp_path / "skin"
+    template_dir.mkdir()
+    (template_dir / "README.md").write_text("# Skin notes")
+    artifact = {"template": "skin", "template_dir": str(template_dir)}
+    docs = document_references({"one": artifact, "two": artifact, "plain": {}})
+    assert list(docs["templates"]) == ["skin"]
+    assert document_references({"plain": {}})["templates"] == {}
+    assert document_references({"missing": {"template": "missing", "template_dir": str(tmp_path / "missing")}})["templates"] == {}
 
 
 def test_inspect_returns_only_requested_page_layout_detail(tmp_path: Path) -> None:
