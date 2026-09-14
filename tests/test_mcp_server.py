@@ -336,7 +336,8 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
             "suffix": " after",
         }
         assert "created" not in stripped
-        assert "updated" not in stripped
+        # The thread's updated stamp is the one thing a rewrite of an entry has to quote.
+        assert isinstance(stripped["updated"], str) and stripped["updated"]
 
         _, replied = asyncio.run(mcp.call_tool("reply_comments", {
             "artifact": "slides",
