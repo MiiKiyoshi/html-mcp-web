@@ -82,7 +82,7 @@ def test_source_comments_are_compact_until_the_agent_reads_detail() -> None:
             "line_start": 12, "line_end": 12, "column_start": 8, "column_end": 19,
             "stale": False,
         },
-        "thread": [{"author": "human", "at": "2026-09-14T00:00:00+00:00", "text": "Revise this"}],
+        "thread": [{"id": "e-00000001", "author": "human", "at": "2026-09-14T00:00:00+00:00", "text": "Revise this"}],
         "status": "open",
         "created": "2026-09-14T00:00:00+00:00",
     }
@@ -799,3 +799,11 @@ def test_list_comments_offers_the_reference_view(tmp_path: Path) -> None:
     mcp = create_server(ProjectBinding(tmp_path))
     schemas = {tool.name: tool.inputSchema for tool in asyncio.run(mcp.list_tools())}
     assert schemas["list_comments"]["properties"]["status"]["enum"] == ["open", "resolved", "reference", "all"]
+
+
+def test_reply_comments_takes_edits_of_the_agents_own_entries(tmp_path: Path) -> None:
+    mcp = create_server(ProjectBinding(tmp_path))
+    schemas = {tool.name: tool.inputSchema for tool in asyncio.run(mcp.list_tools())}
+    assert set(schemas["reply_comments"]["properties"]) == {
+        "artifact", "replies_text", "edited_files", "replies_file", "edits_text"}
+    assert "entry id, @, the comment's updated stamp" in schemas["reply_comments"]["properties"]["edits_text"]["description"]

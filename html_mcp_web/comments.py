@@ -31,6 +31,10 @@ def _new_id() -> str:
     return f"c-{uuid.uuid4().hex[:8]}"
 
 
+def _new_entry_id() -> str:
+    return f"e-{uuid.uuid4().hex[:8]}"
+
+
 @dataclass
 class DomPosition:
     path: list[int]
@@ -248,17 +252,25 @@ class ThreadEntry:
     at: str
     text: str
     edits: list[str] = field(default_factory=list)
+    # A stable id, so an entry can be named after the thread grows; updated_at is set when
+    # its text was rewritten after it was written.
+    id: str = field(default_factory=_new_entry_id)
+    updated_at: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        data: dict[str, Any] = {"author": self.author, "at": self.at, "text": self.text}
+        data: dict[str, Any] = {"id": self.id, "author": self.author, "at": self.at, "text": self.text}
         if self.edits:
             data["edits"] = list(self.edits)
+        if self.updated_at is not None:
+            data["updated_at"] = self.updated_at
         return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ThreadEntry":
         edits = [str(value) for value in data["edits"]] if "edits" in data else []
-        return cls(author=data["author"], at=str(data["at"]), text=str(data["text"]), edits=edits)
+        return cls(author=data["author"], at=str(data["at"]), text=str(data["text"]), edits=edits,
+                   id=str(data["id"]) if "id" in data else _new_entry_id(),
+                   updated_at=str(data["updated_at"]) if "updated_at" in data else None)
 
 
 @dataclass
@@ -310,6 +322,20 @@ class CommentStore:
         self.lock_path = self.path.with_name(f"{self.path.name}.lock")
         if not self.path.exists():
             self._write({"version": STORE_VERSION, "comments": []})
+        else:
+            self._assign_entry_ids()
+
+    def _assign_entry_ids(self) -> None:
+        """Give entries written before they carried ids their ids, once, under the lock:
+        an id made on every load would name nothing across loads."""
+        with self._locked():
+            try:
+                data = self._read()
+            except (OSError, ValueError, KeyError, TypeError):
+                return  # an unreadable store fails on its first operation, as before
+            if all("id" in entry for comment in data["comments"] for entry in comment["thread"]):
+                return
+            self._save(Comment.from_dict(value) for value in data["comments"])
 
     @contextlib.contextmanager
     def _locked(self) -> Iterator[None]:
@@ -413,8 +439,67 @@ class CommentStore:
     def reply_file(self, path: str, edits: list[str] | None = None) -> list[Comment]:
         from .comment_drafts import load
 
-        replies, expected = load(self.path.parent.parent / "drafts" / self.path.stem, path)
-        return self.update_many(list(replies), "agent", replies, edits=edits, expected_updated=expected)
+        replies, entry_edits, expected = load(self.path.parent.parent / "drafts" / self.path.stem, path)
+        return self.apply_batch(replies, entry_edits, expected, edits)
+
+    def edit_agent_entries(self, entry_edits: list[tuple[str, str]],
+                           expected_updated: dict[str, str]) -> list[Comment]:
+        """Rewrite agent entries named by id, all or none. expected_updated maps each
+        touched comment to the updated stamp the caller read; a thread that moved on
+        since refuses the whole batch."""
+        return self.apply_batch({}, entry_edits, expected_updated, None)
+
+    def apply_batch(
+        self,
+        replies: dict[str, str],
+        entry_edits: list[tuple[str, str]],
+        expected_updated: dict[str, str],
+        edits: list[str] | None,
+    ) -> list[Comment]:
+        """Append agent replies and rewrite agent entries under one lock and one save.
+
+        Every comment in expected_updated is checked against the store first; nothing is
+        written unless all of it can be. Entries are named by their ids, which are unique
+        across comments; a human's entry is refused."""
+        if not replies and not entry_edits:
+            raise ValueError("nothing to apply")
+        if any(not text.strip() for text in replies.values()) or any(not text.strip() for _, text in entry_edits):
+            raise ValueError("thread text must not be empty")
+        if len({entry_id for entry_id, _ in entry_edits}) != len(entry_edits):
+            raise ValueError("each entry appears at most once")
+        with self._locked():
+            comments = self._all()
+            by_id = {comment.id: comment for comment in comments}
+            entries = {entry.id: (comment, entry) for comment in comments for entry in comment.thread}
+            touched: dict[str, Comment] = {}
+            for entry_id, _ in entry_edits:
+                if entry_id not in entries:
+                    raise KeyError(f"thread entry {entry_id!r} not found")
+                comment, entry = entries[entry_id]
+                if entry.author != "agent":
+                    raise ValueError(f"thread entry {entry_id} was written by {entry.author}")
+                touched[comment.id] = comment
+            for comment_id in replies:
+                if comment_id not in by_id:
+                    raise KeyError(f"comments not found: {comment_id}")
+                touched[comment_id] = by_id[comment_id]
+            for comment_id, comment in touched.items():
+                if comment_id not in expected_updated:
+                    raise ValueError(f"no updated stamp given for {comment_id}")
+                if comment.updated != expected_updated[comment_id]:
+                    raise ValueError(f"stale: {comment_id} changed since it was read")
+            now = _now()
+            for entry_id, text in entry_edits:
+                _, entry = entries[entry_id]
+                entry.text = text.strip()
+                entry.updated_at = now
+            for comment_id, text in replies.items():
+                by_id[comment_id].thread.append(
+                    ThreadEntry(author="agent", at=now, text=text.strip(), edits=list(edits or [])))
+            for comment in touched.values():
+                comment.updated = now
+            self._save(comments)
+            return list(touched.values())
 
     def update_many(
         self,
