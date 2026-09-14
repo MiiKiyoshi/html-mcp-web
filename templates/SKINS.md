@@ -53,4 +53,3 @@ to its `.woff2`. Without `fonts`, runs are set in Arial and nothing is embedded.
 The neutral skins in this directory carry no organization identity, and the repository
 test `tests/test_repository_is_neutral.py` keeps it that way: a private skin lives
 under `~/.config/html-mcp-web/templates/` and is never committed here.
-
