@@ -14,10 +14,12 @@ from typing import Any, Iterable, Iterator, Literal
 
 
 Author = Literal["human", "agent"]
-# A thread is open or resolved. A third state, dismissed, closed a thread without acting
-# on it; the reviewer never used it, and it was the one close an agent still had for its
-# own work, so a comment not worth acting on is resolved or deleted like any other.
-Status = Literal["open", "resolved"]
+# A thread is open, resolved, or kept as reference: a thread worth reading again after
+# the work it asked for is done, or instead of it, listed on its own. A dismissed state
+# once closed a thread without acting on it; the reviewer never used it, and it was the
+# one close an agent still had for its own work, so a comment not worth acting on is
+# resolved or deleted like any other.
+Status = Literal["open", "resolved", "reference"]
 
 
 def _now() -> str:
@@ -471,6 +473,10 @@ class CommentStore:
                 self._save(comments)
                 return comment
         raise KeyError(f"comment {comment_id!r} not found")
+
+    def keep_as_reference(self, comment_id: str, author: Author) -> Comment:
+        """Set the thread aside to be read again; its entries stay as they are."""
+        return self._append(comment_id, author, "", status="reference")
 
     def delete(self, comment_id: str) -> None:
         with self._locked():

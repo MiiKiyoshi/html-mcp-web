@@ -65,9 +65,12 @@ export function createComments(dependencies) {
     // one written last, by when it was written and not by when it was last touched:
     // closing a comment touches it, so by that measure every closed comment stood above
     // every open one and a comment written a minute ago sat below a dozen closed ones.
+    // The reference view leads with the thread touched last: what was kept to be read
+    // again is read again when something is added to it.
     const view = $("#comment-filter").value;
     const moment = view === "resolved"
       ? (comment) => comment.resolved ?? comment.created
+      : view === "reference" ? (comment) => comment.updated
       : (comment) => comment.created;
     state.comments = view === "open" ? payload.comments
       : [...payload.comments].sort((first, second) => (moment(first) < moment(second) ? 1
@@ -250,15 +253,20 @@ export function createComments(dependencies) {
           entry.edits.map((edit) => h("li", { text: edit })))));
     }
     const actions = h("div", { class: "comment-actions" });
-    if (comment.status === "open") {
-      actions.append(
-        actionButton("Reply", () => setActiveForm(comment.id, "reply")),
-        actionButton("Resolve", () => flipStatus(comment.id, "resolve", "summary")),
-      );
-    } else {
-      // Reopening is a one-click status flip like closing: the status says what happened,
-      // and anything more belongs in a reply, which is a click away either way.
+    // Every status flip is one click: the status says what happened, and anything more
+    // belongs in a reply. A thread kept as reference still takes replies, and goes back
+    // to open or resolved from the same row.
+    if (comment.status !== "resolved") {
+      actions.appendChild(actionButton("Reply", () => setActiveForm(comment.id, "reply")));
+    }
+    if (comment.status !== "open") {
       actions.appendChild(actionButton("Reopen", () => flipStatus(comment.id, "reopen", "text")));
+    }
+    if (comment.status !== "resolved") {
+      actions.appendChild(actionButton("Resolve", () => flipStatus(comment.id, "resolve", "summary")));
+    }
+    if (comment.status !== "reference") {
+      actions.appendChild(actionButton("Reference", () => flipStatus(comment.id, "reference", "text")));
     }
     actions.appendChild(actionButton("Delete", () => deleteComment(comment.id), "danger"));
     body.appendChild(actions);

@@ -55,6 +55,8 @@ NO_CACHE = {"Cache-Control": "no-cache"}
 # Reopening one stays the agent's to do.
 AGENT_CLOSE_REFUSED = ("an agent does not resolve a thread: reply, record the edited files and "
                        "leave it open; the reviewer resolves from the page")
+AGENT_REFERENCE_REFUSED = ("an agent does not keep a thread as reference: reply and leave it open; "
+                           "the reviewer keeps it from the page")
 
 
 def strip_script_blocks(source: str) -> str:
@@ -216,7 +218,7 @@ class ArtifactRuntime:
         comments = self.store.list()
         comment_counts = {
             status: sum(comment.status == status for comment in comments)
-            for status in ("open", "resolved")
+            for status in ("open", "resolved", "reference")
         }
         data: dict[str, Any] = {
             "id": self.artifact_id,
@@ -907,7 +909,7 @@ class HtmlReviewServer:
     async def list_comments(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         status = request.query["status"] if "status" in request.query else None
-        if status not in {None, "open", "resolved"}:
+        if status not in {None, "open", "resolved", "reference"}:
             raise web.HTTPBadRequest(text="invalid status")
         return web.json_response({"comments": [comment.to_dict() for comment in runtime.store.list(status=status)]})
 
@@ -962,6 +964,8 @@ class HtmlReviewServer:
             raise web.HTTPBadRequest(text="invalid author")
         if author == "agent" and action == "resolve":
             raise web.HTTPBadRequest(text=AGENT_CLOSE_REFUSED)
+        if author == "agent" and action == "reference":
+            raise web.HTTPBadRequest(text=AGENT_REFERENCE_REFUSED)
         try:
             if action == "reply":
                 comment = runtime.store.reply(comment_id, str(data["text"]), author,
@@ -971,6 +975,8 @@ class HtmlReviewServer:
                                                 [str(value) for value in data["edits"]] if "edits" in data else None)
             elif action == "reopen":
                 comment = runtime.store.reopen(comment_id, str(data["text"]), author)
+            elif action == "reference":
+                comment = runtime.store.keep_as_reference(comment_id, author)
             else:
                 raise RuntimeError(f"unknown mutation: {action}")
         except KeyError as error:
@@ -1022,8 +1028,8 @@ class HtmlReviewServer:
                 raise ValueError("comment_ids must be a list of strings")
             if not isinstance(message, str):
                 raise ValueError("message must be a string")
-            if status not in {None, "open", "resolved"}:
-                raise ValueError("status must be open or resolved")
+            if status not in {None, "open", "resolved", "reference"}:
+                raise ValueError("status must be open, resolved or reference")
             if author == "agent" and status == "resolved":
                 raise ValueError(AGENT_CLOSE_REFUSED)
             if edited_files is not None and (
@@ -1040,6 +1046,8 @@ class HtmlReviewServer:
         except KeyError as error:
             raise web.HTTPNotFound(text=str(error)) from error
         except (TypeError, ValueError) as error:
+            if author == "agent" and status == "reference":
+                raise ValueError(AGENT_REFERENCE_REFUSED)
             raise web.HTTPBadRequest(text=str(error)) from error
         result: dict[str, Any] = {
             "updated": [
@@ -1092,6 +1100,9 @@ class HtmlReviewServer:
         return web.json_response(comment.to_dict())
 
     async def delete_comment(self, request: web.Request) -> web.Response:
+    async def reference_comment(self, request: web.Request) -> web.Response:
+        return await self._thread_mutation(request, "reference")
+
         runtime = self.runtime(request)
         comment_id = request.match_info["comment_id"]
         try:
@@ -1262,6 +1273,7 @@ class HtmlReviewServer:
         # once and finds the port closed.
         self.closing = True
         self.review_called.set()
+        app.router.add_post(f"{base}/comments/{{comment_id}}/reference", self.reference_comment)
 
 
 def run_server(config: Config, host: str = "127.0.0.1") -> None:

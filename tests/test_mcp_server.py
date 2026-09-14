@@ -626,7 +626,7 @@ def test_inspect_returns_only_requested_page_layout_detail(tmp_path: Path) -> No
         assert compact["artifacts"]["slides"] == {
             "revision": revision,
             "layout_error_count": 2,
-            "comment_counts": {"open": 0, "resolved": 0},
+            "comment_counts": {"open": 0, "resolved": 0, "reference": 0},
         }
         _, detailed = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides", "page": 1}))
         page = detailed["artifacts"]["slides"]["page"]
@@ -791,3 +791,11 @@ def test_wait_review(tmp_path: Path, monkeypatch, codex) -> None:
             waiter.wait(timeout=5)
     finally:
         binding.stop()
+
+
+def test_list_comments_offers_the_reference_view(tmp_path: Path) -> None:
+    """A thread the reviewer keeps as reference is listed apart from open and resolved,
+    and the agent asks for that view by name."""
+    mcp = create_server(ProjectBinding(tmp_path))
+    schemas = {tool.name: tool.inputSchema for tool in asyncio.run(mcp.list_tools())}
+    assert schemas["list_comments"]["properties"]["status"]["enum"] == ["open", "resolved", "reference", "all"]

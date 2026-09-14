@@ -164,3 +164,27 @@ def test_a_close_leaves_its_time_and_a_reopen_takes_it_back(tmp_path: Path) -> N
     stored = closed.to_dict()
     del stored["resolved"]
     assert Comment.from_dict(stored).resolved is None
+
+
+def test_a_thread_kept_as_reference_stays_readable_and_comes_back(tmp_path: Path) -> None:
+    """Reference is a third status beside open and resolved, for a thread worth reading
+    again: it takes replies without changing, and goes back to either with one flip."""
+    store = CommentStore(tmp_path / "comments.json")
+    created = store.add(anchor(), "Keep this reasoning")
+    kept = store.keep_as_reference(created.id, "human")
+    assert kept.status == "reference" and kept.resolved is None
+    assert len(kept.thread) == 1                      # a status flip adds no entry
+    assert [comment.id for comment in store.list(status="reference")] == [created.id]
+    assert store.list(status="open") == [] and store.list(status="resolved") == []
+
+    replied = store.reply(created.id, "One more thought", "agent")
+    assert replied.status == "reference" and len(replied.thread) == 2
+    assert store.resolve(created.id, "", "human").status == "resolved"
+    assert store.keep_as_reference(created.id, "human").resolved is None  # resolved -> reference
+    assert store.reopen(created.id, "", "human").status == "open"
+    assert len(store.get(created.id).thread) == 2      # the flips left the thread alone
+
+    # A store written before the status existed holds only open and resolved, and loads.
+    older = CommentStore(tmp_path / "older.json")
+    older.add(anchor(), "old")
+    assert {comment.status for comment in CommentStore(tmp_path / "older.json").list()} == {"open"}

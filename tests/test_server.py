@@ -342,6 +342,7 @@ async def test_comment_and_agent_reply_round_trip(client) -> None:
     assert state["artifacts"]["slides"]["comment_counts"] == {
         "open": 1,
         "resolved": 0,
+        "reference": 0,
     }
 
     reply = await test_client.post(
@@ -512,6 +513,42 @@ async def test_reopening_needs_no_words(client) -> None:
     empty_reply = await test_client.post(
         f"/artifacts/slides/comments/{comment['id']}/reply", json={"text": "   "})
     assert empty_reply.status == 400
+
+
+async def test_a_thread_kept_as_reference_is_listed_apart_and_only_by_the_reviewer(client) -> None:
+    test_client, review = client
+    digest = review.artifacts["slides"].digest()
+    comment = await (await test_client.post(
+        "/artifacts/slides/comments", json={"anchor": text_anchor(digest), "text": "Keep"})).json()
+    other = await (await test_client.post(
+        "/artifacts/slides/comments", json={"anchor": text_anchor(digest), "text": "Work"})).json()
+
+    refused = await test_client.post(
+        f"/artifacts/slides/comments/{comment['id']}/reference", json={"author": "agent"})
+    assert refused.status == 400 and "an agent does not keep a thread as reference" in await refused.text()
+    refused = await test_client.post("/artifacts/slides/comments/update", json={
+        "comment_ids": [comment["id"]], "status": "reference"})
+    assert refused.status == 400 and "an agent does not keep a thread as reference" in await refused.text()
+
+    kept = await (await test_client.post(
+        f"/artifacts/slides/comments/{comment['id']}/reference", json={})).json()
+    assert kept["status"] == "reference" and kept["resolved"] is None and len(kept["thread"]) == 1
+    listed = await (await test_client.get("/artifacts/slides/comments?status=reference")).json()
+    assert [entry["id"] for entry in listed["comments"]] == [comment["id"]]
+    listed = await (await test_client.get("/artifacts/slides/comments?status=open")).json()
+    assert [entry["id"] for entry in listed["comments"]] == [other["id"]]
+    state = await (await test_client.get("/state")).json()
+    assert state["artifacts"]["slides"]["comment_counts"] == {"open": 1, "resolved": 0, "reference": 1}
+
+    replied = await (await test_client.post(
+        f"/artifacts/slides/comments/{comment['id']}/reply", json={"text": "Still true", "author": "agent"})).json()
+    assert replied["status"] == "reference"
+    batch = await (await test_client.post("/artifacts/slides/comments/update", json={
+        "comment_ids": [other["id"]], "status": "reference", "author": "human", "message": ""})).json()
+    assert [entry["status"] for entry in batch["updated"]] == ["reference"]
+    reopened = await (await test_client.post(
+        f"/artifacts/slides/comments/{comment['id']}/reopen", json={"text": ""})).json()
+    assert reopened["status"] == "open" and len(reopened["thread"]) == 2
 
 
 async def test_replying_never_reports_the_anchor(client) -> None:
