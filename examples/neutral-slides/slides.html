@@ -6,6 +6,69 @@
   <title>Evaluation Review</title>
   
   <style>
+/* What the components of templates/README.md are, in the part that holds whatever page
+   they sit on. A deck's page is 1280x720 pixels and a report's is A4, so sizes, spacing
+   and rules measured in millimetres stay with each of those; a colour, a weight, an
+   alignment and the shape of a component do not change with the paper and stand here
+   once. Both builders read this file before their own sheet, so either can override a
+   line of it, and a skin overrides both.
+
+   --ink and --ink-soft are not here: the deck and the report each set their own. */
+
+:root {
+  --accent: #6d928d;
+  --line: #d9dfdf;
+  --muted: #6d777c;
+  --paper: #fffefd;
+  --good: #2f756a;
+  --bad: #a24b47;
+  --mono: ui-monospace, monospace;
+  --code-bg: #ecefef;
+
+  /* Safari measures a line of text one way when it can take its simplified path and
+     another when it cannot, and the two drift apart along the line: a paragraph carrying
+     an inline box set at another size, a subscript or a KaTeX span, opens a gap before
+     that box, 43px of it after 125 characters on a reader's screen. Any letter-spacing
+     at all sends the line down the general path, since WebKit's
+     TextUtil::canUseSimplifiedTextMeasuring refuses a font that has letter-spacing or
+     word-spacing, and a hundredth of a pixel is under what a screen can show: 1.5px
+     across a 150-character line. Turning kerning or ligatures off does not do it; those
+     change what is drawn, and the gate reads only the two spacings. */
+  letter-spacing: 0.01px;
+}
+
+* { box-sizing: border-box; }
+.page { position: relative; padding: 0; background: var(--paper); }
+
+/* Chrome shapes the letters of an svg label at the size they will appear on screen, to
+   keep them from being stretched: LayoutSVGInlineText asks
+   calculateScreenFontSizeScalingFactor for that size and shapes the glyphs for it. The
+   size is read again when the label's own style changes, and a page drawn larger changes
+   the transform of the page, not of the label inside it, so the label went on wearing
+   letters shaped for the size before: zooming a deck left the words at one scale and the
+   boxes around them at another until something else made the label restyle. Asking for
+   geometric precision turns that off, and the letters are laid out once in the drawing's
+   own units and scaled with everything else. Plain html text never had this: it is placed
+   in css pixels and only painted at the scale. */
+svg text { text-rendering: geometricPrecision; }
+
+.lead { color: var(--ink-soft); }
+.note { color: var(--muted); line-height: 1.5; }
+ul.notes { color: var(--muted); line-height: 1.55; }
+.nw { white-space: nowrap; }
+.pos { color: var(--good); font-weight: 650; }
+.neg { color: var(--bad); font-weight: 650; }
+code { background: var(--code-bg); font-family: var(--mono); font-size: .92em; }
+
+.two { display: grid; }
+.metric strong { display: block; }
+.metric span { color: var(--ink-soft); line-height: 1.4; }
+
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th { font-weight: 650; letter-spacing: .025em; }
+th, td { text-align: right; }
+th:first-child, td:first-child { text-align: left; }
+
 /* Slide engine skeleton: where things sit on a 1280x720 page. A skin sets the variables
    below and supplies chrome images through the slots the builder emits; it does not
    restate this file. Values here are the neutral defaults; a skin overrides only what it
@@ -17,15 +80,9 @@
 
   --ink: #22282c;
   --ink-soft: #4f5a60;
-  --muted: #6d777c;
   --primary: #243943;
-  --accent: #6d928d;
-  --line: #d9dfdf;
-  --paper: #fffefd;
   --panel: #f4f6f8;
-  --good: #2f756a;
-  --bad: #a24b47;
-  --mono: ui-monospace, monospace;
+  --code-block-bg: #f4f6f8;
 
   --tbar-height: 64px;
   --tbar-padding: 0 42px;
@@ -43,8 +100,6 @@
   --lead-gap: 8px;
 }
 
-* { box-sizing: border-box; }
-.page { position: relative; padding: 0; background: var(--paper); }
 
 /* ---- Body page: title bar, body box, footer bar ---- */
 .tbar {
@@ -69,7 +124,20 @@
   flex-direction: column;
 }
 .body > .rest { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; }
-.body > .lead:first-child { margin-top: var(--lead-gap); }
+.body > .lead:first-child:not(.takeaway) { margin-top: var(--lead-gap); }
+.body > .takeaway {
+  flex-shrink: 0;
+  width: 100%;
+  max-width: none;
+  margin-top: var(--lead-gap);
+  text-align: center;
+}
+/* A picture keeps its own proportions. The body is a column flex box, and its default
+   stretch handed an image with no stated width the whole column: max-height then cut only
+   the height, so a 4:3 figure was drawn 1196x300, at 4:1. Centred because that is where a
+   figure narrower than the text belongs, and held inside the column because an image wider
+   than it no longer has the stretch to keep it in. */
+.body > img, .body > .rest > img { align-self: center; max-width: 100%; }
 
 .bbar {
   position: absolute;
@@ -201,43 +269,64 @@
 
 /* ---- Body components ---- */
 p { margin: 0 0 12px; font-size: 19px; line-height: 1.5; }
-.lead { max-width: 1120px; color: var(--ink-soft); font-size: 20px; }
-.note { margin-top: 12px; color: var(--muted); font-size: 15px; line-height: 1.5; }
-ul.notes { margin: 12px 0 0; padding-left: 20px; color: var(--muted); font-size: 15px; line-height: 1.55; }
+.lead { max-width: 1120px; font-size: 20px; }
+.note { margin-top: 12px; font-size: 15px; }
+ul.notes { margin: 12px 0 0; padding-left: 20px; font-size: 15px; }
 ul.notes li { margin-bottom: 3px; }
 .units { margin: 0 0 4px; color: var(--muted); font-size: 13px; text-align: right; }
 .feedback { margin-top: 16px; padding: 10px 0 10px 16px; border-left: 3px solid var(--accent); color: var(--ink-soft); font-size: 17px; }
 .feedback b { margin-right: 8px; }
+/* A labelled block of points raised about the work: the label on its own line, then the
+   points as a list or a paragraph. */
+.concerns { margin-top: 16px; padding: 10px 0 10px 16px; border-left: 3px solid var(--accent); color: var(--ink-soft); }
+.concerns > b { display: block; margin-bottom: 5px; color: var(--primary); font-size: 14.5px; letter-spacing: .05em; }
+.concerns p { margin: 0; font-size: 17px; }
+.concerns ul { margin: 0; padding-left: 20px; font-size: 17px; line-height: 1.5; }
+.concerns ul li { margin-bottom: 2px; }
 
-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 /* Text right below a table hugs the last row line without this gap. */
 table + p, table + table { margin-top: 16px; }
 /* keep-all so a cell breaks between words: CJK text otherwise wraps mid-word. */
-th, td { padding: 8px 13px; border-bottom: 1px solid var(--line); font-size: 17px; text-align: right; word-break: keep-all; }
-th:first-child, td:first-child { text-align: left; }
-th { border-bottom: 2px solid var(--accent); color: var(--primary); font-size: 14px; font-weight: 650; letter-spacing: .025em; }
+th, td { padding: 8px 13px; border-bottom: 1px solid var(--line); font-size: 17px; word-break: keep-all; }
+th { border-bottom: 2px solid var(--accent); color: var(--primary); font-size: 14px; }
 th.sep, td.sep { border-left: 1px solid var(--line); }
-.nw { white-space: nowrap; }
 tfoot td { border-top: 2px solid var(--accent); border-bottom: 0; font-weight: 700; }
 .dense th, .dense td { padding: 4px 10px; font-size: 15px; line-height: 1.25; }
 .dense th { font-size: 13px; }
 .tight th, .tight td { padding: 4px 7px; font-size: 14px; white-space: nowrap; }
 .tight th { font-size: 12.5px; }
-.pos { color: var(--good); font-weight: 650; }
-.neg { color: var(--bad); font-weight: 650; }
 
 .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 34px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .metric { min-height: 150px; padding: 25px 25px 22px; }
-.metric strong { display: block; margin-bottom: 8px; color: var(--primary); font-size: 40px; font-weight: 650; letter-spacing: -0.025em; }
-.metric span { display: block; max-width: 300px; color: var(--ink-soft); font-size: 17px; line-height: 1.4; }
+.metric strong { margin-bottom: 8px; color: var(--primary); font-size: 40px; font-weight: 650; letter-spacing: -0.025em; }
+.metric span { display: block; max-width: 300px; font-size: 17px; }
 .win strong { color: var(--good); }
 .lose strong { color: var(--bad); }
 
-.two { display: grid; grid-template-columns: 1.15fr 1fr; gap: 36px; align-items: start; }
+/* The two columns share the row's height, and a column that wraps its blocks in a div
+   spreads them over it the way the body spreads its own (.body > .rest above): beside a
+   tall figure, a short stack of cards sat in a clump at the top and left the rest of the
+   column empty. A column that is one block (a figure, a table) keeps its own height. */
+.two { grid-template-columns: 1.15fr 1fr; gap: 36px; align-items: stretch; }
+.two > div { display: flex; flex-direction: column; justify-content: space-evenly; }
 .card { padding: 4px 0 4px 22px; border-left: 2px solid var(--accent); }
 .card h3 { margin: 0 0 9px; color: var(--primary); font-size: 21px; }
 .card p { margin: 0 0 8px; color: var(--ink-soft); font-size: 16px; }
-code { padding: 1px 6px; border-radius: 3px; background: #ecefef; font-family: var(--mono); font-size: .92em; }
+code { padding: 1px 6px; border-radius: 3px; }
+/* A code block is one box: the chip padding and background belong to inline code, so a
+   code inside a pre gives them up. Long lines are left to overflow the box rather than
+   scroll or wrap, so the layout check reports them the way it reports any other overflow. */
+pre { margin: 12px 0; padding: 14px 18px; border-radius: 6px; background: var(--code-block-bg);
+      font-family: var(--mono); font-size: 16px; line-height: 1.5; color: var(--ink);
+      white-space: pre; }
+pre code { padding: 0; border-radius: 0; background: none; font-family: inherit; font-size: inherit; }
+
+/* KaTeX sets .katex to 1.21em. Next to a line of text that reads right, because the maths
+   glyphs are optically smaller, but a display equation stands alone and the enlargement
+   makes it overpower the body. A display equation takes the size of the paragraph it sits
+   in. The selector carries a class more than KaTeX's own, whose stylesheet is written
+   after this file and would otherwise win. */
+.pages .katex-display > .katex { font-size: 1em; }
 
 .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; position: relative; margin: 34px 0 28px; counter-reset: step; }
 .flow::before { content: ""; position: absolute; left: 22px; right: 22px; top: 14px; height: 1px; background: var(--line); }
@@ -270,10 +359,47 @@ code { padding: 1px 6px; border-radius: 3px; background: #ecefef; font-family: v
 
 @media screen {
   main.pages section.page { border-radius: 10px; box-shadow: 0 2px 14px rgba(25, 35, 42, .09); }
+
+  /* The deck carries its own page size. Opened as a file, with no viewer to impose one,
+     a page was a plain block: it took the window's width while its height stayed with its
+     content, so the slide came out stretched sideways. The viewer sets the attribute below
+     and states the size itself, and the pptx export states it again, so this is for the
+     file on its own. --deck-fit is the shrink that keeps a page inside a narrower window;
+     the negative margins give back the room the unscaled box would still hold. */
+  html:not([data-html-mcp-layout]) body { margin: 0; }
+  html:not([data-html-mcp-layout]) main.pages {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    padding: 24px 0;
+  }
+  html:not([data-html-mcp-layout]) main.pages > section.page {
+    flex: none;
+    width: 1280px;
+    height: 720px;
+    overflow: hidden;
+    transform: scale(var(--deck-fit, 1));
+    transform-origin: top center;
+    margin: 0 calc(1280px * (var(--deck-fit, 1) - 1) / 2)
+            calc(720px * (var(--deck-fit, 1) - 1));
+  }
+  html:not([data-html-mcp-layout]) main.pages > .script-block {
+    width: 1280px;
+    transform: scale(var(--deck-fit, 1));
+    transform-origin: top center;
+    margin: 0 calc(1280px * (var(--deck-fit, 1) - 1) / 2);
+  }
 }
 @media print {
   .script-block { display: none; }
-  main.pages section.page { margin-bottom: 0 !important; border-radius: 0; box-shadow: none; }
+  /* The printed page is sized by @page, so the screen's fitting has no place here. */
+  main.pages section.page {
+    margin-bottom: 0 !important;
+    border-radius: 0;
+    box-shadow: none;
+    transform: none;
+  }
 }
 
 /* ---- skin: neutral-slides ---- */
@@ -286,10 +412,10 @@ code { padding: 1px 6px; border-radius: 3px; background: #ecefef; font-family: v
 <body>
   <main class="pages">
 
-    <section class="page cover">
+    <section class="page cover has-sub">
       <div class="band">
         <h1>Evaluation Review</h1>
-        
+        <div class="sub">Runtime and quality after the current change</div>
       </div>
       <div class="who">Systems Research Group</div>
       <div class="aff">Internal evaluation<br>
@@ -298,54 +424,87 @@ code { padding: 1px 6px; border-radius: 3px; background: #ecefef; font-family: v
       <footer class="bbar"><span class="pageno">1 / 3</span></footer>
     </section>
     <div class="script-block">
-      <div class="script-text"><p>Welcome. This review covers the current evaluation result and the remaining verification.</p></div>
+      <div class="script-text"><p>Welcome. This review covers the measured result and the final verification gate.</p></div>
     </div>
     <section class="page">
-      <header class="tbar"><h2>Decision</h2></header>
+      <header class="tbar"><h2>Runtime improves while quality holds</h2></header>
       <div class="body" data-layout-guard>
-<p class="lead">Keep the current method while the remaining input cases are verified.</p>
+<p class="lead">The current method cuts evaluation time with no material score change.</p>
         <div class="rest">
-<div class="grid3">
-    <div class="metric"><strong>18.4%</strong><span>runtime reduction</span></div>
-    <div class="metric"><strong>0.7%</strong><span>score change</span></div>
-    <div class="metric"><strong>3</strong><span>unverified cases</span></div>
+<div class="two">
+    <svg viewbox="0 0 620 350" role="img" aria-label="Runtime and quality comparison">
+      <rect x="0" y="0" width="620" height="350" rx="16" fill="#f4f6f8"></rect>
+      <text x="36" y="45" fill="#243943" font-size="20" font-weight="650">Measured comparison</text>
+      <text x="36" y="76" fill="#6d777c" font-size="14">runtime · same workload · lower is better</text>
+      <line x1="60" y1="280" x2="574" y2="280" stroke="#cfd8d7" stroke-width="2"></line>
+      <rect x="100" y="112" width="126" height="168" rx="7" fill="#b9c7c5"></rect>
+      <rect x="270" y="143" width="126" height="137" rx="7" fill="#6d928d"></rect>
+      <text x="163" y="101" text-anchor="middle" fill="#4f5a60" font-size="24" font-weight="650">12.5 min</text>
+      <text x="333" y="132" text-anchor="middle" fill="#2f756a" font-size="24" font-weight="650">10.2 min</text>
+      <text x="163" y="312" text-anchor="middle" fill="#4f5a60" font-size="16">Baseline</text>
+      <text x="333" y="312" text-anchor="middle" fill="#243943" font-size="16" font-weight="650">Current</text>
+      <rect x="438" y="108" width="136" height="92" rx="10" fill="#ffffff" stroke="#d9dfdf"></rect>
+      <text x="456" y="137" fill="#6d777c" font-size="13">RUNTIME</text>
+      <text x="456" y="178" fill="#2f756a" font-size="32" font-weight="650">−18.4%</text>
+      <rect x="438" y="214" width="136" height="92" rx="10" fill="#ffffff" stroke="#d9dfdf"></rect>
+      <text x="456" y="243" fill="#6d777c" font-size="13">SCORE</text>
+      <text x="456" y="284" fill="#243943" font-size="32" font-weight="650">−0.1</text>
+    </svg>
+    <div>
+      <div class="card">
+        <h3>Faster evaluation</h3>
+        <p>Runtime falls from 12.5 to 10.2 minutes on the same workload.</p>
+      </div>
+      <div class="card">
+        <h3>Stable quality</h3>
+        <p>The score moves from 91.6 to 91.5, inside the 0.5-point tolerance.</p>
+      </div>
+      <div class="card">
+        <h3>Final verification</h3>
+        <p>Three unresolved inputs still need the same comparison.</p>
+      </div>
+    </div>
   </div>
         </div>
+<p class="lead takeaway">Adopt after the three remaining inputs pass verification.</p>
       </div>
       
       <footer class="bbar"><span class="pageno">2 / 3</span></footer>
     </section>
     <div class="script-block">
-      <div class="script-text"><p>The measured runtime fell while the score stayed nearly unchanged. Three input cases still need verification before the decision is closed.</p></div>
+      <div class="script-text"><p>The current method is faster while measured quality remains stable. The decision waits only for the three unresolved inputs.</p></div>
     </div>
     <section class="page">
-      <header class="tbar"><h2>Next Evaluation</h2></header>
+      <header class="tbar"><h2>Close the remaining evidence gap</h2></header>
       <div class="body" data-layout-guard>
 
         <div class="rest">
-<div class="two">
-    <div>
-      <h3>Run now</h3>
-      <ul class="notes">
-        <li>Inspect the unresolved inputs.</li>
-        <li>Repeat the comparison.</li>
-        <li>Record runtime and score together.</li>
-      </ul>
-    </div>
-    <div>
-      <h3>Decision condition</h3>
-      <p>Keep the method when corrected inputs preserve the runtime reduction without lowering the score.</p>
-    </div>
+<div class="flow">
+    <div class="step"><strong>Inspect</strong>Check the three unresolved inputs.</div>
+    <div class="step"><strong>Repeat</strong>Run the baseline again.</div>
+    <div class="step"><strong>Record</strong>Capture both measures.</div>
+    <div class="step"><strong>Decide</strong>Adopt when all three pass.</div>
   </div>
         </div>
+<p class="lead takeaway">The decision rule is fixed before the final run.</p>
       </div>
       
       <footer class="bbar"><span class="pageno">3 / 3</span></footer>
     </section>
     <div class="script-block">
-      <div class="script-text"><p>The next run checks the unresolved inputs first, then repeats the same comparison and records runtime and score together.</p></div>
+      <div class="script-text"><p>The final run follows one fixed rule: all three unresolved inputs must preserve the runtime gain without a material score loss.</p></div>
     </div>
 
   </main>
+<script>
+(() => {
+  const root = document.documentElement;
+  if (root.hasAttribute("data-html-mcp-layout")) return;
+  const fit = () => root.style.setProperty(
+    "--deck-fit", String(Math.min(1, (root.clientWidth - 24) / 1280)));
+  addEventListener("resize", fit);
+  fit();
+})();
+</script>
 </body>
 </html>
