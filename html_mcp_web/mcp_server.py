@@ -188,13 +188,15 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         }
 
     @mcp.tool()
-    async def read_comments(artifact: str, comment_ids: list[str]) -> dict[str, Any]:
-        """Read full anchors and threads for explicitly selected comment IDs."""
+    async def read_comments(artifact: str, comment_ids: list[str], save: bool = False) -> dict[str, Any]:
+        """Read selected threads; save returns a Markdown draft path/hash/IDs. Edit only Reply blocks."""
         if not comment_ids:
             raise ValueError("comment_ids must not be empty")
         if len(set(comment_ids)) != len(comment_ids):
             raise ValueError("comment_ids must be unique")
         client = binding.require_client()
+        if save:
+            return await client.request_json("POST", f"/artifacts/{artifact}/comments/export", {"comment_ids": comment_ids})
         comments = []
         for comment_id in comment_ids:
             comment = await client.request_json("GET", f"/artifacts/{artifact}/comments/{comment_id}")
@@ -204,13 +206,23 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     @mcp.tool()
     async def reply_comments(
         artifact: str,
-        replies_text: Annotated[str, Field(min_length=1, description=(
+        replies_text: Annotated[str | None, Field(min_length=1, description=(
             "The replies as one text. Each starts at a line head with its comment id and a colon "
             "('c-1a2b3c4d: ') and runs to the next such line head, blank lines and all; a colon "
-            "elsewhere is just a colon. Written as prose, as it is."))],
+            "elsewhere is just a colon. Written as prose, as it is."))] = None,
         edited_files: Annotated[list[str] | None, Field(description="Project-relative paths edited for these comments; recorded on each thread entry.")] = None,
+        replies_file: str | None = None,
     ) -> dict[str, Any]:
-        """Reply to comments without changing their status."""
+        """Reply without changing status. Use replies_text or a saved draft's replies_file, exclusively."""
+        if (replies_text is None) == (replies_file is None):
+            raise ValueError("provide exactly one of replies_text or replies_file")
+        if replies_file is not None:
+            client = binding.require_client()
+            result = await client.request_json("POST", f"/artifacts/{artifact}/comments/update", {
+                "replies_file": replies_file,
+                **({"edited_files": edited_files} if edited_files is not None else {}),
+            })
+            return {"updated": result["updated"], **({"notes": [result["note"]]} if "note" in result else {})}
         replies = parse_replies(replies_text)
         client = binding.require_client()
         updated: list[dict[str, Any]] = []

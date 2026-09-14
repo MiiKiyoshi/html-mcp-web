@@ -402,18 +402,34 @@ class CommentStore:
     ) -> Comment:
         return self.update_many([comment_id], author, text, status=status, edits=edits)[0]
 
+    def export_comments(self, comment_ids: list[str]) -> dict:
+        from .comment_drafts import export
+
+        with self._locked():
+            by_id = {comment.id: comment for comment in self._all()}
+            return export(self.path.parent.parent / "drafts" / self.path.stem,
+                          [by_id[key].to_dict() for key in comment_ids])
+
+    def reply_file(self, path: str, edits: list[str] | None = None) -> list[Comment]:
+        from .comment_drafts import load
+
+        replies, expected = load(self.path.parent.parent / "drafts" / self.path.stem, path)
+        return self.update_many(list(replies), "agent", replies, edits=edits, expected_updated=expected)
+
     def update_many(
         self,
         comment_ids: list[str],
         author: Author,
-        text: str,
+        text: str | dict[str, str],
         status: Status | None = None,
         edits: list[str] | None = None,
+        expected_updated: dict[str, str] | None = None,
     ) -> list[Comment]:
         # Changing a comment's status may be silent: replies already carry the content, a
         # forced summary duplicates them, and reopening usually says no more than the
         # status itself does. A reply is only its text, so that one still needs some.
-        if not text.strip() and status is None:
+        texts = text if isinstance(text, dict) else dict.fromkeys(comment_ids, text)
+        if any(not value.strip() for value in texts.values()) and status is None:
             raise ValueError("thread text must not be empty")
         if not comment_ids:
             raise ValueError("comment_ids must not be empty")
@@ -425,10 +441,15 @@ class CommentStore:
             missing = [comment_id for comment_id in comment_ids if comment_id not in by_id]
             if missing:
                 raise KeyError(f"comments not found: {', '.join(missing)}")
+            if expected_updated is not None and any(
+                by_id[key][1].updated != expected_updated[key] for key in comment_ids
+            ):
+                raise ValueError("stale draft: export comments again")
             changed = []
             now = _now()
             for comment_id in comment_ids:
                 index, comment = by_id[comment_id]
+                text = texts[comment_id]
                 if text.strip() or edits:
                     comment.thread.append(
                         ThreadEntry(author=author, at=now, text=text.strip(), edits=list(edits) if edits is not None else [])

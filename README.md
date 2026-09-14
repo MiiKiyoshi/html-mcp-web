@@ -106,6 +106,8 @@ overlapping labels at the artifact's fixed size, and reports them to the agent s
 them. Comments are stored in `.html-mcp-web/comments/<artifact>.json`, which holds selected
 text, so whether to track it in git is a privacy choice.
 
+For a long answer, the agent can ask `read_comments(save=true)` for a Markdown draft of the selected threads under `.html-mcp-web/drafts/`, write its replies into the draft's Reply blocks, and send the file back with `reply_comments(replies_file=...)`; the whole batch is applied together, and a draft made before a thread changed is refused.
+
 If the agent restarts or stops receiving calls, ask it to listen for **Call agent** again. Calls made while it is disconnected stay queued.
 
 ## Templates
