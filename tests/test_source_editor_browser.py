@@ -80,20 +80,26 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         placement = browser.execute_script('''
           const tabs = document.querySelector(".view-tabs");
           const toolbar = document.querySelector(".workspace-toolbar");
+          const topbar = document.querySelector(".topbar");
           return {
-            inTopbar: document.querySelector(".topbar").contains(tabs),
+            inTopbar: topbar.contains(tabs),
             inWorkspace: document.querySelector("#workspace").contains(tabs),
             toolbarAboveArtifact: toolbar.getBoundingClientRect().bottom <=
               document.querySelector("#artifact-pane").getBoundingClientRect().top + 1,
             fitInToolbar: toolbar.contains(document.querySelector("#zoom-reset-btn")),
+            toolbarHeight: toolbar.getBoundingClientRect().height,
+            topbarHeight: topbar.getBoundingClientRect().height,
           };
         ''')
-        assert placement == {
+        assert {key: placement[key] for key in (
+            "inTopbar", "inWorkspace", "toolbarAboveArtifact", "fitInToolbar"
+        )} == {
             "inTopbar": False,
             "inWorkspace": True,
             "toolbarAboveArtifact": True,
             "fitInToolbar": True,
         }
+        assert abs(placement["toolbarHeight"] - placement["topbarHeight"]) < 0.5, placement
 
         browser.find_element("css selector", '[data-view="source"]').click()
         wait_until(lambda: browser.execute_script(
