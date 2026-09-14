@@ -2,7 +2,17 @@ from pathlib import Path
 
 import pytest
 
-from html_mcp_web.comments import Comment, CommentStore, DomPosition, PageAnchor, TextAnchor, anchor_from_dict
+from html_mcp_web.comments import (
+    Comment,
+    CommentStore,
+    DomPosition,
+    PageAnchor,
+    SourceAnchor,
+    TextAnchor,
+    anchor_from_dict,
+    capture_source_anchor,
+    source_offset,
+)
 
 
 def anchor() -> TextAnchor:
@@ -62,6 +72,42 @@ def test_page_anchor_rejects_number_below_one() -> None:
         anchor_from_dict({"kind": "page", "number": 0, "title": "Results"})
 
 
+def test_source_anchor_keeps_exact_utf16_selection_and_reattaches(tmp_path: Path) -> None:
+    source = tmp_path / "content.html"
+    source.write_text("<p>😀 long selected words here</p>\n", encoding="utf-8")
+    start = len("<p>😀 ".encode("utf-16-le")) // 2
+    end = start + len("long selected".encode("utf-16-le")) // 2
+    captured = capture_source_anchor(source, "content.html", 1, 1, start, end)
+    assert captured.quote == "long selected"
+    assert source_offset(source.read_text(encoding="utf-8"), 1, start) == len("<p>😀 ")
+
+    store = CommentStore(tmp_path / "comments.json")
+    created = store.add(captured, "Tighten this phrase")
+    source.write_text("<main>\n<p>😀 long selected words here</p>\n</main>\n", encoding="utf-8")
+    store.refresh_source_anchors(source, "content.html")
+    moved = store.get(created.id).anchor
+    assert isinstance(moved, SourceAnchor)
+    assert (moved.line_start, moved.line_end, moved.column_start, moved.column_end) == (2, 2, start, end)
+    assert moved.stale is False
+
+    source.write_text("<main>\n<p>😀 changed words here</p>\n</main>\n", encoding="utf-8")
+    store.refresh_source_anchors(source, "content.html")
+    assert store.get(created.id).anchor.stale is True
+
+
+def test_repeated_source_quote_needs_unique_context(tmp_path: Path) -> None:
+    source = tmp_path / "content.html"
+    source.write_text("<p>first word</p>\n<p>second word</p>\n", encoding="utf-8")
+    anchor = capture_source_anchor(source, "content.html", 2, 2, 10, 14)
+    store = CommentStore(tmp_path / "comments.json")
+    created = store.add(anchor, "This one")
+    store.refresh_source_anchors(source, "content.html")
+    moved = store.get(created.id).anchor
+    assert isinstance(moved, SourceAnchor)
+    assert moved.line_start == 2
+    assert moved.stale is False
+
+
 def test_update_many_is_atomic(tmp_path: Path) -> None:
     store = CommentStore(tmp_path / "comments.json")
     first = store.add(anchor(), "first")
@@ -118,4 +164,3 @@ def test_a_close_leaves_its_time_and_a_reopen_takes_it_back(tmp_path: Path) -> N
     stored = closed.to_dict()
     del stored["resolved"]
     assert Comment.from_dict(stored).resolved is None
-

@@ -108,7 +108,97 @@ async def test_viewer_shell_includes_pages_and_comments_tabs(client) -> None:
     assert 'id="presentation-controls"' in text
     assert 'id="artifact-status"' in text
     assert 'id="artifact-comment-btn"' in text
+    assert 'data-view="source"' in text
+    assert 'id="source-editor"' in text
+    assert 'id="split-grip"' in text
+    assert '/static/' in text and '/ace/ace.js' in text
     assert 'id="reload-btn"' not in text
+
+
+async def test_source_edit_and_exact_comment_use_the_artifact_edit_file(client) -> None:
+    test_client, review = client
+    opened = await (await test_client.get("/artifacts/slides/source")).json()
+    assert opened["path"] == "artifact.html"
+    start = opened["text"].index("Selected")
+    end = start + len("Selected")
+
+    created_response = await test_client.post("/artifacts/slides/comments", json={
+        "anchor": {
+            "kind": "source",
+            "file": "artifact.html",
+            "quote": "ignored client quote",
+            "line_start": 1,
+            "line_end": 1,
+            "column_start": start,
+            "column_end": end,
+        },
+        "source_revision": opened["revision"],
+        "text": "Comment on these characters",
+    })
+    assert created_response.status == 201
+    created = await created_response.json()
+    assert created["anchor"]["quote"] == "Selected"
+    assert created["anchor"]["prefix"].endswith("<p>")
+
+    changed = opened["text"].replace("<p>Selected", "<p>Before</p>\n<p>Selected")
+    saved = await test_client.put("/artifacts/slides/source", json={
+        "text": changed,
+        "revision": opened["revision"],
+    })
+    assert saved.status == 200
+    moved = await (await test_client.get(f"/artifacts/slides/comments/{created['id']}")).json()
+    assert moved["anchor"]["line_start"] == 2
+    assert moved["anchor"]["quote"] == "Selected"
+    assert moved["anchor"]["stale"] is False
+
+    conflict = await test_client.put("/artifacts/slides/source", json={
+        "text": "discarded",
+        "revision": opened["revision"],
+    })
+    assert conflict.status == 409
+
+
+async def test_source_comment_rejects_a_stale_revision(client) -> None:
+    test_client, _ = client
+    response = await test_client.post("/artifacts/slides/comments", json={
+        "anchor": {
+            "kind": "source", "file": "artifact.html", "quote": "Selected",
+            "line_start": 1, "line_end": 1, "column_start": 50, "column_end": 58,
+        },
+        "source_revision": "old",
+        "text": "Too late",
+    })
+    assert response.status == 409
+
+
+async def test_templated_artifact_source_opens_the_content_file(tmp_path: Path) -> None:
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<!doctype html><meta charset="utf-8"><title>Deck</title>'
+        '<body data-author="A" data-meta="B"><section data-title="One">'
+        '<p>Small editable source.</p></section></body>',
+        encoding="utf-8",
+    )
+    review = HtmlReviewServer(Config(
+        artifacts={"slides": ArtifactConfig(
+            label="Slides", layout="slides", main="slides.html",
+            template="neutral-slides", content="content.html",
+        )},
+        config_path=tmp_path / ".html-mcp-web.yaml",
+    ))
+    app = review.create_app()
+    app.on_startup.clear()
+    app.on_cleanup.clear()
+    test_client = TestClient(TestServer(app))
+    await test_client.start_server()
+    try:
+        state = await (await test_client.get("/state")).json()
+        assert state["artifacts"]["slides"]["edit_file"] == "content.html"
+        source = await (await test_client.get("/artifacts/slides/source")).json()
+        assert source["path"] == "content.html"
+        assert source["text"] == content.read_text(encoding="utf-8")
+    finally:
+        await test_client.close()
 
 
 def test_report_artifact_uses_portrait_a4_print_page(tmp_path: Path) -> None:

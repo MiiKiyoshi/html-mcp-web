@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import html
 import json
 import logging
 import math
+import os
 import re
+import stat
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -18,7 +22,7 @@ from typing import Any
 import yaml
 from aiohttp import WSMsgType, web
 
-from .comments import Comment, CommentStore, anchor_from_dict
+from .comments import Comment, CommentStore, anchor_from_dict, capture_source_anchor
 from .config import (
     ArtifactConfig,
     Config,
@@ -219,6 +223,7 @@ class ArtifactRuntime:
             "label": self.config.label,
             "layout": self.config.layout,
             "main_file": self.config.main,
+            "edit_file": self.config.content if self.content_file is not None else self.config.main,
             # A main file can be missing mid-session: the reviewer renaming it, a build not
             # run yet. That is this artifact's problem, reported on this artifact, and must
             # not take the whole project's server down with it; the watcher picks the file
@@ -394,6 +399,11 @@ class HtmlReviewServer:
             return
         affected: list[ArtifactRuntime] = []
         for runtime in self.artifacts.values():
+            source = runtime.content_file or runtime.main_file
+            if changed == source and source.is_file():
+                with contextlib.suppress(ValueError):
+                    runtime.store.refresh_source_anchors(
+                        source, source.relative_to(self.project_dir).as_posix())
             # The state read compares the files with what was noted and takes a change it
             # finds, and the watcher reports the same change a debounce later. Both moved
             # the revision, so one write cost two reloads and two checks. A change already
@@ -601,6 +611,65 @@ class HtmlReviewServer:
             raise web.HTTPNotFound()
         return web.FileResponse(target, headers={"Cache-Control": "no-store"})
 
+    def source_file(self, runtime: ArtifactRuntime) -> tuple[Path, str]:
+        path = runtime.content_file or runtime.main_file
+        try:
+            relative = path.relative_to(self.project_dir).as_posix()
+        except ValueError as error:
+            raise web.HTTPForbidden(text="editable source must stay inside the project") from error
+        if not path.is_file():
+            raise web.HTTPNotFound(text=f"source not found: {relative}")
+        return path, relative
+
+    @staticmethod
+    def read_source(path: Path) -> tuple[str, str]:
+        data = path.read_bytes()
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise web.HTTPUnsupportedMediaType(text="source must be UTF-8 text") from error
+        return text, hashlib.sha256(data).hexdigest()
+
+    async def get_source(self, request: web.Request) -> web.Response:
+        path, relative = self.source_file(self.runtime(request))
+        text, revision = self.read_source(path)
+        return web.json_response(
+            {"path": relative, "text": text, "revision": revision},
+            headers={"Cache-Control": "no-store"},
+        )
+
+    async def save_source(self, request: web.Request) -> web.Response:
+        runtime = self.runtime(request)
+        path, relative = self.source_file(runtime)
+        data = await request.json()
+        if not isinstance(data.get("text"), str) or not isinstance(data.get("revision"), str):
+            raise web.HTTPBadRequest(text="text and revision are required")
+        _, current_revision = self.read_source(path)
+        if data["revision"] != current_revision:
+            return web.json_response(
+                {"error": "source changed after it was opened", "revision": current_revision},
+                status=409,
+            )
+        encoded = data["text"].encode("utf-8")
+        staging_dir = self.project_dir / ".html-mcp-web"
+        staging_dir.mkdir(parents=True, exist_ok=True)
+        temporary: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "wb", dir=staging_dir, prefix="source-save-", suffix=".new", delete=False
+            ) as handle:
+                handle.write(encoded)
+                temporary = Path(handle.name)
+            temporary.chmod(stat.S_IMODE(path.stat().st_mode))
+            os.replace(temporary, path)
+        finally:
+            if temporary is not None:
+                with contextlib.suppress(FileNotFoundError):
+                    temporary.unlink()
+        revision = hashlib.sha256(encoded).hexdigest()
+        runtime.store.refresh_source_anchors(path, relative)
+        return web.json_response({"path": relative, "revision": revision})
+
     async def catch_up(self) -> None:
         """Bring the artifacts level with what is on disk.
 
@@ -617,6 +686,12 @@ class HtmlReviewServer:
                 return
             for runtime in behind:
                 logger.warning("%s changed on disk without the watcher saying so", runtime.artifact_id)
+                source = runtime.content_file or runtime.main_file
+                source_seen = runtime.seen_content if runtime.content_file is not None else runtime.seen_main
+                if runtime.stamp(source) != source_seen and source.is_file():
+                    with contextlib.suppress(ValueError):
+                        runtime.store.refresh_source_anchors(
+                            source, source.relative_to(self.project_dir).as_posix())
                 if runtime.content_file is not None and runtime.stamp(runtime.content_file) != runtime.seen_content:
                     runtime.build()
                     if runtime.build_error is None:
@@ -838,7 +913,31 @@ class HtmlReviewServer:
         runtime = self.runtime(request)
         data = await request.json()
         try:
-            comment = runtime.store.add(anchor_from_dict(data["anchor"]), str(data["text"]), author="human")
+            raw_anchor = data["anchor"]
+            if raw_anchor.get("kind") == "source":
+                path, relative = self.source_file(runtime)
+                _, revision = self.read_source(path)
+                if data.get("source_revision") != revision:
+                    raise web.HTTPConflict(
+                        text="source changed after this text was selected; reload and select again"
+                    )
+                if raw_anchor.get("file") != relative:
+                    raise ValueError("source anchor must use this artifact's edit_file")
+                anchor = capture_source_anchor(
+                    path,
+                    relative,
+                    int(raw_anchor["line_start"]),
+                    int(raw_anchor["line_end"]),
+                    int(raw_anchor["column_start"]),
+                    int(raw_anchor["column_end"]),
+                )
+                if not anchor.quote.strip():
+                    raise ValueError("source anchor quote must not be empty")
+            else:
+                anchor = anchor_from_dict(raw_anchor)
+            comment = runtime.store.add(anchor, str(data["text"]), author="human")
+        except web.HTTPException:
+            raise
         except (KeyError, TypeError, ValueError) as error:
             raise web.HTTPBadRequest(text=str(error)) from error
         await self.broadcast({"type": "comment_added", "artifact": runtime.artifact_id, "comment": comment.to_dict()})
@@ -1126,6 +1225,8 @@ class HtmlReviewServer:
         app.router.add_get(f"{base}/render/page", self.render_page)
         app.router.add_post(f"{base}/layout", self.update_layout)
         app.router.add_get(f"{base}/space", self.measure_space)
+        app.router.add_get(f"{base}/source", self.get_source)
+        app.router.add_put(f"{base}/source", self.save_source)
         app.router.add_get(f"{base}/comments", self.list_comments)
         app.router.add_get(f"{base}/comments/{{comment_id}}", self.get_comment)
         app.router.add_post(f"{base}/comments", self.add_comment)

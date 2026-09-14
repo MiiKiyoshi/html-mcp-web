@@ -15,6 +15,11 @@
         <span id="artifact-status" class="artifact-status">connecting</span>
       </div>
       <nav id="artifact-tabs" class="artifact-tabs" aria-label="Artifacts"></nav>
+      <nav class="view-tabs" aria-label="Workspace view">
+        <button class="view-tab active" type="button" data-view="preview">Preview</button>
+        <button class="view-tab" type="button" data-view="source">Source</button>
+        <button class="view-tab" type="button" data-view="split">Split</button>
+      </nav>
       <div class="topbar-actions">
         <button id="print-btn" type="button">Print</button>
         <a id="download-pdf-btn" class="download-btn" download>PDF</a>
@@ -32,19 +37,35 @@
       </div>
     </header>
 
-    <main class="layout">
-      <section id="artifact-pane">
-        <iframe id="artifact-frame" class="artifact-frame active" title="Agent-generated HTML artifact" tabindex="-1"></iframe>
-        <button id="selection-comment-btn" class="selection-comment hidden" type="button">Comment</button>
-        <button id="zoom-reset-btn" class="zoom-reset hidden" type="button"
-                title="Back to the size the pane fits">Fit</button>
-        <div id="presentation-controls" class="presentation-controls" aria-label="Slide show controls">
-          <button id="presentation-prev-btn" type="button" aria-label="Previous slide">←</button>
-          <span id="presentation-page" aria-live="polite"></span>
-          <button id="presentation-next-btn" type="button" aria-label="Next slide">→</button>
-          <button id="presentation-exit-btn" type="button">Exit</button>
-        </div>
-      </section>
+    <main class="layout view-preview">
+      <div id="workspace">
+        <section id="artifact-pane">
+          <iframe id="artifact-frame" class="artifact-frame active" title="Agent-generated HTML artifact" tabindex="-1"></iframe>
+          <button id="selection-comment-btn" class="selection-comment hidden" type="button">Comment</button>
+          <button id="zoom-reset-btn" class="zoom-reset hidden" type="button"
+                  title="Back to the size the pane fits">Fit</button>
+          <div id="presentation-controls" class="presentation-controls" aria-label="Slide show controls">
+            <button id="presentation-prev-btn" type="button" aria-label="Previous slide">←</button>
+            <span id="presentation-page" aria-live="polite"></span>
+            <button id="presentation-next-btn" type="button" aria-label="Next slide">→</button>
+            <button id="presentation-exit-btn" type="button">Exit</button>
+          </div>
+        </section>
+
+        <div id="split-grip" role="separator" tabindex="0" aria-label="Resize preview and source panes"
+             aria-controls="artifact-pane source-pane" aria-orientation="vertical"
+             aria-valuemin="15" aria-valuemax="85" aria-valuenow="50" title="Drag to resize preview and source"></div>
+        <section id="source-pane" aria-label="Source editor">
+          <div class="source-toolbar">
+            <span id="source-file" class="source-file">Source</span>
+            <span id="source-status" class="source-status">Open Source to edit</span>
+            <button id="source-comment-btn" type="button" disabled title="Select source text to comment">+ Comment</button>
+            <button id="source-reload-btn" type="button" disabled>Reload</button>
+            <button id="source-save-btn" type="button" disabled>Save</button>
+          </div>
+          <div id="source-editor"></div>
+        </section>
+      </div>
 
       <aside id="sidebar">
         <div id="sidebar-grip" class="sidebar-grip" role="separator" aria-orientation="horizontal"
@@ -115,6 +136,7 @@
     </form>
   </dialog>
 
+  <script src="/static/ace/ace.js?v=1.44.0"></script>
   <script type="module" src="/static/viewer.js"></script>
 </body>
 </html>

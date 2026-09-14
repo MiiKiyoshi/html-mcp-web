@@ -13,6 +13,7 @@ const state = {
   revision: null,
   loadedRevision: null,
   pendingAnchor: null,
+  pendingSourceRevision: null,
   selectionAnchor: null,
   composeSubmitting: false,
   expanded: new Set(),
@@ -46,6 +47,15 @@ const state = {
   suppressPresentationClick: false,
   draggingPanel: false,
   panelDraggedAt: -Infinity,
+  view: "preview",
+  editor: null,
+  sourcePath: null,
+  sourceRevision: null,
+  sourceDirty: false,
+  sourceLoading: false,
+  sourceCommentMarkers: [],
+  sourceCommentRows: new Set(),
+  sourceCommentsByRow: new Map(),
   artifactZoom: 1,
   pinch: null,
   pinchSettle: null,
@@ -64,7 +74,7 @@ function renderArtifactTabs() {
       type: "button",
       class: `artifact-tab${artifactId === state.artifactId ? " active" : ""}`,
       text: artifact.label,
-      onclick: () => selectArtifact(artifactId),
+      onclick: () => selectArtifact(artifactId).catch((error) => alert(error.message)),
     }));
   }
 }
@@ -127,6 +137,7 @@ function scrollToRepaint(win) {
 
 async function selectArtifact(artifactId) {
   if (artifactId === state.artifactId) return;
+  if (state.sourceDirty && !confirm(`Discard unsaved changes to ${state.sourcePath}?`)) return;
   if (state.artifactId) state.zooms[state.artifactId] = state.artifactZoom;
   state.artifactId = artifactId;
   announceActiveArtifact();
@@ -138,6 +149,9 @@ async function selectArtifact(artifactId) {
   state.expanded.clear();
   state.unattached.clear();
   state.currentPage = null;
+  state.sourcePath = null;
+  state.sourceRevision = null;
+  state.sourceDirty = false;
   const frame = frameFor(artifactId);
   // The frame says what revision it shows; the artifact says which is current.
   state.loadedRevision = frame.dataset.revision === undefined ? null : Number(frame.dataset.revision);
@@ -146,6 +160,7 @@ async function selectArtifact(artifactId) {
   updateArtifactLinks();
   updateLayoutUi();
   await refreshComments();
+  if (state.view !== "preview") await loadSource(true);
   if (state.loadedRevision === state.revision) showLoadedArtifact(frame);
   else loadArtifact(false);
 }
@@ -220,6 +235,204 @@ async function fetchJson(path, options) {
   const response = await fetch(path, options);
   if (!response.ok) throw new Error(await responseError(response));
   return response.status === 204 ? null : response.json();
+}
+
+function setSourceStatus(text, kind = "") {
+  const status = $("#source-status");
+  status.textContent = text;
+  status.classList.toggle("dirty", kind === "dirty");
+  status.classList.toggle("conflict", kind === "conflict");
+}
+
+function clearSourceCommentMarkers() {
+  if (state.editor === null) return;
+  for (const marker of state.sourceCommentMarkers) state.editor.session.removeMarker(marker);
+  for (const row of state.sourceCommentRows) {
+    state.editor.session.removeGutterDecoration(row, "source-comment-line");
+  }
+  state.sourceCommentMarkers = [];
+  state.sourceCommentRows.clear();
+  state.sourceCommentsByRow.clear();
+}
+
+function updateSourceCommentButton() {
+  const selected = Boolean(state.editor?.getSelectedText().trim());
+  const button = $("#source-comment-btn");
+  button.disabled = !selected || state.sourceDirty;
+  button.title = state.sourceDirty
+    ? "Save source before commenting"
+    : selected ? "Comment on the selected source text" : "Select source text to comment";
+}
+
+function setSourceDirty(dirty) {
+  state.sourceDirty = dirty;
+  $("#source-save-btn").disabled = !dirty;
+  if (dirty) {
+    setSourceStatus("Unsaved", "dirty");
+    clearSourceCommentMarkers();
+  }
+  updateSourceCommentButton();
+}
+
+function syncSourceCommentMarkers() {
+  if (state.editor === null) return;
+  clearSourceCommentMarkers();
+  if (state.sourcePath === null || state.sourceDirty) return;
+  const Range = window.ace.require("ace/range").Range;
+  for (const comment of state.comments) {
+    const anchor = comment.anchor;
+    if (comment.status !== "open" || anchor.kind !== "source"
+        || anchor.file !== state.sourcePath || anchor.stale) continue;
+    const firstRow = anchor.line_start - 1;
+    const lastRow = anchor.line_end - 1;
+    state.sourceCommentMarkers.push(state.editor.session.addMarker(
+      new Range(firstRow, anchor.column_start, lastRow, anchor.column_end),
+      "source-comment-highlight",
+      "text",
+      false,
+    ));
+    state.editor.session.addGutterDecoration(firstRow, "source-comment-line");
+    state.sourceCommentRows.add(firstRow);
+    const comments = state.sourceCommentsByRow.get(firstRow) ?? [];
+    comments.push(comment);
+    state.sourceCommentsByRow.set(firstRow, comments);
+  }
+}
+
+async function initializeSourceEditor() {
+  if (state.editor !== null) return;
+  if (window.ace === undefined) throw new Error("The source editor did not load");
+  window.ace.config.set("basePath", `/static/${servedStatic()}/ace`);
+  const editor = window.ace.edit("source-editor");
+  editor.setTheme("ace/theme/textmate");
+  editor.session.setUseWorker(false);
+  editor.session.setMode("ace/mode/html");
+  editor.session.setUseWrapMode(true);
+  editor.setShowPrintMargin(false);
+  editor.setOptions({ fontSize: "13px", scrollPastEnd: 0.25 });
+  editor.session.on("change", () => {
+    if (!state.sourceLoading) setSourceDirty(true);
+  });
+  editor.selection.on("changeSelection", updateSourceCommentButton);
+  editor.commands.addCommand({
+    name: "saveSource",
+    bindKey: { win: "Ctrl-S", mac: "Command-S" },
+    exec: () => saveSource().catch((error) => alert(`Could not save: ${error.message}`)),
+  });
+  editor.on("guttermousedown", (event) => {
+    if (event.domEvent.target.classList.contains("source-comment-line")) {
+      const comments = state.sourceCommentsByRow.get(event.getDocumentPosition().row) ?? [];
+      if (comments.length > 0) focusComment(comments[0].id);
+    }
+  });
+  state.editor = editor;
+}
+
+async function loadSource(force = false) {
+  await initializeSourceEditor();
+  if (!force && state.sourcePath !== null) return true;
+  if (state.sourceDirty) {
+    if (!force) {
+      setSourceStatus("Changed on disk · reload", "conflict");
+      return false;
+    }
+    if (!confirm(`Discard unsaved changes to ${state.sourcePath}?`)) return false;
+  }
+  const source = await fetchJson(`${artifactBase()}/source`);
+  state.sourceLoading = true;
+  state.editor.session.setMode("ace/mode/html");
+  state.editor.setValue(source.text, -1);
+  state.editor.session.getUndoManager().reset();
+  state.sourceLoading = false;
+  state.sourcePath = source.path;
+  state.sourceRevision = source.revision;
+  state.sourceDirty = false;
+  $("#source-file").textContent = source.path;
+  $("#source-save-btn").disabled = true;
+  $("#source-reload-btn").disabled = false;
+  setSourceStatus("Saved");
+  syncSourceCommentMarkers();
+  updateSourceCommentButton();
+  state.editor.resize();
+  return true;
+}
+
+async function saveSource() {
+  if (state.editor === null || state.sourcePath === null || !state.sourceDirty) return;
+  setSourceStatus("Saving…");
+  const response = await fetch(`${artifactBase()}/source`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: state.editor.getValue(), revision: state.sourceRevision }),
+  });
+  if (response.status === 409) {
+    setSourceStatus("Changed on disk · reload", "conflict");
+    throw new Error(await responseError(response));
+  }
+  if (!response.ok) {
+    setSourceStatus("Save failed", "conflict");
+    throw new Error(await responseError(response));
+  }
+  const saved = await response.json();
+  state.sourceRevision = saved.revision;
+  state.sourceDirty = false;
+  $("#source-save-btn").disabled = true;
+  setSourceStatus("Saved");
+  await refreshComments();
+}
+
+function openSourceCommentCompose() {
+  if (state.editor === null || state.sourcePath === null || state.sourceDirty) return;
+  const range = state.editor.getSelectionRange();
+  const quote = state.editor.getSelectedText();
+  if (!quote.trim() || range.isEmpty()) return;
+  openCompose({
+    kind: "source",
+    file: state.sourcePath,
+    quote,
+    line_start: range.start.row + 1,
+    line_end: range.end.row + 1,
+    column_start: range.start.column,
+    column_end: range.end.column,
+  });
+}
+
+async function setWorkspaceView(view) {
+  if (!["preview", "source", "split"].includes(view)) return;
+  if (view !== "preview") await loadSource(false);
+  state.view = view;
+  const layout = $(".layout");
+  layout.classList.remove("view-preview", "view-source", "view-split");
+  layout.classList.add(`view-${view}`);
+  for (const button of document.querySelectorAll(".view-tab")) {
+    button.classList.toggle("active", button.dataset.view === view);
+  }
+  localStorage.setItem("htmlMcpWorkspaceView", view);
+  requestAnimationFrame(() => {
+    state.editor?.resize();
+    if (view !== "source") {
+      updatePageScale();
+      scheduleHighlights();
+      scheduleLayoutCheck();
+    }
+  });
+}
+
+async function openSourceLocation(anchor) {
+  if (state.view === "preview") await setWorkspaceView("source");
+  else await loadSource(false);
+  if (state.editor === null || state.sourcePath !== anchor.file) return;
+  state.editor.gotoLine(anchor.line_start, anchor.column_start, true);
+  if (!anchor.stale) {
+    const Range = window.ace.require("ace/range").Range;
+    state.editor.selection.setRange(new Range(
+      anchor.line_start - 1,
+      anchor.column_start,
+      anchor.line_end - 1,
+      anchor.column_end,
+    ));
+  }
+  state.editor.focus();
 }
 
 function frameWindow() {
@@ -1256,9 +1469,11 @@ const comments = createComments({
   frameWindow,
   h,
   hideSelectionButton,
+  openSourceLocation,
   renderHighlights,
   resolveAnchor,
   state,
+  syncSourceCommentMarkers,
 });
 const actionButton = comments.actionButton;
 const captureCommentUi = comments.captureCommentUi;
@@ -1328,6 +1543,14 @@ async function handleSocketMessage(message) {
     updateArtifactLinks();
     updateLayoutUi();
     if (changed) loadArtifact(true);
+    if (message.type === "artifacts_changed" && message.path === state.sourcePath) {
+      if (state.sourceDirty) setSourceStatus("Changed on disk · reload", "conflict");
+      else if (state.view !== "preview") await loadSource(true);
+      else {
+        state.sourcePath = null;
+        state.sourceRevision = null;
+      }
+    }
     return;
   }
   if (["comment_added", "comment_updated", "comments_updated", "comment_deleted"].includes(message.type)
@@ -1360,7 +1583,82 @@ function announceActiveArtifact() {
   }
 }
 
+function attachSplitResize() {
+  const grip = $("#split-grip");
+  const workspace = $("#workspace");
+  const stacked = matchMedia("(max-width: 950px)");
+  let ratio = Number(localStorage.getItem("htmlMcpSplitRatio")) || 0.5;
+  const apply = (value) => {
+    ratio = Math.max(0.15, Math.min(0.85, value));
+    workspace.style.setProperty("--split-first", `${ratio}fr`);
+    workspace.style.setProperty("--split-second", `${1 - ratio}fr`);
+    grip.setAttribute("aria-valuenow", String(Math.round(ratio * 100)));
+    state.editor?.resize();
+  };
+  const finish = () => {
+    state.draggingPanel = false;
+    localStorage.setItem("htmlMcpSplitRatio", String(ratio));
+    state.editor?.resize();
+    updatePageScale();
+    scheduleHighlights();
+    scheduleLayoutCheck();
+  };
+  const orientation = () => {
+    grip.setAttribute("aria-orientation", stacked.matches ? "horizontal" : "vertical");
+    requestAnimationFrame(finish);
+  };
+  apply(ratio);
+  orientation();
+  stacked.addEventListener("change", orientation);
+  grip.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    state.draggingPanel = true;
+    grip.setPointerCapture(event.pointerId);
+    const move = (moved) => {
+      const rect = workspace.getBoundingClientRect();
+      const size = stacked.matches ? rect.height : rect.width;
+      const position = stacked.matches ? moved.clientY - rect.top : moved.clientX - rect.left;
+      apply((position - 5) / Math.max(1, size - 10));
+    };
+    const done = () => {
+      grip.removeEventListener("pointermove", move);
+      grip.removeEventListener("lostpointercapture", done);
+      finish();
+    };
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener("lostpointercapture", done);
+  });
+  grip.addEventListener("keydown", (event) => {
+    const decrease = stacked.matches ? "ArrowUp" : "ArrowLeft";
+    const increase = stacked.matches ? "ArrowDown" : "ArrowRight";
+    if (![decrease, increase, "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    apply(event.key === "Home" ? 0.15 : event.key === "End" ? 0.85
+      : ratio + (event.key === decrease ? -0.05 : 0.05));
+    finish();
+  });
+}
+
 function attachControls() {
+  attachSplitResize();
+  window.addEventListener("beforeunload", (event) => {
+    if (!state.sourceDirty) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
+  $("#source-save-btn").addEventListener("click", () => {
+    saveSource().catch((error) => alert(`Could not save: ${error.message}`));
+  });
+  $("#source-reload-btn").addEventListener("click", () => {
+    loadSource(true).catch((error) => alert(`Could not reload: ${error.message}`));
+  });
+  $("#source-comment-btn").addEventListener("click", openSourceCommentCompose);
+  for (const button of document.querySelectorAll(".view-tab")) {
+    button.addEventListener("click", () => {
+      setWorkspaceView(button.dataset.view).catch((error) => alert(error.message));
+    });
+  }
   $("#selection-comment-btn").addEventListener("click", () => {
     if (state.selectionAnchor !== null) openCompose(state.selectionAnchor);
   });
@@ -1392,6 +1690,7 @@ function attachControls() {
   $("#compose-cancel").addEventListener("click", () => {
     $("#compose-dialog").close();
     state.pendingAnchor = null;
+    state.pendingSourceRevision = null;
   });
   $("#comment-filter").addEventListener("change", () => refreshComments().catch((error) => alert(error.message)));
   $("#fold-all-btn").addEventListener("click", foldAll);
@@ -1527,6 +1826,8 @@ async function init() {
   await refreshState();
   await refreshComments();
   loadArtifact(false);
+  const savedView = localStorage.getItem("htmlMcpWorkspaceView");
+  if (["source", "split"].includes(savedView)) await setWorkspaceView(savedView);
   connectWebSocket();
 }
 

@@ -19,6 +19,7 @@ from mcp.client.stdio import stdio_client
 from html_mcp_web import config as config_module
 from html_mcp_web.config import load_config
 from html_mcp_web.mcp_client import ProjectBinding
+from html_mcp_web.mcp_contract import agent_comment, agent_comment_summary
 from html_mcp_web.mcp_server import create_server
 from html_mcp_web.project_server import SharedProjectServer
 
@@ -70,6 +71,30 @@ def space_snapshot() -> list[dict]:
             },
         },
     }]
+
+
+def test_source_comments_are_compact_until_the_agent_reads_detail() -> None:
+    comment = {
+        "id": "c-12345678",
+        "anchor": {
+            "kind": "source", "file": "content.html", "quote": "exact words",
+            "prefix": "large private context", "suffix": "more private context",
+            "line_start": 12, "line_end": 12, "column_start": 8, "column_end": 19,
+            "stale": False,
+        },
+        "thread": [{"author": "human", "at": "2026-09-14T00:00:00+00:00", "text": "Revise this"}],
+        "status": "open",
+        "created": "2026-09-14T00:00:00+00:00",
+    }
+    listed = agent_comment_summary(comment)
+    assert listed["anchor"] == {
+        "kind": "source", "file": "content.html", "line_start": 12,
+        "line_end": 12, "stale": False,
+    }
+    assert "quote" not in listed["anchor"]
+    detailed = agent_comment(comment)
+    assert detailed["anchor"]["quote"] == "exact words"
+    assert "prefix" not in detailed["anchor"] and "suffix" not in detailed["anchor"]
 
 
 @pytest.mark.asyncio

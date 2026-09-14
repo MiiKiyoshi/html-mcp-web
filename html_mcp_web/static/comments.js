@@ -8,9 +8,11 @@ export function createComments(dependencies) {
     frameWindow,
     h,
     hideSelectionButton,
+    openSourceLocation,
     renderHighlights,
     resolveAnchor,
     state,
+    syncSourceCommentMarkers,
   } = dependencies;
 
   // Enter writes a new line, as it does in any box of text. What sends it is shift with
@@ -72,6 +74,7 @@ export function createComments(dependencies) {
         : moment(first) > moment(second) ? -1 : 0));
     renderComments();
     renderHighlights();
+    syncSourceCommentMarkers();
     restoreCommentUi(ui);
   }
   
@@ -84,6 +87,10 @@ export function createComments(dependencies) {
     if (anchor.kind === "artifact") return { label: "artifact", quote: "Whole artifact" };
     if (anchor.kind === "text") return { label: "", quote: anchor.quote };
     if (anchor.kind === "page") return { label: `p${anchor.number}`, quote: anchor.title };
+    if (anchor.kind === "source") {
+      const end = anchor.line_end === anchor.line_start ? "" : `-${anchor.line_end}`;
+      return { label: `${anchor.file}:${anchor.line_start}${end}`, quote: anchor.quote };
+    }
     throw new Error(`unknown anchor kind: ${anchor.kind}`);
   }
   
@@ -186,8 +193,10 @@ export function createComments(dependencies) {
   function renderComment(comment) {
     const anchor = anchorSummary(comment.anchor);
     const expanded = state.expanded.has(comment.id);
+    const stale = state.unattached.has(comment.id)
+      || (comment.anchor.kind === "source" && comment.anchor.stale);
     const card = h("article", {
-      class: `comment-card${state.focusedCommentId === comment.id ? " focused" : ""}${state.unattached.has(comment.id) ? " unattached" : ""}`,
+      class: `comment-card${state.focusedCommentId === comment.id ? " focused" : ""}${stale ? " unattached" : ""}`,
       data: { commentId: comment.id },
     });
     const box = h("input", { class: "comment-pick", type: "checkbox",
@@ -213,9 +222,9 @@ export function createComments(dependencies) {
       box,
       h("span", { class: "comment-id", text: comment.id }),
       h("span", { class: `status-pill ${comment.status}`, text: `[${comment.status}]` }),
-      state.unattached.has(comment.id)
+      stale
         ? h("span", { class: "stale-pill", text: "[stale]",
-                      title: "The text this quotes is gone. The card opens at the dashed mark where it was written." })
+                      title: "The exact text this comment selected has changed or is ambiguous." })
         : null,
       anchor.label === "" ? null : h("span", { class: "anchor-kind", text: anchor.label })),
     // Collapsed cards show the comment text. To see what it is attached to, click the card to jump to the source.
@@ -442,7 +451,12 @@ export function createComments(dependencies) {
 
   function jumpToComment(commentId) {
     const comment = state.comments.find((value) => value.id === commentId);
-    if (comment === undefined || comment.anchor.kind !== "text") return;
+    if (comment === undefined) return;
+    if (comment.anchor.kind === "source") {
+      openSourceLocation(comment.anchor).catch((error) => alert(`Could not open source: ${error.message}`));
+      return;
+    }
+    if (comment.anchor.kind !== "text") return;
     const range = resolveAnchor(comment.anchor);
     // A comment whose text is gone is not stranded: the page carries a dashed mark where
     // it was written, and the card opens there like any other.
@@ -477,11 +491,13 @@ export function createComments(dependencies) {
   function composeAnchorText(anchor) {
     if (anchor.kind === "text") return anchor.quote;
     if (anchor.kind === "page") return `Page ${anchor.number}: ${anchor.title}`;
+    if (anchor.kind === "source") return `${anchor.file}:${anchor.line_start}\n${anchor.quote}`;
     return "Whole artifact";
   }
   
   function openCompose(anchor) {
     state.pendingAnchor = anchor;
+    state.pendingSourceRevision = anchor.kind === "source" ? state.sourceRevision : null;
     $("#compose-anchor").textContent = composeAnchorText(anchor);
     $("#compose-text").value = "";
     $("#compose-dialog").showModal();
@@ -505,13 +521,23 @@ export function createComments(dependencies) {
       await fetchJson(`${artifactBase()}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ anchor: state.pendingAnchor, text }),
+        body: JSON.stringify({
+          anchor: state.pendingAnchor,
+          text,
+          ...(state.pendingAnchor.kind === "source" ? { source_revision: state.pendingSourceRevision } : {}),
+        }),
       });
+      const sourceComment = state.pendingAnchor.kind === "source";
       $("#compose-dialog").close();
       state.pendingAnchor = null;
+      state.pendingSourceRevision = null;
       state.selectionAnchor = null;
-      frameWindow().getSelection()?.removeAllRanges();
-      hideSelectionButton();
+      if (sourceComment) {
+        state.editor?.clearSelection();
+      } else {
+        frameWindow().getSelection()?.removeAllRanges();
+        hideSelectionButton();
+      }
       await refreshComments();
     } catch (error) {
       alert(`Could not save comment: ${error.message}`);
