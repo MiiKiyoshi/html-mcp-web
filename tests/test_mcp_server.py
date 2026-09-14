@@ -121,7 +121,7 @@ async def test_stdio_mcp_starts_without_project_config(tmp_path: Path) -> None:
                 "render_page",
                 "export_pptx",
                 "measure_space",
-                "wait_review",
+                "listen",
             ]
             assert all(initialized.instructions not in (tool.description or "") for tool in tools.tools)
             inspected = await session.call_tool("inspect", {})
@@ -160,7 +160,7 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
     try:
         mcp = create_server(binding)
         assert len(mcp.instructions) < 1000
-        for needed in ("wait_review()", "document references", "configured guideline", "resource_uri"):
+        for needed in ("listen()", "document references", "configured guideline", "resource_uri"):
             assert needed in mcp.instructions, needed
         for needed in ("new connection", "do not poll", "duplicate"):
             assert needed in mcp.instructions.lower(), needed
@@ -183,7 +183,7 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
             "render_page",
             "export_pptx",
             "measure_space",
-            "wait_review",
+            "listen",
         ]
         assert schemas["read_comments"]["required"] == ["artifact", "comment_ids"]
         assert schemas["reply_comments"]["required"] == ["artifact", "replies_text"]
@@ -671,7 +671,7 @@ def test_guideline_discovery_returns_a_reference_and_resource_not_inline_text(
 
 
 @pytest.mark.parametrize("codex", [False, True])
-def test_wait_review(tmp_path: Path, monkeypatch, codex) -> None:
+def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
     # The tool returns at once with a script for the harness to watch in the background;
     # blocking here would freeze the agent, which is what the button exists to avoid.
     project(tmp_path)
@@ -681,7 +681,7 @@ def test_wait_review(tmp_path: Path, monkeypatch, codex) -> None:
         context = SimpleNamespace(session=SimpleNamespace(client_params=SimpleNamespace(
             clientInfo=SimpleNamespace(name="claude-code"))))
         monkeypatch.setattr(mcp, "get_context", lambda: context)
-        unstructured, told = asyncio.run(mcp.call_tool("wait_review", {}))
+        unstructured, told = asyncio.run(mcp.call_tool("listen", {}))
         assert json.loads(unstructured[0].text) == told
         script = Path(told["script"])
         assert script == tmp_path / ".html-mcp-web" / "wait-review.sh"
@@ -700,11 +700,11 @@ def test_wait_review(tmp_path: Path, monkeypatch, codex) -> None:
         assert "write_stdin" not in told["how"]
         for name in ("codex-mcp-client", "other-client"):
             context.session.client_params.clientInfo.name = name
-            _, selected = asyncio.run(mcp.call_tool("wait_review", {}))
+            _, selected = asyncio.run(mcp.call_tool("listen", {}))
             assert "Monitor" not in selected["how"]
             assert ("codex queue" in selected["how"]) == (name == "codex-mcp-client")
             assert ('sandbox_permissions="require_escalated"' in selected["how"]) == (name == "codex-mcp-client")
-        tool = next(t for t in asyncio.run(mcp.list_tools()) if t.name == "wait_review")
+        tool = next(t for t in asyncio.run(mcp.list_tools()) if t.name == "listen")
         assert "ctx" not in tool.inputSchema["properties"]
         # One monitor serves the whole session: a press is printed, not exited on.
         assert "exit 0" not in body
