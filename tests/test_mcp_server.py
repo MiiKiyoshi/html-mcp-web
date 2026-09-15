@@ -174,6 +174,13 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
             assert gone not in mcp.instructions, gone
         assert "Call inspect() once" in mcp.instructions
         assert "page=..." in mcp.instructions
+        assert (
+            "Treat overflow, clipping, and text-tail warnings as geometric unless the user or a "
+            "visual audit finds a content problem. First preserve content and structure with the "
+            "smallest size or spacing change. Do not rewrite, remove, or reorganize content just "
+            "to clear a warning. Use structural edits only if the geometric fix cannot work or "
+            "the user requests them. Then rerun inspect and render only the affected page."
+        ) in mcp.instructions
         tools = asyncio.run(mcp.list_tools())
         schemas = {tool.name: tool.inputSchema for tool in tools}
         assert list(schemas) == [
