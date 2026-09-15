@@ -566,6 +566,60 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         wait_until(lambda: browser.execute_script(
             'return document.querySelectorAll(".comment-card").length === 0'))
 
+        # A DOM range and a JavaScript string both count UTF-16 units.  Its boundary can
+        # therefore sit before, between, or after the two units of an astral-plane
+        # character.  The second such character also puts the 120-unit context cutoff at
+        # those same three positions.  Exercise the browser payload and the UTF-8 comment
+        # store together: neither the selected quote nor its context may contain half a
+        # surrogate pair.
+        boundary_cases = [
+            ("before", 6, 118, "before", "𝜃" + "x" * 118),
+            ("inside", 7, 119, "before𝜃", "x" * 119),
+            ("after", 8, 118, "before𝜃", "x" * 118 + "𝜃"),
+        ]
+        for label, selection_end, filler_length, expected_quote, expected_suffix in boundary_cases:
+            browser.execute_script('''
+              const frame = document.querySelector("#artifact-frame");
+              const doc = frame.contentDocument;
+              const view = frame.contentWindow;
+              const paragraph = doc.createElement("p");
+              paragraph.id = "unicode-boundary";
+              paragraph.textContent = "before𝜃" + "x".repeat(arguments[1]) + "𝜃tail";
+              doc.querySelector("section.page [data-layout-guard]").prepend(paragraph);
+              paragraph.scrollIntoView({block: "center"});
+              const range = doc.createRange();
+              range.setStart(paragraph.firstChild, 0);
+              range.setEnd(paragraph.firstChild, arguments[0]);
+              const selection = view.getSelection();
+              selection.removeAllRanges();
+              selection.addRange(range);
+              doc.dispatchEvent(new view.MouseEvent("mouseup", {bubbles: true}));
+            ''', script_args=[selection_end, filler_length])
+            wait_until(lambda: browser.execute_script(
+                'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+            browser.execute_script('document.querySelector("#selection-comment-btn").click();')
+            wait_until(lambda: browser.execute_script(
+                'return document.querySelector("#compose-dialog").open === true'))
+            comment_text = f"Unicode boundary {label}"
+            browser.find_element("css selector", "#compose-text").send_keys(comment_text)
+            browser.find_element("css selector", "#compose-submit").click()
+            created = wait_until(lambda: next(
+                (item for item in get_json(f"{base}/artifacts/slides/comments")["comments"]
+                 if item["thread"][0]["text"] == comment_text), None))
+            assert created["anchor"]["quote"] == expected_quote
+            assert created["anchor"]["suffix"] == expected_suffix
+            json.dumps(created["anchor"], ensure_ascii=False).encode("utf-8")
+            delete = urllib.request.Request(
+                f"{base}/artifacts/slides/comments/{created['id']}", method="DELETE")
+            with urllib.request.urlopen(delete, timeout=3):
+                pass
+            browser.execute_script('''
+              document.querySelector("#artifact-frame").contentDocument
+                .querySelector("#unicode-boundary")?.remove();
+            ''')
+            wait_until(lambda: browser.execute_script(
+                'return document.querySelectorAll(".comment-card").length === 0'))
+
         anchor = browser.execute_script('''
           const frame = document.querySelector("#artifact-frame");
           const doc = frame.contentDocument;

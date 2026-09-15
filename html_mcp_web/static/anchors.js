@@ -68,6 +68,21 @@ export function createAnchors(dependencies) {
     if (index < 0) throw new Error("selection boundary is not artifact text");
     return snapshot.starts[index] + offset;
   }
+
+  function wholeCharacterBoundary(text, offset, side) {
+    const previous = text.charCodeAt(offset - 1);
+    const next = text.charCodeAt(offset);
+    const splitsSurrogate = previous >= 0xD800 && previous <= 0xDBFF
+      && next >= 0xDC00 && next <= 0xDFFF;
+    return splitsSurrogate ? offset + (side === "after" ? 1 : -1) : offset;
+  }
+
+  function wholeCharacterSlice(text, start, end) {
+    return text.slice(
+      wholeCharacterBoundary(text, start, "after"),
+      wholeCharacterBoundary(text, end, "before"),
+    );
+  }
   
   // A drag does not always stop inside a text node. Released on the edge between two
   // inline boxes, which a rendered formula is full of, the boundary is the element and the
@@ -75,7 +90,14 @@ export function createAnchors(dependencies) {
   // comment button vanished on a selection the reader could see highlighted. The boundary
   // moves to the nearest text in the direction the reader was dragging.
   function textPoint(snapshot, container, offset, edge) {
-    if (container.nodeType === Node.TEXT_NODE) return { node: container, offset };
+    if (container.nodeType === Node.TEXT_NODE) {
+      return {
+        node: container,
+        offset: wholeCharacterBoundary(
+          container.nodeValue, offset, edge === "start" ? "before" : "after",
+        ),
+      };
+    }
     const point = frameDocument().createRange();
     point.setStart(container, offset);
     let low = 0;
@@ -110,8 +132,8 @@ export function createAnchors(dependencies) {
     return {
       kind: "text",
       quote,
-      prefix: snapshot.text.slice(Math.max(0, startOffset - 120), startOffset),
-      suffix: snapshot.text.slice(endOffset, endOffset + 120),
+      prefix: wholeCharacterSlice(snapshot.text, Math.max(0, startOffset - 120), startOffset),
+      suffix: wholeCharacterSlice(snapshot.text, endOffset, endOffset + 120),
       start: { path: nodePath(start.node, doc.body), offset: start.offset },
       end: { path: nodePath(end.node, doc.body), offset: end.offset },
       artifact_digest: state.artifact.artifact_digest,
