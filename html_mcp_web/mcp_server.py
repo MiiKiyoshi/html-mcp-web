@@ -88,13 +88,18 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     mcp = FastMCP(
         "html-mcp-web",
         instructions=(
-            "Call inspect() once for paths and document references; reuse them until configuration changes. "
+            "Call inspect() once for paths and document references; reuse until configuration changes. "
             "Read authoring, template notes and any configured guideline only when needed, by path or "
             "resource_uri. Use inspect(artifact=..., page=...) for current state. "
-            "Read list_comments(unanswered=True), then read_comments only for needed IDs; reuse unchanged "
+            "Read list_comments(unanswered=True), then read_comments for needed IDs; reuse unchanged "
             "threads. Within the user's editing scope, edit, render affected pages, and reply in the "
             "threads; the reviewer resolves them. For review notifications, call listen() on each "
-            "new connection and follow how; reuse its process, do not poll or duplicate it."
+            "new connection and follow how; reuse its process, do not poll or duplicate it. "
+            "Treat overflow, clipping, and text-tail warnings as geometric unless the user or a "
+            "visual audit finds a content problem. First preserve content and structure with the "
+            "smallest size or spacing change. Do not rewrite, remove, or reorganize content just "
+            "to clear a warning. Use structural edits only if the geometric fix cannot work or "
+            "the user requests them. Then rerun inspect and render only the affected page."
         ),
     )
 
