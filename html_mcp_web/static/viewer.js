@@ -2,8 +2,10 @@ import { createPresentation } from "./presentation.js";
 import { createLayoutChecks } from "./layout-check.js";
 import { createAnchors } from "./anchors.js";
 import { createComments } from "./comments.js";
+import { displayPath } from "./path-display.mjs";
 
 const $ = (selector) => document.querySelector(selector);
+const homePath = document.querySelector('meta[name="html-mcp-home"]')?.content ?? "";
 
 const state = {
   project: null,
@@ -166,7 +168,7 @@ async function selectArtifact(artifactId) {
 }
 
 function updateArtifactLinks() {
-  $("#main-file").textContent = state.artifact.main_file;
+  $("#main-file").textContent = displayPath(state.artifact.main_file, homePath);
   // The tab carries the file being reviewed, so several projects open at once stay
   // apart in the browser's tab strip.
   document.title = state.artifact.main_file.split("/").pop();
@@ -347,7 +349,7 @@ async function loadSource(force = false) {
   state.sourcePath = source.path;
   state.sourceRevision = source.revision;
   state.sourceDirty = false;
-  $("#source-file").textContent = source.path;
+  $("#source-file").textContent = displayPath(source.path, homePath);
   $("#source-save-btn").disabled = true;
   $("#source-reload-btn").disabled = false;
   setSourceStatus("Saved");

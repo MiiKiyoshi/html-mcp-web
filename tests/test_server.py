@@ -112,7 +112,28 @@ async def test_viewer_shell_includes_pages_and_comments_tabs(client) -> None:
     assert 'id="source-editor"' in text
     assert 'id="split-grip"' in text
     assert '/static/' in text and '/ace/ace.js' in text
+    assert f'<meta name="html-mcp-home" content="{Path.home()}">' in text
     assert 'id="reload-btn"' not in text
+
+
+def test_absolute_artifact_path_stays_absolute_outside_the_ui(tmp_path: Path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    main = home / "artifact.html"
+    main.write_text("<!doctype html><p>absolute artifact</p>", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(home))
+    config = Config(
+        artifacts={"slides": ArtifactConfig(label="Slides", layout="slides", main=str(main))},
+        config_path=home / ".html-mcp-web.yaml",
+    )
+
+    review = HtmlReviewServer(config)
+    artifact = review.project_state()["artifacts"]["slides"]
+
+    assert config.to_dict()["artifacts"]["slides"]["main"] == str(main)
+    assert artifact["main_file"] == str(main)
+    assert review.artifacts["slides"].main_file == main
+    assert "absolute artifact" in review._artifact_html(review.artifacts["slides"])
 
 
 async def test_source_edit_and_exact_comment_use_the_artifact_edit_file(client) -> None:

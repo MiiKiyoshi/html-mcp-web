@@ -462,7 +462,9 @@ class HtmlReviewServer:
         # loaded, reloads rather than going on: an open review page kept checking a deck
         # with the layout rules from before a restart and posting the results.
         page = page.replace('<meta charset="utf-8">',
-                            f'<meta charset="utf-8">\n  <meta name="html-mcp-static" content="{tag}">', 1)
+                            f'<meta charset="utf-8">\n'
+                            f'  <meta name="html-mcp-static" content="{tag}">\n'
+                            f'  <meta name="html-mcp-home" content="{html.escape(str(Path.home()), quote=True)}">', 1)
         return web.Response(text=page.replace('"/static/', f'"/static/{tag}/'),
                             content_type="text/html", charset="utf-8",
                             headers={"Cache-Control": "no-store"})
