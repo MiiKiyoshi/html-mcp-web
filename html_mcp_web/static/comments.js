@@ -65,7 +65,7 @@ export function createComments(dependencies) {
     // one written last, by when it was written and not by when it was last touched:
     // closing a comment touches it, so by that measure every closed comment stood above
     // every open one and a comment written a minute ago sat below a dozen closed ones.
-    // The reference view leads with the thread touched last: what was kept to be read
+    // The archive view leads with the thread touched last: what was kept to be read
     // again is read again when something is added to it.
     const view = $("#comment-filter").value;
     const moment = view === "resolved"
@@ -224,7 +224,8 @@ export function createComments(dependencies) {
     h("div", { class: "anchor-label" },
       box,
       h("span", { class: "comment-id", text: comment.id }),
-      h("span", { class: `status-pill ${comment.status}`, text: `[${comment.status}]` }),
+      h("span", { class: `status-pill ${comment.status}`,
+                  text: `[${comment.status === "reference" ? "archived" : comment.status}]` }),
       stale
         ? h("span", { class: "stale-pill", text: "[stale]",
                       title: "The exact text this comment selected has changed or is ambiguous." })
@@ -254,7 +255,7 @@ export function createComments(dependencies) {
     }
     const actions = h("div", { class: "comment-actions" });
     // Every status flip is one click: the status says what happened, and anything more
-    // belongs in a reply. A thread kept as reference still takes replies, and goes back
+    // belongs in a reply. An archived thread still takes replies, and goes back
     // to open or resolved from the same row.
     if (comment.status !== "resolved") {
       actions.appendChild(actionButton("Reply", () => setActiveForm(comment.id, "reply")));
@@ -266,7 +267,7 @@ export function createComments(dependencies) {
       actions.appendChild(actionButton("Resolve", () => flipStatus(comment.id, "resolve", "summary")));
     }
     if (comment.status !== "reference") {
-      actions.appendChild(actionButton("Reference", () => flipStatus(comment.id, "reference", "text")));
+      actions.appendChild(actionButton("Archive", () => flipStatus(comment.id, "reference", "text")));
     }
     actions.appendChild(actionButton("Delete", () => deleteComment(comment.id), "danger"));
     body.appendChild(actions);
@@ -292,11 +293,12 @@ export function createComments(dependencies) {
   }
   
   // What the picked comments can be sent to, which is decided by the state they are in:
-  // open ones close, closed ones reopen. Both buttons show a count, so a mixed pick says
-  // exactly what each press will touch, and neither appears with nothing to touch.
+  // open ones close, unarchived ones archive, and closed ones reopen. The counts say
+  // exactly what each press will touch, and no action moves a thread already in that state.
   function renderPickedActions() {
     const picked = state.comments.filter((comment) => state.picked.has(comment.id));
     const open = picked.filter((comment) => comment.status === "open").map((comment) => comment.id);
+    const archivable = picked.filter((comment) => comment.status !== "reference").map((comment) => comment.id);
     const closed = picked.filter((comment) => comment.status !== "open").map((comment) => comment.id);
     const shown = state.comments.length;
     const all = $("#pick-all-btn");
@@ -313,6 +315,11 @@ export function createComments(dependencies) {
     resolve.querySelector(".count").textContent = open.length > 0 ? String(open.length) : "";
     resolve.setAttribute("aria-label", open.length > 0 ? `Resolve ${open.length}` : "Resolve");
     resolve.dataset.ids = open.join(" ");
+    const archive = $("#archive-picked-btn");
+    archive.disabled = archivable.length === 0;
+    archive.querySelector(".count").textContent = archivable.length > 0 ? String(archivable.length) : "";
+    archive.setAttribute("aria-label", archivable.length > 0 ? `Archive ${archivable.length}` : "Archive");
+    archive.dataset.ids = archivable.join(" ");
     const reopen = $("#reopen-picked-btn");
     reopen.disabled = closed.length === 0;
     reopen.querySelector(".count").textContent = closed.length > 0 ? String(closed.length) : "";
