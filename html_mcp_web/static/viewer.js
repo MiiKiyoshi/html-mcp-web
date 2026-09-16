@@ -1716,7 +1716,7 @@ function attachControls() {
   // Picking is the reviewer's own act, and closing what was picked is the sign-off on a
   // batch the agent answered and deliberately left open. The buttons carry the ids they
   // were drawn with, so a press acts on what its label counted.
-  for (const [id, status] of [["#resolve-picked-btn", "resolved"], ["#reopen-picked-btn", "open"]]) {
+  for (const [id, status] of [["#resolve-picked-btn", "resolved"], ["#archive-picked-btn", "reference"], ["#reopen-picked-btn", "open"]]) {
     $(id).addEventListener("click", async () => {
       const button = $(id);
       const ids = button.dataset.ids === "" ? [] : button.dataset.ids.split(" ");
