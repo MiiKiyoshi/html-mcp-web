@@ -44,18 +44,21 @@ def get_json(url: str) -> dict:
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
-def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path) -> None:
+def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path, monkeypatch) -> None:
     target = "SELECT START " + "exact wrapped characters " * 12 + "SELECT END"
-    source = tmp_path / "slides.html"
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    source = home / "slides.html"
     source.write_text(
         '<!doctype html><html><head><title>Source</title></head><body><main class="pages">'
         f'<section class="page"><p>before {target} after</p></section></main></body></html>',
         encoding="utf-8",
     )
     port = available_port()
-    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path = home / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": str(source)}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -77,6 +80,9 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        assert browser.execute_script(
+            'return document.querySelector("#main-file").textContent') == "~/slides.html"
+        assert get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]["main_file"] == str(source)
         placement = browser.execute_script('''
           const tabs = document.querySelector(".view-tabs");
           const toolbar = document.querySelector(".workspace-toolbar");
@@ -117,6 +123,8 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         wait_until(lambda: browser.execute_script(
             'const page = window.wrappedJSObject || window;'
             'return page.ace && page.ace.edit("source-editor").getValue().includes("SELECT START")'))
+        assert browser.execute_script(
+            'return document.querySelector("#source-file").textContent') == "slides.html"
         selected = browser.execute_script('''
           const page = window.wrappedJSObject || window;
           const editor = page.ace.edit("source-editor");
