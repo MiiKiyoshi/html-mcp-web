@@ -419,31 +419,23 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   .artifact-tabs { padding-left: 0; border-left: 0; }
 }
 
-/* Shown only where the comments sit under the artifact, and dragged to divide the two.
-   A finger is wider than the bar it aims at, and a touch that fell short of the bar hit
-   the tab row underneath, so the band that answers a touch is 38px while what is drawn in
-   it is a bar as thin as the split's, 3px, centred in the band. The band keeps the
-   sidebar's own colour: painted a shade apart, its edge read as a second strip laid over
-   the bar, and the bar, centred in the painted part rather than in the band, sat low in
-   it. */
+/* Shown only where the comments sit under the artifact, and dragged to divide the two. It
+   is drawn as the split's bar is when the panes are stacked: a 10px band in the page
+   colour with a 3px bar centred in it, and the line the comments begin at along its
+   lower edge. */
 .sidebar-grip {
   display: none;
   flex: 0 0 auto;
-  height: 38px;
+  height: 11px;
+  align-items: center;
+  justify-content: center;
   cursor: row-resize;
   touch-action: none;
+  background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
-
-.sidebar-grip::before {
-  content: "";
-  display: block;
-  width: 42px;
-  height: 3px;
-  margin: 17.5px auto 0;
-  border-radius: 2px;
-  background: var(--line);
-}
+.sidebar-grip::before { content: ""; width: 32px; height: 3px; border-radius: 2px; background: var(--line); }
+.sidebar-grip:hover::before, .sidebar-grip:focus-visible::before { background: var(--accent); }
 
 /* Beside the artifact or under it is decided by the shape of the screen rather than its
    width: a tablet held upright has room to spare across and still reads better with the
@@ -455,8 +447,8 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
     grid-template-rows: minmax(0, 1fr) minmax(0, var(--html-mcp-panel-height, 45vh));
   }
   .layout.sidebar-collapsed { grid-template-rows: minmax(0, 1fr) 0; }
-  #sidebar { border-left: 0; border-top: 1px solid var(--line); }
-  .sidebar-grip { display: block; }
+  #sidebar { border-left: 0; }
+  .sidebar-grip { display: flex; }
 }
 
 /* A narrow screen also has no room for the row of controls, which ran off the right edge

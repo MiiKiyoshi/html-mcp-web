@@ -1275,24 +1275,15 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
         assert opened["sideTop"] >= opened["paneBottom"] - 2    # under the artifact, not over it
         assert opened["paneWidth"] >= measured["width"] - 2     # which keeps the whole width
 
-        # The band that answers a touch is wider than the bar drawn in it, and the bar sits
-        # in the middle of the band: painted a shade apart from the sidebar, the band's edge
-        # read as a second strip laid over the bar, and the bar sat low in it.
+        # The bar along the top of the comments is drawn as the split's is: a thin band with
+        # a 3px bar centred in it, not a thick strip of its own.
         drawn = browser.execute_script('''
           const grip = document.querySelector("#sidebar-grip");
           const bar = getComputedStyle(grip, "::before");
-          const style = getComputedStyle(grip);
-          return {band: grip.getBoundingClientRect().height,
-                  barTop: parseFloat(bar.marginTop), barHeight: parseFloat(bar.height),
-                  painted: style.backgroundImage === "none" ? style.backgroundColor : style.backgroundImage,
-                  sidebar: getComputedStyle(document.querySelector("#sidebar")).backgroundColor};
+          return {band: grip.getBoundingClientRect().height, barWidth: bar.width, barHeight: bar.height};
         ''')
-        assert drawn["band"] > drawn["barHeight"] * 4, drawn
-        above = drawn["barTop"]
-        below = drawn["band"] - drawn["barTop"] - drawn["barHeight"]
-        assert abs(above - below) < 1, drawn
-        # Nothing of its own is painted over the sidebar behind it.
-        assert drawn["painted"] in ("rgba(0, 0, 0, 0)", "transparent", drawn["sidebar"]), drawn
+        assert drawn["band"] <= 12, drawn
+        assert (drawn["barWidth"], drawn["barHeight"]) == ("32px", "3px"), drawn
 
         # The bar along the top of the comments drags the split, so either side can be given
         # the screen without the other going away.
@@ -1351,15 +1342,26 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
             'return document.querySelector(".tab-btn.active").dataset.tab;') == "pages"
         browser.execute_script(f'document.querySelector(\'.tab-btn[data-tab="{before}"]\').click();')
 
-        # A finger is wider than the bar, so the whole band answers a touch, its top edge
-        # included, while the bar stays as thin as it is drawn.
+        # The whole band answers a touch, its top edge included, not only the bar drawn in it.
         band = browser.execute_script('''
           const grip = document.querySelector("#sidebar-grip");
           const box = grip.getBoundingClientRect();
-          const near = document.elementFromPoint(box.left + box.width / 2, box.top + 3);
-          return {height: box.height, grabbedNearTop: near === grip};
+          const near = document.elementFromPoint(box.left + box.width / 2, box.top + 1);
+          return {grabbedNearTop: near === grip};
         ''')
-        assert band["height"] >= 36 and band["grabbedNearTop"], band
+        assert band["grabbedNearTop"], band
+
+        # The keys move the bar as the split's do, and the height they reach is kept.
+        keyed = browser.execute_script('''
+          const grip = document.querySelector("#sidebar-grip");
+          const before = document.querySelector("#sidebar").getBoundingClientRect().height;
+          grip.focus();
+          grip.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowUp", bubbles: true}));
+          const after = document.querySelector("#sidebar").getBoundingClientRect().height;
+          return {before, after, stored: Number(localStorage.getItem("htmlMcpPanelHeight"))};
+        ''')
+        assert keyed["after"] > keyed["before"] + 20, keyed
+        assert abs(keyed["stored"] - keyed["after"]) <= 2, keyed
 
         # A tablet held upright has width to spare and still reads better with the comments
         # below, so the split follows the shape of the screen rather than its width.
@@ -1404,16 +1406,17 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
         assert ratio_after != ratio_before
         stored = browser.execute_script('return Number(localStorage.getItem("htmlMcpSplitRatio"))')
         assert round(stored * 100) == int(ratio_after)
-        # The two bars are drawn alike, and the band around the comments' bar still answers
-        # a finger.
+        # The two bars are drawn alike, in bands of the same thickness.
         bars = browser.execute_script('''
           const split = getComputedStyle(document.querySelector("#split-grip"), "::after");
           const grip = document.querySelector("#sidebar-grip");
-          return {split: split.height, side: getComputedStyle(grip, "::before").height,
+          const side = getComputedStyle(grip, "::before");
+          return {split: [split.width, split.height], side: [side.width, side.height],
+                  splitBand: document.querySelector("#split-grip").getBoundingClientRect().height,
                   band: grip.getBoundingClientRect().height};
         ''')
-        assert bars["split"] == bars["side"] == "3px", bars
-        assert bars["band"] >= 36, bars
+        assert bars["split"] == bars["side"] == ["32px", "3px"], bars
+        assert abs(bars["band"] - bars["splitBand"]) <= 1, bars
         browser.execute_script('document.querySelector(".view-tab[data-view=preview]").click()')
 
         # A phone that enlarges text on its own doubled the labels inside the drawings while
