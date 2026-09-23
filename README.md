@@ -108,6 +108,8 @@ text, so whether to track it in git is a privacy choice.
 
 For a long answer, the agent can ask `read_comments(save=true)` for a Markdown draft of the selected threads under `.html-mcp-web/drafts/`, write its replies into the draft's Reply blocks, and send the file back with `reply_comments(replies_file=...)`; the whole batch is applied together, and a draft made before a thread changed is refused. Each of the agent's earlier entries appears in the draft as an Edit block; a changed block rewrites that entry in place (author and time kept, `updated_at` recorded). Inline, `reply_comments(edits_text="c-.../e-...@<rev>: ...")` does the same by comment id, entry id and the thread's `rev`, an 8-character token that `read_comments` and every reply report.
 
+On **Call agent**, the agent reads `read_comments(new=True)`: on open threads, what the reviewer wrote after the agent's last entry there and after what the previous call handed over, each thread with its `rev`. The call reports `from` and `cursor`; `since=<from>` hands the same entries over again. The cursor is kept per artifact in `.html-mcp-web/agent-cursor.json`.
+
 The agent sees times as `MM-DD HH:MM` on the server's clock and passes the same form back as `list_comments(since=...)`, which returns that minute too. A listing shows the newest 30 threads, each request cut to 120 characters, and counts the rest as `more`.
 
 If the agent restarts or stops receiving calls, ask it to listen for **Call agent** again. Calls made while it is disconnected stay queued.

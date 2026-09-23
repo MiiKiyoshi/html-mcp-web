@@ -1177,7 +1177,7 @@ class HtmlReviewServer:
         listed = ", ".join(f"{count} on '{artifact_id}'" for artifact_id, count in waiting.items() if count)
         return (f"[review] reviewer called (press #{self.review_calls}): "
                 + (f"unanswered comments: {listed}" if listed else "no unanswered comments")
-                + " -- read them with list_comments(unanswered=True)")
+                + " -- read them with read_comments(new=True)")
 
     async def request_review(self, request: web.Request) -> web.Response:
         self.review_calls += 1

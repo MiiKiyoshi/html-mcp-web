@@ -117,7 +117,7 @@ async def test_stdio_mcp_starts_without_project_config(tmp_path: Path) -> None:
         async with ClientSession(read, write) as session:
             initialized = await session.initialize()
             assert initialized.instructions is not None
-            assert "reuse unchanged threads" in initialized.instructions
+            assert "read_comments(new=True)" in initialized.instructions
             tools = await session.list_tools()
             assert [tool.name for tool in tools.tools] == [
                 "inspect",
@@ -201,7 +201,7 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
             "measure_space",
             "listen",
         ]
-        assert schemas["read_comments"]["required"] == ["artifact", "comment_ids"]
+        assert schemas["read_comments"]["required"] == ["artifact"]
         assert schemas["reply_comments"]["required"] == ["artifact"]
         assert schemas["reply_comments"]["properties"]["replies_text"]["anyOf"][0]["type"] == "string"
         assert set(schemas["inspect"]["properties"]) == {"artifact", "page"}
@@ -468,6 +468,47 @@ def test_failed_start_releases_the_lock_so_a_retry_can_serve(tmp_path: Path) -> 
             assert response.status == 200
     finally:
         shared.stop()
+
+
+def test_read_new_hands_over_what_is_unread_and_unanswered(tmp_path: Path) -> None:
+    config = project(tmp_path)
+    binding = ProjectBinding(tmp_path)
+    try:
+        mcp = create_server(binding)
+        base = f"http://127.0.0.1:{config.port}"
+        read_new = lambda **extra: answer(mcp.call_tool("read_comments", {"artifact": "slides", "new": True, **extra}))
+        binding.require_client()
+        asked = post_json(f"{base}/artifacts/slides/comments", {"anchor": {"kind": "artifact"}, "text": "First ask"})
+        answered = post_json(f"{base}/artifacts/slides/comments", {"anchor": {"kind": "artifact"}, "text": "Old ask"})
+        post_json(f"{base}/artifacts/slides/comments/update", {"comment_ids": [answered["id"]], "message": "Done"})
+
+        # A first call has no cursor: what stands unanswered bounds it, not the history.
+        first = read_new()
+        assert "from" not in first
+        assert [(c["id"], [e["text"] for e in c["entries"]]) for c in first["comments"]] == [(asked["id"], ["First ask"])]
+        assert set(first["comments"][0]) == {"id", "rev", "anchor", "entries"}
+        assert read_new()["comments"] == []
+
+        post_json(f"{base}/artifacts/slides/comments/update", {"comment_ids": [asked["id"]], "message": "Fixed"})
+        post_json(f"{base}/artifacts/slides/comments/{asked['id']}/reply", {"text": "Still wrong"})
+        follow = read_new()
+        assert [e["text"] for e in follow["comments"][0]["entries"]] == ["Still wrong"]
+        assert follow["from"] == first["cursor"]
+        assert read_new()["comments"] == []
+        # A turn that went wrong is taken again from the moment it read from.
+        again = read_new(since=follow["from"])
+        assert [e["text"] for e in again["comments"][0]["entries"]] == ["Still wrong"]
+
+        # A closed thread is not where a request arrives.
+        post_json(f"{base}/artifacts/slides/comments/{answered['id']}/reply", {"text": "One more"})
+        post_json(f"{base}/artifacts/slides/comments/update",
+                  {"comment_ids": [answered["id"]], "status": "resolved", "author": "human"})
+        assert read_new(since=follow["from"])["comments"][0]["id"] == asked["id"]
+        assert len(read_new(since=follow["from"])["comments"]) == 1
+        with pytest.raises(Exception, match="takes no comment_ids"):
+            asyncio.run(mcp.call_tool("read_comments", {"artifact": "slides", "new": True, "comment_ids": [asked["id"]]}))
+    finally:
+        binding.stop()
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")

@@ -4,6 +4,7 @@ import asyncio
 import functools
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.parse import quote, urlencode
@@ -17,10 +18,12 @@ from .mcp_contract import (
     is_after,
     is_unanswered,
     last_human_at,
+    new_requests,
     parse_entry_edits,
     parse_replies,
     parse_short_time,
     revision_of,
+    short_time,
 )
 
 
@@ -114,8 +117,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "Call inspect() once for paths and document references; reuse until configuration changes. "
             "Read authoring, template notes and any configured guideline only when needed, by path or "
             "resource_uri. Use inspect(artifact=..., page=...) for current state. "
-            "Read list_comments(unanswered=True), then read_comments for needed IDs; reuse unchanged "
-            "threads. Within the user's editing scope, edit, render affected pages, and reply in the "
+            "Work from read_comments(new=True); pass comment_ids only to reread a whole thread. Within the user's editing scope, edit, render affected pages, and reply in the "
             "threads; the reviewer resolves them. For review notifications, call listen() on each "
             "new connection and follow how; reuse its process, do not poll or duplicate it. "
             "Treat overflow, clipping, and text-tail warnings as geometric unless the user or a "
@@ -221,13 +223,48 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
 
     @mcp.tool(structured_output=False)
     @_compact
-    async def read_comments(artifact: str, comment_ids: list[str], save: bool = False) -> dict[str, Any]:
-        """Read selected threads; save returns a Markdown draft path/hash/IDs. Edit only Reply blocks."""
+    async def read_comments(
+        artifact: str,
+        comment_ids: list[str] | None = None,
+        new: Annotated[bool, Field(description=(
+            "Instead of comment_ids: on open threads, what the reviewer wrote that this has "
+            "neither handed over before nor seen you answer. Reports from and cursor; a turn "
+            "that went wrong is taken again with since=<from>."))] = False,
+        since: Annotated[str | None, Field(description="With new: 'MM-DD HH:MM'; read from that minute instead of the cursor.")] = None,
+        save: bool = False,
+    ) -> dict[str, Any]:
+        """Read what is new, or selected threads whole; save writes the selected threads as a
+        Markdown draft and returns its path. Edit only its Reply and Edit blocks."""
+        client = binding.require_client()
+        if new:
+            if comment_ids is not None or save:
+                raise ValueError("new answers on its own; it takes no comment_ids and writes no draft")
+            payload = await client.request_json("GET", f"/artifacts/{artifact}/comments?status=open")
+            project_dir = Path((await client.request_json("GET", "/state"))["project_dir"])
+            previous = read_cursor(project_dir, artifact)
+            edge = parse_short_time(since) if since is not None else (
+                datetime.fromisoformat(previous) if previous is not None else None)
+            fresh, newest = new_requests(payload["comments"], edge)
+            # Moved forward only: since= re-reads what was handed over without rewinding.
+            latest = previous
+            if newest is not None and (previous is None or datetime.fromisoformat(newest) > datetime.fromisoformat(previous)):
+                latest = newest
+            if latest is None:
+                # A quiet first call still fixes where the next one starts.
+                latest = datetime.now(timezone.utc).isoformat()
+            if latest != previous:
+                write_cursor(project_dir, artifact, latest)
+            return {
+                "comments": fresh,
+                **({"from": short_time(previous)} if previous is not None else {}),
+                "cursor": short_time(latest),
+            }
+        if since is not None:
+            raise ValueError("since goes with new")
         if not comment_ids:
-            raise ValueError("comment_ids must not be empty")
+            raise ValueError("give comment_ids, or new=True")
         if len(set(comment_ids)) != len(comment_ids):
             raise ValueError("comment_ids must be unique")
-        client = binding.require_client()
         if save:
             return await client.request_json("POST", f"/artifacts/{artifact}/comments/export", {"comment_ids": comment_ids})
         comments = []
@@ -445,13 +482,36 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "how": (
                 _wait_method(ctx)
                 + " Start another copy only after the previous process has ended. "
-                "On [review], read list_comments(unanswered=True) for the reported artifact and handle the review. "
+                "On [review], call read_comments(new=True) for the reported artifact and handle the review. "
                 "[gone] means the review server is unreachable; the script keeps retrying. "
                 "[back] means it is reachable again."
             ),
         }
 
     return mcp
+
+
+def _cursor_path(project_dir: Path) -> Path:
+    return project_dir / ".html-mcp-web" / "agent-cursor.json"
+
+
+def read_cursor(project_dir: Path, artifact: str) -> str | None:
+    """The exact stamp of the newest entry read_comments(new=True) handed over, or None."""
+    path = _cursor_path(project_dir)
+    if not path.exists():
+        return None
+    cursors = json.loads(path.read_text(encoding="utf-8"))
+    return cursors[artifact] if artifact in cursors else None
+
+
+def write_cursor(project_dir: Path, artifact: str, at: str) -> None:
+    path = _cursor_path(project_dir)
+    cursors = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    cursors[artifact] = at
+    path.parent.mkdir(parents=True, exist_ok=True)
+    staging = path.with_name(path.name + ".new")
+    staging.write_text(json.dumps(cursors), encoding="utf-8")
+    staging.replace(path)
 
 
 def document_references(artifacts: dict[str, Any]) -> dict[str, Any]:

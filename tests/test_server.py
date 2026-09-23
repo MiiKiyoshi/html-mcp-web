@@ -1092,7 +1092,7 @@ async def test_call_button_wakes_a_parked_waiter_and_keeps_an_early_press(client
     assert early.headers["X-Press"] == "2"
     line = await early.text()
     assert line.startswith("[review] reviewer called (press #2)")
-    assert "list_comments" in line
+    assert "read_comments(new=True)" in line
     # The line counts threads whose last word is the reviewer's: a count of open threads
     # sent an agent to read one it had already answered.
     assert "no unanswered comments" in line

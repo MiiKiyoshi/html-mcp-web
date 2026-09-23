@@ -195,6 +195,44 @@ def is_after(comment: dict[str, Any], since: datetime) -> bool:
     return at >= since
 
 
+
+def _moment(stamp: str) -> datetime:
+    at = datetime.fromisoformat(stamp)
+    return at if at.tzinfo is not None else at.replace(tzinfo=timezone.utc)
+
+
+def new_requests(comments: list[dict[str, Any]], edge: datetime | None) -> tuple[list[dict[str, Any]], str | None]:
+    """What the reviewer has written on open threads that the agent has neither been
+    handed before nor already taken up, and the stamp of the newest such entry.
+
+    Unread and unanswered, both: edge says what was handed before, and the agent's last
+    entry in a thread says what it has taken up. With no edge the second half alone keeps
+    a first call off the whole history. The edge is exact and compared strictly, or the
+    entry it names would be handed over on every call.
+    """
+    fresh: list[dict[str, Any]] = []
+    newest: str | None = None
+    for comment in comments:
+        if comment["status"] != "open":
+            continue
+        thread = comment["thread"]
+        answered = max((index for index, entry in enumerate(thread) if entry["author"] == "agent"), default=-1)
+        said = [entry for entry in thread[answered + 1:]
+                if entry["author"] == "human" and (edge is None or _moment(entry["at"]) > edge)]
+        if not said:
+            continue
+        fresh.append({
+            "id": comment["id"],
+            "rev": revision_of(comment["updated"]),
+            "anchor": agent_anchor(comment["anchor"]),
+            # Every entry here is the reviewer's, on an open thread.
+            "entries": [{"at": short_time(entry["at"]), "text": entry["text"]} for entry in said],
+        })
+        latest = max((entry["at"] for entry in said), key=_moment)
+        if newest is None or _moment(latest) > _moment(newest):
+            newest = latest
+    return fresh, newest
+
 def agent_artifact_summary(
     artifact_id: str,
     artifact: dict[str, Any],
