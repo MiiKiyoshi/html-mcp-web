@@ -75,14 +75,23 @@ def test_export_bakes_chrome_into_background_and_keeps_body_editable(tmp_path: P
     cover_texts = [s.text_frame.text for s in prs.slides[0].shapes]
     assert "Export Deck" in cover_texts and "Export Author" in cover_texts
     body = prs.slides[2]
-    # The chrome (title bar, footer, page number, corner logos) bakes into a locked
-    # background the mouse cannot grab; only the body's own blocks stay editable over it.
+    # The chrome (title bar, footer, corner logos) bakes into a locked background the mouse
+    # cannot grab; only the body's own blocks stay editable over it.
     body_bg = body._element.find(_qn("p:cSld")).find(_qn("p:bg"))
     assert body_bg is not None and body_bg.find(f".//{_qn('a:blip')}") is not None
     kinds = shapes_by_kind(body)
     texts = [shape.text_frame.text for shape in kinds["TEXT_BOX"]]
     assert "Numbers" in texts   # the bar's title stays editable: decks are retitled per page
-    assert "3 / 3" not in texts  # the bar itself and the footer page number baked in
+    # The page number comes back too, its number as the slide-number field so it follows
+    # the slide when slides move, and the total as text that can be corrected.
+    number = next(shape for shape in kinds["TEXT_BOX"] if shape.text_frame.text == "3 / 3")
+    paragraph = number.text_frame.paragraphs[0]._p
+    field = paragraph.find(_qn("a:fld"))
+    assert field is not None and field.get("type") == "slidenum" and field.find(_qn("a:t")).text == "3"
+    assert [run.text for run in number.text_frame.paragraphs[0].runs] == [" / 3"]
+    # The cover's number is the same field.
+    cover_number = next(s for s in prs.slides[0].shapes if s.text_frame.text == "1 / 3")
+    assert cover_number.text_frame.paragraphs[0]._p.find(_qn("a:fld")).get("type") == "slidenum"
     lead = next(shape for shape in kinds["TEXT_BOX"] if shape.text_frame.text.startswith("Lead sentence"))
     runs = lead.text_frame.paragraphs[0].runs
     assert [run.text for run in runs] == ["Lead sentence with ", "bold", " and ", "code", "."]
@@ -533,3 +542,32 @@ def test_a_speaker_script_becomes_the_slide_notes(tmp_path: Path) -> None:
     # The script stays out of the slide itself: it is spoken, not shown.
     shown = " ".join(shape.text_frame.text for shape in first.shapes if shape.has_text_frame)
     assert "What to say first" not in shown
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_an_appendix_number_is_editable_text_not_a_field(tmp_path: Path) -> None:
+    """A slide-number field counts the slide's place in the whole deck, so it cannot say
+    A1; an appendix label comes back as plain text to correct by hand, while the pages
+    before it keep the field."""
+    from html_mcp_web.slides import build
+    from pptx.oxml.ns import qn
+
+    content = tmp_path / "content.html"
+    content.write_text('''<!doctype html>
+<meta charset="utf-8">
+<title>Numbered</title>
+<body data-author="A" data-meta="B">
+<section data-title="Main"><p>The talk.</p></section>
+<section data-title="Backup" data-appendix><p>Opened on a question.</p></section>
+</body>
+''', encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, NEUTRAL)
+    out = tmp_path / "deck.pptx"
+    export_pptx(html.as_uri(), out, tmp_path, None)
+    slides = pptx.Presentation(str(out)).slides
+
+    main = next(s for s in slides[1].shapes if s.has_text_frame and s.text_frame.text == "2 / 2")
+    assert main.text_frame.paragraphs[0]._p.find(qn("a:fld")).get("type") == "slidenum"
+    backup = next(s for s in slides[2].shapes if s.has_text_frame and s.text_frame.text == "A1 / A1")
+    assert backup.text_frame.paragraphs[0]._p.find(qn("a:fld")) is None

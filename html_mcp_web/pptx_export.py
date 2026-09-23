@@ -9,9 +9,12 @@ the html (a 1280x720 px page is 12192000x6858000 EMU, 9525 EMU per px):
   - a div that paints a background or border                            -> a rounded panel, then its content
   - inline <svg> (self-contained)                                       -> real vector, with a screenshot fallback
   - KaTeX, canvas, anything else                                        -> a 3x screenshot of that element
-The title bar, footer, corner logos, and page number bake into the slide background so
-they cannot be grabbed; only the content stays editable over them. A page without a body
-box (cover, contents, divider) bakes the whole page and overlays only its plain text.
+The title bar, footer, and corner logos bake into the slide background so they cannot be
+grabbed; only the content stays editable over them, with the bar's title and the page
+number. A page number "N / M" carries N as PowerPoint's slide-number field, so it follows
+the slide when slides move; M and an appendix label ("A1 / A3") are plain text. A page
+without a body box (cover, contents, divider) bakes the whole page and overlays only its
+plain text.
 Every skin is handled the same way; its look comes through the HTML it styles, so no skin
 carries a pptx.
 
@@ -26,6 +29,7 @@ Skin configuration lives in skin.json under "pptx":
 Requires firefox, marionette_driver, python-pptx, and fontTools when fonts are embedded.
 """
 import base64
+import copy
 import io
 import json
 import re
@@ -314,21 +318,23 @@ const emit = (el) => {
 const body = page.querySelector('.body');
 const titleEl = page.querySelector('.tbar h2');
 const title = (titleEl || {}).textContent || '';
-// The chrome (title bar, footer, corner logos, page number) bakes into the slide
-// background so it cannot be grabbed; only the body's own blocks, tagged here, stay
-// as editable shapes laid over it. The bar's title is the exception: the deck is edited
-// per page by its title, so the words come back as a text box while the bar stays baked.
+// The chrome (title bar, footer, corner logos) bakes into the slide background so it
+// cannot be grabbed; only the body's own blocks, tagged here, stay as editable shapes laid
+// over it. The bar's title is an exception: the deck is edited per page by its title, so
+// the words come back as a text box while the bar stays baked.
 for (const ch of page.children) {
   if (ch === body || ch.classList.contains('script-block')) continue;
   emit(ch);
 }
-if (titleEl) {
-  const marked = titleEl.getAttribute('data-pptx-index');
-  if (marked !== null) {
-    const item = items.find((it) => String(it.i) === marked && it.kind === 'text');
-    if (item) item.body = true;
-  }
-}
+// The page number comes back too: baked into the picture it could not be corrected
+// when slides were added, moved or removed.
+const lift = (el, extra) => {
+  const marked = el === null ? null : el.getAttribute('data-pptx-index');
+  const item = marked === null ? undefined : items.find((it) => String(it.i) === marked && it.kind === 'text');
+  if (item) Object.assign(item, {body: true}, extra);
+};
+lift(titleEl, {});
+lift(page.querySelector('.pageno'), {pageno: true});
 const chromeCount = items.length;
 if (body) for (const ch of body.children) emit(ch);
 for (let k = chromeCount; k < items.length; k++) items[k].body = true;
@@ -470,9 +476,14 @@ def _add_text(slide, item: dict[str, Any], font: str) -> None:
     from pptx.enum.text import MSO_ANCHOR
     from pptx.oxml.ns import qn
     x, y, w, h = item["rect"]
+    if item.get("pageno"):
+        # The box is as wide as the number it was measured on, and the field grows when a
+        # slide moves: "9 / 20" become "10 / 20" wrapped in a box made for one digit. It
+        # keeps its centre and gains room on both sides, and does not wrap.
+        x, w = x - w, 3 * w
     box = slide.shapes.add_textbox(_px(x), _px(y), _px(w + 6), _px(h))
     frame = box.text_frame
-    frame.word_wrap = True
+    frame.word_wrap = not item.get("pageno")
     frame.margin_left = frame.margin_right = frame.margin_top = frame.margin_bottom = 0
     # Centre the text in its box: a multi-line block fills its box so this is a no-op, while
     # a single line in a line-height-taller box (a bar title) is centred instead of riding
@@ -496,6 +507,39 @@ def _add_text(slide, item: dict[str, Any], font: str) -> None:
         gap = para["marginTop"] if index == 0 else max(previous_bottom, para["marginTop"])
         _fill_paragraph(p, para, font, space_before=gap)
         previous_bottom = para.get("marginBottom", 0)
+    if item.get("pageno"):
+        from pptx.enum.text import PP_ALIGN
+        frame.paragraphs[0].alignment = PP_ALIGN.CENTER
+        _slide_number_field(frame.paragraphs[0])
+
+
+def _slide_number_field(p) -> None:
+    """Turn the leading number of a page number ("3 / 20") into the slide-number field
+    PowerPoint and LibreOffice recompute from the slide's position; the digits written
+    here are only the cached value. The rest of the text stays a plain run. An appendix
+    label ("A1 / A3") starts with no number, and a field would count the whole deck
+    rather than the appendix, so it stays text."""
+    import uuid
+    from lxml import etree
+    from pptx.oxml.ns import qn
+    runs = p._p.findall(qn("a:r"))
+    if not runs:
+        return
+    first = runs[0]
+    text = first.find(qn("a:t"))
+    match = re.fullmatch(r"(\d+)(.*)", text.text or "", re.DOTALL)
+    if match is None:
+        return
+    field = etree.Element(qn("a:fld"), id="{" + str(uuid.uuid4()).upper() + "}", type="slidenum")
+    properties = first.find(qn("a:rPr"))
+    if properties is not None:
+        field.append(copy.deepcopy(properties))
+    etree.SubElement(field, qn("a:t")).text = match[1]
+    first.addprevious(field)
+    if match[2]:
+        text.text = match[2]
+    else:
+        p._p.remove(first)
 
 
 def _wider(current, other):
