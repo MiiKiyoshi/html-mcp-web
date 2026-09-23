@@ -73,6 +73,11 @@ def space_snapshot() -> list[dict]:
     }]
 
 
+def answer(call):
+    """What a tool call hands the agent: its one text, read back as JSON."""
+    return json.loads(asyncio.run(call)[0].text)
+
+
 def test_source_comments_are_compact_until_the_agent_reads_detail() -> None:
     comment = {
         "id": "c-12345678",
@@ -127,14 +132,17 @@ async def test_stdio_mcp_starts_without_project_config(tmp_path: Path) -> None:
             assert all(initialized.instructions not in (tool.description or "") for tool in tools.tools)
             inspected = await session.call_tool("inspect", {})
             assert inspected.isError is False
-            assert inspected.structuredContent["setup_required"]["project_dir"] == str(tmp_path)
+            # One text, one line of JSON: no structured copy beside it.
+            assert inspected.structuredContent is None and "\n" not in inspected.content[0].text
+            assert json.loads(inspected.content[0].text)["setup_required"]["project_dir"] == str(tmp_path)
             config = project(tmp_path)
             connected = await session.call_tool("inspect", {})
             assert connected.isError is False
-            assert connected.structuredContent["config_path"] == str(config.config_path)
-            assert connected.structuredContent["review_url"] == f"http://127.0.0.1:{config.port}"
+            discovered = json.loads(connected.content[0].text)
+            assert discovered["config_path"] == str(config.config_path)
+            assert discovered["review_url"] == f"http://127.0.0.1:{config.port}"
             compact = await session.call_tool("inspect", {"artifact": "slides"})
-            assert set(compact.structuredContent) == {"artifacts"}
+            assert set(json.loads(compact.content[0].text)) == {"artifacts"}
 
 
 @pytest.mark.asyncio
@@ -207,7 +215,7 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         # measure_space needs no inspect round first just to learn the number.
         assert schemas["measure_space"]["required"] == ["artifact", "page", "clearance"]
 
-        _, setup = asyncio.run(mcp.call_tool("inspect", {}))
+        setup = answer(mcp.call_tool("inspect", {}))
         assert setup == {
             "setup_required": {
                 "project_dir": str(tmp_path),
@@ -220,11 +228,11 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         }
 
         config = project(tmp_path)
-        _, inspected = asyncio.run(mcp.call_tool("inspect", {}))
+        inspected = answer(mcp.call_tool("inspect", {}))
         assert inspected["config_path"] == str(config.config_path)
         assert inspected["project_dir"] == str(tmp_path)
         assert inspected["review_url"] == f"http://127.0.0.1:{config.port}"
-        _, compact = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
+        compact = answer(mcp.call_tool("inspect", {"artifact": "slides"}))
         assert set(compact) == {"artifacts"}
     finally:
         binding.stop()
@@ -236,12 +244,12 @@ def test_binding_retries_after_invalid_config_is_fixed(tmp_path: Path) -> None:
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        _, setup_error = asyncio.run(mcp.call_tool("inspect", {}))
+        setup_error = answer(mcp.call_tool("inspect", {}))
         assert setup_error["setup_error"]["config_path"] == str(config_path)
         assert "while parsing a flow node" in setup_error["setup_error"]["message"]
         config_path.unlink()
         config = project(tmp_path)
-        _, inspected = asyncio.run(mcp.call_tool("inspect", {}))
+        inspected = answer(mcp.call_tool("inspect", {}))
         assert inspected["config_path"] == str(config.config_path)
     finally:
         binding.stop()
@@ -285,7 +293,7 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
             assert response.status == 200
 
         mcp = create_server(binding)
-        _, discovered = asyncio.run(mcp.call_tool("inspect", {}))
+        discovered = answer(mcp.call_tool("inspect", {}))
         assert discovered["artifacts"]["slides"]["edit_file"] == str(tmp_path / "slides.html")
 
         base = f"http://127.0.0.1:{config.port}"
@@ -305,14 +313,14 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
             },
             "text": "Check this text",
         })
-        _, inspected = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
+        inspected = answer(mcp.call_tool("inspect", {"artifact": "slides"}))
         artifact = inspected["artifacts"]["slides"]
         assert set(artifact) == {"revision", "layout_error_count", "comment_counts"}
         assert artifact["comment_counts"]["open"] == 2
         assert "comments" not in artifact
         assert "artifact_digest" not in artifact
 
-        _, listed = asyncio.run(mcp.call_tool("list_comments", {"artifact": "slides"}))
+        listed = answer(mcp.call_tool("list_comments", {"artifact": "slides"}))
         # Newest first; a listing filtered by status does not repeat it on every row.
         assert [comment["id"] for comment in listed["comments"]] == [text_comment["id"], created["id"]]
         assert listed["comments"][1] == {
@@ -324,16 +332,16 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
         }
         # A text comment is chosen by what it quotes, not read in full to learn it.
         assert listed["comments"][0]["anchor"] == {"kind": "text", "quote": "selected text"}
-        _, everything = asyncio.run(mcp.call_tool("list_comments", {"artifact": "slides", "status": "all"}))
+        everything = answer(mcp.call_tool("list_comments", {"artifact": "slides", "status": "all"}))
         assert everything["comments"][0]["status"] == "open"
         # A time names a minute, and the minute it names comes back rather than being missed.
         first_seen = listed["comments"][1]["last_human_at"]
-        _, later = asyncio.run(mcp.call_tool("list_comments", {"artifact": "slides", "since": first_seen}))
+        later = answer(mcp.call_tool("list_comments", {"artifact": "slides", "since": first_seen}))
         assert {comment["id"] for comment in later["comments"]} == {created["id"], text_comment["id"]}
-        _, unanswered = asyncio.run(mcp.call_tool("list_comments", {"artifact": "slides", "unanswered": True}))
+        unanswered = answer(mcp.call_tool("list_comments", {"artifact": "slides", "unanswered": True}))
         assert len(unanswered["comments"]) == 2
 
-        _, selected = asyncio.run(mcp.call_tool("read_comments", {
+        selected = answer(mcp.call_tool("read_comments", {
             "artifact": "slides",
             "comment_ids": [text_comment["id"]],
         }))
@@ -350,21 +358,21 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
         # The thread's rev is the one thing a rewrite of an entry has to quote.
         assert stripped["rev"] == revision_of(text_comment["updated"])
 
-        _, replied = asyncio.run(mcp.call_tool("reply_comments", {
+        replied = answer(mcp.call_tool("reply_comments", {
             "artifact": "slides",
             "replies_text": f"{created['id']}: Changed the wording",
             "edited_files": ["slides.html"],
         }))
         assert set(replied["updated"][0]) == {"id", "rev"}
 
-        _, inspect_after_reply = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
+        inspect_after_reply = answer(mcp.call_tool("inspect", {"artifact": "slides"}))
         assert inspect_after_reply == inspected
         # The agent's reply leaves the thread answered; a later human entry reopens it.
-        _, unanswered = asyncio.run(mcp.call_tool("list_comments", {"artifact": "slides", "unanswered": True}))
+        unanswered = answer(mcp.call_tool("list_comments", {"artifact": "slides", "unanswered": True}))
         assert [comment["id"] for comment in unanswered["comments"]] == [text_comment["id"]]
         newest_seen = listed["comments"][0]["last_human_at"]
 
-        _, replied_read = asyncio.run(mcp.call_tool("read_comments", {
+        replied_read = answer(mcp.call_tool("read_comments", {
             "artifact": "slides",
             "comment_ids": [created["id"]],
         }))
@@ -374,7 +382,7 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
         # A rewrite quotes the rev it read; the one it was handed after replying is current.
         own = replied_comment["thread"][-1]["id"]
         assert replied_comment["rev"] == replied["updated"][0]["rev"]
-        _, rewritten = asyncio.run(mcp.call_tool("reply_comments", {
+        rewritten = answer(mcp.call_tool("reply_comments", {
             "artifact": "slides",
             "edits_text": f"{created['id']}/{own}@{replied_comment['rev']}: Changed the wording again",
         }))
@@ -383,11 +391,11 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
                 "artifact": "slides",
                 "edits_text": f"{created['id']}/{own}@{replied_comment['rev']}: A third wording",
             }))
-        _, reread = asyncio.run(mcp.call_tool("read_comments", {"artifact": "slides", "comment_ids": [created["id"]]}))
+        reread = answer(mcp.call_tool("read_comments", {"artifact": "slides", "comment_ids": [created["id"]]}))
         assert reread["comments"][0]["thread"][-1]["text"] == "Changed the wording again"
         assert reread["comments"][0]["rev"] == rewritten["updated"][0]["rev"]
         post_json(f"{base}/artifacts/slides/comments/{created['id']}/reply", {"text": "Still wrong"})
-        _, unanswered = asyncio.run(mcp.call_tool("list_comments", {"artifact": "slides", "unanswered": True, "since": newest_seen}))
+        unanswered = answer(mcp.call_tool("list_comments", {"artifact": "slides", "unanswered": True, "since": newest_seen}))
         assert [comment["id"] for comment in unanswered["comments"]] == [created["id"], text_comment["id"]]
         assert unanswered["comments"][0]["thread_entries"] == 3
         assert unanswered["comments"][0]["request"] == "Still wrong"
@@ -401,7 +409,7 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
             "errors": [],
             "space": space_snapshot(),
         })
-        _, measured = asyncio.run(mcp.call_tool("measure_space", {
+        measured = answer(mcp.call_tool("measure_space", {
             "artifact": "slides",
             "page": 1,
             "revision": revision,
@@ -415,7 +423,7 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
         post_json(f"http://127.0.0.1:{binding._shared.port}/artifacts/slides/comments/update", {
             "comment_ids": [created["id"]], "status": "resolved", "author": "human",
         })
-        _, closed_read = asyncio.run(mcp.call_tool("read_comments", {
+        closed_read = answer(mcp.call_tool("read_comments", {
             "artifact": "slides",
             "comment_ids": [created["id"]],
         }))
@@ -550,14 +558,14 @@ def test_discovery_contains_project_state_without_static_instructions(tmp_path: 
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        _, discovered = asyncio.run(mcp.call_tool("inspect", {}))
+        discovered = answer(mcp.call_tool("inspect", {}))
         assert set(discovered) == {
             "config_path", "project_dir", "review_url", "guideline", "documents", "artifacts",
         }
         assert "guide" not in discovered
         assert "reader-facing unit" not in json.dumps(discovered, ensure_ascii=False)
 
-        _, one = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
+        one = answer(mcp.call_tool("inspect", {"artifact": "slides"}))
         assert "guide" not in one
     finally:
         binding.stop()
@@ -600,7 +608,7 @@ def test_discovery_references_documents_and_resources_serve_exact_text(tmp_path:
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        _, discovered = asyncio.run(mcp.call_tool("inspect", {}))
+        discovered = answer(mcp.call_tool("inspect", {}))
         docs = discovered["documents"]
         refs = [docs["authoring"], docs["components"], docs["templates"]["neutral-slides"]]
         for ref in refs:
@@ -609,7 +617,7 @@ def test_discovery_references_documents_and_resources_serve_exact_text(tmp_path:
             resource = list(asyncio.run(mcp.read_resource(ref["resource_uri"])))
             assert resource[0].content == text
             assert text not in json.dumps(discovered)
-        _, inspected = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
+        inspected = answer(mcp.call_tool("inspect", {"artifact": "slides"}))
         assert set(inspected) == {"artifacts"}
         assert "docs" not in next(t for t in asyncio.run(mcp.list_tools()) if t.name == "inspect").inputSchema["properties"]
     finally:
@@ -633,7 +641,7 @@ def test_inspect_returns_only_requested_page_layout_detail(tmp_path: Path) -> No
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        _, initial = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
+        initial = answer(mcp.call_tool("inspect", {"artifact": "slides"}))
         revision = initial["artifacts"]["slides"]["revision"]
         with urllib.request.urlopen(f"http://127.0.0.1:{config.port}/state") as response:
             static = json.loads(response.read().decode("utf-8"))["static"]
@@ -647,13 +655,13 @@ def test_inspect_returns_only_requested_page_layout_detail(tmp_path: Path) -> No
             "space": space_snapshot(),
         })
 
-        _, compact = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
+        compact = answer(mcp.call_tool("inspect", {"artifact": "slides"}))
         assert compact["artifacts"]["slides"] == {
             "revision": revision,
             "layout_error_count": 2,
             "comment_counts": {"open": 0, "resolved": 0, "reference": 0},
         }
-        _, detailed = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides", "page": 1}))
+        detailed = answer(mcp.call_tool("inspect", {"artifact": "slides", "page": 1}))
         page = detailed["artifacts"]["slides"]["page"]
         assert page["number"] == 1
         assert page["errors"] == ["page 1 exceeds the slides height at p1:0"]
@@ -680,7 +688,7 @@ def test_guideline_discovery_returns_a_reference_and_resource_not_inline_text(
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        _, discovered = asyncio.run(mcp.call_tool("inspect", {}))
+        discovered = answer(mcp.call_tool("inspect", {}))
         assert discovered["guideline"] == {
             "name": "eda-domain-meeting",
             "path": str(guideline_path),
@@ -706,8 +714,7 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
         context = SimpleNamespace(session=SimpleNamespace(client_params=SimpleNamespace(
             clientInfo=SimpleNamespace(name="claude-code"))))
         monkeypatch.setattr(mcp, "get_context", lambda: context)
-        unstructured, told = asyncio.run(mcp.call_tool("listen", {}))
-        assert json.loads(unstructured[0].text) == told
+        told = answer(mcp.call_tool("listen", {}))
         script = Path(told["script"])
         assert script == tmp_path / ".html-mcp-web" / "wait-review.sh"
         assert script.stat().st_mode & 0o111
@@ -725,7 +732,7 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
         assert "write_stdin" not in told["how"]
         for name in ("codex-mcp-client", "other-client"):
             context.session.client_params.clientInfo.name = name
-            _, selected = asyncio.run(mcp.call_tool("listen", {}))
+            selected = answer(mcp.call_tool("listen", {}))
             assert "Monitor" not in selected["how"]
             assert ("codex queue" in selected["how"]) == (name == "codex-mcp-client")
             assert ('sandbox_permissions="require_escalated"' in selected["how"]) == (name == "codex-mcp-client")

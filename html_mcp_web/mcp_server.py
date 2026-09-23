@@ -1,6 +1,8 @@
 """MCP tools for reviewing project HTML artifacts."""
 
 import asyncio
+import functools
+import json
 import sys
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -90,6 +92,19 @@ def _revisions(result: dict[str, Any]) -> list[dict[str, str]]:
     return [{"id": entry["id"], "rev": revision_of(entry["updated"])} for entry in result["updated"]]
 
 
+def _compact(tool):
+    """A tool's mapping as one line of JSON, its text left as it is.
+
+    Left to the framework, a mapping went out indented by two and a second time as
+    structured content, with an output schema in every definition to describe it: the
+    indentation alone was 28% of a read of seventeen real threads."""
+    @functools.wraps(tool)
+    async def answer(*args, **kwargs):
+        result = await tool(*args, **kwargs)
+        return result if isinstance(result, Image) else json.dumps(result, ensure_ascii=False)
+    return answer
+
+
 def create_server(binding: "ProjectBinding") -> "FastMCP":
     _check_dependencies()
     guideline_resource_uri = "html-mcp://guideline/configured"
@@ -136,7 +151,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         state = await binding.require_client().request_json("GET", "/state")
         return (Path(state["artifacts"][artifact]["template_dir"]) / "README.md").read_text(encoding="utf-8")
 
-    @mcp.tool()
+    @mcp.tool(structured_output=False)
+    @_compact
     async def inspect(
         artifact: str | None = None,
         page: Annotated[int | None, Field(ge=1, description="With an artifact: add only this page's layout errors and available-room regions.")] = None,
@@ -177,7 +193,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "artifacts": {artifact: agent_artifact(artifacts[artifact], page)},
         }
 
-    @mcp.tool()
+    @mcp.tool(structured_output=False)
+    @_compact
     async def list_comments(
         artifact: str,
         status: Literal["open", "resolved", "reference", "all"] = "open",
@@ -202,7 +219,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             **({"more": len(comments) - LIST_LIMIT} if len(comments) > LIST_LIMIT else {}),
         }
 
-    @mcp.tool()
+    @mcp.tool(structured_output=False)
+    @_compact
     async def read_comments(artifact: str, comment_ids: list[str], save: bool = False) -> dict[str, Any]:
         """Read selected threads; save returns a Markdown draft path/hash/IDs. Edit only Reply blocks."""
         if not comment_ids:
@@ -218,7 +236,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             comments.append(agent_comment(comment))
         return {"artifact": artifact, "comments": comments}
 
-    @mcp.tool()
+    @mcp.tool(structured_output=False)
+    @_compact
     async def reply_comments(
         artifact: str,
         replies_text: Annotated[str | None, Field(min_length=1, description=(
@@ -280,7 +299,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 notes.append(result["note"])
         return {"updated": updated, **({"notes": notes} if notes else {})}
 
-    @mcp.tool()
+    @mcp.tool(structured_output=False)
+    @_compact
     async def render_page(
         artifact: str,
         page: Annotated[int, Field(ge=1)],
@@ -311,7 +331,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         out_path.write_bytes(data)
         return {"path": str(out_path), "bytes": len(data), "page": page, "dpi": dpi}
 
-    @mcp.tool()
+    @mcp.tool(structured_output=False)
+    @_compact
     async def export_pptx(
         artifact: str,
         out: Annotated[str | None, Field(description="Project-relative path of the pptx to write; default export/<artifact>.pptx.")] = None,
@@ -321,7 +342,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         return await client.request_json(
             "POST", f"/artifacts/{artifact}/export/pptx", {"out": out} if out is not None else {}, timeout=300.0)
 
-    @mcp.tool()
+    @mcp.tool(structured_output=False)
+    @_compact
     async def measure_space(
         artifact: str,
         page: Annotated[int, Field(ge=1)],
@@ -349,7 +371,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         # open: it starts a headless browser on its own page and answers once that posts.
         return await client.request_json("GET", f"/artifacts/{artifact}/space?{urlencode(query)}", timeout=75.0)
 
-    @mcp.tool()
+    @mcp.tool(structured_output=False)
+    @_compact
     async def listen(ctx: Context) -> dict[str, Any]:
         """Return a script and client-specific instructions for listening for Call agent.
 
