@@ -2,20 +2,23 @@
 
 import asyncio
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.parse import quote, urlencode
 
 from .mcp_contract import (
+    LIST_LIMIT,
     agent_artifact,
     agent_artifact_summary,
     agent_comment,
     agent_comment_summary,
     is_after,
     is_unanswered,
+    last_human_at,
     parse_entry_edits,
     parse_replies,
+    parse_short_time,
+    revision_of,
 )
 
 
@@ -80,6 +83,11 @@ def _wait_method(ctx: "Context") -> str:
         "a completed turn from background output. After handling an event, resume "
         "waiting on the same process."
     )
+
+
+def _revisions(result: dict[str, Any]) -> list[dict[str, str]]:
+    # A reply leaves the status as it was; what the agent can use next is the rev.
+    return [{"id": entry["id"], "rev": revision_of(entry["updated"])} for entry in result["updated"]]
 
 
 def create_server(binding: "ProjectBinding") -> "FastMCP":
@@ -174,9 +182,9 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         artifact: str,
         status: Literal["open", "resolved", "reference", "all"] = "open",
         unanswered: Annotated[bool, Field(description="Only comments whose latest thread entry is the human's: not yet answered, or written to again after the agent's reply.")] = False,
-        since: Annotated[str | None, Field(description="ISO 8601 time; only comments whose latest human entry is after it. Pass the largest last_human_at seen so far.")] = None,
+        since: Annotated[str | None, Field(description="'MM-DD HH:MM'; only comments whose latest human entry is in or after that minute. Pass the largest last_human_at seen so far.")] = None,
     ) -> dict[str, Any]:
-        """List compact comment requests without anchors or thread history."""
+        """List comment requests, newest first, without thread history."""
         client = binding.require_client()
         query = "" if status == "all" else f"?status={status}"
         payload = await client.request_json("GET", f"/artifacts/{artifact}/comments{query}")
@@ -184,13 +192,14 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         if unanswered:
             comments = [comment for comment in comments if is_unanswered(comment)]
         if since is not None:
-            cutoff = datetime.fromisoformat(since)
-            if cutoff.tzinfo is None:
-                cutoff = cutoff.replace(tzinfo=timezone.utc)
+            cutoff = parse_short_time(since)
             comments = [comment for comment in comments if is_after(comment, cutoff)]
+        # The newest are what was just written; a cap that kept the oldest would hide them.
+        comments.sort(key=last_human_at, reverse=True)
         return {
             "artifact": artifact,
-            "comments": [agent_comment_summary(comment) for comment in comments],
+            "comments": [agent_comment_summary(comment, status == "all") for comment in comments[:LIST_LIMIT]],
+            **({"more": len(comments) - LIST_LIMIT} if len(comments) > LIST_LIMIT else {}),
         }
 
     @mcp.tool()
@@ -220,8 +229,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         replies_file: str | None = None,
         edits_text: Annotated[str | None, Field(description=(
             "Rewrites of your own earlier entries, as one text: each starts at a line head with "
-            "the comment id, /, the entry id, @, the comment's updated stamp as read, and a colon "
-            "('c-1a2b3c4d/e-5e6f7a8b@2026-01-01T00:00:00+00:00: ') and runs to the next such head. "
+            "the comment id, /, the entry id, @, the comment's rev as read, and a colon "
+            "('c-1a2b3c4d/e-5e6f7a8b@9f8e7d6c: ') and runs to the next such head. "
             "Refused if the thread changed since."))] = None,
     ) -> dict[str, Any]:
         """Reply without changing status, or rewrite your own entries. Use replies_text and/or
@@ -236,17 +245,27 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 "replies_file": replies_file,
                 **({"edited_files": edited_files} if edited_files is not None else {}),
             })
-            return {"updated": result["updated"], **({"notes": [result["note"]]} if "note" in result else {})}
+            return {"updated": _revisions(result), **({"notes": [result["note"]]} if "note" in result else {})}
         client = binding.require_client()
         updated: list[dict[str, Any]] = []
         notes: list[str] = []
         if edits_text is not None:
             rewrites = parse_entry_edits(edits_text)
+            # The agent quotes a rev; the store checks a stamp. The stamp read here is the
+            # one the rev stood for, or the thread has moved on, and the store checks it
+            # again under its lock, so a change in between is refused there.
+            stamps: dict[str, str] = {}
+            for comment_id, _, rev, _ in rewrites:
+                if comment_id not in stamps:
+                    comment = await client.request_json("GET", f"/artifacts/{artifact}/comments/{comment_id}")
+                    if revision_of(comment["updated"]) != rev:
+                        raise ValueError(f"stale: {comment_id} changed since it was read; read it again")
+                    stamps[comment_id] = comment["updated"]
             result = await client.request_json("POST", f"/artifacts/{artifact}/comments/update", {
-                "entry_edits": [{"comment": comment_id, "entry": entry_id, "updated": stamp, "text": body}
-                                for comment_id, entry_id, stamp, body in rewrites],
+                "entry_edits": [{"comment": comment_id, "entry": entry_id, "updated": stamps[comment_id], "text": body}
+                                for comment_id, entry_id, _, body in rewrites],
             })
-            updated.extend(result["updated"])
+            updated.extend(_revisions(result))
         replies = parse_replies(replies_text) if replies_text is not None else []
         for comment_id, message in replies:
             result = await client.request_json("POST", f"/artifacts/{artifact}/comments/update", {
@@ -254,7 +273,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 "message": message,
                 **({"edited_files": edited_files} if edited_files is not None else {}),
             })
-            updated.extend(result["updated"])
+            updated.extend(_revisions(result))
             # Where the quoted text is still in the artifact unchanged after an edit was
             # reported for it: normal for a fix that landed elsewhere, a place to look otherwise.
             if "note" in result:
