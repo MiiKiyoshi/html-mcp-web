@@ -19,7 +19,7 @@ from mcp.client.stdio import stdio_client
 from html_mcp_web import config as config_module
 from html_mcp_web.config import load_config
 from html_mcp_web.mcp_client import ProjectBinding
-from html_mcp_web.mcp_contract import agent_comment, agent_comment_summary
+from html_mcp_web.mcp_contract import agent_comment, agent_comment_summary, revision_of, short_time
 from html_mcp_web.mcp_server import create_server
 from html_mcp_web.project_server import SharedProjectServer
 
@@ -87,7 +87,7 @@ def test_source_comments_are_compact_until_the_agent_reads_detail() -> None:
         "status": "open",
         "created": "2026-09-14T00:00:00+00:00",
     }
-    listed = agent_comment_summary(comment)
+    listed = agent_comment_summary(comment, True)
     assert listed["anchor"] == {
         "kind": "source", "file": "content.html", "line_start": 12,
         "line_end": 12, "stale": False,
@@ -313,19 +313,23 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
         assert "artifact_digest" not in artifact
 
         _, listed = asyncio.run(mcp.call_tool("list_comments", {"artifact": "slides"}))
-        assert len(listed["comments"]) == 2
-        assert listed["comments"][0] == {
+        # Newest first; a listing filtered by status does not repeat it on every row.
+        assert [comment["id"] for comment in listed["comments"]] == [text_comment["id"], created["id"]]
+        assert listed["comments"][1] == {
             "id": created["id"],
-            "status": "open",
             "anchor": {"kind": "artifact"},
             "request": "Reply without resolving",
             "thread_entries": 1,
-            "last_human_at": created["thread"][0]["at"],
+            "last_human_at": short_time(created["thread"][0]["at"]),
         }
-        assert "quote" not in json.dumps(listed)
-        first_seen = listed["comments"][0]["last_human_at"]
+        # A text comment is chosen by what it quotes, not read in full to learn it.
+        assert listed["comments"][0]["anchor"] == {"kind": "text", "quote": "selected text"}
+        _, everything = asyncio.run(mcp.call_tool("list_comments", {"artifact": "slides", "status": "all"}))
+        assert everything["comments"][0]["status"] == "open"
+        # A time names a minute, and the minute it names comes back rather than being missed.
+        first_seen = listed["comments"][1]["last_human_at"]
         _, later = asyncio.run(mcp.call_tool("list_comments", {"artifact": "slides", "since": first_seen}))
-        assert [comment["id"] for comment in later["comments"]] == [text_comment["id"]]
+        assert {comment["id"] for comment in later["comments"]} == {created["id"], text_comment["id"]}
         _, unanswered = asyncio.run(mcp.call_tool("list_comments", {"artifact": "slides", "unanswered": True}))
         assert len(unanswered["comments"]) == 2
 
@@ -343,25 +347,22 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
             "suffix": " after",
         }
         assert "created" not in stripped
-        # The thread's updated stamp is the one thing a rewrite of an entry has to quote.
-        assert isinstance(stripped["updated"], str) and stripped["updated"]
+        # The thread's rev is the one thing a rewrite of an entry has to quote.
+        assert stripped["rev"] == revision_of(text_comment["updated"])
 
         _, replied = asyncio.run(mcp.call_tool("reply_comments", {
             "artifact": "slides",
             "replies_text": f"{created['id']}: Changed the wording",
             "edited_files": ["slides.html"],
         }))
-        assert replied["updated"][0]["status"] == "open"
-        assert set(replied["updated"][0]) == {"id", "status", "updated"}
+        assert set(replied["updated"][0]) == {"id", "rev"}
 
         _, inspect_after_reply = asyncio.run(mcp.call_tool("inspect", {"artifact": "slides"}))
         assert inspect_after_reply == inspected
         # The agent's reply leaves the thread answered; a later human entry reopens it.
         _, unanswered = asyncio.run(mcp.call_tool("list_comments", {"artifact": "slides", "unanswered": True}))
         assert [comment["id"] for comment in unanswered["comments"]] == [text_comment["id"]]
-        newest_seen = listed["comments"][1]["last_human_at"]
-        _, since_all = asyncio.run(mcp.call_tool("list_comments", {"artifact": "slides", "since": newest_seen}))
-        assert since_all["comments"] == []
+        newest_seen = listed["comments"][0]["last_human_at"]
 
         _, replied_read = asyncio.run(mcp.call_tool("read_comments", {
             "artifact": "slides",
@@ -370,9 +371,24 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
         replied_comment = replied_read["comments"][0]
         assert replied_comment["thread"][-1]["edited_files"] == ["slides.html"]
         assert "edits" not in replied_comment["thread"][-1]
+        # A rewrite quotes the rev it read; the one it was handed after replying is current.
+        own = replied_comment["thread"][-1]["id"]
+        assert replied_comment["rev"] == replied["updated"][0]["rev"]
+        _, rewritten = asyncio.run(mcp.call_tool("reply_comments", {
+            "artifact": "slides",
+            "edits_text": f"{created['id']}/{own}@{replied_comment['rev']}: Changed the wording again",
+        }))
+        with pytest.raises(Exception, match="stale"):
+            asyncio.run(mcp.call_tool("reply_comments", {
+                "artifact": "slides",
+                "edits_text": f"{created['id']}/{own}@{replied_comment['rev']}: A third wording",
+            }))
+        _, reread = asyncio.run(mcp.call_tool("read_comments", {"artifact": "slides", "comment_ids": [created["id"]]}))
+        assert reread["comments"][0]["thread"][-1]["text"] == "Changed the wording again"
+        assert reread["comments"][0]["rev"] == rewritten["updated"][0]["rev"]
         post_json(f"{base}/artifacts/slides/comments/{created['id']}/reply", {"text": "Still wrong"})
         _, unanswered = asyncio.run(mcp.call_tool("list_comments", {"artifact": "slides", "unanswered": True, "since": newest_seen}))
-        assert [comment["id"] for comment in unanswered["comments"]] == [created["id"]]
+        assert [comment["id"] for comment in unanswered["comments"]] == [created["id"], text_comment["id"]]
         assert unanswered["comments"][0]["thread_entries"] == 3
         assert unanswered["comments"][0]["request"] == "Still wrong"
 
@@ -815,4 +831,4 @@ def test_reply_comments_takes_edits_of_the_agents_own_entries(tmp_path: Path) ->
     schemas = {tool.name: tool.inputSchema for tool in asyncio.run(mcp.list_tools())}
     assert set(schemas["reply_comments"]["properties"]) == {
         "artifact", "replies_text", "edited_files", "replies_file", "edits_text"}
-    assert "the comment id, /, the entry id, @, the comment's updated stamp" in schemas["reply_comments"]["properties"]["edits_text"]["description"]
+    assert "the comment id, /, the entry id, @, the comment's rev" in schemas["reply_comments"]["properties"]["edits_text"]["description"]

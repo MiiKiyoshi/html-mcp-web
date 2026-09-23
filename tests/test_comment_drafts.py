@@ -66,7 +66,7 @@ def test_stale_batch_is_all_or_nothing(store, mutation):
     assert store.path.read_bytes() == before
 
 
-@pytest.mark.parametrize("damage", ["blank", "header", "timestamp", "truncated", "utf8"])
+@pytest.mark.parametrize("damage", ["blank", "header", "thread", "truncated", "utf8"])
 def test_malformed_draft_does_not_write(store, damage):
     comment = add(store)
     result = store.export_comments([comment.id])
@@ -77,7 +77,7 @@ def test_malformed_draft_does_not_write(store, damage):
         path.write_bytes(b"\xff")
     elif damage != "blank":
         text = path.read_text(encoding="utf-8")
-        text = {"header": "wrong" + text, "timestamp": text.replace(comment.updated, "changed"),
+        text = {"header": "wrong" + text, "thread": text.replace("두 번째 줄", "changed"),
                 "truncated": text[:-10]}[damage]
         path.write_text(text, encoding="utf-8")
     before = store.path.read_bytes()

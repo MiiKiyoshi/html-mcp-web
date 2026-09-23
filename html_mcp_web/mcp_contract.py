@@ -1,9 +1,52 @@
 """Agent-facing projection of browser review state."""
 
+import hashlib
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+
+# How much of the text around a quote a read carries. The browser stores 120 characters
+# each side, of rendered text: across the real stores that context made a quote findable
+# in its source file in 4 of 192 cases where the quote alone was not, so it is there to be
+# read, not searched for, and 40 characters say where in a sentence the quote sits.
+CONTEXT = 40
+# How much of a quote or a request a listing shows; a listing is for choosing a thread.
+QUOTE_PREVIEW = 60
+REQUEST_PREVIEW = 120
+# How many threads a listing shows, newest first; the rest are counted.
+LIST_LIMIT = 30
+
+
+def revision_of(updated: str) -> str:
+    """A short token standing for a thread's updated stamp. An agent hands it back to say
+    which version of a thread it read; nothing reads its parts."""
+    return hashlib.sha256(updated.encode("utf-8")).hexdigest()[:8]
+
+
+def short_time(stamp: str) -> str:
+    """A stored ISO stamp as the server's clock reads it, 'MM-DD HH:MM': nothing an agent
+    does with a time needs the second, the microsecond or the offset."""
+    return datetime.fromisoformat(stamp).astimezone().strftime("%m-%d %H:%M")
+
+
+def parse_short_time(value: str) -> datetime:
+    """Read back a 'MM-DD HH:MM' the server printed. The year is this one, or the last one
+    when that would put the moment in the future."""
+    try:
+        month_day, clock = value.strip().split(" ", 1)
+        month, day = (int(part) for part in month_day.split("-"))
+        hour, minute = (int(part) for part in clock.split(":"))
+    except ValueError:
+        raise ValueError(f"a time reads as 'MM-DD HH:MM', like '09-19 00:52': {value!r}") from None
+    now = datetime.now().astimezone()
+    moment = datetime(now.year, month, day, hour, minute, tzinfo=now.tzinfo)
+    return moment.replace(year=now.year - 1) if moment > now else moment
+
+
+def _cut(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[:limit] + "…"
 
 
 def agent_anchor(anchor: dict[str, Any]) -> dict[str, Any]:
@@ -11,8 +54,10 @@ def agent_anchor(anchor: dict[str, Any]) -> dict[str, Any]:
         return {
             "kind": "text",
             "quote": anchor["quote"],
-            "prefix": anchor["prefix"],
-            "suffix": anchor["suffix"],
+            # Rendered text keeps the source's line breaks and indentation as runs of
+            # whitespace, which would spend the context on nothing.
+            "prefix": re.sub(r"\s+", " ", anchor["prefix"])[-CONTEXT:],
+            "suffix": re.sub(r"\s+", " ", anchor["suffix"])[:CONTEXT],
         }
     if anchor["kind"] == "source":
         return {
@@ -28,22 +73,22 @@ def agent_anchor(anchor: dict[str, Any]) -> dict[str, Any]:
 def agent_comment(comment: dict[str, Any]) -> dict[str, Any]:
     thread = []
     for entry in comment["thread"]:
-        shaped = {"author": entry["author"], "at": entry["at"], "text": entry["text"]}
+        shaped = {"author": entry["author"], "at": short_time(entry["at"]), "text": entry["text"]}
         # Only the agent's own entries can be rewritten, so only those carry the id to name them by.
         if entry["author"] == "agent":
             shaped = {"id": entry["id"], **shaped}
         if "edits" in entry:
             shaped["edited_files"] = entry["edits"]
         if "updated_at" in entry:
-            shaped["updated_at"] = entry["updated_at"]
+            shaped["updated_at"] = short_time(entry["updated_at"])
         thread.append(shaped)
     return {
         "id": comment["id"],
         "anchor": agent_anchor(comment["anchor"]),
         "thread": thread,
         "status": comment["status"],
-        # The stamp a rewrite of an entry must quote; it moves with every change to the thread.
-        "updated": comment["updated"],
+        # What a rewrite of an entry must quote; it moves with every change to the thread.
+        "rev": revision_of(comment["updated"]),
     }
 
 
@@ -52,7 +97,7 @@ def last_human_at(comment: dict[str, Any]) -> str:
     return (human_entries[-1] if human_entries else comment["thread"][0])["at"]
 
 
-def agent_comment_summary(comment: dict[str, Any]) -> dict[str, Any]:
+def agent_comment_summary(comment: dict[str, Any], with_status: bool) -> dict[str, Any]:
     human_entries = [entry for entry in comment["thread"] if entry["author"] == "human"]
     request = human_entries[-1] if human_entries else comment["thread"][0]
     anchor = comment["anchor"]
@@ -60,6 +105,10 @@ def agent_comment_summary(comment: dict[str, Any]) -> dict[str, Any]:
     if anchor["kind"] == "page":
         anchor_summary["number"] = anchor["number"]
         anchor_summary["title"] = anchor["title"]
+    elif anchor["kind"] == "text":
+        # A request is mostly a few words about the text it is anchored to; without the
+        # quote, choosing a thread took reading it.
+        anchor_summary["quote"] = _cut(anchor["quote"], QUOTE_PREVIEW)
     elif anchor["kind"] == "source":
         anchor_summary.update(
             file=anchor["file"],
@@ -69,11 +118,12 @@ def agent_comment_summary(comment: dict[str, Any]) -> dict[str, Any]:
         )
     return {
         "id": comment["id"],
-        "status": comment["status"],
+        # Every row of a listing filtered by status carries the same one.
+        **({"status": comment["status"]} if with_status else {}),
         "anchor": anchor_summary,
-        "request": request["text"],
+        "request": _cut(request["text"], REQUEST_PREVIEW),
         "thread_entries": len(comment["thread"]),
-        "last_human_at": last_human_at(comment),
+        "last_human_at": short_time(last_human_at(comment)),
     }
 
 
@@ -107,19 +157,19 @@ def parse_replies(text: str) -> list[tuple[str, str]]:
     return replies
 
 
-EDIT_HEAD = re.compile(r"^(c-[0-9a-f]{8})/(e-[0-9a-f]{8})@(\S+): ", re.MULTILINE)
+EDIT_HEAD = re.compile(r"^(c-[0-9a-f]{8})/(e-[0-9a-f]{8})@([0-9a-f]{8}): ", re.MULTILINE)
 
 
 def parse_entry_edits(text: str) -> list[tuple[str, str, str, str]]:
     """Rewrites of the agent's own entries, written as one text: each starts at a line
-    head with the comment id, a slash, the entry id, an @, the comment's updated stamp as
-    read, and a colon ('c-1a2b3c4d/e-5e6f7a8b@2026-...: '), and runs to the next such
-    head. The stamp is the check that the thread has not moved on since it was read."""
+    head with the comment id, a slash, the entry id, an @, the comment's rev as read, and a
+    colon ('c-1a2b3c4d/e-5e6f7a8b@9f8e7d6c: '), and runs to the next such head. The rev is
+    the check that the thread has not moved on since it was read."""
     heads = list(EDIT_HEAD.finditer(text))
     if not heads:
-        raise ValueError("edits_text holds no edit: each starts at a line head with '<comment_id>/<entry_id>@<updated>: '")
+        raise ValueError("edits_text holds no edit: each starts at a line head with '<comment_id>/<entry_id>@<rev>: '")
     if text[:heads[0].start()].strip():
-        raise ValueError("edits_text has text before the first '<comment_id>/<entry_id>@<updated>: ' line head")
+        raise ValueError("edits_text has text before the first '<comment_id>/<entry_id>@<rev>: ' line head")
     found: list[tuple[str, str, str, str]] = []
     for index, head in enumerate(heads):
         end = heads[index + 1].start() if index + 1 < len(heads) else len(text)
@@ -137,10 +187,12 @@ def is_unanswered(comment: dict[str, Any]) -> bool:
 
 
 def is_after(comment: dict[str, Any], since: datetime) -> bool:
+    """Whether the latest human entry falls in or after the minute since names: a time is
+    printed to the minute, so the minute it names comes back rather than being missed."""
     at = datetime.fromisoformat(last_human_at(comment))
     if at.tzinfo is None:
         at = at.replace(tzinfo=timezone.utc)
-    return at > since
+    return at >= since
 
 
 def agent_artifact_summary(

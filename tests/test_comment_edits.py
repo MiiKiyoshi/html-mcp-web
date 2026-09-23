@@ -127,8 +127,9 @@ def test_a_draft_carries_edit_blocks_for_agent_entries(store):
     entry = store.reply(comment.id, "first\nanswer", "agent").thread[1]
     result = store.export_comments([comment.id])
     draft = Path(result["path"]).read_text(encoding="utf-8")
-    assert f"### Edit {entry.id}" in draft and "first\nanswer\n<!-- /edit:" in draft
-    assert draft.count("### Edit") == 1                     # the human's entry has none
+    assert f":{entry.id} -->\nfirst\nanswer\n<!-- /edit:" in draft
+    assert draft.count("<!-- edit:") == 1                   # the human's entry has none
+    assert draft.count("first\nanswer") == 1                # the block is where the entry reads
 
     # Left alone, the Edit block changes nothing and an empty Reply adds nothing.
     with pytest.raises(ValueError, match="no reply and no changed Edit"):
@@ -158,13 +159,14 @@ def test_a_draft_carries_edit_blocks_for_agent_entries(store):
 
 def test_edits_text_grammar():
     parsed = parse_entry_edits(
-        "c-11111111/e-1a2b3c4d@2026-01-01T00:00:00+00:00: first line\n\nsecond: with a colon\n"
-        "c-22222222/e-5e6f7a8b@2026-01-01T00:00:01+00:00: other")
-    assert parsed == [("c-11111111", "e-1a2b3c4d", "2026-01-01T00:00:00+00:00", "first line\n\nsecond: with a colon"),
-                      ("c-22222222", "e-5e6f7a8b", "2026-01-01T00:00:01+00:00", "other")]
-    for bad, error in (("no head here", "holds no edit"), ("e-1a2b3c4d@s: no comment id", "holds no edit"),
-                       ("x\nc-11111111/e-1a2b3c4d@s: y", "before the first"),
-                       ("c-11111111/e-1a2b3c4d@s: ", "is empty"),
-                       ("c-11111111/e-1a2b3c4d@s: a\nc-11111111/e-1a2b3c4d@s: b", "at most once")):
+        "c-11111111/e-1a2b3c4d@0a1b2c3d: first line\n\nsecond: with a colon\n"
+        "c-22222222/e-5e6f7a8b@4e5f6a7b: other")
+    assert parsed == [("c-11111111", "e-1a2b3c4d", "0a1b2c3d", "first line\n\nsecond: with a colon"),
+                      ("c-22222222", "e-5e6f7a8b", "4e5f6a7b", "other")]
+    for bad, error in (("no head here", "holds no edit"), ("e-1a2b3c4d@0a1b2c3d: no comment id", "holds no edit"),
+                       ("c-11111111/e-1a2b3c4d@2026-01-01T00:00:00+00:00: a stamp, not a rev", "holds no edit"),
+                       ("x\nc-11111111/e-1a2b3c4d@0a1b2c3d: y", "before the first"),
+                       ("c-11111111/e-1a2b3c4d@0a1b2c3d: ", "is empty"),
+                       ("c-11111111/e-1a2b3c4d@0a1b2c3d: a\nc-11111111/e-1a2b3c4d@0a1b2c3d: b", "at most once")):
         with pytest.raises(ValueError, match=error):
             parse_entry_edits(bad)

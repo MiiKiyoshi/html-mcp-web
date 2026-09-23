@@ -10,6 +10,8 @@ import re
 import stat
 import uuid
 
+from .mcp_contract import agent_anchor, short_time
+
 
 @contextlib.contextmanager
 def _directory(root: Path, create: bool = False):
@@ -42,9 +44,31 @@ def _read(fd: int, name: str) -> str:
         return stream.read()
 
 
+def _anchor_line(anchor: dict) -> str:
+    anchor = agent_anchor(anchor)
+    if anchor["kind"] == "text":
+        return f"Anchor: …{anchor['prefix']}«{anchor['quote']}»{anchor['suffix']}…"
+    if anchor["kind"] == "source":
+        return (f"Anchor: {anchor['file']}:{anchor['line_start']}-{anchor['line_end']}"
+                f"{' (stale)' if anchor['stale'] else ''} «{anchor['quote']}»")
+    if anchor["kind"] == "page":
+        return f"Anchor: page {anchor['number']}, {anchor['title']}"
+    return "Anchor: the whole artifact"
+
+
+def _entry_head(entry: dict) -> str:
+    head = f"**{entry['author']}** {short_time(entry['at'])}"
+    if "updated_at" in entry:
+        head += f", rewritten {short_time(entry['updated_at'])}"
+    if "edits" in entry:
+        head += f", edited {', '.join(entry['edits'])}"
+    return f"\n{head}\n"
+
+
 def export(root: Path, comments: list[dict]) -> dict:
-    """Write the draft. Each comment gets an Edit block per entry the agent wrote,
-    holding its current text, and one empty Reply block; everything else is fixed."""
+    """Write the draft. Each entry the agent wrote is an Edit block where it stands in the
+    thread, holding its current text, and each comment ends in one empty Reply block;
+    everything else is fixed."""
     ids = [comment["id"] for comment in comments]
     if not ids or len(ids) != len(set(ids)):
         raise ValueError("comment_ids must be nonempty and unique")
@@ -53,14 +77,15 @@ def export(root: Path, comments: list[dict]) -> dict:
                 "A Reply block left empty adds nothing; an Edit block left as it is changes nothing.\n"]
     slots: list[list] = []  # ["reply", comment_id] or ["edit", comment_id, entry_id, original]
     for comment in comments:
-        segments[-1] += (
-            f"\n## {comment['id']}\nUpdated: {comment['updated']}\n\n"
-            + json.dumps(comment, ensure_ascii=False, indent=2) + "\n"
-        )
+        # The thread as it reads, not as it is stored: the stored record was three
+        # quarters of a draft, and nothing in it past this is for the reader.
+        segments[-1] += f"\n## {comment['id']} ({comment['status']})\n{_anchor_line(comment['anchor'])}\n"
         for entry in comment["thread"]:
+            segments[-1] += _entry_head(entry)
             if entry["author"] != "agent":
+                segments[-1] += f"\n{entry['text']}\n"
                 continue
-            segments[-1] += f"\n### Edit {entry['id']}\n<!-- edit:{key}:{entry['id']} -->\n"
+            segments[-1] += f"<!-- edit:{key}:{entry['id']} -->\n"
             segments.append(f"\n<!-- /edit:{key}:{entry['id']} -->\n")
             slots.append(["edit", comment["id"], entry["id"], entry["text"]])
         segments[-1] += f"\n### Reply\n<!-- reply:{key}:{comment['id']} -->\n"
