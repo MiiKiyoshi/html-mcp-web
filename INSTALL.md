@@ -6,7 +6,9 @@ install after the user agrees. On a machine that already has it, the same steps 
 
 ## 1. Inspect (change nothing)
 
-- Python: `python3 --version`, 3.10 or newer.
+- Python 3.10 or newer (the `mcp` package has no release for older ones): `python3 --version`;
+  when older, `command -v python3.13 python3.12 python3.11 python3.10`. None: stop and tell
+  the user. Use the one found as `python3` below.
 - Firefox: `command -v firefox`; record its directory. Missing is not a stop: say that PDF
   and PPTX export, and layout checks while no review page is open, need it. Do not install it.
 - Install directory: `$HOME/.local/share/html-mcp-web`, unless the user named another.
