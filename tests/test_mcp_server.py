@@ -18,7 +18,7 @@ from mcp.client.stdio import stdio_client
 
 from html_mcp_web import config as config_module
 from html_mcp_web.config import load_config
-from html_mcp_web.mcp_client import ProjectBinding
+from html_mcp_web.mcp_client import CLI, INIT_GUIDE, ProjectBinding
 from html_mcp_web.mcp_contract import agent_comment, agent_comment_summary, revision_of, short_time
 from html_mcp_web.mcp_server import create_server
 from html_mcp_web.project_server import SharedProjectServer
@@ -168,10 +168,11 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        assert len(mcp.instructions) < 1000
-        for needed in ("listen()", "document references", "configured guideline", "resource_uri"):
+        # The setup guide's path is as long as the install location; the rest is bounded.
+        assert len(mcp.instructions) - len(str(INIT_GUIDE)) < 1000
+        for needed in ("listen()", "init.md", "document references", "configured guideline", "resource_uri"):
             assert needed in mcp.instructions, needed
-        for needed in ("new connection", "do not poll", "duplicate"):
+        for needed in ("asks to listen", "do not poll", "duplicate"):
             assert needed in mcp.instructions.lower(), needed
         for gone in (
             "templates/README.md",
@@ -220,10 +221,8 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
             "setup_required": {
                 "project_dir": str(tmp_path),
                 "config_path": str(tmp_path / ".html-mcp-web.yaml"),
-                "next_action": (
-                    "Run html-mcp-web init in project_dir with the requested layout, main file, and port "
-                    "(add --template and --content for a templated deck), then call inspect() again."
-                ),
+                "cli": str(CLI),
+                "next_action": f"Ask the user whether to set this folder up now; if they agree, follow {INIT_GUIDE}.",
             }
         }
 

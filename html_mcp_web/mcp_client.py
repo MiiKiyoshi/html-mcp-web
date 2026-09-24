@@ -1,5 +1,6 @@
 """HTTP client used by the MCP tool surface."""
 
+import sys
 import threading
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,10 @@ import yaml
 
 from .config import DEFAULT_CONFIG_NAME, find_config, load_config
 from .project_server import SharedProjectServer
+
+# How a folder is set up for review, read only when it is: an agent follows it with its shell.
+INIT_GUIDE = Path(__file__).resolve().parent / "agent" / "init.md"
+CLI = Path(sys.executable).parent / "html-mcp-web"
 
 
 class ProjectSetupError(RuntimeError):
@@ -86,8 +91,8 @@ class ProjectBinding:
         client = self.connect()
         if client is None:
             raise RuntimeError(
-                f"{DEFAULT_CONFIG_NAME} was not found from {self.start_dir}; "
-                "call inspect() for project setup instructions"
+                f"this folder is not set up for review: {DEFAULT_CONFIG_NAME} was not found from "
+                f"{self.start_dir}. Ask the user whether to set it up now; if they agree, follow {INIT_GUIDE} with {CLI}."
             )
         return client
 
@@ -96,10 +101,8 @@ class ProjectBinding:
             "setup_required": {
                 "project_dir": str(self.start_dir),
                 "config_path": str(self.start_dir / DEFAULT_CONFIG_NAME),
-                "next_action": (
-                    "Run html-mcp-web init in project_dir with the requested layout, main file, and port "
-                    "(add --template and --content for a templated deck), then call inspect() again."
-                ),
+                "cli": str(CLI),
+                "next_action": f"Ask the user whether to set this folder up now; if they agree, follow {INIT_GUIDE}.",
             }
         }
 
