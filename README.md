@@ -10,7 +10,9 @@ Review an AI agent's HTML slides or report from the rendered page while Claude C
 
 ![A rendered report page, its highlighted HTML source, and the open review thread in Split view.](docs/report.png)
 
-You open the artifact in a local review page, select rendered text or an exact source range, and comment on it. The agent reads the comment over MCP, edits the HTML, and replies in the same thread. The rendered result, source, and thread stay together, and saving a file refreshes only the artifact frame, so your scroll position and drafts stay put.
+You comment on the rendered page in your browser. The agent reads the comments, edits the
+HTML, and replies in the same thread. Saving a file refreshes only the artifact frame, so
+your scroll position and drafts stay put.
 
 ```
 you:    select text -> write a comment -> press Call agent
@@ -20,124 +22,85 @@ agent:  read comments -> edit HTML -> reply
 you:    read the refreshed page -> comment again
 ```
 
-## Requirements
-
-- Python 3.10 or newer.
-- Firefox, only for PDF or PPTX export.
-
 ## Install
 
-```bash
-git clone https://github.com/MiiKiyoshi/html-mcp-web.git
-cd html-mcp-web
-python -m venv .venv
-.venv/bin/pip install -e '.[mcp]'
+Paste this into Claude Code or Codex:
+
+```
+Install html-mcp-web by following https://raw.githubusercontent.com/MiiKiyoshi/html-mcp-web/main/INSTALL.md
 ```
 
-Keep this checkout after installation; the installed commands and built-in templates use it.
+The agent checks for Python and Firefox, shows you what it will install, and registers
+html-mcp-web for every folder once you agree. Start the agent again afterwards.
 
-Register the MCP server once, using the executable inside the venv so it resolves without activation. Run this from the repository directory:
+## Init
 
-Claude Code:
+Once per folder, start the agent in the folder that holds (or will hold) your artifact and say:
 
-```bash
-claude mcp add --scope user html-mcp -- "$PWD/.venv/bin/html-mcp"
+```
+do html init
 ```
 
-Codex:
+The agent asks whether it is slides (16:9) or a report (A4), proposes the file, a template,
+and a free port, and writes `.html-mcp-web.yaml` once you agree.
 
-```bash
-codex mcp add html-mcp -- "$PWD/.venv/bin/html-mcp"
+## Listen
+
+To review, say:
+
+```
+do html listen
 ```
 
-The `html-mcp-web` command (project setup) is also in `.venv/bin`; activate the venv or call it by that path.
+Open `http://localhost:<port>` with the port you chose at init. Say it again after the
+agent restarts; presses of **Call agent** made meanwhile wait for it.
 
-## Quickstart
+## Reviewing
 
-```bash
-cd examples
-# Start Claude Code or Codex here, with the html-mcp server enabled.
-```
+- **Preview**, **Source**, and **Split** show the rendered artifact, its source, or both;
+  drag the divider to resize. A templated artifact shows its smaller content file.
+- Select exact characters in either view and press **Comment**. Source comments reattach
+  when the surrounding source moves.
+- **+ Note** comments on the whole artifact, the **Pages** tab jumps between pages, and
+  **Edit** fixes your own message.
+- Press **Call agent** when your comments are ready.
+- Resolving is yours: **Resolve** closes a thread. **Reference** sets one aside to read again;
+  it still takes replies and returns with **Reopen** or **Resolve**.
+- The page flags content off the page, clipped SVG drawings, and overlapping labels, and
+  reports them to the agent.
 
-Tell the agent:
-
-> Open the review page and listen for **Call agent**.
-
-The agent opens [http://localhost:8766](http://localhost:8766) and starts listening. The page has tabs for the neutral slides and report examples. Select some text, press **Comment**, then press **Call agent**; the agent receives the request and handles the comment.
-
-## Set up your own artifact
-
-In the directory that holds your artifact, create one project and pick a layout:
-
-```bash
-html-mcp-web init --layout slides --main artifact.html
-```
-
-Then tell the agent to open the review page and listen for **Call agent**; the same session starts the review page at the configured port. `init` creates missing source files and writes `.html-mcp-web.yaml`:
-
-```yaml
-artifacts:
-  slides:
-    label: Slides
-    layout: slides
-    main: artifact.html
-watch: ['*.html', '*.css', '*.js', '*.svg', '*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp']
-ignore: []
-port: 8765
-```
-
-`artifacts` maps an id to its label, `layout` (`slides` is 16:9, `report` is A4), and `main` file. Its body contains `main.pages`, with one `section.page` per printed page. Only the directories that hold artifact files are watched, together with the project root for this config; within them `watch` refreshes on save, `ignore` is checked first, and `port` is the local address. Agent sessions that find the same config share one server, comments, and revisions.
-
-An optional top-level `guideline` names
-`~/.config/html-mcp-web/guidelines/<name>/GUIDELINE.md`. For example, use
-`html-mcp-web init --layout slides --main artifact.html --guideline eda-domain-meeting`,
-or add `guideline: eda-domain-meeting` to an existing config. The file must exist.
-The agent uses the configured guideline when writing your artifact.
-
-## Use it
-
-Use **Preview**, **Source**, or **Split** to review the rendered artifact and edit its source in one page. A plain artifact opens its main HTML file; a templated artifact opens its smaller content file. Select exact characters in either view and add a comment. Source comments highlight only the selected characters, including selections that wrap visually across lines, and reattach when surrounding source moves. Drag the divider in Split view to resize the panes.
-
-Use **+ Note** for a whole-artifact comment, the **Pages** tab to jump between pages, and the **Edit** link to fix your own message in place. Press **Call agent** when the comments are ready. **Resolve** closes a comment in one click, and **Reference** sets a thread aside to read again: it stays out of the open and resolved lists, still takes replies, and goes back to either with **Reopen** or **Resolve**.
-
-The agent reads the comments, edits the source, and replies to each one; the reviewer resolves
-the thread. The review page also flags anything off the page, clipped SVG drawings, and
-overlapping labels at the artifact's fixed size, and reports them to the agent so it can fix
-them. Comments are stored in `.html-mcp-web/comments/<artifact>.json`, which holds selected
-text, so whether to track it in git is a privacy choice.
-
-For a long answer, the agent can ask `read_comments(save=true)` for a Markdown draft of the selected threads under `.html-mcp-web/drafts/`, write its replies into the draft's Reply blocks, and send the file back with `reply_comments(replies_file=...)`; the whole batch is applied together, and a draft made before a thread changed is refused. Each of the agent's earlier entries appears in the draft as an Edit block; a changed block rewrites that entry in place (author and time kept, `updated_at` recorded). Inline, `reply_comments(edits_text="c-.../e-...@<rev>: ...")` does the same by comment id, entry id and the thread's `rev`, an 8-character token that `read_comments` and every reply report.
-
-On **Call agent**, the agent reads `read_comments(new=True)`: on open threads, what the reviewer wrote after the agent's last entry there and after what the previous call handed over, each thread with its `rev`. The call reports `from` and `cursor`; `since=<from>` hands the same entries over again. The cursor is kept per artifact in `.html-mcp-web/agent-cursor.json`.
-
-The agent sees times as `MM-DD HH:MM` on the server's clock and passes the same form back as `list_comments(since=...)`, which returns that minute too. A listing shows the newest 30 threads, each request cut to 120 characters, and counts the rest as `more`.
-
-If the agent restarts or stops receiving calls, ask it to listen for **Call agent** again. Calls made while it is disconnected stay queued.
+Comments are stored in `.html-mcp-web/comments/<artifact>.json` and hold the text you
+selected, so whether to track them in git is a privacy choice.
 
 ## Templates
 
-A template compiles a small content file into the artifact, so you edit content while the cover, bars, and page numbers stay consistent:
-
-```bash
-html-mcp-web init --layout slides --main slides.html --template neutral-slides --content content.html
-```
-
-Initialization builds a missing main file; the build then reruns on every content save. Existing source files are preserved. This repo ships [`templates/neutral-slides/`](templates/neutral-slides/) and [`templates/neutral-report/`](templates/neutral-report/); the content format is in [`templates/README.md`](templates/README.md). Your own templates go in `~/.config/html-mcp-web/templates/<name>/` and stay out of this repository.
+A template builds the artifact from a small content file, so you edit content while the
+cover, bars, and page numbers stay consistent. Pick one at init. This repo ships
+[`templates/neutral-slides/`](templates/neutral-slides/) and
+[`templates/neutral-report/`](templates/neutral-report/); the content format is in
+[`templates/README.md`](templates/README.md). Your own templates go in
+`~/.config/html-mcp-web/templates/<name>/`, and a writing guideline the agent follows in
+`~/.config/html-mcp-web/guidelines/<name>/GUIDELINE.md`.
 
 ## Export
 
-The topbar exports each artifact as a file. **PDF** prints every page at the layout's fixed size through headless Firefox. **PPTX** (slides only) builds an editable deck: text stays editable text, tables stay tables, inline SVG stays vector, and math becomes an image. A skin can name TrueType files to embed the deck font; see [`templates/SKINS.md`](templates/SKINS.md).
+The topbar exports each artifact. **PDF** prints every page at the layout's fixed size
+through headless Firefox. **PPTX** (slides only) builds an editable deck: text stays text,
+tables stay tables, inline SVG stays vector, and math becomes an image. A skin can name
+TrueType files to embed the deck font; see [`templates/SKINS.md`](templates/SKINS.md).
 
 ## Configuration
 
-```bash
-html-mcp-web config                                  # print the whole config
-html-mcp-web config artifacts.slides.layout report   # change one value
-html-mcp-web config port 8766
-html-mcp-web config watch '*.html,assets/**'
-```
+`.html-mcp-web.yaml` sits in the project folder. Ask the agent to change a field, or edit it.
 
-`init` also takes `--port`, `--guideline`, and, for a templated artifact, `--template <name> --content <file>`. Config changes apply on the next save; a port change takes effect when the agent restarts.
+| Field | Effect |
+|---|---|
+| `artifacts.<id>.layout` | `slides` (16:9) or `report` (A4). |
+| `artifacts.<id>.main` | The HTML file the page shows; one `section.page` per printed page inside `main.pages`. |
+| `artifacts.<id>.template`, `.content` | A template name and the content file it builds `main` from. |
+| `guideline` | A guideline name under `~/.config/html-mcp-web/guidelines/`. |
+| `watch`, `ignore` | Files whose saves refresh the page; `ignore` is checked first. |
+| `port` | This folder's review page port. |
 
 ## Security
 
