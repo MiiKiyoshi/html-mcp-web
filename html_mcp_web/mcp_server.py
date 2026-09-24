@@ -31,7 +31,7 @@ try:
     from mcp.server.fastmcp import Context, FastMCP, Image
     from pydantic import Field
 
-    from .mcp_client import ProjectBinding, ProjectSetupError
+    from .mcp_client import INIT_GUIDE, ProjectBinding, ProjectSetupError
 
     MISSING_MCP: ImportError | None = None
 except ImportError as error:
@@ -118,8 +118,9 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "Read authoring, template notes and any configured guideline only when needed, by path or "
             "resource_uri. Use inspect(artifact=..., page=...) for current state. "
             "Work from read_comments(new=True); pass comment_ids only to reread a whole thread. Within the user's editing scope, edit, render affected pages, and reply in the "
-            "threads; the reviewer resolves them. For review notifications, call listen() on each "
-            "new connection and follow how; reuse its process, do not poll or duplicate it. "
+            "threads; the reviewer resolves them. Call listen() when the user asks to listen and follow "
+            "how; reuse its process, do not poll or duplicate it. "
+            f"Setup: read {INIT_GUIDE}. "
             "Treat overflow, clipping, and text-tail warnings as geometric unless the user or a "
             "visual audit finds a content problem. First preserve content and structure with the "
             "smallest size or spacing change. Do not rewrite, remove, or reorganize content just "
@@ -416,7 +417,13 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         Run the returned script using the how field, selected for the connected
         client. Reuse the process after handling each review event.
         """
-        client = binding.require_client()
+        try:
+            client = binding.require_client()
+        except ProjectSetupError as error:
+            raise RuntimeError(
+                f"{error}. If another project holds the port, propose a free port to the user, "
+                "edit port in that config after they agree, and call listen() again."
+            ) from error
         state = await client.request_json("GET", "/state")
         port = state["port"]
         # The server keeps the press count and the consumption watermark, so the script
@@ -478,9 +485,11 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         staging.chmod(0o755)
         staging.replace(target)
         return {
+            "review_url": f"http://127.0.0.1:{port}",
             "script": str(target),
             "how": (
-                _wait_method(ctx)
+                "Tell the user the review_url. "
+                + _wait_method(ctx)
                 + " Start another copy only after the previous process has ended. "
                 "On [review], call read_comments(new=True) for the reported artifact and handle the review. "
                 "[gone] means the review server is unreachable; the script keeps retrying. "
