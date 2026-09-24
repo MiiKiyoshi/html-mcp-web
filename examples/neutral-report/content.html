@@ -1,51 +1,45 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>Evaluation Review</title>
-<body data-author="Systems Research Group" data-meta="Internal evaluation|13 August 2026">
-<section data-title="Executive Summary">
-  <p class="lead">The current evaluation supports keeping the existing method while the remaining input cases are verified.</p>
-  <div class="metrics">
-    <div class="metric"><strong>18.4%</strong><span>runtime reduction</span></div>
-    <div class="metric"><strong>0.7%</strong><span>score change</span></div>
-    <div class="metric"><strong>3</strong><span>unverified cases</span></div>
-  </div>
-  <div class="callout">The measured bottleneck is input validation, not model capacity.</div>
-  <h3>Recommended decision</h3>
-  <p>Keep the current model. Verify unresolved inputs before the next evaluation.</p>
-  <p class="note">All values on this page come from the current evaluation set.</p>
+<title>Duration-based sharding for the nightly suite</title>
+<body data-author="Build and CI team" data-meta="Technical note|22 September 2026">
+<section data-title="Summary">
+  <p class="lead">Since 15 September the nightly suite splits its tests across the eight runners by measured duration instead of by file name. It now finishes in 47 minutes instead of 74.</p>
+  <h3>What changed</h3>
+  <p>The scheduler reads each test's median duration over the last seven nightly runs. It places the longest test first, each on the runner with the least total time so far, until every test has a runner.</p>
+  <h3>What stayed the same</h3>
+  <p>The same eight runners run the same 2,140 tests. The order of tests within a runner, the retry rule, and the report format are unchanged.</p>
+  <h3>Why it helps</h3>
+  <p>The suite is finished only when its slowest runner is. Splitting by file name gave runner 1 the whole integration folder, so it ran for 74 minutes while runner 8 sat idle after 18.</p>
+  <p class="note">All times are from the nightly runs of 15 to 21 September.</p>
 </section>
 
-<section data-title="Measured Results">
-  <p class="lead">The comparison separates runtime, score, and validation state so one improvement does not conceal a regression elsewhere.</p>
+<section data-title="Results">
+  <p class="lead">Every runner now ends within two minutes of the others.</p>
   <table>
     <thead>
-      <tr><th>Measure</th><th>Baseline</th><th>Current</th><th>Change</th></tr>
+      <tr><th>Runner</th><th>By file name</th><th>By duration</th><th>Change</th></tr>
     </thead>
     <tbody>
-      <tr><td>Runtime</td><td>42.9 min</td><td>35.0 min</td><td class="pos">-18.4%</td></tr>
-      <tr><td>Score</td><td>0.812</td><td>0.818</td><td class="pos">+0.7%</td></tr>
-      <tr><td>Verified cases</td><td>21 / 24</td><td>21 / 24</td><td>unchanged</td></tr>
+      <tr><td>1</td><td>74 min</td><td>47 min</td><td>−27 min</td></tr>
+      <tr><td>2</td><td>61 min</td><td>46 min</td><td>−15 min</td></tr>
+      <tr><td>3</td><td>58 min</td><td>46 min</td><td>−12 min</td></tr>
+      <tr><td>4</td><td>49 min</td><td>46 min</td><td>−3 min</td></tr>
+      <tr><td>5</td><td>41 min</td><td>46 min</td><td>+5 min</td></tr>
+      <tr><td>6</td><td>37 min</td><td>46 min</td><td>+9 min</td></tr>
+      <tr><td>7</td><td>30 min</td><td>46 min</td><td>+16 min</td></tr>
+      <tr><td>8</td><td>18 min</td><td>45 min</td><td>+27 min</td></tr>
     </tbody>
   </table>
-  <h3>Interpretation</h3>
-  <p>The runtime improvement is visible without a measured score loss. The three unverified cases prevent a broader conclusion.</p>
+  <p>The total test time is 368 minutes both ways, since only the split changed. Runners that used to finish early now take more of the work, and the suite ends when runner 1 does, 27 minutes sooner.</p>
 </section>
 
-<section data-title="Next Evaluation">
-  <p class="lead">The next run verifies unresolved inputs before the method changes.</p>
-  <div class="two">
-    <div>
-      <h3>Run now</h3>
-      <ul class="notes">
-        <li>Inspect the three unresolved inputs.</li>
-        <li>Repeat the comparison on corrected data.</li>
-        <li>Record runtime and score together.</li>
-      </ul>
-    </div>
-    <div>
-      <h3>Decision condition</h3>
-      <p>Keep the method when the corrected cases preserve the runtime reduction without lowering the score.</p>
-    </div>
-  </div>
+<section data-title="Open issues">
+  <p class="lead">Two kinds of test still fall back to the old split.</p>
+  <h3>New tests</h3>
+  <p>A test added this week has no recorded duration, so it is placed by file name. Until it has seven runs, we will give it the median of the other tests in its folder.</p>
+  <h3>Reruns after a flaky failure</h3>
+  <p>A rerun goes back to the runner that failed, which already has its full share. We will send reruns to the spare ninth runner instead.</p>
+  <h3>Next measurement</h3>
+  <p>Both fixes go in on 29 September. We will compare the finish times of that week with the table on the previous page.</p>
 </section>
 </body>

@@ -3,22 +3,80 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Evaluation Review</title>
+  <title>Duration-based sharding for the nightly suite</title>
   <style>
+/* What the components of templates/README.md are, in the part that holds whatever page
+   they sit on. A deck's page is 1280x720 pixels and a report's is A4, so sizes, spacing
+   and rules measured in millimetres stay with each of those; a colour, a weight, an
+   alignment and the shape of a component do not change with the paper and stand here
+   once. Both builders read this file before their own sheet, so either can override a
+   line of it, and a skin overrides both.
+
+   --ink and --ink-soft are not here: the deck and the report each set their own. */
+
 :root {
-  font-family: Inter, "Noto Sans KR", system-ui, sans-serif;
-  color: #252b2e;
-  --ink: #252b2e;
-  --ink-soft: #505b60;
   --accent: #6d928d;
-  --accent-soft: #edf2f1;
   --line: #d9dfdf;
   --muted: #6d777c;
   --paper: #fffefd;
+  --good: #2f756a;
+  --bad: #a24b47;
+  --mono: ui-monospace, monospace;
+  --code-bg: #ecefef;
+
+  /* Safari measures a line of text one way when it can take its simplified path and
+     another when it cannot, and the two drift apart along the line: a paragraph carrying
+     an inline box set at another size, a subscript or a KaTeX span, opens a gap before
+     that box, 43px of it after 125 characters on a reader's screen. Any letter-spacing
+     at all sends the line down the general path, since WebKit's
+     TextUtil::canUseSimplifiedTextMeasuring refuses a font that has letter-spacing or
+     word-spacing, and a hundredth of a pixel is under what a screen can show: 1.5px
+     across a 150-character line. Turning kerning or ligatures off does not do it; those
+     change what is drawn, and the gate reads only the two spacings. */
+  letter-spacing: 0.01px;
 }
 
 * { box-sizing: border-box; }
 .page { position: relative; padding: 0; background: var(--paper); }
+
+/* Chrome shapes the letters of an svg label at the size they will appear on screen, to
+   keep them from being stretched: LayoutSVGInlineText asks
+   calculateScreenFontSizeScalingFactor for that size and shapes the glyphs for it. The
+   size is read again when the label's own style changes, and a page drawn larger changes
+   the transform of the page, not of the label inside it, so the label went on wearing
+   letters shaped for the size before: zooming a deck left the words at one scale and the
+   boxes around them at another until something else made the label restyle. Asking for
+   geometric precision turns that off, and the letters are laid out once in the drawing's
+   own units and scaled with everything else. Plain html text never had this: it is placed
+   in css pixels and only painted at the scale. */
+svg text { text-rendering: geometricPrecision; }
+
+.lead { color: var(--ink-soft); }
+.note { color: var(--muted); line-height: 1.5; }
+ul.notes { color: var(--muted); line-height: 1.55; }
+.nw { white-space: nowrap; }
+.pos { color: var(--good); font-weight: 650; }
+.neg { color: var(--bad); font-weight: 650; }
+code { background: var(--code-bg); font-family: var(--mono); font-size: .92em; }
+
+.two { display: grid; }
+.metric strong { display: block; }
+.metric span { color: var(--ink-soft); line-height: 1.4; }
+
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th { font-weight: 650; letter-spacing: .025em; }
+th, td { text-align: right; }
+th:first-child, td:first-child { text-align: left; }
+
+:root {
+  font-family: Inter, "Noto Sans KR", system-ui, sans-serif;
+  color: #252b2e;
+
+  --ink: #252b2e;
+  --ink-soft: #505b60;
+  --accent-soft: #edf2f1;
+}
+
 .page-header { height: 35mm; margin: 0 19mm; padding-top: 12mm; border-bottom: .7mm solid var(--accent); }
 .report-title { display: block; margin-bottom: 3mm; color: var(--muted); font-size: 9pt; letter-spacing: .04em; }
 .page-header h2 { margin: 0; color: var(--ink); font-size: 23pt; font-weight: 620; line-height: 1.12; letter-spacing: -.02em; }
@@ -31,37 +89,34 @@ footer span { position: absolute; left: 50%; top: 3mm; transform: translateX(-50
 .cover-content { position: absolute; left: 28mm; right: 24mm; top: 54mm; }
 .document-type { margin: 0 0 12mm; color: var(--accent); font-size: 10pt; font-weight: 700; letter-spacing: .12em; }
 .cover h1 { max-width: 150mm; margin: 0; color: var(--ink); font-size: 34pt; font-weight: 620; line-height: 1.12; letter-spacing: -.025em; }
+.cover-sub { max-width: 150mm; margin: 6mm 0 0; color: var(--muted); font-size: 14pt; line-height: 1.35; }
 .cover-meta { margin-top: 58mm; padding-top: 7mm; border-top: .5mm solid var(--line); color: var(--muted); font-size: 11pt; line-height: 1.55; }
 .cover-meta .author { margin-bottom: 2mm; color: var(--ink); font-size: 14pt; }
 
 p { margin: 0 0 4mm; font-size: 10.5pt; line-height: 1.6; }
 .lead { margin-bottom: 7mm; color: var(--ink-soft); font-size: 13pt; line-height: 1.5; }
-.note { margin-top: 4mm; color: var(--muted); font-size: 8.5pt; line-height: 1.5; }
+.note { margin-top: 4mm; font-size: 8.5pt; }
 h3 { margin: 8mm 0 3mm; color: var(--ink); font-size: 14pt; font-weight: 650; }
-ul.notes { margin: 4mm 0 0; padding-left: 6mm; color: var(--muted); font-size: 9pt; line-height: 1.55; }
+ul.notes { margin: 4mm 0 0; padding-left: 6mm; font-size: 9pt; }
 ul.notes li { margin-bottom: 1.5mm; }
 .callout { margin: 7mm 0; padding: 5mm 6mm; border-left: 1.2mm solid var(--accent); background: var(--accent-soft); color: var(--ink-soft); font-size: 10.5pt; line-height: 1.55; }
 
 .metrics { display: grid; grid-template-columns: repeat(3, 1fr); margin: 7mm 0; border-top: .3mm solid var(--line); border-bottom: .3mm solid var(--line); }
 .metric { padding: 5mm; border-left: .3mm solid var(--line); }
 .metric:first-child { border-left: 0; }
-.metric strong { display: block; margin-bottom: 2mm; color: var(--ink); font-size: 23pt; font-weight: 620; }
-.metric span { color: var(--ink-soft); font-size: 9pt; line-height: 1.4; }
+.metric strong { margin-bottom: 2mm; color: var(--ink); font-size: 23pt; font-weight: 620; }
+.metric span { font-size: 9pt; }
 
-table { width: 100%; margin: 5mm 0; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-th, td { padding: 2.7mm 3mm; border-bottom: .3mm solid var(--line); font-size: 9pt; text-align: right; }
-th:first-child, td:first-child { text-align: left; }
-th { border-bottom: .7mm solid var(--accent); color: var(--ink); font-size: 8pt; font-weight: 650; letter-spacing: .025em; }
+table { margin: 5mm 0; }
+th, td { padding: 2.7mm 3mm; border-bottom: .3mm solid var(--line); font-size: 9pt; }
+th { border-bottom: .7mm solid var(--accent); color: var(--ink); font-size: 8pt; }
 .dense th, .dense td { padding: 1.8mm 2mm; font-size: 8pt; }
-.nw { white-space: nowrap; }
-.pos { color: #2f756a; font-weight: 650; }
-.neg { color: #a24b47; font-weight: 650; }
 
-.two { display: grid; grid-template-columns: 1fr 1fr; gap: 9mm; }
+.two { grid-template-columns: 1fr 1fr; gap: 9mm; }
 figure { margin: 7mm 0; }
 figure img, figure svg { display: block; max-width: 100%; height: auto; }
 figcaption { margin-top: 2mm; color: var(--muted); font-size: 8pt; line-height: 1.45; }
-code { padding: .3mm 1.2mm; border-radius: .8mm; background: #ecefef; font-family: ui-monospace, monospace; font-size: .92em; }
+code { padding: .3mm 1.2mm; border-radius: .8mm; }
 
 @media screen { main.pages section.page { box-shadow: 0 2px 14px rgba(25, 35, 42, .09); } }
 @media print { main.pages section.page { box-shadow: none; } }
@@ -75,77 +130,72 @@ code { padding: .3mm 1.2mm; border-radius: .8mm; background: #ecefef; font-famil
       <div class="cover-rule"></div>
       <div class="cover-content">
         <p class="document-type">TECHNICAL REPORT</p>
-        <h1>Evaluation Review</h1>
+        <h1>Duration-based sharding for the nightly suite</h1>
+        
         <div class="cover-meta">
-          <p class="author">Systems Research Group</p>
-          <p>Internal evaluation<br>
-        13 August 2026</p>
+          <p class="author">Build and CI team</p>
+          <p>Technical note<br>
+        22 September 2026</p>
         </div>
       </div>
       <footer><span>1 / 4</span></footer>
     </section>
     <section class="page">
       <header class="page-header">
-        <span class="report-title">Evaluation Review</span>
-        <h2>Executive Summary</h2>
+        <span class="report-title">Duration-based sharding for the nightly suite</span>
+        <h2>Summary</h2>
       </header>
       <div class="report-body" data-layout-guard>
-<p class="lead">The current evaluation supports keeping the existing method while the remaining input cases are verified.</p>
-  <div class="metrics">
-    <div class="metric"><strong>18.4%</strong><span>runtime reduction</span></div>
-    <div class="metric"><strong>0.7%</strong><span>score change</span></div>
-    <div class="metric"><strong>3</strong><span>unverified cases</span></div>
-  </div>
-  <div class="callout">The measured bottleneck is input validation, not model capacity.</div>
-  <h3>Recommended decision</h3>
-  <p>Keep the current model. Verify unresolved inputs before the next evaluation.</p>
-  <p class="note">All values on this page come from the current evaluation set.</p>
+<p class="lead">Since 15 September the nightly suite splits its tests across the eight runners by measured duration instead of by file name. It now finishes in 47 minutes instead of 74.</p>
+  <h3>What changed</h3>
+  <p>The scheduler reads each test's median duration over the last seven nightly runs. It places the longest test first, each on the runner with the least total time so far, until every test has a runner.</p>
+  <h3>What stayed the same</h3>
+  <p>The same eight runners run the same 2,140 tests. The order of tests within a runner, the retry rule, and the report format are unchanged.</p>
+  <h3>Why it helps</h3>
+  <p>The suite is finished only when its slowest runner is. Splitting by file name gave runner 1 the whole integration folder, so it ran for 74 minutes while runner 8 sat idle after 18.</p>
+  <p class="note">All times are from the nightly runs of 15 to 21 September.</p>
       </div>
       <footer><span>2 / 4</span></footer>
     </section>
     <section class="page">
       <header class="page-header">
-        <span class="report-title">Evaluation Review</span>
-        <h2>Measured Results</h2>
+        <span class="report-title">Duration-based sharding for the nightly suite</span>
+        <h2>Results</h2>
       </header>
       <div class="report-body" data-layout-guard>
-<p class="lead">The comparison separates runtime, score, and validation state so one improvement does not conceal a regression elsewhere.</p>
+<p class="lead">Every runner now ends within two minutes of the others.</p>
   <table>
     <thead>
-      <tr><th>Measure</th><th>Baseline</th><th>Current</th><th>Change</th></tr>
+      <tr><th>Runner</th><th>By file name</th><th>By duration</th><th>Change</th></tr>
     </thead>
     <tbody>
-      <tr><td>Runtime</td><td>42.9 min</td><td>35.0 min</td><td class="pos">-18.4%</td></tr>
-      <tr><td>Score</td><td>0.812</td><td>0.818</td><td class="pos">+0.7%</td></tr>
-      <tr><td>Verified cases</td><td>21 / 24</td><td>21 / 24</td><td>unchanged</td></tr>
+      <tr><td>1</td><td>74 min</td><td>47 min</td><td>−27 min</td></tr>
+      <tr><td>2</td><td>61 min</td><td>46 min</td><td>−15 min</td></tr>
+      <tr><td>3</td><td>58 min</td><td>46 min</td><td>−12 min</td></tr>
+      <tr><td>4</td><td>49 min</td><td>46 min</td><td>−3 min</td></tr>
+      <tr><td>5</td><td>41 min</td><td>46 min</td><td>+5 min</td></tr>
+      <tr><td>6</td><td>37 min</td><td>46 min</td><td>+9 min</td></tr>
+      <tr><td>7</td><td>30 min</td><td>46 min</td><td>+16 min</td></tr>
+      <tr><td>8</td><td>18 min</td><td>45 min</td><td>+27 min</td></tr>
     </tbody>
   </table>
-  <h3>Interpretation</h3>
-  <p>The runtime improvement is visible without a measured score loss. The three unverified cases prevent a broader conclusion.</p>
+  <p>The total test time is 368 minutes both ways, since only the split changed. Runners that used to finish early now take more of the work, and the suite ends when runner 1 does, 27 minutes sooner.</p>
       </div>
       <footer><span>3 / 4</span></footer>
     </section>
     <section class="page">
       <header class="page-header">
-        <span class="report-title">Evaluation Review</span>
-        <h2>Next Evaluation</h2>
+        <span class="report-title">Duration-based sharding for the nightly suite</span>
+        <h2>Open issues</h2>
       </header>
       <div class="report-body" data-layout-guard>
-<p class="lead">The next run verifies unresolved inputs before the method changes.</p>
-  <div class="two">
-    <div>
-      <h3>Run now</h3>
-      <ul class="notes">
-        <li>Inspect the three unresolved inputs.</li>
-        <li>Repeat the comparison on corrected data.</li>
-        <li>Record runtime and score together.</li>
-      </ul>
-    </div>
-    <div>
-      <h3>Decision condition</h3>
-      <p>Keep the method when the corrected cases preserve the runtime reduction without lowering the score.</p>
-    </div>
-  </div>
+<p class="lead">Two kinds of test still fall back to the old split.</p>
+  <h3>New tests</h3>
+  <p>A test added this week has no recorded duration, so it is placed by file name. Until it has seven runs, we will give it the median of the other tests in its folder.</p>
+  <h3>Reruns after a flaky failure</h3>
+  <p>A rerun goes back to the runner that failed, which already has its full share. We will send reruns to the spare ninth runner instead.</p>
+  <h3>Next measurement</h3>
+  <p>Both fixes go in on 29 September. We will compare the finish times of that week with the table on the previous page.</p>
       </div>
       <footer><span>4 / 4</span></footer>
     </section>

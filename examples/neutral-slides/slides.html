@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Evaluation Review</title>
+  <title>Sharding the nightly test suite</title>
   
   <style>
 /* What the components of templates/README.md are, in the part that holds whatever page
@@ -414,85 +414,114 @@ pre code { padding: 0; border-radius: 0; background: none; font-family: inherit;
 
     <section class="page cover has-sub">
       <div class="band">
-        <h1>Evaluation Review</h1>
-        <div class="sub">Runtime and quality after the current change</div>
+        <h1>Sharding the nightly test suite</h1>
+        <div class="sub">Splitting tests by measured duration instead of by file name</div>
       </div>
-      <div class="who">Systems Research Group</div>
-      <div class="aff">Internal evaluation<br>
-        13 August 2026</div>
+      <div class="who">Build and CI team</div>
+      <div class="aff">Weekly sync<br>
+        22 September 2026</div>
       
       <footer class="bbar"><span class="pageno">1 / 3</span></footer>
     </section>
     <div class="script-block">
-      <div class="script-text"><p>Welcome. This review covers the measured result and the final verification gate.</p></div>
+      <div class="script-text"><p>This week I changed how the nightly tests are split across our eight runners. The suite now finishes 27 minutes earlier on the same machines.</p></div>
     </div>
     <section class="page">
-      <header class="tbar"><h2>Runtime improves while quality holds</h2></header>
+      <header class="tbar"><h2>Balanced shards finish the suite 27 minutes sooner</h2></header>
       <div class="body" data-layout-guard>
-<p class="lead">The current method cuts evaluation time with no material score change.</p>
+<p class="lead">Each runner now gets about the same total test time, taken from last week's runs.</p>
         <div class="rest">
 <div class="two">
-    <svg viewbox="0 0 620 350" role="img" aria-label="Runtime and quality comparison">
-      <rect x="0" y="0" width="620" height="350" rx="16" fill="#f4f6f8"></rect>
-      <text x="36" y="45" fill="#243943" font-size="20" font-weight="650">Measured comparison</text>
-      <text x="36" y="76" fill="#6d777c" font-size="14">runtime · same workload · lower is better</text>
-      <line x1="60" y1="280" x2="574" y2="280" stroke="#cfd8d7" stroke-width="2"></line>
-      <rect x="100" y="112" width="126" height="168" rx="7" fill="#b9c7c5"></rect>
-      <rect x="270" y="143" width="126" height="137" rx="7" fill="#6d928d"></rect>
-      <text x="163" y="101" text-anchor="middle" fill="#4f5a60" font-size="24" font-weight="650">12.5 min</text>
-      <text x="333" y="132" text-anchor="middle" fill="#2f756a" font-size="24" font-weight="650">10.2 min</text>
-      <text x="163" y="312" text-anchor="middle" fill="#4f5a60" font-size="16">Baseline</text>
-      <text x="333" y="312" text-anchor="middle" fill="#243943" font-size="16" font-weight="650">Current</text>
-      <rect x="438" y="108" width="136" height="92" rx="10" fill="#ffffff" stroke="#d9dfdf"></rect>
-      <text x="456" y="137" fill="#6d777c" font-size="13">RUNTIME</text>
-      <text x="456" y="178" fill="#2f756a" font-size="32" font-weight="650">−18.4%</text>
-      <rect x="438" y="214" width="136" height="92" rx="10" fill="#ffffff" stroke="#d9dfdf"></rect>
-      <text x="456" y="243" fill="#6d777c" font-size="13">SCORE</text>
-      <text x="456" y="284" fill="#243943" font-size="32" font-weight="650">−0.1</text>
+    <svg viewbox="0 0 622 360" role="img" aria-label="Finish time of each shard before and after">
+      <text x="0" y="22" fill="#243943" font-size="17" font-weight="650">Finish time per runner (minutes)</text>
+      <rect x="360" y="10" width="14" height="14" rx="2" fill="#c3cccb"></rect>
+      <text x="380" y="22" fill="#4f5a60" font-size="14">split by file name</text>
+      <rect x="500" y="10" width="14" height="14" rx="2" fill="#4f8078"></rect>
+      <text x="520" y="22" fill="#4f5a60" font-size="14">by duration</text>
+      <line x1="56" y1="300" x2="606" y2="300" stroke="#e3e8e7" stroke-width="1"></line>
+      <text x="46" y="305" text-anchor="end" fill="#6d777c" font-size="13">0</text>
+      <line x1="56" y1="239" x2="606" y2="239" stroke="#e3e8e7" stroke-width="1"></line>
+      <text x="46" y="244" text-anchor="end" fill="#6d777c" font-size="13">20</text>
+      <line x1="56" y1="178" x2="606" y2="178" stroke="#e3e8e7" stroke-width="1"></line>
+      <text x="46" y="183" text-anchor="end" fill="#6d777c" font-size="13">40</text>
+      <line x1="56" y1="117" x2="606" y2="117" stroke="#e3e8e7" stroke-width="1"></line>
+      <text x="46" y="122" text-anchor="end" fill="#6d777c" font-size="13">60</text>
+      <line x1="56" y1="56" x2="606" y2="56" stroke="#e3e8e7" stroke-width="1"></line>
+      <text x="46" y="61" text-anchor="end" fill="#6d777c" font-size="13">80</text>
+      <rect x="66" y="74" width="22" height="226" rx="3" fill="#c3cccb"></rect>
+      <rect x="92" y="157" width="22" height="143" rx="3" fill="#4f8078"></rect>
+      <text x="90" y="322" text-anchor="middle" fill="#6d777c" font-size="13">1</text>
+      <rect x="135" y="114" width="22" height="186" rx="3" fill="#c3cccb"></rect>
+      <rect x="161" y="160" width="22" height="140" rx="3" fill="#4f8078"></rect>
+      <text x="159" y="322" text-anchor="middle" fill="#6d777c" font-size="13">2</text>
+      <rect x="204" y="123" width="22" height="177" rx="3" fill="#c3cccb"></rect>
+      <rect x="230" y="160" width="22" height="140" rx="3" fill="#4f8078"></rect>
+      <text x="228" y="322" text-anchor="middle" fill="#6d777c" font-size="13">3</text>
+      <rect x="273" y="151" width="22" height="149" rx="3" fill="#c3cccb"></rect>
+      <rect x="299" y="160" width="22" height="140" rx="3" fill="#4f8078"></rect>
+      <text x="297" y="322" text-anchor="middle" fill="#6d777c" font-size="13">4</text>
+      <rect x="341" y="175" width="22" height="125" rx="3" fill="#c3cccb"></rect>
+      <rect x="367" y="160" width="22" height="140" rx="3" fill="#4f8078"></rect>
+      <text x="365" y="322" text-anchor="middle" fill="#6d777c" font-size="13">5</text>
+      <rect x="410" y="187" width="22" height="113" rx="3" fill="#c3cccb"></rect>
+      <rect x="436" y="160" width="22" height="140" rx="3" fill="#4f8078"></rect>
+      <text x="434" y="322" text-anchor="middle" fill="#6d777c" font-size="13">6</text>
+      <rect x="479" y="208" width="22" height="92" rx="3" fill="#c3cccb"></rect>
+      <rect x="505" y="160" width="22" height="140" rx="3" fill="#4f8078"></rect>
+      <text x="503" y="322" text-anchor="middle" fill="#6d777c" font-size="13">7</text>
+      <rect x="548" y="245" width="22" height="55" rx="3" fill="#c3cccb"></rect>
+      <rect x="574" y="163" width="22" height="137" rx="3" fill="#4f8078"></rect>
+      <text x="572" y="322" text-anchor="middle" fill="#6d777c" font-size="13">8</text>
+      <line x1="56" y1="300" x2="606" y2="300" stroke="#9aa6a8" stroke-width="1.5"></line>
+      <text x="331" y="346" text-anchor="middle" fill="#6d777c" font-size="13">runner</text>
     </svg>
     <div>
-      <div class="card">
-        <h3>Faster evaluation</h3>
-        <p>Runtime falls from 12.5 to 10.2 minutes on the same workload.</p>
-      </div>
-      <div class="card">
-        <h3>Stable quality</h3>
-        <p>The score moves from 91.6 to 91.5, inside the 0.5-point tolerance.</p>
-      </div>
-      <div class="card">
-        <h3>Final verification</h3>
-        <p>Three unresolved inputs still need the same comparison.</p>
-      </div>
+      <table>
+        <thead><tr><th></th><th>File name</th><th>Duration</th></tr></thead>
+        <tbody>
+          <tr><td>Slowest runner</td><td>74 min</td><td class="pos">47 min</td></tr>
+          <tr><td>Fastest runner</td><td>18 min</td><td>45 min</td></tr>
+          <tr><td>Runners</td><td>8</td><td>8</td></tr>
+          <tr><td>Tests</td><td>2,140</td><td>2,140</td></tr>
+        </tbody>
+      </table>
+      <p class="note">Each test's duration is its median over the last seven nightly runs.</p>
     </div>
   </div>
         </div>
-<p class="lead takeaway">Adopt after the three remaining inputs pass verification.</p>
+
       </div>
       
       <footer class="bbar"><span class="pageno">2 / 3</span></footer>
     </section>
     <div class="script-block">
-      <div class="script-text"><p>The current method is faster while measured quality remains stable. The decision waits only for the three unresolved inputs.</p></div>
+      <div class="script-text"><p>Before, runner one got the whole integration folder and took 74 minutes while runner eight was idle after 18. Now every runner ends between 45 and 47 minutes, so the suite is done when the slowest one is, 27 minutes sooner.</p></div>
     </div>
     <section class="page">
-      <header class="tbar"><h2>Close the remaining evidence gap</h2></header>
+      <header class="tbar"><h2>Two cases still use the old split</h2></header>
       <div class="body" data-layout-guard>
-
+<p class="lead">Both come from tests that have no clean duration yet.</p>
         <div class="rest">
-<div class="flow">
-    <div class="step"><strong>Inspect</strong>Check the three unresolved inputs.</div>
-    <div class="step"><strong>Repeat</strong>Run the baseline again.</div>
-    <div class="step"><strong>Record</strong>Capture both measures.</div>
-    <div class="step"><strong>Decide</strong>Adopt when all three pass.</div>
+<div class="two">
+    <div class="card">
+      <h3>A new test with no history</h3>
+      <p>Now: it is placed by file name, like before.</p>
+      <p>Plan: use the median of its folder until it has seven runs of its own.</p>
+    </div>
+    <div class="card">
+      <h3>A rerun after a flaky failure</h3>
+      <p>Now: it runs again on the runner that failed, which is already busy.</p>
+      <p>Plan: send every rerun to the spare ninth runner.</p>
+    </div>
   </div>
         </div>
-<p class="lead takeaway">The decision rule is fixed before the final run.</p>
+
       </div>
       
       <footer class="bbar"><span class="pageno">3 / 3</span></footer>
     </section>
     <div class="script-block">
-      <div class="script-text"><p>The final run follows one fixed rule: all three unresolved inputs must preserve the runtime gain without a material score loss.</p></div>
+      <div class="script-text"><p>Two gaps are left. New tests have no history, and reruns land back on an already busy runner. I will try both fixes next week and report the finish times again.</p></div>
     </div>
 
   </main>
