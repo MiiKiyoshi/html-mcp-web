@@ -28,7 +28,8 @@ Registration is user-level, available in every folder; do not ask about scope. A
     DIR="$HOME/.local/share/html-mcp-web"
     git clone https://github.com/MiiKiyoshi/html-mcp-web.git "$DIR"   # update: git -C "$DIR" pull --ff-only
     python3 -m venv "$DIR/.venv"
-    "$DIR/.venv/bin/pip" install -e "$DIR[mcp]"
+    "$DIR/.venv/bin/pip" install -q -U pip                              # editable installs need a recent pip
+    "$DIR/.venv/bin/pip" install -e "${DIR}[mcp]"
     "$DIR/.venv/bin/html-mcp-web" mcp --check                          # lists the tools
 
 ## 4. Register

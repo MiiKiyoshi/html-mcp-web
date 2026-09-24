@@ -9,7 +9,7 @@ file when it is missing. Inspect first, show one summary, write only after the u
 - A config here or in a parent folder (`.html-mcp-web.yaml`): if one exists, show the user
   its values and stop. A change is an edit to that file, after the user agrees.
 - HTML files already here: `ls *.html *.htm`.
-- Port: the first free one from 8765 (`ss -ltn`), also skipping the port in a
+- Port: the first free one from 8765 (`ss -ltn`, or `lsof -iTCP -sTCP:LISTEN -P -n` on macOS), also skipping the port in a
   `.tex-mcp-web.yaml` in this folder; both tools default to 8765.
 - Templates: directory names holding `build.py` in `templates/` two levels above this file
   and in `~/.config/html-mcp-web/templates/`.
