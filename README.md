@@ -1,6 +1,6 @@
 # html-mcp-web
 
-Review an AI agent's HTML slides or report from the rendered page while Claude Code or Codex edits the source.
+Review an AI agent's HTML slides or report from the rendered page, on a desktop, tablet, or phone, while Claude Code or Codex edits the source.
 
 **[Slides example](examples/neutral-slides/)**
 
@@ -54,6 +54,18 @@ do html listen
 
 Open `http://localhost:<port>` with the port you chose at init. Say it again after the
 agent restarts; presses of **Call agent** made meanwhile wait for it.
+
+## On a tablet or phone
+
+The review page adapts to the screen: held upright, the comments dock below the artifact
+and the bar between them drags with a finger. On a phone the comments start closed so the
+slide has the screen; **⇥** opens them. On a touch screen the button that comments on
+selected text sits clear of your finger.
+
+![The review page on a tablet and a phone: the slide above, the open comment thread below.](docs/mobile.png)
+
+The server listens on `127.0.0.1` only, so reach it from another device through a
+forwarded port: an SSH tunnel, VS Code port forwarding, or `tailscale serve`.
 
 ## Reviewing
 
