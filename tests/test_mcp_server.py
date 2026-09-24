@@ -140,7 +140,6 @@ async def test_stdio_mcp_starts_without_project_config(tmp_path: Path) -> None:
             assert connected.isError is False
             discovered = json.loads(connected.content[0].text)
             assert discovered["config_path"] == str(config.config_path)
-            assert discovered["review_url"] == f"http://127.0.0.1:{config.port}"
             compact = await session.call_tool("inspect", {"artifact": "slides"})
             assert set(json.loads(compact.content[0].text)) == {"artifacts"}
 
@@ -230,7 +229,6 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         inspected = answer(mcp.call_tool("inspect", {}))
         assert inspected["config_path"] == str(config.config_path)
         assert inspected["project_dir"] == str(tmp_path)
-        assert inspected["review_url"] == f"http://127.0.0.1:{config.port}"
         compact = answer(mcp.call_tool("inspect", {"artifact": "slides"}))
         assert set(compact) == {"artifacts"}
     finally:
@@ -600,7 +598,7 @@ def test_discovery_contains_project_state_without_static_instructions(tmp_path: 
         mcp = create_server(binding)
         discovered = answer(mcp.call_tool("inspect", {}))
         assert set(discovered) == {
-            "config_path", "project_dir", "review_url", "guideline", "documents", "artifacts",
+            "config_path", "project_dir", "guideline", "documents", "artifacts",
         }
         assert "guide" not in discovered
         assert "reader-facing unit" not in json.dumps(discovered, ensure_ascii=False)
