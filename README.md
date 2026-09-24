@@ -55,14 +55,14 @@ do html listen
 ```
 
 Open `http://localhost:<port>` with the port you chose at init. Say it again after the
-agent restarts; presses of **Call agent** made meanwhile wait for it.
+agent restarts. Presses of **Call agent** made meanwhile wait for it.
 
 ## Export to PowerPoint and PDF
 
 Slides reviewed here leave as a PowerPoint deck you can keep editing: press **PPTX** in the
 topbar. Text stays editable text, tables stay tables, inline SVG drawings stay vector, math
 becomes an image, and the script under each slide becomes its speaker notes. A skin can
-name TrueType files to embed the deck font; see [`templates/SKINS.md`](templates/SKINS.md).
+name TrueType files to embed the deck font, as [`templates/SKINS.md`](templates/SKINS.md) explains.
 **PDF** prints every page, slides or report, at the layout's fixed size. Both run through
 headless Firefox.
 
@@ -70,7 +70,7 @@ headless Firefox.
 
 The review page adapts to the screen: held upright, the comments dock below the artifact
 and the bar between them drags with a finger. On a phone the comments start closed so the
-slide has the screen; **⇥** opens them. On a touch screen the button that comments on
+slide has the screen, and **⇥** opens them. On a touch screen the button that comments on
 selected text sits clear of your finger.
 
 ![The review page on a tablet and a phone: the slide above, the open comment thread below.](docs/mobile.png)
@@ -80,15 +80,15 @@ forwarded port: an SSH tunnel, VS Code port forwarding, or `tailscale serve`.
 
 ## Reviewing
 
-- **Preview**, **Source**, and **Split** show the rendered artifact, its source, or both;
-  drag the divider to resize. A templated artifact shows its smaller content file.
+- **Preview**, **Source**, and **Split** show the rendered artifact, its source, or both.
+  Drag the divider to resize. A templated artifact shows its smaller content file.
 - Select exact characters in either view and press **Comment**. Source comments reattach
   when the surrounding source moves.
 - **+ Note** comments on the whole artifact, the **Pages** tab jumps between pages, and
   **Edit** fixes your own message.
 - Press **Call agent** when your comments are ready.
-- Resolving is yours: **Resolve** closes a thread. **Reference** sets one aside to read again;
-  it still takes replies and returns with **Reopen** or **Resolve**.
+- Resolving is yours: **Resolve** closes a thread. **Reference** sets one aside to read again,
+  and it still takes replies and returns with **Reopen** or **Resolve**.
 - The page flags content off the page, clipped SVG drawings, and overlapping labels, and
   reports them to the agent.
 
@@ -100,7 +100,7 @@ selected, so whether to track them in git is a privacy choice.
 A template builds the artifact from a small content file, so you edit content while the
 cover, bars, and page numbers stay consistent. Pick one at init. This repo ships
 [`templates/neutral-slides/`](templates/neutral-slides/) and
-[`templates/neutral-report/`](templates/neutral-report/); the content format is in
+[`templates/neutral-report/`](templates/neutral-report/), and the content format is in
 [`templates/README.md`](templates/README.md). Your own templates go in
 `~/.config/html-mcp-web/templates/<name>/`, and a writing guideline the agent follows in
 `~/.config/html-mcp-web/guidelines/<name>/GUIDELINE.md`.
@@ -112,10 +112,10 @@ cover, bars, and page numbers stay consistent. Pick one at init. This repo ships
 | Field | Effect |
 |---|---|
 | `artifacts.<id>.layout` | `slides` (16:9) or `report` (A4). |
-| `artifacts.<id>.main` | The HTML file the page shows; one `section.page` per printed page inside `main.pages`. |
+| `artifacts.<id>.main` | The HTML file the page shows, with one `section.page` per printed page inside `main.pages`. |
 | `artifacts.<id>.template`, `.content` | A template name and the content file it builds `main` from. |
 | `guideline` | A guideline name under `~/.config/html-mcp-web/guidelines/`. |
-| `watch`, `ignore` | Files whose saves refresh the page; `ignore` is checked first. |
+| `watch`, `ignore` | Files whose saves refresh the page. `ignore` is checked first. |
 | `port` | This folder's review page port. |
 
 ## Security
@@ -124,4 +124,4 @@ An agent-generated artifact runs JavaScript with the local page's privileges, so
 
 ## Acknowledgements
 
-MIT licensed; see [`LICENSE`](LICENSE). The source editor uses [Ace](https://ace.c9.io/) under the BSD license; its license is included with the bundled files. Full-screen wheel navigation adapts the intent-detection strategy from [Swiper's Mousewheel module](https://github.com/nolimits4web/swiper/tree/master/src/modules/mousewheel) by Vladimir Kharlampidi and the Swiper contributors, under the MIT license.
+MIT licensed. See [`LICENSE`](LICENSE). The source editor uses [Ace](https://ace.c9.io/) under the BSD license, and its license is included with the bundled files. Full-screen wheel navigation adapts the intent-detection strategy from [Swiper's Mousewheel module](https://github.com/nolimits4web/swiper/tree/master/src/modules/mousewheel) by Vladimir Kharlampidi and the Swiper contributors, under the MIT license.
