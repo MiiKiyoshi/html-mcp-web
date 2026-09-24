@@ -183,7 +183,6 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             return {
                 "config_path": state["config_path"],
                 "project_dir": state["project_dir"],
-                "review_url": f"http://127.0.0.1:{state['port']}",
                 "guideline": ({**guideline, "resource_uri": guideline_resource_uri}
                               if guideline is not None else None),
                 "documents": document_references(artifacts),
@@ -485,11 +484,9 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         staging.chmod(0o755)
         staging.replace(target)
         return {
-            "review_url": f"http://127.0.0.1:{port}",
             "script": str(target),
             "how": (
-                "Tell the user the review_url. "
-                + _wait_method(ctx)
+                _wait_method(ctx)
                 + " Start another copy only after the previous process has ended. "
                 "On [review], call read_comments(new=True) for the reported artifact and handle the review. "
                 "[gone] means the review server is unreachable; the script keeps retrying. "
