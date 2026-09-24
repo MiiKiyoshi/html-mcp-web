@@ -1,6 +1,8 @@
+<img src="docs/logo.png" alt="" width="96">
+
 # html-mcp-web
 
-Review an AI agent's HTML slides or report from the rendered page, on a desktop, tablet, or phone, while Claude Code or Codex edits the source.
+Review an AI agent's HTML slides or report from the rendered page, on a desktop, tablet, or phone, while Claude Code or Codex edits the source. Hand the finished slides over as an editable PowerPoint deck.
 
 **[Slides example](examples/neutral-slides/)**
 
@@ -55,6 +57,15 @@ do html listen
 Open `http://localhost:<port>` with the port you chose at init. Say it again after the
 agent restarts; presses of **Call agent** made meanwhile wait for it.
 
+## Export to PowerPoint and PDF
+
+Slides reviewed here leave as a PowerPoint deck you can keep editing: press **PPTX** in the
+topbar. Text stays editable text, tables stay tables, inline SVG drawings stay vector, math
+becomes an image, and the script under each slide becomes its speaker notes. A skin can
+name TrueType files to embed the deck font; see [`templates/SKINS.md`](templates/SKINS.md).
+**PDF** prints every page, slides or report, at the layout's fixed size. Both run through
+headless Firefox.
+
 ## On a tablet or phone
 
 The review page adapts to the screen: held upright, the comments dock below the artifact
@@ -93,13 +104,6 @@ cover, bars, and page numbers stay consistent. Pick one at init. This repo ships
 [`templates/README.md`](templates/README.md). Your own templates go in
 `~/.config/html-mcp-web/templates/<name>/`, and a writing guideline the agent follows in
 `~/.config/html-mcp-web/guidelines/<name>/GUIDELINE.md`.
-
-## Export
-
-The topbar exports each artifact. **PDF** prints every page at the layout's fixed size
-through headless Firefox. **PPTX** (slides only) builds an editable deck: text stays text,
-tables stay tables, inline SVG stays vector, and math becomes an image. A skin can name
-TrueType files to embed the deck font; see [`templates/SKINS.md`](templates/SKINS.md).
 
 ## Configuration
 
