@@ -6,14 +6,15 @@ Review an AI agent's HTML slides or report from the rendered page, on a desktop,
 
 **[Slides example](examples/neutral-slides/)**
 
-![A rendered slide, its highlighted HTML source, and the open review thread in Split view.](docs/hero.png)
+![A phrase highlighted on a rendered slide, and the reviewer's comment with the agent's reply beside it.](docs/hero.png)
 
 **[Report example](examples/neutral-report/)**
 
-![A rendered report page, its highlighted HTML source, and the open review thread in Split view.](docs/report.png)
+![A sentence highlighted on a rendered report page, and the reviewer's question with the agent's answer beside it.](docs/report.png)
 
-You comment on the rendered page in your browser. The agent reads the comments, edits the
-HTML, and replies in the same thread. Saving a file refreshes only the artifact frame, so
+You comment on the rendered page itself: select the words you mean, the way you would mark
+a printout, and say what should change. The agent reads the comments, edits the HTML, and
+replies in the same thread. Saving a file refreshes only the artifact frame, so
 your scroll position and drafts stay put.
 
 ```
@@ -80,10 +81,13 @@ forwarded port: an SSH tunnel, VS Code port forwarding, or `tailscale serve`.
 
 ## Reviewing
 
-- **Preview**, **Source**, and **Split** show the rendered artifact, its source, or both.
-  Drag the divider to resize. A templated artifact shows its smaller content file.
-- Select exact characters in either view and press **Comment**. Source comments reattach
-  when the surrounding source moves.
+- Select text on the rendered page and press the **Comment** button that appears beside it.
+  This is the usual way to review: you point at what you see, and the agent finds the
+  source behind it.
+- **Source** and **Split** show the source as well, for when you want to point at the
+  markup itself. A comment made there covers exactly the selected characters and follows
+  them when the surrounding source moves. Drag the divider to resize. A templated artifact
+  shows its smaller content file.
 - **+ Note** comments on the whole artifact, the **Pages** tab jumps between pages, and
   **Edit** fixes your own message.
 - Press **Call agent** when your comments are ready.
