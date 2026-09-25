@@ -3,7 +3,6 @@
 import hashlib
 import re
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 
@@ -232,56 +231,3 @@ def new_requests(comments: list[dict[str, Any]], edge: datetime | None) -> tuple
         if newest is None or _moment(latest) > _moment(newest):
             newest = latest
     return fresh, newest
-
-def agent_artifact_summary(
-    artifact_id: str,
-    artifact: dict[str, Any],
-    project_dir: Path,
-) -> dict[str, Any]:
-    layout_check = artifact["layout_check"]
-    edit_name = artifact["edit_file"]
-    result = {
-        "id": artifact_id,
-        "label": artifact["label"],
-        "layout": artifact["layout"],
-        "edit_file": str((project_dir / edit_name).resolve()),
-        "main_file": str((project_dir / artifact["main_file"]).resolve()),
-        "revision": artifact["revision"],
-        "checked_revision": layout_check["checked_revision"],
-        "layout_error_count": len(layout_check["errors"]),
-        "open_comment_count": artifact["comment_counts"]["open"],
-        # A missing main file, among others. Dropping it here showed the agent a healthy
-        # unchecked artifact where there was none to check.
-        **({"error": artifact["error"]} if "error" in artifact else {}),
-    }
-    if "template" in artifact:
-        result["template"] = artifact["template"]
-        result["template_dir"] = artifact["template_dir"]
-    return result
-
-
-def agent_artifact(
-    artifact: dict[str, Any],
-    page: int | None = None,
-) -> dict[str, Any]:
-    layout_check = artifact["layout_check"]
-    layout_is_current = layout_check["checked_revision"] == artifact["revision"]
-    result = {
-        "revision": artifact["revision"],
-        # None is both smaller and harder to misread than a stale count plus a separate
-        # checked revision. A later inspect reports the count once this revision is checked.
-        "layout_error_count": len(layout_check["errors"]) if layout_is_current else None,
-        "comment_counts": artifact["comment_counts"],
-        **({"error": artifact["error"]} if "error" in artifact else {}),
-    }
-    if "template" in artifact:
-        result["build_error"] = artifact["build_error"]
-    if page is not None:
-        result["page"] = {
-            "number": page,
-            "errors": ([error for error in layout_check["errors"]
-                        if error.startswith(f"page {page} ")]
-                       if layout_is_current else None),
-            "room": layout_check["room"].get(str(page), []) if layout_is_current else None,
-        }
-    return result

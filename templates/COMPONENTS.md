@@ -1,6 +1,6 @@
 # Component reference
 
-Read the sections needed for the current figure or page. MCP resource: `html-mcp://docs/components`.
+Read the sections needed for the current figure or page.
 
 ## Page kinds
 
@@ -131,8 +131,8 @@ printed over each other are reported as a collision, and a label that runs past 
 sides of the rect it sits on is reported with the side and by how much.
 
 The body box carries `data-layout-guard`, so clipped overflow is reported.
-Check the current artifact with `inspect(artifact=...)`: `layout_error_count` is
-`null` before verification and `0` when the current revision has no layout errors.
+Check the current artifact with `layout(artifact=...)`: it waits for the check, and an
+empty `errors` means the current revision has no layout errors.
 
 ## Report template
 

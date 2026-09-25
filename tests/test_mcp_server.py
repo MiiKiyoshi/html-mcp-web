@@ -120,28 +120,23 @@ async def test_stdio_mcp_starts_without_project_config(tmp_path: Path) -> None:
             assert "read_comments(new=True)" in initialized.instructions
             tools = await session.list_tools()
             assert [tool.name for tool in tools.tools] == [
-                "inspect",
-                "list_comments",
+                "guide",
                 "read_comments",
-                "reply_comments",
-                "render_page",
-                "export_pptx",
-                "measure_space",
+                "write_comments",
+                "image",
+                "layout",
                 "listen",
             ]
             assert all(initialized.instructions not in (tool.description or "") for tool in tools.tools)
-            inspected = await session.call_tool("inspect", {})
-            assert inspected.isError is False
+            # Before setup, the answer is where to set up, not a tool that half works.
+            unready = await session.call_tool("guide", {"artifact": "slides"})
+            assert unready.isError is True and "init.md" in unready.content[0].text
+            project(tmp_path)
+            guided = await session.call_tool("guide", {"artifact": "slides"})
+            assert guided.isError is False
             # One text, one line of JSON: no structured copy beside it.
-            assert inspected.structuredContent is None and "\n" not in inspected.content[0].text
-            assert json.loads(inspected.content[0].text)["setup_required"]["project_dir"] == str(tmp_path)
-            config = project(tmp_path)
-            connected = await session.call_tool("inspect", {})
-            assert connected.isError is False
-            discovered = json.loads(connected.content[0].text)
-            assert discovered["config_path"] == str(config.config_path)
-            compact = await session.call_tool("inspect", {"artifact": "slides"})
-            assert set(json.loads(compact.content[0].text)) == {"artifacts"}
+            assert guided.structuredContent is None and "\n" not in guided.content[0].text
+            assert json.loads(guided.content[0].text)["edit_file"] == str(tmp_path / "slides.html")
 
 
 @pytest.mark.asyncio
@@ -168,69 +163,43 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
     try:
         mcp = create_server(binding)
         # The setup guide's path is as long as the install location; the rest is bounded.
-        assert len(mcp.instructions) - len(str(INIT_GUIDE)) < 1000
-        for needed in ("listen()", "init.md", "document references", "configured guideline", "resource_uri"):
+        assert len(mcp.instructions) - len(str(INIT_GUIDE)) < 550
+        for needed in ("read_comments(new=True)", "guide()", "layout()", "image()", "write_comments",
+                       "listen()", "init.md"):
             assert needed in mcp.instructions, needed
         for needed in ("asks to listen", "do not poll", "duplicate"):
             assert needed in mcp.instructions.lower(), needed
-        for gone in (
-            "templates/README.md",
-            "exactly once",
-            "Monitor",
-            "tells you to wait",
-        ):
+        # Read only when it applies: the geometric advice rides on a layout answer with errors.
+        for gone in ("templates/README.md", "Monitor", "inspect", "resource_uri", "geometric"):
             assert gone not in mcp.instructions, gone
-        assert "Call inspect() once" in mcp.instructions
-        assert "page=..." in mcp.instructions
-        assert (
-            "Treat overflow, clipping, and text-tail warnings as geometric unless the user or a "
-            "visual audit finds a content problem. First preserve content and structure with the "
-            "smallest size or spacing change. Do not rewrite, remove, or reorganize content just "
-            "to clear a warning. Use structural edits only if the geometric fix cannot work or "
-            "the user requests them. Then rerun inspect and render only the affected page."
-        ) in mcp.instructions
         tools = asyncio.run(mcp.list_tools())
         schemas = {tool.name: tool.inputSchema for tool in tools}
         assert list(schemas) == [
-            "inspect",
-            "list_comments",
+            "guide",
             "read_comments",
-            "reply_comments",
-            "render_page",
-            "export_pptx",
-            "measure_space",
+            "write_comments",
+            "image",
+            "layout",
             "listen",
         ]
+        assert schemas["guide"]["required"] == ["artifact"]
         assert schemas["read_comments"]["required"] == ["artifact"]
-        assert schemas["reply_comments"]["required"] == ["artifact"]
-        assert schemas["reply_comments"]["properties"]["replies_text"]["anyOf"][0]["type"] == "string"
-        assert set(schemas["inspect"]["properties"]) == {"artifact", "page"}
-        assert schemas["inspect"]["properties"]["page"]["anyOf"][0]["minimum"] == 1
-        assert schemas["render_page"]["required"] == ["artifact", "page"]
-        assert schemas["render_page"]["properties"]["page"]["minimum"] == 1
-        assert schemas["render_page"]["properties"]["dpi"]["minimum"] == 36
-        assert schemas["render_page"]["properties"]["dpi"]["maximum"] == 300
-        assert set(schemas["render_page"]["properties"]) >= {"save", "out"}
-        # revision is optional: left out, the server measures its current one, so a lone
-        # measure_space needs no inspect round first just to learn the number.
-        assert schemas["measure_space"]["required"] == ["artifact", "page", "clearance"]
+        assert schemas["write_comments"]["required"] == ["artifact", "action"]
+        assert schemas["image"]["required"] == ["artifact", "page"]
+        assert schemas["image"]["properties"]["dpi"]["minimum"] == 36
+        assert schemas["image"]["properties"]["dpi"]["maximum"] == 300
+        assert set(schemas["image"]["properties"]) >= {"save", "out", "target"}
+        assert schemas["layout"]["required"] == ["artifact"]
+        assert set(schemas["layout"]["properties"]) == {
+            "artifact", "page", "target", "clearance", "min_width", "min_height"}
 
-        setup = answer(mcp.call_tool("inspect", {}))
-        assert setup == {
-            "setup_required": {
-                "project_dir": str(tmp_path),
-                "config_path": str(tmp_path / ".html-mcp-web.yaml"),
-                "cli": str(CLI),
-                "next_action": f"Ask the user whether to set this folder up now; if they agree, follow {INIT_GUIDE}.",
-            }
-        }
+        with pytest.raises(Exception, match="not set up for review") as unready:
+            asyncio.run(mcp.call_tool("guide", {"artifact": "slides"}))
+        assert str(INIT_GUIDE) in str(unready.value) and str(CLI) in str(unready.value)
 
-        config = project(tmp_path)
-        inspected = answer(mcp.call_tool("inspect", {}))
-        assert inspected["config_path"] == str(config.config_path)
-        assert inspected["project_dir"] == str(tmp_path)
-        compact = answer(mcp.call_tool("inspect", {"artifact": "slides"}))
-        assert set(compact) == {"artifacts"}
+        project(tmp_path)
+        guided = answer(mcp.call_tool("guide", {"artifact": "slides"}))
+        assert guided["edit_file"] == str(tmp_path / "slides.html")
     finally:
         binding.stop()
 
@@ -241,13 +210,13 @@ def test_binding_retries_after_invalid_config_is_fixed(tmp_path: Path) -> None:
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        setup_error = answer(mcp.call_tool("inspect", {}))
-        assert setup_error["setup_error"]["config_path"] == str(config_path)
-        assert "while parsing a flow node" in setup_error["setup_error"]["message"]
+        with pytest.raises(Exception, match="while parsing a flow node") as broken:
+            asyncio.run(mcp.call_tool("guide", {"artifact": "slides"}))
+        assert str(config_path) in str(broken.value)
         config_path.unlink()
-        config = project(tmp_path)
-        inspected = answer(mcp.call_tool("inspect", {}))
-        assert inspected["config_path"] == str(config.config_path)
+        project(tmp_path)
+        guided = answer(mcp.call_tool("guide", {"artifact": "slides"}))
+        assert guided["edit_file"] == str(tmp_path / "slides.html")
     finally:
         binding.stop()
 
@@ -290,8 +259,8 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
             assert response.status == 200
 
         mcp = create_server(binding)
-        discovered = answer(mcp.call_tool("inspect", {}))
-        assert discovered["artifacts"]["slides"]["edit_file"] == str(tmp_path / "slides.html")
+        guided = answer(mcp.call_tool("guide", {"artifact": "slides"}))
+        assert guided["edit_file"] == str(tmp_path / "slides.html")
 
         base = f"http://127.0.0.1:{config.port}"
         created = post_json(f"{base}/artifacts/slides/comments", {
@@ -310,14 +279,12 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
             },
             "text": "Check this text",
         })
-        inspected = answer(mcp.call_tool("inspect", {"artifact": "slides"}))
-        artifact = inspected["artifacts"]["slides"]
-        assert set(artifact) == {"revision", "layout_error_count", "comment_counts"}
-        assert artifact["comment_counts"]["open"] == 2
-        assert "comments" not in artifact
-        assert "artifact_digest" not in artifact
+        def revision_now() -> int:
+            with urllib.request.urlopen(f"{base}/state", timeout=3) as response:
+                return json.loads(response.read().decode("utf-8"))["artifacts"]["slides"]["revision"]
 
-        listed = answer(mcp.call_tool("list_comments", {"artifact": "slides"}))
+        revision_before = revision_now()
+        listed = answer(mcp.call_tool("read_comments", {"artifact": "slides"}))
         # Newest first; a listing filtered by status does not repeat it on every row.
         assert [comment["id"] for comment in listed["comments"]] == [text_comment["id"], created["id"]]
         assert listed["comments"][1] == {
@@ -329,18 +296,18 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
         }
         # A text comment is chosen by what it quotes, not read in full to learn it.
         assert listed["comments"][0]["anchor"] == {"kind": "text", "quote": "selected text"}
-        everything = answer(mcp.call_tool("list_comments", {"artifact": "slides", "status": "all"}))
+        everything = answer(mcp.call_tool("read_comments", {"artifact": "slides", "status": "all"}))
         assert everything["comments"][0]["status"] == "open"
         # A time names a minute, and the minute it names comes back rather than being missed.
         first_seen = listed["comments"][1]["last_human_at"]
-        later = answer(mcp.call_tool("list_comments", {"artifact": "slides", "since": first_seen}))
+        later = answer(mcp.call_tool("read_comments", {"artifact": "slides", "since": first_seen}))
         assert {comment["id"] for comment in later["comments"]} == {created["id"], text_comment["id"]}
-        unanswered = answer(mcp.call_tool("list_comments", {"artifact": "slides", "unanswered": True}))
+        unanswered = answer(mcp.call_tool("read_comments", {"artifact": "slides", "unanswered": True}))
         assert len(unanswered["comments"]) == 2
 
         selected = answer(mcp.call_tool("read_comments", {
             "artifact": "slides",
-            "comment_ids": [text_comment["id"]],
+            "ids": [text_comment["id"]],
         }))
         assert len(selected["comments"]) == 1
         assert created["id"] not in json.dumps(selected)
@@ -355,23 +322,23 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
         # The thread's rev is the one thing a rewrite of an entry has to quote.
         assert stripped["rev"] == revision_of(text_comment["updated"])
 
-        replied = answer(mcp.call_tool("reply_comments", {
+        replied = answer(mcp.call_tool("write_comments", {
             "artifact": "slides",
-            "replies_text": f"{created['id']}: Changed the wording",
+            "action": "reply",
+            "text": f"{created['id']}: Changed the wording",
             "edited_files": ["slides.html"],
         }))
         assert set(replied["updated"][0]) == {"id", "rev"}
-
-        inspect_after_reply = answer(mcp.call_tool("inspect", {"artifact": "slides"}))
-        assert inspect_after_reply == inspected
+        # A reply is a thread's business: the artifact's revision stays where it was.
+        assert revision_now() == revision_before
         # The agent's reply leaves the thread answered; a later human entry reopens it.
-        unanswered = answer(mcp.call_tool("list_comments", {"artifact": "slides", "unanswered": True}))
+        unanswered = answer(mcp.call_tool("read_comments", {"artifact": "slides", "unanswered": True}))
         assert [comment["id"] for comment in unanswered["comments"]] == [text_comment["id"]]
         newest_seen = listed["comments"][0]["last_human_at"]
 
         replied_read = answer(mcp.call_tool("read_comments", {
             "artifact": "slides",
-            "comment_ids": [created["id"]],
+            "ids": [created["id"]],
         }))
         replied_comment = replied_read["comments"][0]
         assert replied_comment["thread"][-1]["edited_files"] == ["slides.html"]
@@ -379,25 +346,27 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
         # A rewrite quotes the rev it read; the one it was handed after replying is current.
         own = replied_comment["thread"][-1]["id"]
         assert replied_comment["rev"] == replied["updated"][0]["rev"]
-        rewritten = answer(mcp.call_tool("reply_comments", {
+        rewritten = answer(mcp.call_tool("write_comments", {
             "artifact": "slides",
-            "edits_text": f"{created['id']}/{own}@{replied_comment['rev']}: Changed the wording again",
+            "action": "edit",
+            "text": f"{created['id']}/{own}@{replied_comment['rev']}: Changed the wording again",
         }))
         with pytest.raises(Exception, match="stale"):
-            asyncio.run(mcp.call_tool("reply_comments", {
+            asyncio.run(mcp.call_tool("write_comments", {
                 "artifact": "slides",
-                "edits_text": f"{created['id']}/{own}@{replied_comment['rev']}: A third wording",
+                "action": "edit",
+                "text": f"{created['id']}/{own}@{replied_comment['rev']}: A third wording",
             }))
-        reread = answer(mcp.call_tool("read_comments", {"artifact": "slides", "comment_ids": [created["id"]]}))
+        reread = answer(mcp.call_tool("read_comments", {"artifact": "slides", "ids": [created["id"]]}))
         assert reread["comments"][0]["thread"][-1]["text"] == "Changed the wording again"
         assert reread["comments"][0]["rev"] == rewritten["updated"][0]["rev"]
         post_json(f"{base}/artifacts/slides/comments/{created['id']}/reply", {"text": "Still wrong"})
-        unanswered = answer(mcp.call_tool("list_comments", {"artifact": "slides", "unanswered": True, "since": newest_seen}))
+        unanswered = answer(mcp.call_tool("read_comments", {"artifact": "slides", "unanswered": True, "since": newest_seen}))
         assert [comment["id"] for comment in unanswered["comments"]] == [created["id"], text_comment["id"]]
         assert unanswered["comments"][0]["thread_entries"] == 3
         assert unanswered["comments"][0]["request"] == "Still wrong"
 
-        revision = inspected["artifacts"]["slides"]["revision"]
+        revision = revision_now()
         with urllib.request.urlopen(f"{base}/state", timeout=3) as response:
             served = json.loads(response.read().decode("utf-8"))["static"]
         post_json(f"{base}/artifacts/slides/layout", {
@@ -406,12 +375,8 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
             "errors": [],
             "space": space_snapshot(),
         })
-        measured = answer(mcp.call_tool("measure_space", {
-            "artifact": "slides",
-            "page": 1,
-            "revision": revision,
-            "clearance": 12,
-        }))
+        measured = answer(mcp.call_tool("layout", {"artifact": "slides", "page": 1, "clearance": 12}))
+        assert measured["errors"] == [] and "note" not in measured
         assert measured["children"][0]["ref"] == "p1:0"
         assert measured["clearance"] == 12
 
@@ -422,7 +387,7 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
         })
         closed_read = answer(mcp.call_tool("read_comments", {
             "artifact": "slides",
-            "comment_ids": [created["id"]],
+            "ids": [created["id"]],
         }))
         assert closed_read["comments"][0]["status"] == "resolved"
 
@@ -502,14 +467,14 @@ def test_read_new_hands_over_what_is_unread_and_unanswered(tmp_path: Path) -> No
                   {"comment_ids": [answered["id"]], "status": "resolved", "author": "human"})
         assert read_new(since=follow["from"])["comments"][0]["id"] == asked["id"]
         assert len(read_new(since=follow["from"])["comments"]) == 1
-        with pytest.raises(Exception, match="takes no comment_ids"):
-            asyncio.run(mcp.call_tool("read_comments", {"artifact": "slides", "new": True, "comment_ids": [asked["id"]]}))
+        with pytest.raises(Exception, match="takes no ids"):
+            asyncio.run(mcp.call_tool("read_comments", {"artifact": "slides", "new": True, "ids": [asked["id"]]}))
     finally:
         binding.stop()
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
-def test_render_page_save_writes_a_png_and_returns_its_path(tmp_path: Path) -> None:
+def test_image_save_writes_a_png_and_returns_its_path(tmp_path: Path) -> None:
     # save exists so a page can be handed to the user without the image entering the
     # transcript; the tool returns a path, not pixels.
     project(tmp_path)
@@ -517,7 +482,7 @@ def test_render_page_save_writes_a_png_and_returns_its_path(tmp_path: Path) -> N
     try:
         mcp = create_server(binding)
         content = asyncio.run(mcp.call_tool(
-            "render_page", {"artifact": "slides", "page": 1, "save": True}))
+            "image", {"artifact": "slides", "page": 1, "save": True}))
         saved = json.loads(content[0].text)
         target = Path(saved["path"])
         assert target == tmp_path / ".html-mcp-web" / "renders" / "slides-p1.png"
@@ -525,7 +490,7 @@ def test_render_page_save_writes_a_png_and_returns_its_path(tmp_path: Path) -> N
         assert saved["bytes"] == target.stat().st_size
         with pytest.raises(Exception, match="inside the project"):
             asyncio.run(mcp.call_tool(
-                "render_page", {"artifact": "slides", "page": 1, "save": True, "out": "../escape.png"}))
+                "image", {"artifact": "slides", "page": 1, "save": True, "out": "../escape.png"}))
     finally:
         binding.stop()
 
@@ -591,20 +556,20 @@ def test_the_lock_names_its_holder(tmp_path: Path) -> None:
         dying.wait(timeout=10)
 
 
-def test_discovery_contains_project_state_without_static_instructions(tmp_path: Path) -> None:
+def test_guide_names_the_file_to_edit_and_what_to_read(tmp_path: Path) -> None:
+    """Paths only: a document is read when it is needed, not carried in the answer."""
     project(tmp_path)
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        discovered = answer(mcp.call_tool("inspect", {}))
-        assert set(discovered) == {
-            "config_path", "project_dir", "guideline", "documents", "artifacts",
-        }
-        assert "guide" not in discovered
-        assert "reader-facing unit" not in json.dumps(discovered, ensure_ascii=False)
-
-        one = answer(mcp.call_tool("inspect", {"artifact": "slides"}))
-        assert "guide" not in one
+        guided = answer(mcp.call_tool("guide", {"artifact": "slides"}))
+        assert set(guided) == {"edit_file", "read"}
+        assert guided["edit_file"] == str(tmp_path / "slides.html")
+        assert [Path(path).name for path in guided["read"]] == ["README.md", "COMPONENTS.md"]
+        assert all(Path(path).is_file() for path in guided["read"])
+        assert "reader-facing unit" not in json.dumps(guided, ensure_ascii=False)
+        with pytest.raises(Exception, match="unknown artifact"):
+            asyncio.run(mcp.call_tool("guide", {"artifact": "report"}))
     finally:
         binding.stop()
 
@@ -638,7 +603,9 @@ def test_replies_are_one_text_with_a_comment_id_at_each_line_head() -> None:
             parse_replies(bad)
 
 
-def test_discovery_references_documents_and_resources_serve_exact_text(tmp_path: Path, monkeypatch) -> None:
+def test_guide_for_a_templated_artifact_names_its_content_file_and_template_notes(
+    tmp_path: Path, monkeypatch,
+) -> None:
     from html_mcp_web.cli import main
     monkeypatch.chdir(tmp_path)
     assert main(["init", "--layout", "slides", "--template", "neutral-slides",
@@ -646,46 +613,32 @@ def test_discovery_references_documents_and_resources_serve_exact_text(tmp_path:
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        discovered = answer(mcp.call_tool("inspect", {}))
-        docs = discovered["documents"]
-        refs = [docs["authoring"], docs["components"], docs["templates"]["neutral-slides"]]
-        for ref in refs:
-            assert set(ref) == {"path", "resource_uri"}
-            text = Path(ref["path"]).read_text(encoding="utf-8")
-            resource = list(asyncio.run(mcp.read_resource(ref["resource_uri"])))
-            assert resource[0].content == text
-            assert text not in json.dumps(discovered)
-        inspected = answer(mcp.call_tool("inspect", {"artifact": "slides"}))
-        assert set(inspected) == {"artifacts"}
-        assert "docs" not in next(t for t in asyncio.run(mcp.list_tools()) if t.name == "inspect").inputSchema["properties"]
+        guided = answer(mcp.call_tool("guide", {"artifact": "slides"}))
+        # The content file is what a templated artifact is written in; the main file is built.
+        assert guided["edit_file"] == str(tmp_path / "content.html")
+        notes = Path(guided["read"][-1])
+        assert notes.parent.name == "neutral-slides" and notes.name == "README.md"
+        for path in guided["read"]:
+            assert Path(path).read_text(encoding="utf-8") not in json.dumps(guided)
     finally:
         binding.stop()
 
 
-def test_discovery_deduplicates_templates_and_handles_plain_artifacts(tmp_path: Path) -> None:
-    from html_mcp_web.mcp_server import document_references
-    template_dir = tmp_path / "skin"
-    template_dir.mkdir()
-    (template_dir / "README.md").write_text("# Skin notes")
-    artifact = {"template": "skin", "template_dir": str(template_dir)}
-    docs = document_references({"one": artifact, "two": artifact, "plain": {}})
-    assert list(docs["templates"]) == ["skin"]
-    assert document_references({"plain": {}})["templates"] == {}
-    assert document_references({"missing": {"template": "missing", "template_dir": str(tmp_path / "missing")}})["templates"] == {}
 
 
-def test_inspect_returns_only_requested_page_layout_detail(tmp_path: Path) -> None:
+
+def test_layout_reports_the_revisions_errors_and_a_pages_detail(tmp_path: Path) -> None:
     config = project(tmp_path)
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        initial = answer(mcp.call_tool("inspect", {"artifact": "slides"}))
-        revision = initial["artifacts"]["slides"]["revision"]
+        binding.require_client()
         with urllib.request.urlopen(f"http://127.0.0.1:{config.port}/state") as response:
-            static = json.loads(response.read().decode("utf-8"))["static"]
+            state = json.loads(response.read().decode("utf-8"))
+        revision = state["artifacts"]["slides"]["revision"]
         post_json(f"http://127.0.0.1:{config.port}/artifacts/slides/layout", {
             "revision": revision,
-            "static": static,
+            "static": state["static"],
             "errors": [
                 "page 1 exceeds the slides height at p1:0",
                 "page 2 exceeds the slides height at p2:0",
@@ -693,23 +646,22 @@ def test_inspect_returns_only_requested_page_layout_detail(tmp_path: Path) -> No
             "space": space_snapshot(),
         })
 
-        compact = answer(mcp.call_tool("inspect", {"artifact": "slides"}))
-        assert compact["artifacts"]["slides"] == {
-            "revision": revision,
-            "layout_error_count": 2,
-            "comment_counts": {"open": 0, "resolved": 0, "reference": 0},
-        }
-        detailed = answer(mcp.call_tool("inspect", {"artifact": "slides", "page": 1}))
-        page = detailed["artifacts"]["slides"]["page"]
-        assert page["number"] == 1
-        assert page["errors"] == ["page 1 exceeds the slides height at p1:0"]
-        assert page["room"]
+        whole = answer(mcp.call_tool("layout", {"artifact": "slides"}))
+        assert whole["revision"] == revision
+        assert len(whole["errors"]) == 2
+        # The advice on fixing them comes with errors, not with every session.
+        assert "smallest size or spacing change" in whole["note"]
+        detailed = answer(mcp.call_tool("layout", {"artifact": "slides", "page": 1}))
+        assert detailed["errors"] == ["page 1 exceeds the slides height at p1:0"]
+        assert detailed["children"][0]["ref"] == "p1:0"
         assert "page 2" not in json.dumps(detailed)
+        with pytest.raises(Exception, match="target needs page"):
+            asyncio.run(mcp.call_tool("layout", {"artifact": "slides", "target": "p1:0"}))
     finally:
         binding.stop()
 
 
-def test_guideline_discovery_returns_a_reference_and_resource_not_inline_text(
+def test_guide_lists_the_configured_guideline_by_path(
     tmp_path: Path, monkeypatch,
 ) -> None:
     user_config = tmp_path / "user-config"
@@ -726,17 +678,11 @@ def test_guideline_discovery_returns_a_reference_and_resource_not_inline_text(
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        discovered = answer(mcp.call_tool("inspect", {}))
-        assert discovered["guideline"] == {
-            "name": "eda-domain-meeting",
-            "path": str(guideline_path),
-            "resource_uri": "html-mcp://guideline/configured",
-        }
-        assert "Never inline this marker" not in json.dumps(discovered)
-        resources = asyncio.run(mcp.list_resources())
-        assert [str(resource.uri) for resource in resources] == ["html-mcp://guideline/configured"]
-        contents = list(asyncio.run(mcp.read_resource("html-mcp://guideline/configured")))
-        assert contents[0].content == guideline_text
+        guided = answer(mcp.call_tool("guide", {"artifact": "slides"}))
+        assert guided["read"][-1] == str(guideline_path)
+        assert "Never inline this marker" not in json.dumps(guided)
+        # Paths are the whole of it: no resources beside them to keep in step.
+        assert asyncio.run(mcp.list_resources()) == []
     finally:
         binding.stop()
 
@@ -863,17 +809,17 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
         binding.stop()
 
 
-def test_list_comments_offers_the_reference_view(tmp_path: Path) -> None:
+def test_read_comments_offers_the_reference_view(tmp_path: Path) -> None:
     """A thread the reviewer keeps as reference is listed apart from open and resolved,
     and the agent asks for that view by name."""
     mcp = create_server(ProjectBinding(tmp_path))
     schemas = {tool.name: tool.inputSchema for tool in asyncio.run(mcp.list_tools())}
-    assert schemas["list_comments"]["properties"]["status"]["enum"] == ["open", "resolved", "reference", "all"]
+    assert schemas["read_comments"]["properties"]["status"]["enum"] == ["open", "resolved", "reference", "all"]
 
 
-def test_reply_comments_takes_edits_of_the_agents_own_entries(tmp_path: Path) -> None:
+def test_write_comments_takes_edits_of_the_agents_own_entries(tmp_path: Path) -> None:
     mcp = create_server(ProjectBinding(tmp_path))
     schemas = {tool.name: tool.inputSchema for tool in asyncio.run(mcp.list_tools())}
-    assert set(schemas["reply_comments"]["properties"]) == {
-        "artifact", "replies_text", "edited_files", "replies_file", "edits_text"}
-    assert "the comment id, /, the entry id, @, the comment's rev" in schemas["reply_comments"]["properties"]["edits_text"]["description"]
+    assert set(schemas["write_comments"]["properties"]) == {
+        "artifact", "action", "text", "edited_files", "draft"}
+    assert "'c-1a2b3c4d/e-5e6f7a8b@<rev>: '" in json.dumps(schemas["write_comments"]["properties"]["text"])

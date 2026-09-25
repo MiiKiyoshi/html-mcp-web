@@ -32,7 +32,7 @@ the user corrects.
 
 ## 3. Write
 
-In the session's folder, with the command `inspect()` names as `setup_required.cli`:
+In the session's folder, with the command named in the error that sent you here:
 
     html-mcp-web init --layout <slides|report> --main <file> --port <port> \
       [--template <name> --content <file>] [--guideline <name>]

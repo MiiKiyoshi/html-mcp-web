@@ -96,25 +96,6 @@ class ProjectBinding:
             )
         return client
 
-    def setup_state(self) -> dict[str, Any]:
-        return {
-            "setup_required": {
-                "project_dir": str(self.start_dir),
-                "config_path": str(self.start_dir / DEFAULT_CONFIG_NAME),
-                "cli": str(CLI),
-                "next_action": f"Ask the user whether to set this folder up now; if they agree, follow {INIT_GUIDE}.",
-            }
-        }
-
-    def setup_error_state(self, error: ProjectSetupError) -> dict[str, Any]:
-        return {
-            "setup_error": {
-                "config_path": str(error.config_path),
-                "message": str(error),
-                "next_action": "Correct the project configuration, then call inspect() again.",
-            }
-        }
-
     def stop(self) -> None:
         with self._lock:
             if self._shared is not None:

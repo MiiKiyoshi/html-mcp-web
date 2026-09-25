@@ -113,8 +113,8 @@ export function createLayoutChecks(dependencies) {
     const extra = Array.from(doc.body.children).filter((child) => child !== root && inNormalFlow(child));
     const errors = [];
     let pages = [];
-    // The error carries the block's ref, so the reader of inspect() can go straight to
-    // measure_space(target=<ref>) instead of drilling down page by page to find which of
+    // The error carries the block's ref, so the reader of layout() can go straight to
+    // layout(target=<ref>) instead of drilling down page by page to find which of
     // a page's four svgs the message meant.
     const addError = (message, element) => {
       const page = element ? element.closest("section.page") : null;
@@ -425,7 +425,7 @@ export function createLayoutChecks(dependencies) {
     renderProblems(checked, errors);
   }
 
-  // The Problems tab mirrors what the agent sees in inspect(): the artifact error and the
+  // The Problems tab mirrors what the agent sees in layout(): the artifact error and the
   // build error, then the layout errors for the current revision.
   function renderProblems(checked, errors) {
     const list = $("#problems-list");
