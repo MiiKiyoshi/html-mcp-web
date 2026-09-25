@@ -821,5 +821,82 @@ def test_write_comments_takes_edits_of_the_agents_own_entries(tmp_path: Path) ->
     mcp = create_server(ProjectBinding(tmp_path))
     schemas = {tool.name: tool.inputSchema for tool in asyncio.run(mcp.list_tools())}
     assert set(schemas["write_comments"]["properties"]) == {
-        "artifact", "action", "text", "edited_files", "draft"}
+        "artifact", "action", "text", "edited_files", "draft", "id", "rev", "changes"}
+    assert schemas["write_comments"]["properties"]["action"]["enum"] == ["reply", "edit", "suggest", "withdraw"]
     assert "'c-1a2b3c4d/e-5e6f7a8b@<rev>: '" in json.dumps(schemas["write_comments"]["properties"]["text"])
+
+
+def test_a_suggestion_is_proposed_on_the_page_and_applied_by_the_reviewer(tmp_path: Path) -> None:
+    """A reviewer points at the rendered page. The agent answers with the source change on
+    that thread, and nothing reaches the file until the reviewer applies it."""
+    import urllib.error
+
+    config = project(tmp_path)
+    source = tmp_path / "slides.html"
+    source.write_text(
+        '<!doctype html><html><body><main class="pages"><section class="page">'
+        "<p>Old words here.</p></section></main></body></html>", encoding="utf-8")
+    binding = ProjectBinding(tmp_path)
+    try:
+        mcp = create_server(binding)
+        binding.require_client()
+        base = f"http://127.0.0.1:{config.port}/artifacts/slides"
+        comment = post_json(f"{base}/comments", {
+            "anchor": {"kind": "text", "quote": "Old words here", "prefix": "", "suffix": ".",
+                       "start": {"path": [0, 0], "offset": 0}, "end": {"path": [0, 0], "offset": 14},
+                       "artifact_digest": "any"},
+            "text": "Say it plainly."})
+
+        def call(**arguments):
+            return answer(mcp.call_tool("write_comments", {"artifact": "slides", **arguments}))
+
+        def thread():
+            return answer(mcp.call_tool("read_comments", {"artifact": "slides", "ids": [comment["id"]]}))["comments"][0]
+
+        def stamp():
+            with urllib.request.urlopen(f"{base}/comments/{comment['id']}") as response:
+                return json.loads(response.read())["updated"]
+
+        rev = thread()["rev"]
+        proposed = call(action="suggest", id=comment["id"], rev=rev, text="Plainer.",
+                        changes=[{"old": "Old words", "new": "New words"}])
+        assert proposed["id"] == comment["id"]
+        read = thread()
+        assert read["suggestion"] == [{"old": "Old words", "new": "New words"}]
+        # Proposed, not written: the file is as the reviewer left it.
+        assert "Old words here." in source.read_text(encoding="utf-8")
+        for arguments, refusal in (
+            ({"rev": rev, "changes": [{"old": "Old words", "new": "x"}]}, "stale"),
+            ({"rev": read["rev"], "changes": [{"old": "not in the file", "new": "x"}]}, "not found in the source"),
+        ):
+            with pytest.raises(Exception, match=refusal):
+                asyncio.run(mcp.call_tool("write_comments", {
+                    "artifact": "slides", "action": "suggest", "id": comment["id"], "text": "x", **arguments}))
+        with pytest.raises(Exception, match="changes go with suggest"):
+            asyncio.run(mcp.call_tool("write_comments", {
+                "artifact": "slides", "action": "withdraw", "id": comment["id"], "rev": read["rev"],
+                "text": "x", "changes": [{"old": "a", "new": "b"}]}))
+
+        applied = post_json(f"{base}/comments/{comment['id']}/apply-suggestion", {"updated": stamp()})
+        assert "New words here." in source.read_text(encoding="utf-8")
+        assert "suggestion" not in applied
+        assert applied["thread"][-1]["author"] == "human"
+        assert applied["thread"][-1]["edits"] == ["slides.html"]
+        # The reviewer's own words were rewritten, and the comment follows them.
+        assert applied["anchor"]["quote"] == "New words here"
+
+        again = call(action="suggest", id=comment["id"], rev=thread()["rev"], text="Shorter.",
+                     changes=[{"old": "New words", "new": "Words"}])
+        call(action="withdraw", id=comment["id"], rev=again["rev"], text="Keep it.")
+        assert "suggestion" not in thread()
+
+        # A file that moved under the proposal refuses it rather than writing blind.
+        call(action="suggest", id=comment["id"], rev=thread()["rev"], text="Once more.",
+             changes=[{"old": "New words", "new": "Words"}])
+        source.write_text(source.read_text(encoding="utf-8").replace("New words", "Other words"), encoding="utf-8")
+        with pytest.raises(urllib.error.HTTPError) as refused:
+            post_json(f"{base}/comments/{comment['id']}/apply-suggestion", {"updated": stamp()})
+        assert refused.value.code == 409
+        assert "Other words" in source.read_text(encoding="utf-8")
+    finally:
+        binding.stop()

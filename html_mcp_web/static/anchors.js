@@ -226,9 +226,12 @@ export function createAnchors(dependencies) {
     const suffix = normalizeWithMap(anchor.suffix).normalized;
     const occurrences = allOccurrences(documentText.normalized, quote);
     if (occurrences.length === 0) return null;
+    // Normalizing drops the space at either end of the stored context, and a selection
+    // that starts or ends between words has one there: the document is read past that
+    // space the same way, or the context sits one character off and never matches.
     const candidates = occurrences.map((start) => {
-      const before = documentText.normalized.slice(Math.max(0, start - prefix.length), start);
-      const after = documentText.normalized.slice(start + quote.length, start + quote.length + suffix.length);
+      const before = documentText.normalized.slice(0, start).trimEnd().slice(-prefix.length || documentText.normalized.length);
+      const after = documentText.normalized.slice(start + quote.length).trimStart().slice(0, suffix.length);
       return {
         start,
         score: Number(prefix.length > 0 && before === prefix) + Number(suffix.length > 0 && after === suffix),

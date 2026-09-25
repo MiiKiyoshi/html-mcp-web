@@ -114,7 +114,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "Work from read_comments(new=True), and pass ids to reread a whole thread. "
             "Before writing an artifact, read what guide() lists. Within the user's editing "
             "scope, edit, check the affected pages with layout() and image(), and reply with "
-            "write_comments. The reviewer resolves threads. Call listen() when the user asks "
+            "write_comments. When the wording is the reviewer's to decide, suggest instead of "
+            "editing. The reviewer resolves threads. Call listen() when the user asks "
             "to listen and follow how. Reuse its process, and do not poll or duplicate it. "
             f"Setup: read {INIT_GUIDE}."
         ),
@@ -215,16 +216,35 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     @_compact
     async def write_comments(
         artifact: str,
-        action: Literal["reply", "edit"],
+        action: Literal["reply", "edit", "suggest", "withdraw"],
         text: Annotated[str | None, Field(min_length=1, description=(
             "reply: the replies as one text, each starting at a line head with its comment id "
             "and a colon ('c-1a2b3c4d: ') and running to the next such head. edit: rewrites of "
-            "your own entries, each headed 'c-1a2b3c4d/e-5e6f7a8b@<rev>: '."))] = None,
+            "your own entries, each headed 'c-1a2b3c4d/e-5e6f7a8b@<rev>: '. suggest, withdraw: "
+            "why."))] = None,
         edited_files: Annotated[list[str] | None, Field(description="reply: project-relative paths you edited for these comments.")] = None,
         draft: Annotated[str | None, Field(description="reply: a draft from read_comments(save=True), given without text. It carries replies and edits.")] = None,
+        id: Annotated[str | None, Field(description="suggest, withdraw: the comment.")] = None,
+        rev: Annotated[str | None, Field(description="suggest, withdraw: the comment's rev as read.")] = None,
+        changes: Annotated[list[dict[str, str]] | None, Field(description=(
+            "suggest: [{old, new}], each old found once in guide()'s edit_file, as the file spells it."))] = None,
     ) -> dict[str, Any]:
-        """Reply to threads, or rewrite your own entries. A rewrite quoting an old rev is refused."""
+        """Reply, rewrite your own entries, or propose a source change for the reviewer to
+        apply, replacing that thread's proposal. A stale rev is refused."""
         client = binding.require_client()
+        if action in ("suggest", "withdraw"):
+            if id is None or rev is None or text is None:
+                raise ValueError(f"{action} needs id, rev and text")
+            if (action == "suggest") != (changes is not None):
+                raise ValueError("changes go with suggest, and only with it")
+            comment = await client.request_json("GET", f"/artifacts/{artifact}/comments/{id}")
+            if revision_of(comment["updated"]) != rev:
+                raise ValueError(f"stale: {id} changed since it was read; read it again")
+            body: dict[str, Any] = {"updated": comment["updated"], "text": text}
+            if changes is not None:
+                body["changes"] = changes
+            result = await client.request_json("POST", f"/artifacts/{artifact}/comments/{id}/{action}", body)
+            return {"id": id, "rev": revision_of(result["updated"])}
         if draft is not None:
             if action != "reply" or text is not None:
                 raise ValueError("a draft goes with action reply and no text")

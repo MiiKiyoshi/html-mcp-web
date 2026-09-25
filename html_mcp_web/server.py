@@ -22,7 +22,15 @@ from typing import Any
 import yaml
 from aiohttp import WSMsgType, web
 
-from .comments import Comment, CommentStore, anchor_from_dict, capture_source_anchor
+from .comments import (
+    Comment,
+    CommentStore,
+    SuggestedEdit,
+    anchor_from_dict,
+    capture_source_anchor,
+    locate_fragments,
+    swap_fragments,
+)
 from .config import (
     ArtifactConfig,
     Config,
@@ -663,7 +671,14 @@ class HtmlReviewServer:
                 {"error": "source changed after it was opened", "revision": current_revision},
                 status=409,
             )
-        encoded = data["text"].encode("utf-8")
+        revision = self._replace_source(path, data["text"])
+        runtime.store.refresh_source_anchors(path, relative)
+        return web.json_response({"path": relative, "revision": revision})
+
+    def _replace_source(self, path: Path, text: str) -> str:
+        """Write the editable source in one step and return its new revision. The watcher
+        sees the change like any save, so a templated artifact rebuilds from it."""
+        encoded = text.encode("utf-8")
         staging_dir = self.project_dir / ".html-mcp-web"
         staging_dir.mkdir(parents=True, exist_ok=True)
         temporary: Path | None = None
@@ -679,9 +694,7 @@ class HtmlReviewServer:
             if temporary is not None:
                 with contextlib.suppress(FileNotFoundError):
                     temporary.unlink()
-        revision = hashlib.sha256(encoded).hexdigest()
-        runtime.store.refresh_source_anchors(path, relative)
-        return web.json_response({"path": relative, "revision": revision})
+        return hashlib.sha256(encoded).hexdigest()
 
     async def catch_up(self) -> None:
         """Bring the artifacts level with what is on disk.
@@ -1171,6 +1184,68 @@ class HtmlReviewServer:
         await self.broadcast({"type": "comment_updated", "artifact": runtime.artifact_id, "comment": comment.to_dict()})
         return web.json_response(comment.to_dict())
 
+    async def suggest_comment(self, request: web.Request) -> web.Response:
+        """The agent proposes a change to the editable source on one thread."""
+        runtime = self.runtime(request)
+        data = await request.json()
+        path, relative = self.source_file(runtime)
+        try:
+            changes = [(str(change["old"]), str(change["new"])) for change in data["changes"]]
+            text, _ = self.read_source(path)
+            # Every piece is found in the file now, so the proposal the reviewer sees is
+            # measured against the source rather than against what the agent remembered.
+            locate_fragments(text, changes)
+            if all(old == new for old, new in changes):
+                raise ValueError("the edits leave the source as it is")
+            comment = runtime.store.suggest(
+                request.match_info["comment_id"], str(data["updated"]), str(data["text"]),
+                SuggestedEdit(file=relative, changes=changes))
+        except KeyError as error:
+            raise web.HTTPNotFound(text=str(error)) from error
+        except (TypeError, ValueError) as error:
+            raise web.HTTPConflict(text=str(error)) from error
+        await self.broadcast({"type": "comment_updated", "artifact": runtime.artifact_id, "comment": comment.to_dict()})
+        return web.json_response(comment.to_dict())
+
+    async def withdraw_suggestion(self, request: web.Request) -> web.Response:
+        runtime = self.runtime(request)
+        data = await request.json()
+        try:
+            comment = runtime.store.withdraw_suggestion(
+                request.match_info["comment_id"], str(data["updated"]), str(data["text"]))
+        except KeyError as error:
+            raise web.HTTPNotFound(text=str(error)) from error
+        except (TypeError, ValueError) as error:
+            raise web.HTTPConflict(text=str(error)) from error
+        await self.broadcast({"type": "comment_updated", "artifact": runtime.artifact_id, "comment": comment.to_dict()})
+        return web.json_response(comment.to_dict())
+
+    async def apply_suggestion(self, request: web.Request) -> web.Response:
+        """The reviewer writes a thread's proposal into the source, as the Source view saves."""
+        runtime = self.runtime(request)
+        data = await request.json()
+        path, relative = self.source_file(runtime)
+
+        def write(suggestion: SuggestedEdit) -> list[str]:
+            if suggestion.file != relative:
+                raise ValueError(f"the proposal is for {suggestion.file}, and this artifact now edits {relative}")
+            text, _ = self.read_source(path)
+            # Looked for again: a source that moved under the proposal refuses it instead
+            # of writing something the reviewer did not see.
+            self._replace_source(path, swap_fragments(text, suggestion.changes))
+            return [relative]
+
+        try:
+            comment = runtime.store.apply_suggestion(request.match_info["comment_id"], str(data["updated"]), write)
+        except KeyError as error:
+            raise web.HTTPNotFound(text=str(error)) from error
+        except (TypeError, ValueError) as error:
+            raise web.HTTPConflict(text=str(error)) from error
+        runtime.store.refresh_source_anchors(path, relative)
+        comment = runtime.store.get(comment.id)
+        await self.broadcast({"type": "comment_updated", "artifact": runtime.artifact_id, "comment": comment.to_dict()})
+        return web.json_response(comment.to_dict())
+
     async def delete_comment(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         comment_id = request.match_info["comment_id"]
@@ -1327,6 +1402,9 @@ class HtmlReviewServer:
         app.router.add_post(f"{base}/comments/{{comment_id}}/resolve", self.resolve_comment)
         app.router.add_post(f"{base}/comments/{{comment_id}}/reopen", self.reopen_comment)
         app.router.add_post(f"{base}/comments/{{comment_id}}/reference", self.reference_comment)
+        app.router.add_post(f"{base}/comments/{{comment_id}}/suggest", self.suggest_comment)
+        app.router.add_post(f"{base}/comments/{{comment_id}}/withdraw", self.withdraw_suggestion)
+        app.router.add_post(f"{base}/comments/{{comment_id}}/apply-suggestion", self.apply_suggestion)
         app.router.add_post(f"{base}/comments/{{comment_id}}/edit", self.edit_comment_entry)
         app.router.add_delete(f"{base}/comments/{{comment_id}}", self.delete_comment)
         app.router.add_post("/review-request", self.request_review)
