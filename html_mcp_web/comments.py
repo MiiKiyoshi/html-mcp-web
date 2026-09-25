@@ -693,15 +693,20 @@ class CommentStore:
         raise KeyError(f"comment {comment_id!r} not found")
 
     @staticmethod
-    def _open_thread(comments: list[Comment], comment_id: str, expected_updated: str) -> Comment:
+    def _current_thread(comments: list[Comment], comment_id: str, expected_updated: str) -> Comment:
         for comment in comments:
             if comment.id == comment_id:
                 if comment.updated != expected_updated:
                     raise ValueError("stale thread: comment changed since it was read")
-                if comment.status != "open":
-                    raise ValueError("a suggestion belongs to a comment that is open")
                 return comment
         raise KeyError(f"comment {comment_id!r} not found")
+
+    @classmethod
+    def _open_thread(cls, comments: list[Comment], comment_id: str, expected_updated: str) -> Comment:
+        comment = cls._current_thread(comments, comment_id, expected_updated)
+        if comment.status != "open":
+            raise ValueError("a suggestion belongs to a comment that is open")
+        return comment
 
     def suggest(self, comment_id: str, expected_updated: str, text: str, suggestion: SuggestedEdit) -> Comment:
         """Put a proposal on an open thread and say why, in one entry.
@@ -721,12 +726,13 @@ class CommentStore:
             return comment
 
     def withdraw_suggestion(self, comment_id: str, expected_updated: str, text: str) -> Comment:
-        """Take the proposal off a thread and say why, keeping every entry."""
+        """Take the proposal off a thread and say why, keeping every entry. A thread closed
+        with its proposal still on it can have the proposal taken back too."""
         if not text.strip():
             raise ValueError("a withdrawal must say why")
         with self._locked():
             comments = self._all()
-            comment = self._open_thread(comments, comment_id, expected_updated)
+            comment = self._current_thread(comments, comment_id, expected_updated)
             if comment.suggestion is None:
                 raise ValueError("the comment carries no suggestion")
             now = _now()
