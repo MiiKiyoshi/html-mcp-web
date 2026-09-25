@@ -10,7 +10,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Literal
+from typing import Any, Callable, Iterable, Iterator, Literal
 
 
 Author = Literal["human", "agent"]
@@ -247,6 +247,109 @@ def relocate_source_anchor(anchor: SourceAnchor, path: Path) -> SourceAnchor:
 
 
 @dataclass
+class SuggestedEdit:
+    """The rewrite a thread currently proposes: the pieces of one file it changes.
+
+    Each ``old`` is a verbatim piece of *file* that occurs there exactly once, and
+    ``new`` is what it becomes. Nothing that stays the same is carried, so a proposal
+    that touches three words costs three words rather than the paragraph twice. A
+    thread holds at most one: proposing again replaces it, applying it clears it.
+    """
+
+    file: str
+    changes: list[tuple[str, str]]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"file": self.file, "changes": [{"old": old, "new": new} for old, new in self.changes]}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SuggestedEdit":
+        return cls(file=str(data["file"]), changes=[(str(c["old"]), str(c["new"])) for c in data["changes"]])
+
+
+def _all_occurrences(text: str, needle: str) -> list[int]:
+    positions: list[int] = []
+    start = 0
+    while True:
+        position = text.find(needle, start)
+        if position < 0:
+            return positions
+        positions.append(position)
+        start = position + 1
+
+
+def locate_fragments(text: str, edits: list[tuple[str, str]]) -> list[tuple[int, int, str]]:
+    """Find each ``(old, new)`` fragment in *text*, all or none, ordered by position.
+
+    The agent names what to change by quoting it, the way an editing tool does, so it
+    never has to count characters to reach a column. A fragment that is missing, that
+    occurs more than once, or that overlaps another one is refused with what the caller
+    needs to fix it in one retry: for an ambiguous one that is the lines it was found
+    on, so the quote can be extended on purpose rather than by guessing.
+    """
+    if not edits:
+        raise ValueError("a suggestion needs at least one edit")
+    spans: list[tuple[int, int, str]] = []
+    for old, new in edits:
+        if not old:
+            raise ValueError("an edit must say which text to replace")
+        found = _all_occurrences(text, old)
+        if not found:
+            raise ValueError(f"not found in the source: {old!r}")
+        if len(found) > 1:
+            lines = ", ".join(str(text.count("\n", 0, at) + 1) for at in found)
+            raise ValueError(
+                f"{old!r} occurs {len(found)} times, on lines {lines}; "
+                "quote more of the surrounding text"
+            )
+        spans.append((found[0], found[0] + len(old), new))
+    spans.sort()
+    for (_, end, _), (start, _, _) in zip(spans, spans[1:]):
+        if start < end:
+            raise ValueError("two edits cover the same text")
+    return spans
+
+
+def swap_fragments(text: str, edits: list[tuple[str, str]]) -> str:
+    """Rewrite *text* by replacing each quoted fragment, all or none."""
+    spans = locate_fragments(text, edits)
+    updated = text
+    # Back to front, so an earlier swap cannot move a later one's offsets.
+    for start, end, new in reversed(spans):
+        updated = updated[:start] + new + updated[end:]
+    if updated == text:
+        raise ValueError("the edits leave the text as it is")
+    return updated
+
+
+def _carry_text_anchor(anchor: TextAnchor, changes: list[tuple[str, str]]) -> None:
+    """Keep a comment on the reviewer's words when an applied proposal rewrites them.
+
+    The page reattaches a text comment by its quote and requires the words on at least one
+    side of it to match. A piece inside the quote changes the quote the same way. A piece
+    that takes in the whole quote becomes the quote, and the parts of it that lay beside
+    the quote come off that side's context, so the context is again what surrounds it.
+    Anything else leaves the comment to be shown as lost rather than placed by a guess.
+    """
+    quote = anchor.quote
+    exact = [new for old, new in changes if old == quote]
+    inside = [(old, new) for old, new in changes if old != quote and quote.count(old) == 1]
+    around = [(old, new) for old, new in changes if old != quote and old.count(quote) == 1]
+    if len(exact) == 1 and not inside and not around:
+        anchor.quote = exact[0]
+    elif len(inside) == 1 and not exact and not around:
+        old, new = inside[0]
+        anchor.quote = quote.replace(old, new, 1)
+    elif len(around) == 1 and not exact and not inside:
+        old, new = around[0]
+        head, _, tail = old.partition(quote)
+        if anchor.prefix.endswith(head) and anchor.suffix.startswith(tail):
+            anchor.prefix = anchor.prefix[:len(anchor.prefix) - len(head)]
+            anchor.suffix = anchor.suffix[len(tail):]
+            anchor.quote = new
+
+
+@dataclass
 class ThreadEntry:
     author: Author
     at: str
@@ -285,6 +388,7 @@ class Comment:
     # with the comment closed last, and "updated" cannot say which that was: a reply
     # after the close moves it too.
     resolved: str | None
+    suggestion: SuggestedEdit | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -295,6 +399,7 @@ class Comment:
             "created": self.created,
             "updated": self.updated,
             "resolved": self.resolved,
+            **({"suggestion": self.suggestion.to_dict()} if self.suggestion is not None else {}),
         }
 
     @classmethod
@@ -309,6 +414,8 @@ class Comment:
             # A store written before the field carries none: its closed comments keep
             # the order they were written in.
             resolved=str(data["resolved"]) if "resolved" in data and data["resolved"] is not None else None,
+            # A thread written before proposals existed carries none.
+            suggestion=SuggestedEdit.from_dict(data["suggestion"]) if "suggestion" in data else None,
         )
 
 
@@ -584,6 +691,78 @@ class CommentStore:
                 self._save(comments)
                 return comment
         raise KeyError(f"comment {comment_id!r} not found")
+
+    @staticmethod
+    def _open_thread(comments: list[Comment], comment_id: str, expected_updated: str) -> Comment:
+        for comment in comments:
+            if comment.id == comment_id:
+                if comment.updated != expected_updated:
+                    raise ValueError("stale thread: comment changed since it was read")
+                if comment.status != "open":
+                    raise ValueError("a suggestion belongs to a comment that is open")
+                return comment
+        raise KeyError(f"comment {comment_id!r} not found")
+
+    def suggest(self, comment_id: str, expected_updated: str, text: str, suggestion: SuggestedEdit) -> Comment:
+        """Put a proposal on an open thread and say why, in one entry.
+
+        Proposing again replaces the proposal and adds another entry, so a thread carries
+        one live proposal and its whole conversation."""
+        if not text.strip():
+            raise ValueError("a suggestion must say why")
+        with self._locked():
+            comments = self._all()
+            comment = self._open_thread(comments, comment_id, expected_updated)
+            now = _now()
+            comment.thread.append(ThreadEntry(author="agent", at=now, text=text.strip()))
+            comment.suggestion = suggestion
+            comment.updated = now
+            self._save(comments)
+            return comment
+
+    def withdraw_suggestion(self, comment_id: str, expected_updated: str, text: str) -> Comment:
+        """Take the proposal off a thread and say why, keeping every entry."""
+        if not text.strip():
+            raise ValueError("a withdrawal must say why")
+        with self._locked():
+            comments = self._all()
+            comment = self._open_thread(comments, comment_id, expected_updated)
+            if comment.suggestion is None:
+                raise ValueError("the comment carries no suggestion")
+            now = _now()
+            comment.thread.append(ThreadEntry(author="agent", at=now, text=text.strip()))
+            comment.suggestion = None
+            comment.updated = now
+            self._save(comments)
+            return comment
+
+    def apply_suggestion(
+        self,
+        comment_id: str,
+        expected_updated: str,
+        write: Callable[[SuggestedEdit], list[str]],
+    ) -> Comment:
+        """Write a thread's proposal into its file and take it off the thread.
+
+        *write* replaces the file and names the ranges it changed, under this store's lock,
+        so a thread that moved on meanwhile refuses rather than writing what the reviewer
+        did not see. It must not take the lock itself: the caller reattaches source
+        anchors once this returns."""
+        with self._locked():
+            comments = self._all()
+            comment = self._open_thread(comments, comment_id, expected_updated)
+            suggestion = comment.suggestion
+            if suggestion is None:
+                raise ValueError("the comment carries no suggestion")
+            edits = write(suggestion)
+            if isinstance(comment.anchor, TextAnchor):
+                _carry_text_anchor(comment.anchor, suggestion.changes)
+            now = _now()
+            comment.thread.append(ThreadEntry(author="human", at=now, text="Applied suggestion.", edits=edits))
+            comment.suggestion = None
+            comment.updated = now
+            self._save(comments)
+            return comment
 
     def delete(self, comment_id: str) -> None:
         with self._locked():

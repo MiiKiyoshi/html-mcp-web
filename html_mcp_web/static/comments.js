@@ -253,6 +253,7 @@ export function createComments(dependencies) {
         entry.edits === undefined || entry.edits.length === 0 ? null : h("ul", { class: "thread-edits" },
           entry.edits.map((edit) => h("li", { text: edit })))));
     }
+    if (comment.suggestion !== undefined) body.appendChild(renderSuggestion(comment));
     const actions = h("div", { class: "comment-actions" });
     // Every status flip is one click: the status says what happened, and anything more
     // belongs in a reply. An archived thread still takes replies, and goes back
@@ -277,6 +278,37 @@ export function createComments(dependencies) {
     return card;
   }
   
+  // One pair per piece the proposal changes; the text it leaves alone is not shown,
+  // because it is not part of the proposal. Applying writes it the way Save does.
+  function renderSuggestion(comment) {
+    let apply = null;
+    if (comment.status === "open") {
+      apply = actionButton("Apply suggestion", async () => {
+        apply.disabled = true;
+        apply.textContent = "Applying…";
+        try {
+          await mutateComment(comment.id, "apply-suggestion", { updated: comment.updated });
+        } catch (error) {
+          alert(`Could not apply: ${error.message}`);
+          apply.disabled = false;
+          apply.textContent = "Apply suggestion";
+          return;
+        }
+        await refreshComments();
+      }, "sugg-apply");
+    }
+    return h("div", { class: "cmt-suggestion" },
+      ...comment.suggestion.changes.flatMap((change) => [
+        h("div", { class: "sugg-old", title: "current text" },
+          h("span", { class: "sugg-marker", text: "−" }),
+          h("span", { class: "sugg-text", text: change.old })),
+        h("div", { class: "sugg-new", title: "proposed replacement" },
+          h("span", { class: "sugg-marker", text: "+" }),
+          h("span", { class: "sugg-text", text: change.new })),
+      ]),
+      apply === null ? null : h("div", { class: "sugg-actions" }, apply));
+  }
+
   function renderComments() {
     const list = $("#comments-list");
     const scrollTop = list.scrollTop;

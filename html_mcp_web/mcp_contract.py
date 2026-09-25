@@ -88,6 +88,8 @@ def agent_comment(comment: dict[str, Any]) -> dict[str, Any]:
         "status": comment["status"],
         # What a rewrite of an entry must quote; it moves with every change to the thread.
         "rev": revision_of(comment["updated"]),
+        # The proposal still waiting on the reviewer, as the pieces it changes.
+        **({"suggestion": comment["suggestion"]["changes"]} if "suggestion" in comment else {}),
     }
 
 

@@ -188,3 +188,31 @@ def test_a_thread_kept_as_reference_stays_readable_and_comes_back(tmp_path: Path
     older = CommentStore(tmp_path / "older.json")
     older.add(anchor(), "old")
     assert {comment.status for comment in CommentStore(tmp_path / "older.json").list()} == {"open"}
+
+
+def test_an_applied_proposal_carries_the_reviewers_text_anchor() -> None:
+    """The page reattaches a text comment by its quote and one side of context. A proposal
+    that rewrites the reviewer's words keeps the comment on what now stands there."""
+    from html_mcp_web.comments import DomPosition, TextAnchor, _carry_text_anchor
+
+    def anchor(prefix: str, quote: str, suffix: str) -> TextAnchor:
+        at = DomPosition(path=[0], offset=0)
+        return TextAnchor(quote=quote, prefix=prefix, suffix=suffix, start=at, end=at, artifact_digest="d")
+
+    inside = anchor("Title ", "old words here", ". Next")
+    _carry_text_anchor(inside, [("old words", "new words")])
+    assert (inside.prefix, inside.quote, inside.suffix) == ("Title ", "new words here", ". Next")
+
+    exact = anchor("Title ", "old words", ". Next")
+    _carry_text_anchor(exact, [("old words", "plain words")])
+    assert exact.quote == "plain words"
+
+    # A piece that takes in the whole quote becomes it, and its own ends leave the context.
+    around = anchor("Title Each runner gets ", "last week's runs", ". Next")
+    _carry_text_anchor(around, [("Each runner gets last week's runs.", "Each runner gets seven nights.")])
+    assert (around.prefix, around.quote, around.suffix) == ("Title ", "Each runner gets seven nights.", " Next")
+
+    # A piece that only overlaps it is not guessed at: the comment shows as lost instead.
+    overlap = anchor("Title ", "old words here", ". Next")
+    _carry_text_anchor(overlap, [("here. Next", "there. Next")])
+    assert overlap.quote == "old words here"

@@ -154,6 +154,13 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
   transform: translateY(-50%);
 }
 #source-editor .ace_gutter-cell.source-comment-line { cursor: pointer; }
+/* What an open suggestion would replace, in the red of the card's − line. */
+#source-editor .ace_marker-layer .source-suggestion-highlight {
+  position: absolute;
+  background: rgba(183, 56, 56, .14);
+  box-shadow: inset 0 -2px 0 rgba(183, 56, 56, .55);
+}
+#source-editor .ace_gutter-cell.source-suggestion-line::before { border-color: #9c3a33; background: #e0857c; }
 /* One frame per artifact, all the size of the pane and stacked in it; the active one is
    the one seen. The others are hidden, not removed from layout: a frame with no layout
    loses its scroll and measures nothing, and coming back to a tab would start it over. */
@@ -361,6 +368,15 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .thread-text { margin-top: 4px; white-space: pre-wrap; font-size: 12px; line-height: 1.45; }
 .thread-edits { margin: 5px 0 0; padding-left: 18px; font-family: ui-monospace, monospace; font-size: 10px; }
 .comment-actions { display: flex; flex-wrap: wrap; gap: 5px; padding-top: 9px; }
+.cmt-suggestion { margin-top: 8px; border: 1px solid var(--line); border-radius: 4px; overflow: hidden;
+  font-family: ui-monospace, monospace; font-size: 11px; }
+.cmt-suggestion .sugg-old, .cmt-suggestion .sugg-new { display: flex; gap: 6px; padding: 4px 8px;
+  white-space: pre-wrap; overflow-wrap: anywhere; }
+.cmt-suggestion .sugg-old { background: rgba(183, 56, 56, .08); }
+.cmt-suggestion .sugg-new { background: rgba(50, 122, 67, .1); }
+.cmt-suggestion .sugg-marker { flex: none; color: var(--muted); }
+.cmt-suggestion .sugg-actions { display: flex; justify-content: flex-end; padding: 5px 8px;
+  border-top: 1px solid var(--line); }
 .comment-actions button { padding: 5px 8px; font-size: 11px; }
 .danger { color: #a23f34; }
 
