@@ -123,11 +123,16 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
 
     @mcp.tool(structured_output=False)
     @_compact
-    async def guide(artifact: str) -> dict[str, Any]:
-        """The file to edit for this artifact, and what to read before writing it."""
+    async def guide(artifact: str | None = None) -> dict[str, Any]:
+        """The file to edit and what to read before writing it. Omit artifact when there is one."""
         client = binding.require_client()
         state = await client.request_json("GET", "/state")
         artifacts = state["artifacts"]
+        if artifact is None:
+            # Nothing else names the artifacts to an agent, so a lone one needs no name.
+            if len(artifacts) != 1:
+                raise RuntimeError(f"this project has several artifacts: {', '.join(artifacts)}. Name one.")
+            artifact = next(iter(artifacts))
         if artifact not in artifacts:
             raise RuntimeError(f"unknown artifact: {artifact}; available artifacts: {', '.join(artifacts)}")
         entry = artifacts[artifact]

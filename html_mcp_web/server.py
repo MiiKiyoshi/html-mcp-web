@@ -838,23 +838,25 @@ class HtmlReviewServer:
             # Nothing to check: say what is missing now rather than wait on a browser.
             return web.json_response({"revision": runtime.revision, "errors": None,
                                       "error": runtime.missing_file()})
-        if runtime.space_revision != runtime.revision:
-            await self._ensure_layout_checked(runtime, request.host)
-        # A review page that is open does the check itself; its result arrives on its own.
-        for _ in range(90):
-            if runtime.layout_revision == runtime.revision:
-                break
-            await asyncio.sleep(0.5)
+        no_checker = _shutil.which("firefox") is None and not self.has_review_ui(runtime.artifact_id)
+        if runtime.layout_revision != runtime.revision and not no_checker:
+            if runtime.space_revision != runtime.revision:
+                await self._ensure_layout_checked(runtime, request.host)
+            # A review page that is open does the check itself; its result arrives on its own.
+            for _ in range(90):
+                if runtime.layout_revision == runtime.revision:
+                    break
+                await asyncio.sleep(0.5)
         checked = runtime.layout_revision == runtime.revision
         data: dict[str, Any] = {
             "revision": runtime.revision,
             "errors": list(runtime.layout_errors) if checked else None,
         }
         if not checked:
+            # Said at once when nothing can check: waiting would only end in the same answer.
             data["unchecked"] = (
                 "Firefox is not installed and no review page is open, so nothing can check the layout"
-                if _shutil.which("firefox") is None and not self.has_review_ui(runtime.artifact_id)
-                else "the layout check did not finish; try again")
+                if no_checker else "the layout check did not finish; try again")
         if runtime.build_error is not None:
             data["build_error"] = runtime.build_error
         return web.json_response(data)
@@ -1106,7 +1108,7 @@ class HtmlReviewServer:
                 if not isinstance(replies_file, str) or author != "agent" or any(
                     key in data for key in ("comment_ids", "message", "status", "entry_edits")
                 ):
-                    raise ValueError("replies_file excludes inline updates and requires agent author")
+                    raise ValueError("a draft is given alone and only by the agent")
                 comments = runtime.store.reply_file(replies_file, edits=edited_files)
             elif entry_edits is not None:
                 # Rewrites of the agent's own entries: {comment, entry, updated, text} each,

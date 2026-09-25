@@ -182,7 +182,8 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
             "layout",
             "listen",
         ]
-        assert schemas["guide"]["required"] == ["artifact"]
+        # A project with one artifact needs no name: nothing else would tell the agent it.
+        assert "required" not in schemas["guide"]
         assert schemas["read_comments"]["required"] == ["artifact"]
         assert schemas["write_comments"]["required"] == ["artifact", "action"]
         assert schemas["image"]["required"] == ["artifact", "page"]
@@ -564,6 +565,7 @@ def test_guide_names_the_file_to_edit_and_what_to_read(tmp_path: Path) -> None:
         mcp = create_server(binding)
         guided = answer(mcp.call_tool("guide", {"artifact": "slides"}))
         assert set(guided) == {"edit_file", "read"}
+        assert answer(mcp.call_tool("guide", {})) == guided
         assert guided["edit_file"] == str(tmp_path / "slides.html")
         assert [Path(path).name for path in guided["read"]] == ["README.md", "COMPONENTS.md"]
         assert all(Path(path).is_file() for path in guided["read"])
@@ -898,5 +900,25 @@ def test_a_suggestion_is_proposed_on_the_page_and_applied_by_the_reviewer(tmp_pa
             post_json(f"{base}/comments/{comment['id']}/apply-suggestion", {"updated": stamp()})
         assert refused.value.code == 409
         assert "Other words" in source.read_text(encoding="utf-8")
+    finally:
+        binding.stop()
+
+
+def test_layout_says_at_once_when_nothing_can_check(tmp_path: Path, monkeypatch) -> None:
+    """With no Firefox and no review page open, waiting could only end in the same answer."""
+    import shutil as shutil_module
+    import time
+
+    project(tmp_path)
+    binding = ProjectBinding(tmp_path)
+    try:
+        mcp = create_server(binding)
+        binding.require_client()
+        monkeypatch.setattr(shutil_module, "which", lambda name: None)
+        started = time.monotonic()
+        result = answer(mcp.call_tool("layout", {"artifact": "slides"}))
+        assert time.monotonic() - started < 5
+        assert result["errors"] is None
+        assert "Firefox is not installed" in result["unchecked"]
     finally:
         binding.stop()
