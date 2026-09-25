@@ -987,15 +987,6 @@ async def test_one_broken_artifact_does_not_take_the_server_down(tmp_path: Path)
     assert state["artifacts"]["good"]["artifact_digest"]
     assert "error" not in state["artifacts"]["good"]
 
-    # The error reaches the agent, not only the raw state: dropped in the contract, a
-    # missing artifact looked exactly like a healthy unchecked one.
-    from html_mcp_web.mcp_contract import agent_artifact, agent_artifact_summary
-    summary = agent_artifact_summary("gone", state["artifacts"]["gone"], tmp_path)
-    assert "not found" in summary["error"]
-    detailed = agent_artifact(state["artifacts"]["gone"])
-    assert "not found" in detailed["error"]
-    assert "error" not in agent_artifact_summary("good", state["artifacts"]["good"], tmp_path)
-
     app = review.create_app()
     app.on_startup.clear()
     app.on_cleanup.clear()
@@ -1006,6 +997,10 @@ async def test_one_broken_artifact_does_not_take_the_server_down(tmp_path: Path)
         missing = await test_client.get("/artifacts/gone/artifact")
         assert missing.status == 404
         assert "renamed-away.html" in await missing.text()
+        # The error reaches the agent through layout(), at once: dropped there, a missing
+        # artifact looked exactly like a healthy unchecked one.
+        gone = await (await test_client.get("/artifacts/gone/layout")).json()
+        assert "not found" in gone["error"] and gone["errors"] is None
 
         # Deleting a main is a change to its artifact: without the watcher reporting it,
         # the layout measured from the deleted file stayed on offer as current.

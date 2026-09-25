@@ -812,6 +812,40 @@ class HtmlReviewServer:
                 await asyncio.get_running_loop().run_in_executor(
                     None, lambda: _shutil.rmtree(profile, ignore_errors=True))
 
+    async def layout_state(self, request: web.Request) -> web.Response:
+        """The current revision's layout errors, once a browser has checked it.
+
+        One answer either way: the check is started or waited for here, so the agent never
+        receives a count that means "not yet" and has to ask again.
+        """
+        import shutil as _shutil
+
+        runtime = self.runtime(request)
+        if runtime.digest() is None:
+            # Nothing to check: say what is missing now rather than wait on a browser.
+            return web.json_response({"revision": runtime.revision, "errors": None,
+                                      "error": runtime.missing_file()})
+        if runtime.space_revision != runtime.revision:
+            await self._ensure_layout_checked(runtime, request.host)
+        # A review page that is open does the check itself; its result arrives on its own.
+        for _ in range(90):
+            if runtime.layout_revision == runtime.revision:
+                break
+            await asyncio.sleep(0.5)
+        checked = runtime.layout_revision == runtime.revision
+        data: dict[str, Any] = {
+            "revision": runtime.revision,
+            "errors": list(runtime.layout_errors) if checked else None,
+        }
+        if not checked:
+            data["unchecked"] = (
+                "Firefox is not installed and no review page is open, so nothing can check the layout"
+                if _shutil.which("firefox") is None and not self.has_review_ui(runtime.artifact_id)
+                else "the layout check did not finish; try again")
+        if runtime.build_error is not None:
+            data["build_error"] = runtime.build_error
+        return web.json_response(data)
+
     async def measure_space(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         try:
@@ -1281,6 +1315,7 @@ class HtmlReviewServer:
         app.router.add_get(f"{base}/render/page", self.render_page)
         app.router.add_post(f"{base}/layout", self.update_layout)
         app.router.add_get(f"{base}/space", self.measure_space)
+        app.router.add_get(f"{base}/layout", self.layout_state)
         app.router.add_get(f"{base}/source", self.get_source)
         app.router.add_put(f"{base}/source", self.save_source)
         app.router.add_get(f"{base}/comments", self.list_comments)

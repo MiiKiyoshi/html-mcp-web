@@ -1,15 +1,14 @@
 # Authoring a paged HTML document
 
-Use the `edit_file` returned by `inspect()`. Read this guide once when creating a
-document; reuse the existing structure for later edits. Template-specific notes and
-any configured guideline are separate references in discovery. MCP resource:
-`html-mcp://docs/authoring`.
+Edit the `edit_file` that `guide()` names. Read this guide once when creating a
+document, and reuse the existing structure for later edits. Template-specific notes
+and any configured guideline are listed by `guide()` beside it.
 
 ## With a template
 
 `init --template <name> --content content.html --main slides.html` creates missing
 source files and builds the output. Edit the content file; the template rebuilds
-the main file on save. Build failures appear as `build_error` in artifact inspection.
+the main file on save. Build failures appear as `build_error` in `layout()`.
 
 ```html
 <!doctype html>
@@ -37,8 +36,7 @@ should match its displayed box; give raster images a maximum height and preserve
 their aspect ratio.
 
 For page kinds, tables, figures, math, or long SVG labels, consult only the relevant
-section of [the component reference](COMPONENTS.md), also available as
-`html-mcp://docs/components`. For developing a template rather than writing content,
+section of [the component reference](COMPONENTS.md). For developing a template rather than writing content,
 see [Developing a skin](SKINS.md).
 
 ## Without a template
@@ -50,9 +48,9 @@ structure: the viewer, layout checker, and exporter use it. Each slide is
 
 ## Verify an edit
 
-Render the affected page and read it as the intended audience. Use
-`inspect(artifact=..., page=...)` for its errors and room. `layout_error_count: null`
-means the current revision has not been checked; `0` means it has no layout errors.
-Rendering or measuring a page requests the check when needed. Fit alone does not
-establish that the explanation is understandable. Use `measure_space` only when
-the rendered page leaves a placement or spacing question unresolved.
+Render the affected page with `image()` and read it as the intended audience. Use
+`layout(artifact=..., page=...)` for its errors. It waits for the check, and an empty
+`errors` means the current revision has none. Fit alone does not establish that the
+explanation is understandable. Read that page's blocks and free space, which the same
+call returns, only when the rendered page leaves a placement or spacing question
+unresolved.

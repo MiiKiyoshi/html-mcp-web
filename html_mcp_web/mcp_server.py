@@ -11,8 +11,6 @@ from urllib.parse import quote, urlencode
 
 from .mcp_contract import (
     LIST_LIMIT,
-    agent_artifact,
-    agent_artifact_summary,
     agent_comment,
     agent_comment_summary,
     is_after,
@@ -110,135 +108,60 @@ def _compact(tool):
 
 def create_server(binding: "ProjectBinding") -> "FastMCP":
     _check_dependencies()
-    guideline_resource_uri = "html-mcp://guideline/configured"
     mcp = FastMCP(
         "html-mcp-web",
         instructions=(
-            "Call inspect() once for paths and document references; reuse until configuration changes. "
-            "Read authoring, template notes and any configured guideline only when needed, by path or "
-            "resource_uri. Use inspect(artifact=..., page=...) for current state. "
-            "Work from read_comments(new=True); pass comment_ids only to reread a whole thread. Within the user's editing scope, edit, render affected pages, and reply in the "
-            "threads; the reviewer resolves them. Call listen() when the user asks to listen and follow "
-            "how; reuse its process, do not poll or duplicate it. "
-            f"Setup: read {INIT_GUIDE}. "
-            "Treat overflow, clipping, and text-tail warnings as geometric unless the user or a "
-            "visual audit finds a content problem. First preserve content and structure with the "
-            "smallest size or spacing change. Do not rewrite, remove, or reorganize content just "
-            "to clear a warning. Use structural edits only if the geometric fix cannot work or "
-            "the user requests them. Then rerun inspect and render only the affected page."
+            "Work from read_comments(new=True), and pass ids to reread a whole thread. "
+            "Before writing an artifact, read what guide() lists. Within the user's editing "
+            "scope, edit, check the affected pages with layout() and image(), and reply with "
+            "write_comments. The reviewer resolves threads. Call listen() when the user asks "
+            "to listen and follow how. Reuse its process, and do not poll or duplicate it. "
+            f"Setup: read {INIT_GUIDE}."
         ),
     )
 
-    @mcp.resource(
-        guideline_resource_uri,
-        name="configured-guideline",
-        description="The guideline configured for this HTML project, read only when needed.",
-        mime_type="text/markdown",
-    )
-    async def configured_guideline() -> str:
-        state = await binding.require_client().request_json("GET", "/state")
-        guideline = state.get("guideline")
-        if guideline is None:
-            raise RuntimeError("this project has no configured guideline")
-        return Path(guideline["path"]).read_text(encoding="utf-8")
-
-    @mcp.resource("html-mcp://docs/{document}", mime_type="text/markdown")
-    async def authoring_document(document: str) -> str:
-        """Read the authoring guide or component reference when needed."""
-        names = {"authoring": "README.md", "components": "COMPONENTS.md"}
-        return (Path(__file__).resolve().parent.parent / "templates" / names[document]).read_text(encoding="utf-8")
-
-    @mcp.resource("html-mcp://templates/{artifact}", mime_type="text/markdown")
-    async def template_document(artifact: str) -> str:
-        """Read the configured artifact's template-specific notes."""
-        state = await binding.require_client().request_json("GET", "/state")
-        return (Path(state["artifacts"][artifact]["template_dir"]) / "README.md").read_text(encoding="utf-8")
-
     @mcp.tool(structured_output=False)
     @_compact
-    async def inspect(
-        artifact: str | None = None,
-        page: Annotated[int | None, Field(ge=1, description="With an artifact: add only this page's layout errors and available-room regions.")] = None,
-    ) -> dict[str, Any]:
-        """Discover paths and document references, or inspect current artifact state.
-
-        layout_error_count is null until the current revision is checked; zero means
-        that revision has no layout errors. Pass page for local errors and room.
-        """
-        try:
-            client = binding.connect()
-        except ProjectSetupError as error:
-            return binding.setup_error_state(error)
-        if client is None:
-            return binding.setup_state()
+    async def guide(artifact: str) -> dict[str, Any]:
+        """The file to edit for this artifact, and what to read before writing it."""
+        client = binding.require_client()
         state = await client.request_json("GET", "/state")
         artifacts = state["artifacts"]
-        if artifact is not None and artifact not in artifacts:
+        if artifact not in artifacts:
             raise RuntimeError(f"unknown artifact: {artifact}; available artifacts: {', '.join(artifacts)}")
-        if artifact is None and page is not None:
-            raise ValueError("page requires artifact")
-        project_dir = Path(state["project_dir"])
-        if artifact is None:
-            guideline = state.get("guideline")
-            return {
-                "config_path": state["config_path"],
-                "project_dir": state["project_dir"],
-                "guideline": ({**guideline, "resource_uri": guideline_resource_uri}
-                              if guideline is not None else None),
-                "documents": document_references(artifacts),
-                "artifacts": {
-                    artifact_id: agent_artifact_summary(artifact_id, value, project_dir)
-                    for artifact_id, value in artifacts.items()
-                },
-            }
-        return {
-            "artifacts": {artifact: agent_artifact(artifacts[artifact], page)},
-        }
-
-    @mcp.tool(structured_output=False)
-    @_compact
-    async def list_comments(
-        artifact: str,
-        status: Literal["open", "resolved", "reference", "all"] = "open",
-        unanswered: Annotated[bool, Field(description="Only comments whose latest thread entry is the human's: not yet answered, or written to again after the agent's reply.")] = False,
-        since: Annotated[str | None, Field(description="'MM-DD HH:MM'; only comments whose latest human entry is in or after that minute. Pass the largest last_human_at seen so far.")] = None,
-    ) -> dict[str, Any]:
-        """List comment requests, newest first, without thread history."""
-        client = binding.require_client()
-        query = "" if status == "all" else f"?status={status}"
-        payload = await client.request_json("GET", f"/artifacts/{artifact}/comments{query}")
-        comments = payload["comments"]
-        if unanswered:
-            comments = [comment for comment in comments if is_unanswered(comment)]
-        if since is not None:
-            cutoff = parse_short_time(since)
-            comments = [comment for comment in comments if is_after(comment, cutoff)]
-        # The newest are what was just written; a cap that kept the oldest would hide them.
-        comments.sort(key=last_human_at, reverse=True)
-        return {
-            "artifact": artifact,
-            "comments": [agent_comment_summary(comment, status == "all") for comment in comments[:LIST_LIMIT]],
-            **({"more": len(comments) - LIST_LIMIT} if len(comments) > LIST_LIMIT else {}),
-        }
+        entry = artifacts[artifact]
+        docs = Path(__file__).resolve().parent.parent / "templates"
+        read = [str(docs / "README.md"), str(docs / "COMPONENTS.md")]
+        if "template_dir" in entry and entry["template_dir"] is not None:
+            notes = Path(entry["template_dir"]) / "README.md"
+            if notes.is_file():
+                read.append(str(notes))
+        if state.get("guideline") is not None:
+            read.append(state["guideline"]["path"])
+        return {"edit_file": str((Path(state["project_dir"]) / entry["edit_file"]).resolve()), "read": read}
 
     @mcp.tool(structured_output=False)
     @_compact
     async def read_comments(
         artifact: str,
-        comment_ids: list[str] | None = None,
+        ids: list[str] | None = None,
         new: Annotated[bool, Field(description=(
-            "Instead of comment_ids: on open threads, what the reviewer wrote that this has "
-            "neither handed over before nor seen you answer. Reports from and cursor; a turn "
-            "that went wrong is taken again with since=<from>."))] = False,
-        since: Annotated[str | None, Field(description="With new: 'MM-DD HH:MM'; read from that minute instead of the cursor.")] = None,
-        save: bool = False,
+            "What the reviewer wrote on open threads that you have neither been handed nor "
+            "answered. Reports from and cursor, and since=<from> takes a turn again."))] = False,
+        since: Annotated[str | None, Field(description=(
+            "'MM-DD HH:MM'. With new: read from that minute. In a listing: only threads the "
+            "reviewer wrote to in or after it."))] = None,
+        status: Literal["open", "resolved", "reference", "all"] = "open",
+        unanswered: Annotated[bool, Field(description="In a listing: only threads whose latest entry is the reviewer's.")] = False,
+        save: Annotated[bool, Field(description=(
+            "With ids: write them as a Markdown draft and return its path. Edit only its "
+            "Reply and Edit blocks."))] = False,
     ) -> dict[str, Any]:
-        """Read what is new, or selected threads whole; save writes the selected threads as a
-        Markdown draft and returns its path. Edit only its Reply and Edit blocks."""
+        """Read what is new (new), threads whole (ids), or else a listing of requests, newest first."""
         client = binding.require_client()
         if new:
-            if comment_ids is not None or save:
-                raise ValueError("new answers on its own; it takes no comment_ids and writes no draft")
+            if ids is not None or save or status != "open" or unanswered:
+                raise ValueError("new answers on its own; it takes no ids, status, unanswered or save")
             payload = await client.request_json("GET", f"/artifacts/{artifact}/comments?status=open")
             project_dir = Path((await client.request_json("GET", "/state"))["project_dir"])
             previous = read_cursor(project_dir, artifact)
@@ -259,54 +182,61 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 **({"from": short_time(previous)} if previous is not None else {}),
                 "cursor": short_time(latest),
             }
-        if since is not None:
-            raise ValueError("since goes with new")
-        if not comment_ids:
-            raise ValueError("give comment_ids, or new=True")
-        if len(set(comment_ids)) != len(comment_ids):
-            raise ValueError("comment_ids must be unique")
+        if ids is not None:
+            if since is not None or status != "open" or unanswered:
+                raise ValueError("ids reads those threads whole; it takes no since, status or unanswered")
+            if not ids or len(set(ids)) != len(ids):
+                raise ValueError("ids must be nonempty and unique")
+            if save:
+                return await client.request_json("POST", f"/artifacts/{artifact}/comments/export", {"comment_ids": ids})
+            comments = []
+            for comment_id in ids:
+                comment = await client.request_json("GET", f"/artifacts/{artifact}/comments/{comment_id}")
+                comments.append(agent_comment(comment))
+            return {"artifact": artifact, "comments": comments}
         if save:
-            return await client.request_json("POST", f"/artifacts/{artifact}/comments/export", {"comment_ids": comment_ids})
-        comments = []
-        for comment_id in comment_ids:
-            comment = await client.request_json("GET", f"/artifacts/{artifact}/comments/{comment_id}")
-            comments.append(agent_comment(comment))
-        return {"artifact": artifact, "comments": comments}
+            raise ValueError("save needs ids")
+        query = "" if status == "all" else f"?status={status}"
+        comments = (await client.request_json("GET", f"/artifacts/{artifact}/comments{query}"))["comments"]
+        if unanswered:
+            comments = [comment for comment in comments if is_unanswered(comment)]
+        if since is not None:
+            cutoff = parse_short_time(since)
+            comments = [comment for comment in comments if is_after(comment, cutoff)]
+        # The newest are what was just written; a cap that kept the oldest would hide them.
+        comments.sort(key=last_human_at, reverse=True)
+        return {
+            "artifact": artifact,
+            "comments": [agent_comment_summary(comment, status == "all") for comment in comments[:LIST_LIMIT]],
+            **({"more": len(comments) - LIST_LIMIT} if len(comments) > LIST_LIMIT else {}),
+        }
 
     @mcp.tool(structured_output=False)
     @_compact
-    async def reply_comments(
+    async def write_comments(
         artifact: str,
-        replies_text: Annotated[str | None, Field(min_length=1, description=(
-            "The replies as one text. Each starts at a line head with its comment id and a colon "
-            "('c-1a2b3c4d: ') and runs to the next such line head, blank lines and all; a colon "
-            "elsewhere is just a colon. Written as prose, as it is."))] = None,
-        edited_files: Annotated[list[str] | None, Field(description="Project-relative paths edited for these comments; recorded on each thread entry.")] = None,
-        replies_file: str | None = None,
-        edits_text: Annotated[str | None, Field(description=(
-            "Rewrites of your own earlier entries, as one text: each starts at a line head with "
-            "the comment id, /, the entry id, @, the comment's rev as read, and a colon "
-            "('c-1a2b3c4d/e-5e6f7a8b@9f8e7d6c: ') and runs to the next such head. "
-            "Refused if the thread changed since."))] = None,
+        action: Literal["reply", "edit"],
+        text: Annotated[str | None, Field(min_length=1, description=(
+            "reply: the replies as one text, each starting at a line head with its comment id "
+            "and a colon ('c-1a2b3c4d: ') and running to the next such head. edit: rewrites of "
+            "your own entries, each headed 'c-1a2b3c4d/e-5e6f7a8b@<rev>: '."))] = None,
+        edited_files: Annotated[list[str] | None, Field(description="reply: project-relative paths you edited for these comments.")] = None,
+        draft: Annotated[str | None, Field(description="reply: a draft from read_comments(save=True), given without text. It carries replies and edits.")] = None,
     ) -> dict[str, Any]:
-        """Reply without changing status, or rewrite your own entries. Use replies_text and/or
-        edits_text, or a saved draft's replies_file (which carries both) on its own."""
-        if replies_file is not None and (replies_text is not None or edits_text is not None):
-            raise ValueError("replies_file carries replies and edits itself; give it alone")
-        if replies_file is None and replies_text is None and edits_text is None:
-            raise ValueError("provide replies_text, edits_text or replies_file")
-        if replies_file is not None:
-            client = binding.require_client()
+        """Reply to threads, or rewrite your own entries. A rewrite quoting an old rev is refused."""
+        client = binding.require_client()
+        if draft is not None:
+            if action != "reply" or text is not None:
+                raise ValueError("a draft goes with action reply and no text")
             result = await client.request_json("POST", f"/artifacts/{artifact}/comments/update", {
-                "replies_file": replies_file,
+                "replies_file": draft,
                 **({"edited_files": edited_files} if edited_files is not None else {}),
             })
             return {"updated": _revisions(result), **({"notes": [result["note"]]} if "note" in result else {})}
-        client = binding.require_client()
-        updated: list[dict[str, Any]] = []
-        notes: list[str] = []
-        if edits_text is not None:
-            rewrites = parse_entry_edits(edits_text)
+        if text is None:
+            raise ValueError("give text, or a draft")
+        if action == "edit":
+            rewrites = parse_entry_edits(text)
             # The agent quotes a rev; the store checks a stamp. The stamp read here is the
             # one the rev stood for, or the thread has moved on, and the store checks it
             # again under its lock, so a change in between is refused there.
@@ -321,9 +251,10 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 "entry_edits": [{"comment": comment_id, "entry": entry_id, "updated": stamps[comment_id], "text": body}
                                 for comment_id, entry_id, _, body in rewrites],
             })
-            updated.extend(_revisions(result))
-        replies = parse_replies(replies_text) if replies_text is not None else []
-        for comment_id, message in replies:
+            return {"updated": _revisions(result)}
+        updated: list[dict[str, Any]] = []
+        notes: list[str] = []
+        for comment_id, message in parse_replies(text):
             result = await client.request_json("POST", f"/artifacts/{artifact}/comments/update", {
                 "comment_ids": [comment_id],
                 "message": message,
@@ -338,16 +269,16 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
 
     @mcp.tool(structured_output=False)
     @_compact
-    async def render_page(
+    async def image(
         artifact: str,
         page: Annotated[int, Field(ge=1)],
-        dpi: Annotated[int, Field(ge=36, le=300, description="Render resolution; 96 reads text, 150 or more shows fine detail at a higher token cost.")] = 96,
-        grayscale: Annotated[bool, Field(description="Grayscale is smaller and enough for layout; set false when colour itself is being checked.")] = True,
-        save: Annotated[bool, Field(description="Write the png and return its path instead of the image, for showing a page to the user without spending the tokens an image costs.")] = False,
-        out: Annotated[str | None, Field(description="Project-relative png path used when save is set; default .html-mcp-web/renders/<artifact>-p<page>.png.")] = None,
-        target: Annotated[str | None, Field(description="A block ref on this page (e.g. p8:1.1.0.2, as layout errors and measure_space report them) to render just that block with a small margin, at a fraction of a full page's tokens. Needs the layout check to have run for the current revision.")] = None,
+        target: Annotated[str | None, Field(description="A block ref from layout() (e.g. p8:1.1.0.2): render just that block, for fewer tokens.")] = None,
+        dpi: Annotated[int, Field(ge=36, le=300, description="96 reads text. 150 or more shows fine detail at more tokens.")] = 96,
+        grayscale: Annotated[bool, Field(description="Set false when colour itself is being checked.")] = True,
+        save: Annotated[bool, Field(description="Write a png and return its path, to show the user without spending image tokens.")] = False,
+        out: Annotated[str | None, Field(description="With save: the project-relative png path.")] = None,
     ) -> "Image":
-        """Render one page (or with target, one block of it) for visual inspection, or with save, to a png file to hand to the user."""
+        """Render one page, or one block of it, as an image."""
         client = binding.require_client()
         params = f"?page={page}&dpi={dpi}&gray={'1' if grayscale else '0'}"
         if target is not None:
@@ -370,43 +301,43 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
 
     @mcp.tool(structured_output=False)
     @_compact
-    async def export_pptx(
+    async def layout(
         artifact: str,
-        out: Annotated[str | None, Field(description="Project-relative path of the pptx to write; default export/<artifact>.pptx.")] = None,
+        page: Annotated[int | None, Field(ge=1, description="Add this page's blocks and free space, in page pixels.")] = None,
+        target: Annotated[str | None, Field(description=(
+            "With page: a block ref from children, to measure inside it: its lines and "
+            "children, a table's no-wrap widths, an SVG's drawn area."))] = None,
+        clearance: Annotated[float, Field(ge=0, description="With page: pixels kept clear around content when free space is found.")] = 0,
+        min_width: Annotated[float | None, Field(ge=0, description="With page: only free regions at least this wide.")] = None,
+        min_height: Annotated[float | None, Field(ge=0, description="With page: only free regions at least this tall.")] = None,
     ) -> dict[str, Any]:
-        """Write the slides artifact as an editable pptx: text blocks become text boxes, tables become tables, images stay images, KaTeX becomes a screenshot, inline SVG stays vector, and a slide's speaker script becomes its notes. A skin's pptx block in skin.json can name TrueType files to embed the deck font."""
+        """Layout errors of the current revision: content off the page, clipped drawings,
+        overlapping labels. With page, that page's errors, blocks and free space."""
         client = binding.require_client()
-        return await client.request_json(
-            "POST", f"/artifacts/{artifact}/export/pptx", {"out": out} if out is not None else {}, timeout=300.0)
-
-    @mcp.tool(structured_output=False)
-    @_compact
-    async def measure_space(
-        artifact: str,
-        page: Annotated[int, Field(ge=1)],
-        clearance: Annotated[float, Field(ge=0, description="Page pixels kept clear around existing content when free regions are computed; 0 to measure exactly.")],
-        revision: Annotated[int | None, Field(ge=1, description="Revision the measurement must belong to, from inspect(); omitted, the current one is measured without an inspect round to learn its number.")] = None,
-        target: Annotated[str | None, Field(description="A block ref from a previous result's children (e.g. p1:0.2), including a table cell ref, to measure inside that block instead of the page.")] = None,
-        min_width: Annotated[float | None, Field(ge=0, description="Keep only free regions at least this wide, in page pixels.")] = None,
-        min_height: Annotated[float | None, Field(ge=0, description="Keep only free regions at least this tall, in page pixels.")] = None,
-    ) -> dict[str, Any]:
-        """Measure where the space is, in page pixels. Without target: page bounds, top-level block refs, and the largest free rectangles. With target: that block's content bounds, how far its content sits from each edge, its children, and its text lines; a table adds no-wrap width constraints, an SVG reports the area its shapes cover. Drill down by passing a child's ref as the next target."""
-        client = binding.require_client()
-        query: dict[str, Any] = {
-            "page": page,
-            "clearance": clearance,
-        }
-        if revision is not None:
-            query["revision"] = revision
-        if target is not None:
-            query["target"] = target
-        if min_width is not None:
-            query["min_width"] = min_width
-        if min_height is not None:
-            query["min_height"] = min_height
-        # Long enough for the server to run the layout check itself when no review UI is
-        # open: it starts a headless browser on its own page and answers once that posts.
-        return await client.request_json("GET", f"/artifacts/{artifact}/space?{urlencode(query)}", timeout=75.0)
+        # Long enough for the server to run the check itself when no review page is open:
+        # it starts a headless browser on its own page and answers once that posts.
+        result = await client.request_json("GET", f"/artifacts/{artifact}/layout", timeout=75.0)
+        if page is not None:
+            if result["errors"] is not None:
+                result["errors"] = [error for error in result["errors"] if error.startswith(f"page {page} ")]
+                query: dict[str, Any] = {"page": page, "clearance": clearance}
+                for key, value in (("target", target), ("min_width", min_width), ("min_height", min_height)):
+                    if value is not None:
+                        query[key] = value
+                space = await client.request_json("GET", f"/artifacts/{artifact}/space?{urlencode(query)}", timeout=75.0)
+                # What the agent asked for is not news: only the measurement comes back.
+                result.update({key: value for key, value in space.items()
+                               if key not in ("artifact", "revision", "page") and value is not None})
+        elif target is not None:
+            raise ValueError("target needs page")
+        if result["errors"]:
+            result["note"] = (
+                "Treat these as geometric unless the user or a visual check finds a content "
+                "problem. Keep content and structure, and make the smallest size or spacing "
+                "change first. Do not rewrite, remove, or reorganize content just to clear an "
+                "error. Restructure only if that cannot work or the user asks. Then check "
+                "layout() and image() for the page again.")
+        return result
 
     @mcp.tool(structured_output=False)
     @_compact
@@ -518,25 +449,6 @@ def write_cursor(project_dir: Path, artifact: str, at: str) -> None:
     staging = path.with_name(path.name + ".new")
     staging.write_text(json.dumps(cursors), encoding="utf-8")
     staging.replace(path)
-
-
-def document_references(artifacts: dict[str, Any]) -> dict[str, Any]:
-    """Discover each shared document once, without loading its text."""
-    directory = Path(__file__).resolve().parent.parent / "templates"
-    templates = {}
-    for artifact_id, artifact in artifacts.items():
-        if "template" not in artifact:
-            continue
-        path = Path(artifact["template_dir"]) / "README.md"
-        if path.is_file():
-            templates[artifact["template"]] = {
-                "path": str(path), "resource_uri": f"html-mcp://templates/{artifact_id}",
-            }
-    return {
-        "authoring": {"path": str(directory / "README.md"), "resource_uri": "html-mcp://docs/authoring"},
-        "components": {"path": str(directory / "COMPONENTS.md"), "resource_uri": "html-mcp://docs/components"},
-        "templates": templates,
-    }
 
 
 def main(start_dir: Path) -> None:
