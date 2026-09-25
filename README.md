@@ -6,7 +6,7 @@ Review an AI agent's HTML slides or report from the rendered page, on a desktop,
 
 **[Slides example](examples/neutral-slides/)**
 
-![A phrase highlighted on a rendered slide, and the reviewer's comment with the agent's reply beside it.](docs/hero.png)
+![A phrase highlighted on a rendered slide, the reviewer's question, and the agent's proposed rewrite of the sentence with Apply suggestion.](docs/hero.png)
 
 **[Report example](examples/neutral-report/)**
 
@@ -14,13 +14,14 @@ Review an AI agent's HTML slides or report from the rendered page, on a desktop,
 
 You comment on the rendered page itself: select the words you mean, the way you would mark
 a printout, and say what should change. The agent reads the comments, edits the HTML, and
-replies in the same thread. Saving a file refreshes only the artifact frame, so
+replies in the same thread, or proposes the exact change and leaves it to you to apply with
+one click. Saving a file refreshes only the artifact frame, so
 your scroll position and drafts stay put.
 
 ```
 you:    select text -> write a comment -> press Call agent
                   |
-agent:  read comments -> edit HTML -> reply
+agent:  read comments -> edit HTML, or propose a change -> reply
                   |
 you:    read the refreshed page -> comment again
 ```
@@ -57,6 +58,15 @@ do html listen
 
 Open `http://localhost:<port>` with the port you chose at init. Say it again after the
 agent restarts. Presses of **Call agent** made meanwhile wait for it.
+
+## Suggested edits
+
+When the wording is yours to decide, the agent proposes it instead of making it. The thread
+shows the source it would change as a −/+ pair, the Source view marks the same text in red,
+and **Apply suggestion** writes the change the way saving does, so a templated slide
+rebuilds at once. Proposing again replaces the proposal, and nothing reaches the source
+until you apply it. If the change rewrites the words you selected, your comment moves to
+what replaced them.
 
 ## Export to PowerPoint and PDF
 
