@@ -216,3 +216,32 @@ def test_an_applied_proposal_carries_the_reviewers_text_anchor() -> None:
     overlap = anchor("Title ", "old words here", ". Next")
     _carry_text_anchor(overlap, [("here. Next", "there. Next")])
     assert overlap.quote == "old words here"
+
+
+def test_a_thread_carries_one_proposal_below_its_conversation(tmp_path: Path) -> None:
+    """The rules tex-mcp keeps: one live proposal per thread, replaced rather than added
+    to, kept through replies and a close, proposed and applied only while open, and taken
+    back at any time with a reason."""
+    from html_mcp_web.comments import ArtifactAnchor, SuggestedEdit
+
+    store = CommentStore(tmp_path / "comments.json")
+    comment = store.add(ArtifactAnchor(), "Tighten the title.")
+    first = store.suggest(comment.id, comment.updated, "Shorter.", SuggestedEdit("a.html", [("Long title", "Title")]))
+    second = store.suggest(comment.id, first.updated, "Shorter still.", SuggestedEdit("a.html", [("Long title", "T")]))
+    assert second.suggestion == SuggestedEdit("a.html", [("Long title", "T")])
+    assert [entry.text for entry in second.thread] == ["Tighten the title.", "Shorter.", "Shorter still."]
+
+    replied = store.reply(comment.id, "Why that short?", author="human")
+    assert replied.suggestion == second.suggestion
+    closed = store.resolve(comment.id, "", author="human")
+    assert closed.suggestion == second.suggestion
+    with pytest.raises(ValueError, match="open"):
+        store.suggest(comment.id, closed.updated, "Again.", SuggestedEdit("a.html", [("Long title", "X")]))
+    with pytest.raises(ValueError, match="open"):
+        store.apply_suggestion(comment.id, closed.updated, lambda suggestion: ["a.html"])
+
+    withdrawn = store.withdraw_suggestion(comment.id, closed.updated, "Keeping the title.")
+    assert withdrawn.suggestion is None
+    assert withdrawn.thread[-1].text == "Keeping the title."
+    with pytest.raises(ValueError, match="carries no suggestion"):
+        store.withdraw_suggestion(comment.id, withdrawn.updated, "Again.")
