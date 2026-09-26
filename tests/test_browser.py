@@ -2250,6 +2250,45 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         """)
         assert taken == {"two": True, "one": False, "gesture": True}, taken
 
+        # A page already zoomed, as a phone leaves it after a small field took the cursor,
+        # keeps two fingers for the browser until they lift, on the artifact and the chrome
+        # alike: taken, nothing could bring the page back.
+        left = browser.execute_script("""
+          const page = window.wrappedJSObject || window;
+          const frame = document.querySelector("#artifact-frame");
+          const doc = frame.contentDocument;
+          const view = frame.contentWindow;
+          const target = doc.querySelector("section.page");
+          const touch = (id, x, y) => new view.Touch({identifier: id, target, clientX: x, clientY: y});
+          const send = (type, touches) => {
+            const event = new view.TouchEvent(type, {
+              touches, targetTouches: touches, changedTouches: touches,
+              bubbles: true, cancelable: true});
+            target.dispatchEvent(event);
+            return event.defaultPrevented;
+          };
+          const gesture = (where, type) => {
+            const event = new (where === document ? Event : view.Event)(type, {bubbles: true, cancelable: true});
+            where.dispatchEvent(event);
+            return event.defaultPrevented;
+          };
+          Object.defineProperty(page.visualViewport, "scale", {value: 2, configurable: true});
+          const zoomed = {
+            touch: send("touchstart", [touch(1, 300, 400), touch(2, 400, 400)]),
+            artifactGesture: gesture(target, "gesturestart"),
+            chromeGesture: gesture(document, "gesturestart"),
+          };
+          send("touchend", []);
+          gesture(target, "gestureend");
+          gesture(document, "gestureend");
+          delete page.visualViewport.scale;
+          const back = send("touchstart", [touch(1, 300, 400), touch(2, 400, 400)]);
+          send("touchend", []);
+          return {zoomed, back};
+        """)
+        assert left == {"zoomed": {"touch": False, "artifactGesture": False, "chromeGesture": False},
+                        "back": True}, left
+
         # A selection with its comment button placed by it, so the gesture has something
         # that would otherwise stay put while the deck under it moved.
         browser.execute_script("""
