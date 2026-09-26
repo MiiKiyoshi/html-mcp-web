@@ -236,6 +236,12 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
     left: auto !important;
     bottom: auto !important;
   }
+  /* A phone zooms the whole page into a field smaller than 16px the moment it takes the
+     cursor: writing a comment left the page zoomed, the source editor's hidden input
+     among them. At 16px nothing zooms, and a comment is easier to read as it is typed. */
+  textarea, select, input {
+    font-size: 16px !important;
+  }
 }
 #artifact-pane:fullscreen .selection-comment { display: none !important; }
 
