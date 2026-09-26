@@ -60,6 +60,10 @@ const state = {
   sourceCommentsByRow: new Map(),
   artifactZoom: 1,
   pinch: null,
+  // Two fingers that began while the page itself was zoomed belong to the browser until
+  // they lift: see pageIsZoomed.
+  pageGesture: false,
+  pageTouch: false,
   pinchSettle: null,
   settledScroll: null,
 };
@@ -668,10 +672,28 @@ function installArtifactZoom() {
 // Refusing it matters either way: left to run, Safari's own zoom moved the window under
 // the settled layout and the deck appeared somewhere else the moment the fingers lifted.
 function handleArtifactGesture(event) {
+  if (leftToPage(event)) return;
   zoomFromGesture(event, { x: event.clientX, y: event.clientY });
 }
 
+// The page itself can be zoomed: by a field that took the cursor on a phone, or by a
+// pinch made before this listened. Two fingers then have to reach the browser, or nothing
+// brings the page back, and every pinch went to the artifact with the sidebar cut off. It
+// is decided when they land and kept until they lift, so a zoom-out that passes the mark
+// on its way down is not taken over short of the end.
+function pageIsZoomed() {
+  return (window.visualViewport?.scale ?? 1) > 1.01;
+}
+
+function leftToPage(event) {
+  if (event.type === "gesturestart") state.pageGesture = pageIsZoomed();
+  if (!state.pageGesture) return false;
+  if (event.type === "gestureend") state.pageGesture = false;
+  return true;
+}
+
 function handleViewerGesture(event) {
+  if (leftToPage(event)) return;
   if (frameDocument() === null) {
     event.preventDefault();
     return;
@@ -793,10 +815,13 @@ function handleArtifactTouch(event) {
   }
   if (event.type === "touchstart") state.settledScroll = null;
   if (event.type === "touchend" || event.type === "touchcancel") {
+    if (touches.length < 2) state.pageTouch = false;
     if (touches.length < 2 && state.pinch !== null) settlePinch();
     return;
   }
   if (touches.length < 2) return;
+  if (event.type === "touchstart" && state.pinch === null) state.pageTouch = pageIsZoomed();
+  if (state.pageTouch) return;
   {
     const [first, second] = touches;
     const span = Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
