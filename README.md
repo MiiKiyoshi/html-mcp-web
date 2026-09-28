@@ -112,6 +112,13 @@ port: 8765
 | `ignore` | Patterns excluded even when they match `watch`. |
 | `port` | This folder's review page port. |
 
+## Your own templates and guidelines
+
+Put a template in `~/.config/html-mcp-web/templates/<name>/`. Start from a copy of
+`templates/neutral-slides`, as [`templates/SKINS.md`](templates/SKINS.md) explains. Put a
+writing guideline for the agent in `~/.config/html-mcp-web/guidelines/<name>/GUIDELINE.md`.
+`do html init` offers both.
+
 ## Acknowledgements
 
 MIT licensed. See [`LICENSE`](LICENSE). The source editor uses [Ace](https://ace.c9.io/) under the BSD license, and its license is included with the bundled files. Full-screen wheel navigation adapts the intent-detection strategy from [Swiper's Mousewheel module](https://github.com/nolimits4web/swiper/tree/master/src/modules/mousewheel) by Vladimir Kharlampidi and the Swiper contributors, under the MIT license.
