@@ -714,7 +714,9 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
         assert f":{binding._shared.port}/wait-review/ack?upto=$press" in body
         assert body.index('deliver "$out"') < body.index("/wait-review/ack")
         assert "[gone]" in body and "timeout" not in body
-        assert "Monitor" in told["how"] and "persistent=true" in told["how"]
+        # Claude Code's Monitor takes command, description and timeout_ms (at most 30 minutes).
+        assert "Monitor" in told["how"] and "persistent" not in told["how"]
+        assert 'description="' in told["how"] and "timeout_ms=1800000" in told["how"]
         assert "write_stdin" not in told["how"]
         for name in ("codex-mcp-client", "other-client"):
             context.session.client_params.clientInfo.name = name
