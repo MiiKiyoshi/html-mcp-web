@@ -106,14 +106,11 @@ port: 8765
 | `artifacts.<id>.label` | Name the review page shows for the artifact. |
 | `artifacts.<id>.layout` | `slides` (16:9) or `report` (A4). |
 | `artifacts.<id>.main` | The HTML file the page shows. |
-| `artifacts.<id>.template`, `.content` | A template, from `templates/` or `~/.config/html-mcp-web/templates/`, and the content file it builds `main` from. |
-| `guideline` | A guideline name under `~/.config/html-mcp-web/guidelines/`. |
-| `watch`, `ignore` | Files whose saves refresh the page. `ignore` is checked first. |
+| `artifacts.<id>.template`, `.content` | A template name and the content file it builds `main` from. |
+| `guideline` | A writing guideline the agent follows. |
+| `watch` | Files whose saves refresh the page. |
+| `ignore` | Patterns excluded even when they match `watch`. |
 | `port` | This folder's review page port. |
-
-## Security
-
-An agent-generated artifact runs JavaScript with the local page's privileges, so html-mcp-web is for trusted local artifacts and binds to `127.0.0.1` only.
 
 ## Acknowledgements
 
