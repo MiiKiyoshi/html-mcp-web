@@ -3,40 +3,47 @@
 <title>Evaluation Review</title>
 <body data-author="Research Group" data-meta="Internal evaluation|13 August 2026"
       data-sub="Runtime and score after the current change">
-<aside class="script"><p>Welcome. This review covers the current result and the remaining verification.</p></aside>
+<aside class="script"><p>[Title and subtitle] Welcome. This review covers the measured change and the cases that are still open.</p></aside>
 <section data-layout="contents" data-title="Contents">
   <ol>
     <li>Decision</li>
     <li>Next evaluation<span class="by">(open cases)</span></li>
   </ol>
+  <aside class="script"><p>[Contents, top to bottom] The review has two parts: the decision on the current method, then the evaluation of the open cases.</p></aside>
 </section>
 <section data-layout="divider" data-no="01">
   <p class="label">Decision</p>
+  <aside class="script"><p>[Section label] First, the decision.</p></aside>
 </section>
 <section data-title="Decision">
-  <p class="lead">Keep the current method while the remaining input cases are verified.</p>
+  <p class="lead">Does the current method cut runtime without lowering the score?</p>
   <div class="grid3">
-    <div class="metric"><strong>18.4%</strong><span>runtime reduction</span></div>
-    <div class="metric"><strong>0.7%</strong><span>score change</span></div>
-    <div class="metric"><strong>3</strong><span>unverified cases</span></div>
+    <div class="metric"><strong>18.4%</strong><span>runtime reduction, 250 s to 204 s</span></div>
+    <div class="metric"><strong>+0.6</strong><span>score points, 81.0 to 81.6</span></div>
+    <div class="metric"><strong>3</strong><span>of 40 inputs unverified</span></div>
   </div>
-  <aside class="script"><p>The measured runtime fell while the score stayed nearly unchanged. Three input cases still need verification before the decision is closed.</p></aside>
+  <p class="takeaway">Keep the current method while the 3 unverified inputs are checked.</p>
+  <aside class="script"><p>[Left card] Runtime fell from 250 to 204 seconds, 46 seconds or 18.4 percent.</p><p>[Middle, then right card] The score rose by 0.6 points, and 3 of the 40 inputs are not verified yet.</p></aside>
 </section>
 <section data-title="Next Evaluation">
+  <p class="lead">What must the corrected run show for the decision to stand?</p>
   <div class="two">
     <div>
       <h3>Run now</h3>
       <ul class="notes">
-        <li>Inspect the unresolved inputs.</li>
-        <li>Repeat the comparison.</li>
-        <li>Record runtime and score together.</li>
+        <li>Correct the 3 unverified inputs.</li>
+        <li>Repeat the runtime and score comparison on all 40.</li>
       </ul>
     </div>
     <div>
       <h3>Decision condition</h3>
-      <p>Keep the method when corrected inputs preserve the runtime reduction without lowering the score.</p>
+      <ul class="notes">
+        <li>Runtime stays below 250 s.</li>
+        <li>Score stays at 81.0 or higher.</li>
+      </ul>
     </div>
   </div>
-  <aside class="script"><p>The next run checks the unresolved inputs first, then repeats the same comparison and records runtime and score together.</p></aside>
+  <p class="takeaway">The method stays when the corrected run meets both conditions.</p>
+  <aside class="script"><p>[Left column, top to bottom] The next run corrects the 3 open inputs and repeats the comparison on all 40.</p><p>[Right column] The method stays only if runtime remains below 250 seconds and the score does not fall below 81.0.</p></aside>
 </section>
 </body>
