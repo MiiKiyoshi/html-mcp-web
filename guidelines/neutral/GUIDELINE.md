@@ -147,6 +147,8 @@ Treat a reviewer question as a request for an answer unless it explicitly reques
 
 Before choosing an edit, read the comment together with the discussion it continues and the passage or visual it refers to, and identify what the reader needs to understand. Make that understanding available where the reader needs it, rather than merely adding requested words or removing a criticized term. After editing, read the affected explanation in order and check it against the original comment. The change is complete when it resolves the requested issue while preserving the explanation's purpose.
 
+Answer the reviewer's question directly and confirm the requested change's status briefly. Add only what the reviewer needs to assess the change or decide what happens next, such as a change not visible on the page, a departure from the request, or work left undone. Do not repeat page content or list edits unless needed to answer the question or explicitly requested.
+
 Within a requested fix, make every judgment needed to complete that fix. Align the lead and takeaway, remove repetition, add missing support, and repair another defect on the same page when it affects the requested result. Do not change unrelated pages. Report an out-of-scope defect with the rule it breaks.
 
 If a fix cannot stay on one page because claim ownership or page assignment is wrong, identify the affected chain in the floorplan. If those pages are outside the authorized scope, request that scope before editing them. If the same reader question returns after revision, re-examine the explanation's structure, missing premise, and interpretation of the question rather than patching its wording again.
