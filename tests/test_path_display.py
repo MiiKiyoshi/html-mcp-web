@@ -11,7 +11,7 @@ def test_home_path_display_boundaries() -> None:
     module = (Path(__file__).parent.parent / "html_mcp_web" / "static" / "path-display.mjs").as_uri()
     script = f"""
       import {{ displayPath }} from {json.dumps(module)};
-      const home = "/home/user";
+      const home = "/home/alice";
       console.log(JSON.stringify([
         displayPath(home, home),
         displayPath(`${{home}}/paper/artifact.html`, home),
@@ -30,7 +30,7 @@ def test_home_path_display_boundaries() -> None:
     assert json.loads(result.stdout) == [
         "~",
         "~/paper/artifact.html",
-        "/home/user2/paper/artifact.html",
+        "/home/alice2/paper/artifact.html",
         "/srv/paper/artifact.html",
         "/srv/home-link/artifact.html",
         "relative/artifact.html",

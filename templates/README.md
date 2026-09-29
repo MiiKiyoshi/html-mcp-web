@@ -2,7 +2,9 @@
 
 Edit the `edit_file` that `guide()` names. Read this guide once when creating a
 document, and reuse the existing structure for later edits. Template-specific notes
-and any configured guideline are listed by `guide()` beside it.
+and any configured guideline are listed by `guide()` beside it. A suggestion the
+reviewer applies is written into that file only, so a page you regenerate from anything
+else, such as a script or an earlier copy, loses it unless you carry the change there first.
 
 ## With a template
 

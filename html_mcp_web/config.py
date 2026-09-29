@@ -199,7 +199,10 @@ def get_content_file(config: Config, artifact_id: str) -> Path | None:
 def get_guideline_file(config: Config) -> Path | None:
     if config.guideline is None:
         return None
-    return (USER_CONFIG_DIR / "guidelines" / config.guideline / "GUIDELINE.md").resolve()
+    user_guideline = USER_CONFIG_DIR / "guidelines" / config.guideline
+    if user_guideline.is_dir():
+        return (user_guideline / "GUIDELINE.md").resolve()
+    return Path(__file__).resolve().parent.parent / "guidelines" / config.guideline / "GUIDELINE.md"
 
 
 def get_template_dir(config: Config, artifact_id: str) -> Path | None:

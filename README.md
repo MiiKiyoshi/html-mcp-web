@@ -31,8 +31,9 @@ Once per folder, start the agent in the folder that holds (or will hold) your ar
 do html init
 ```
 
-The agent asks whether it is slides (16:9) or a report (A4), proposes the file, a template,
-and a free port, and writes `.html-mcp-web.yaml` once you agree.
+The agent proposes slides (16:9) with the neutral-slides template and the neutral writing
+guideline, a file, and a free port, and writes `.html-mcp-web.yaml` once you agree. Ask for
+the defaults to take them as they are, or name what to change, such as a report (A4).
 
 ## Listen
 
@@ -107,7 +108,7 @@ port: 8765
 | `artifacts.<id>.layout` | `slides` (16:9) or `report` (A4). |
 | `artifacts.<id>.main` | The HTML file the page shows. |
 | `artifacts.<id>.template`, `.content` | A template name and the content file it builds `main` from. |
-| `guideline` | A writing guideline the agent follows. |
+| `guideline` | A writing guideline the agent follows, such as the built-in `neutral`. |
 | `watch` | Files whose saves refresh the page. |
 | `ignore` | Patterns excluded even when they match `watch`. |
 | `port` | This folder's review page port. |
@@ -116,8 +117,9 @@ port: 8765
 
 Put a template in `~/.config/html-mcp-web/templates/<name>/`. Start from a copy of
 `templates/neutral-slides`, as [`templates/SKINS.md`](templates/SKINS.md) explains. Put a
-writing guideline for the agent in `~/.config/html-mcp-web/guidelines/<name>/GUIDELINE.md`.
-`do html init` offers both.
+writing guideline for the agent in `~/.config/html-mcp-web/guidelines/<name>/GUIDELINE.md`,
+starting from a copy of [`guidelines/neutral`](guidelines/neutral/GUIDELINE.md). A name you
+use replaces the built-in one of the same name. `do html init` offers both.
 
 ## Acknowledgements
 

@@ -12,7 +12,7 @@ install after the user agrees. On a machine that already has it, the same steps 
 - Firefox: `command -v firefox`, and record its directory. Missing is not a stop: say that PDF
   and PPTX export, and layout checks while no review page is open, need it. Do not install it.
 - Install directory: `$HOME/.local/share/html-mcp-web`, unless the user named another.
-  Note whether it already holds a checkout. The checkout stays: its templates are read from it.
+  Note whether it already holds a checkout. The checkout stays: its templates and guidelines are read from it.
 - Agents: `command -v claude` and `command -v codex`. Register with each one found.
 - Existing registration: `claude mcp get html-mcp`, `codex mcp get html-mcp`. Note a
   command path that differs from the one below.

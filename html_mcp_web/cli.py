@@ -153,7 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--port", type=int, default=8765)
     init.add_argument("--template", help="template directory name; --content is then required")
     init.add_argument("--content", help="content file the template compiles into --main")
-    init.add_argument("--guideline", help="directory name under ~/.config/html-mcp-web/guidelines")
+    init.add_argument("--guideline", help="guideline name, from ~/.config/html-mcp-web/guidelines or the built-in guidelines")
     init.set_defaults(handler=cmd_init)
 
     config = subcommands.add_parser("config")

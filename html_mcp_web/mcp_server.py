@@ -359,9 +359,9 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         if result["errors"]:
             result["note"] = (
                 "Treat these as geometric unless the user or a visual check finds a content "
-                "problem. Keep content and structure, and make the smallest size or spacing "
-                "change first. Do not rewrite, remove, or reorganize content just to clear an "
-                "error. Restructure only if that cannot work or the user asks. Then check "
+                "problem. First combine labels, clarify column ownership, move blocks, or "
+                "separate an independent claim, and change font size or padding only after "
+                "that. Do not rewrite or remove content just to clear an error. Then check "
                 "layout() and image() for the page again.")
         return result
 

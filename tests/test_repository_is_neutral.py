@@ -1,18 +1,16 @@
-"""The repository carries no organization identity: private skins live outside it."""
+"""The repository carries no private identity: private skins and names live outside it."""
 
 import re
 import subprocess
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parent.parent
-
-# Words, colours, and file kinds that belong to a private skin. Any hit in a tracked file is a
-# leak, so the list stays deliberately blunt.
-PRIVATE_MARKERS = re.compile(
-    r"lab|school|REDACTED|REDACTED|000000|000000|000000",
-    re.IGNORECASE,
-)
+# One pattern per line. The list names what must stay private, so it lives outside the
+# repository, and a machine without it skips the check.
+MARKERS_FILE = Path.home() / ".config" / "html-mcp-web" / "private-markers.txt"
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".bmp"}
 
 
@@ -23,12 +21,14 @@ def tracked_files() -> list[Path]:
     return [ROOT / name for name in output.decode().split("\0") if name]
 
 
+@pytest.mark.skipif(not MARKERS_FILE.is_file(), reason="no private marker list on this machine")
 def test_tracked_files_carry_no_private_identity() -> None:
+    lines = MARKERS_FILE.read_text(encoding="utf-8").splitlines()
+    markers = re.compile("|".join(f"(?:{line})" for line in lines if line.strip()), re.IGNORECASE)
     hits = []
     for path in tracked_files():
-        # A tracked file removed in the working tree is on its way out; this file itself
-        # names the markers it looks for.
-        if not path.is_file() or path == Path(__file__).resolve():
+        # A tracked file removed in the working tree is on its way out.
+        if not path.is_file():
             continue
         # docs/ holds curated, manually reviewed product screenshots for the README; every
         # other raster image is refused so a private skin's assets cannot slip in.
@@ -41,6 +41,6 @@ def test_tracked_files_carry_no_private_identity() -> None:
         except (UnicodeDecodeError, IsADirectoryError):
             continue
         for number, line in enumerate(text.splitlines(), 1):
-            if PRIVATE_MARKERS.search(line):
+            if markers.search(line):
                 hits.append(f"{path.relative_to(ROOT)}:{number}: {line.strip()[:80]}")
     assert hits == [], "\n".join(hits)

@@ -652,7 +652,7 @@ def test_layout_reports_the_revisions_errors_and_a_pages_detail(tmp_path: Path) 
         assert whole["revision"] == revision
         assert len(whole["errors"]) == 2
         # The advice on fixing them comes with errors, not with every session.
-        assert "smallest size or spacing change" in whole["note"]
+        assert "font size or padding only after" in whole["note"]
         detailed = answer(mcp.call_tool("layout", {"artifact": "slides", "page": 1}))
         assert detailed["errors"] == ["page 1 exceeds the slides height at p1:0"]
         assert detailed["children"][0]["ref"] == "p1:0"

@@ -122,6 +122,19 @@ def test_guideline_is_a_named_user_file(tmp_path: Path, monkeypatch) -> None:
         Config.from_dict({"artifacts": {"slides": artifact()}, "guideline": "../private"})
 
 
+def test_a_user_guideline_overrides_the_built_in_one(tmp_path: Path, monkeypatch) -> None:
+    user_config = tmp_path / ".config" / "html-mcp-web"
+    monkeypatch.setattr(config_module, "USER_CONFIG_DIR", user_config)
+    config = Config.from_dict({"artifacts": {"slides": artifact()}, "guideline": "neutral"})
+    built_in = Path(config_module.__file__).resolve().parent.parent / "guidelines" / "neutral" / "GUIDELINE.md"
+    assert get_guideline_file(config) == built_in
+    assert built_in.is_file()
+    own = user_config / "guidelines" / "neutral" / "GUIDELINE.md"
+    own.parent.mkdir(parents=True)
+    own.write_text("# My neutral\n", encoding="utf-8")
+    assert get_guideline_file(config) == own
+
+
 def test_load_config_rejects_a_missing_guideline(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(config_module, "USER_CONFIG_DIR", tmp_path / "user-config")
     path = tmp_path / ".html-mcp-web.yaml"
