@@ -38,6 +38,8 @@ Give each claim one owner slide. Repeat it only to add a consequence or interpre
 
 Build one question chain per page. Each element answers the question raised before it, beginning with what the preceding page established. Source order does not define the chain. State what a reduction or transformation preserves and discards. Express the reader's new understanding without incidental names or counts. A defined named object under review may appear in the title and conclusion. If a page conflicts with an earlier establishment, resolve or report the conflict rather than writing around it.
 
+Compare presentation alternatives by how well they serve the reader's question and the requester's stated purpose. Distinguish necessary content from choices that can be adjusted, such as which element carries a statement or where a block goes, and do not reject an explanatory approach because of a placement that can be changed. Reuse an established way of explaining the same relationship when it helps the reader, adapting the layout to the current content.
+
 ## Write
 
 ### Align title, lead, evidence, and takeaway
