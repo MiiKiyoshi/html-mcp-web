@@ -1,6 +1,6 @@
 # Neutral Technical Slides: Content Guideline
 
-Use this guideline for progress reports, design reviews, research meetings, and other technical decks built with the neutral-slides template. Template documentation defines page structure, available components, and production checks. This guideline defines what the deck should say and show.
+Use this guideline for progress reports, design reviews, research meetings, and other technical decks built with the neutral-slides template. Template documentation defines page structure, available components, and production checks. This guideline defines what the deck should say and show. When rules pull in different directions, keep claims accurate and checkable, the explanation understandable, and the work within the authorized scope. Title, lead, takeaway, and script forms are defaults that serve those aims. Adapt one that obscures meaning or repeats content rather than dropping needed explanation to satisfy it.
 
 ## Plan
 
@@ -14,15 +14,15 @@ Determine the deck's mode from primary evidence. If results are pending, omit re
 
 ### Build the floorplan before HTML
 
-Keep the floorplan outside the deck, in `<artifact>.FLOORPLAN.md` beside the edit file. Update it before adding, splitting, or removing a slide. Include a term ledger that records every project-specific term and the page and element that defines it. Fix a missing or later definition before handoff.
+Keep the floorplan outside the deck, in `<artifact>.FLOORPLAN.md` beside the edit file. Update it before adding, splitting, or removing a slide. Include a term ledger that records every project-specific term and the page and element that defines it. Fix a missing or later definition before handoff. A local fix plans only the sections it affects and updates only their floorplan entries.
 
 Plan in three passes:
 
-1. Inventory each candidate fact, its primary evidence, status, constraint, response, decision value, and exclusion reason.
+1. Inventory each candidate fact with its primary evidence and any status, constraint, response, decision value, or exclusion reason that affects its use.
 2. Cluster facts by one causal chain, comparison, mechanism, or decision question. Do not choose slide count yet.
 3. Give each cluster a title, one interrogative reader question, required evidence, observation, response, visual form, prerequisite, successor, and expected density.
 
-Map every top-level section and sibling before authoring. Order sections by what the reader must know first. Put a method before the setup that exercises it, then show the result.
+Map every top-level section and sibling before authoring. Order sections by what the reader must know first. Put a method before the setup that exercises it, then show the observed results.
 
 Do not require one section order for every technical deck. A useful progress-update sequence is Cover, Recap, Summary of Progress, Methods, Experimental Setup, Results, optional Discussion, and Next Plan. Treat it as an example because a design review, decision review, and research update answer different audience questions. When using it, Recap connects prior context to the result now needed, Summary of Progress contains only work and status since that context, and Next Plan is exactly one final slide with evidence-derived actions or an explicit statement that no next action is needed.
 
@@ -44,7 +44,7 @@ Build one question chain per page. Each element answers the question raised befo
 
 Use a short noun phrase for the title. Name the page's object or comparison rather than its conclusion or an incidental source label. A defined API, file format, or dataset under review may name the page. Use a causal title only when the evidence distinguishes that cause from plausible alternatives. The title, central visual, and takeaway must support one proposition.
 
-Every content slide has one short lead and one takeaway. The lead states the problem, comparison, or definition that makes the page necessary. It does not contain procedure, evidence, result, conclusion, or a count repeated below. The takeaway states the one conclusion supported by the visible content and adds no new evidence. The page chain is `problem or question → visible method or evidence → applied method or result`. Cover, contents, and divider pages are exempt.
+By default, each content slide has one short lead and one takeaway. The lead states the problem, comparison, or definition that makes the page necessary. It does not contain procedure, evidence, result, conclusion, or a count repeated below. The takeaway states the one conclusion supported by the visible content and adds no new evidence. The page chain is `problem or question → visible method or evidence → applied method or result`. Cover, contents, and divider pages are exempt.
 
 ### Write for a technical reader
 
@@ -55,7 +55,7 @@ Apply these tests to visible technical content and speaker sentences. Judge orie
 3. It avoids inflated scale, completion, abstraction, or importance.
 4. It answers the page's reader question.
 
-Choose terms that convey the intended meaning without misleading the reader in context. Use established field terms in the field's own form for technical concepts and familiar plain language otherwise. Assess wording by the meaning the intended reader would reasonably take from the page and earlier explanations, not by whether the author can explain what they intended. If that reading could misrepresent the object, action, or relationship, revise the wording or supply the missing context. Apply this check to familiar words used technically as well as to specialized labels. Do not assume that wording familiar from the author's code, notes, or discussions is familiar to readers, and do not use code names, literal translations, or labels coined while working as substitutes for explaining the object or action. Use an internal name or introduce a new term when readers need the name itself, and define it at first use. Explain field terms the audience may not know, as well as project-specific choices and measurements. Use terms consistently for the same meaning throughout the deck.
+Choose terms that convey the intended meaning without misleading the reader in context. Use established field terms in the field's own form for technical concepts and familiar plain language otherwise. Assess wording by the meaning the intended reader would reasonably take from the page and earlier explanations, not by whether the author can explain what they intended. If that reading could misrepresent the object, action, or relationship, revise the wording or supply the missing context. Apply this check to familiar words used technically as well as to specialized labels. Do not assume that wording familiar from the author's code, notes, or discussions is familiar to readers, and do not use code names, literal translations, or labels coined while working as substitutes for explaining the object or action. Use an internal name or introduce a new term when readers need the name itself, and define it at first use. Explain field terms the audience may not know, as well as project-specific choices and measurements.
 
 A concept page answers its reader question by linking two parts: what the concept is and is for in source-grounded general terms, and how the page's example uses it. A label or type signature alone is insufficient. A mechanism diagram can carry both parts when it shows their relationship. Show the concept's general scope as well as the instance.
 
@@ -99,25 +99,25 @@ Every data or relationship figure has a caption that names what is drawn and the
 
 ### Keep information local and pages economical
 
-A content page states one step and stops. Do not announce later pages or send the reader backward by slide position. Show an output where it is produced and its use where it is consumed. A deliberately unresolved question may point forward only to say where it will close. Refer backward by a named object. Move a page that requires a later value.
+A content page answers one reader question and stops. Do not announce later pages or send the reader backward by slide position. Show an output where it is produced and its use where it is consumed. A deliberately unresolved question may point forward only to say where it will close. Refer backward by a named object. Move a page that requires a later value.
 
-Complete one causal chain or comparison in one place. Keep a method's inputs, transformation, and result together. Keep changed and fixed variables together. Use previously defined terms consistently, but keep the evidence needed to check this page's count or comparison on this page. Merge adjacent fragments or redraw claim boundaries. Place detail beside the visual it changes.
+Complete one causal chain or comparison in one place. Keep a method's inputs, transformation, and output together. Keep changed and fixed variables together. Use established terms and visual notation consistently across the deck. Build later explanations on meanings already introduced instead of defining them again. Keep the evidence needed to check this page's count or comparison on this page. Merge adjacent fragments or redraw claim boundaries. Place detail beside the visual it changes.
 
 A content slide needs an independent question, sufficient evidence, and a page-worthy visual. Cover, contents, and divider pages serve orientation and are exempt from content-density and evidence requirements. A subsection name does not qualify. Meaningful occupancy comes from answer-carrying text, data, diagrams, or images. Whitespace establishes grouping and hierarchy. For a roughly half-empty page, check whether its answer is complete. Only if incomplete, merge it without duplicating claim ownership, add missing evidence or explanation, or remove it. Marked pending placeholders are exempt from density and evidence requirements. Choose page count to make the explanation understandable, rather than treating the existing count as fixed. Group content by the reader question it answers, not by available space.
 
 Count only answer-carrying content as occupied space, even when a layout report marks a box as filled. An empty box is not information.
 
-Before adjusting layout, check whether the page answers one reader question with the definitions, evidence, and relationships needed to understand it. Split independent questions into separate pages. If one explanation remains too dense to follow at a readable size, divide it into successive questions, each answered completely on its own page. Remove redundancy, but do not shrink content or remove needed explanation merely to fit the current page count. A change to wording, coordinates, or spacing alone does not require new claim boundaries. If the reader question, evidence chain, or claim ownership is wrong, restart claim clustering and floorplanning, then rerender the deck. Cosmetic edits do not close a structural defect.
+Before adjusting layout, check whether the page answers one reader question with the definitions, evidence, and relationships needed to understand it. Split independent questions into separate pages. If one explanation remains too dense to follow at a readable size, divide it into successive questions, each answered completely on its own page. Remove redundancy, but do not shrink content or remove needed explanation merely to fit the current page count. A change to wording, coordinates, or spacing alone does not require new claim boundaries. If the reader question, evidence chain, or claim ownership is wrong, restart claim clustering and floorplanning for the affected explanation, then rerender and check the affected pages. Cosmetic edits do not close a structural defect.
 
 ### Write speaker scripts from the page
 
-Write one speaker script for every page after its body is planned. Derive it from authoritative material and the page's owned claim. Ground technical statements in visible figures, names, numbers, and relationships. Greetings, transitions, and source citations supporting visible claims need not be drawn. Draw and make checkable any concept the speaker needs, or remove it. Do not put a new claim or number only in notes.
+Every page has one speaker script, written after its body is planned and revised when the page's explanation changes. Derive it from authoritative material and the page's owned claim. Ground technical statements in visible figures, names, numbers, and relationships. Greetings, transitions, and source citations supporting visible claims need not be drawn. Draw and make checkable any concept the speaker needs, or remove it. Do not put a new claim or number only in notes.
 
-Begin each script paragraph with a square-bracketed unspoken direction that names the visible place and traversal order. Spoken sentences follow the closing bracket. The direction is not a topic label. Each paragraph speaks only to that place. Use complete sentences in the deck's spoken language. Do not add empty spacing paragraphs, page numbers, titles, or note labels. Keep the cover script to the opening and avoid repeating another page.
+Begin each script paragraph that explains visible content with a square-bracketed unspoken direction that names the visible place and traversal order. Spoken sentences follow the closing bracket. The direction is not a topic label. Each such paragraph speaks only to that place. Use complete sentences in the deck's spoken language. Do not add empty spacing paragraphs, page numbers, titles, or note labels. Keep the cover script to the opening and avoid repeating another page.
 
 ## Verify
 
-Audit every rendered page as its intended reader. Repair each applicable failed check. Apply evidence, lead, and claim checks to content pages, with the pending-placeholder evidence exemption. Check cover, contents, and divider pages for their orientation purpose, scripts, and geometry:
+For a new deck or a deck-wide review, audit every rendered page as its intended reader. For a local fix, audit the changed pages and inspect any other pages whose definitions, claims, or shared layout the change affects. Repair each applicable failed check. Apply evidence, lead, and claim checks to content pages, with the pending-placeholder evidence exemption. Check cover, contents, and divider pages for their orientation purpose, scripts, and geometry:
 
 1. Can the reader check measured or computed values by counting or arithmetic? On a concept or design page, can the reader trace each step of the mechanism diagram to its source or rule? On a background page without arithmetic, does each factual item trace to a named source?
 2. Is each quantity identified as measured, source-reported, assumed, or computed, with its source or derivation?
@@ -141,7 +141,7 @@ Keep content findings separate from production checks. A successful build, prese
 
 ## Review
 
-When reporting a defect, name its type, inspect the relevant text and visual elements on every rendered page, and report the number of instances. One found example is not a deck-wide review. Report changes and remaining defects rather than search mechanics or dismissed candidates.
+For a deck-wide defect review, name each defect type, inspect the relevant text and visual elements on every rendered page, and report the number of instances. One found example is not a deck-wide review. Report changes and remaining defects rather than search mechanics or dismissed candidates.
 
 Treat a reviewer question as a request for an answer unless it explicitly requests a change. Preserve requester-specified exact wording. If exact wording conflicts with another rule, report the conflict instead of silently changing it.
 
@@ -149,7 +149,7 @@ Before choosing an edit, read the comment together with the discussion it contin
 
 Answer the reviewer's question directly and confirm the requested change's status briefly. Add only what the reviewer needs to assess the change or decide what happens next, such as a change not visible on the page, a departure from the request, or work left undone. Do not repeat page content or list edits unless needed to answer the question or explicitly requested.
 
-Within a requested fix, make every judgment needed to complete that fix. Align the lead and takeaway, remove repetition, add missing support, and repair another defect on the same page when it affects the requested result. Do not change unrelated pages. Report an out-of-scope defect with the rule it breaks.
+Within a requested fix, make every judgment needed to complete that fix. Align the lead and takeaway, remove repetition, add missing support, and repair another defect on the same page when it affects the requested change. Do not change unrelated pages. Report an out-of-scope defect with the rule it breaks and the pages checked.
 
 Within the authorized content scope, redistribute material or add pages when needed to make the explanation understandable, and update the floorplan. Ask before changing content outside that scope or exceeding an explicit page limit. If the same reader question returns after revision, re-examine the explanation's structure, missing premise, and interpretation of the question rather than patching its wording again.
 
