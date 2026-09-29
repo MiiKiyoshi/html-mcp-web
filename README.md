@@ -117,9 +117,18 @@ port: 8765
 
 Put a template in `~/.config/html-mcp-web/templates/<name>/`. Start from a copy of
 `templates/neutral-slides`, as [`templates/SKINS.md`](templates/SKINS.md) explains. Put a
-writing guideline for the agent in `~/.config/html-mcp-web/guidelines/<name>/GUIDELINE.md`,
-starting from a copy of [`guidelines/neutral`](guidelines/neutral/GUIDELINE.md). A name you
-use replaces the built-in one of the same name. `do html init` offers both.
+writing guideline for the agent in `~/.config/html-mcp-web/guidelines/<name>/GUIDELINE.md`.
+To build on the built-in [`neutral`](guidelines/neutral/GUIDELINE.md) guideline instead of
+copying it, open your file with this front matter, write only the rules you add or change,
+and say that yours win where the two differ:
+
+```markdown
+---
+extends: neutral
+---
+```
+
+A name you use replaces the built-in one of the same name. `do html init` offers both.
 
 ## Acknowledgements
 

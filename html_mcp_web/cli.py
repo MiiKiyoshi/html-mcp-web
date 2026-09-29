@@ -12,7 +12,7 @@ from .config import (
     DEFAULT_CONFIG_NAME,
     Config,
     create_config,
-    get_guideline_file,
+    get_guideline_files,
     get_content_file,
     get_main_file,
     get_template_dir,
@@ -121,9 +121,9 @@ def cmd_config(args: argparse.Namespace) -> int:
     else:
         target[leaf] = args.value
     validated = Config.from_dict(data, config.config_path)
-    guideline_file = get_guideline_file(validated)
-    if guideline_file is not None and not guideline_file.is_file():
-        print(f"configured guideline not found: {guideline_file}", file=sys.stderr)
+    missing = [path for path in get_guideline_files(validated) if not path.is_file()]
+    if missing:
+        print(f"configured guideline not found: {missing[0]}", file=sys.stderr)
         return 1
     config.config_path.write_text(yaml.safe_dump(validated.to_dict(), sort_keys=False), encoding="utf-8")
     print(config.config_path)

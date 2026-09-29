@@ -139,9 +139,9 @@ def load_config(path: Path | None = None) -> Config:
     if not isinstance(loaded, dict):
         raise ValueError(f"{config_path} must contain a YAML mapping")
     config = Config.from_dict(loaded, config_path=config_path.resolve())
-    guideline = get_guideline_file(config)
-    if guideline is not None and not guideline.is_file():
-        raise FileNotFoundError(f"configured guideline not found: {guideline}")
+    for guideline in get_guideline_files(config):
+        if not guideline.is_file():
+            raise FileNotFoundError(f"configured guideline not found: {guideline}")
     return config
 
 
@@ -174,9 +174,9 @@ def create_config(
         },
         config_path=target,
     )
-    guideline_file = get_guideline_file(config)
-    if guideline_file is not None and not guideline_file.is_file():
-        raise FileNotFoundError(f"configured guideline not found: {guideline_file}")
+    for guideline_file in get_guideline_files(config):
+        if not guideline_file.is_file():
+            raise FileNotFoundError(f"configured guideline not found: {guideline_file}")
     target.write_text(yaml.safe_dump(config.to_dict(), sort_keys=False), encoding="utf-8")
     return target
 
@@ -196,13 +196,45 @@ def get_content_file(config: Config, artifact_id: str) -> Path | None:
     return None if content is None else get_project_dir(config) / content
 
 
-def get_guideline_file(config: Config) -> Path | None:
-    if config.guideline is None:
-        return None
-    user_guideline = USER_CONFIG_DIR / "guidelines" / config.guideline
+def _guideline_file(name: str) -> Path:
+    user_guideline = USER_CONFIG_DIR / "guidelines" / name
     if user_guideline.is_dir():
         return (user_guideline / "GUIDELINE.md").resolve()
-    return Path(__file__).resolve().parent.parent / "guidelines" / config.guideline / "GUIDELINE.md"
+    return Path(__file__).resolve().parent.parent / "guidelines" / name / "GUIDELINE.md"
+
+
+def _extended_name(path: Path) -> str | None:
+    """The guideline a file extends, from front matter it opens with:
+    a `---` line, `extends: <name>`, and a closing `---` line."""
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return None
+    end = text.find("\n---\n", 3)
+    if end < 0:
+        raise ValueError(f"{path}: front matter has no closing ---")
+    front = yaml.safe_load(text[4:end]) or {}
+    if not isinstance(front, dict) or set(front) - {"extends"}:
+        raise ValueError(f"{path}: front matter takes only extends")
+    name = front.get("extends")
+    if name is not None and not (isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9_-]+", name)):
+        raise ValueError(f"{path}: extends must name a guideline directory")
+    return name
+
+
+def get_guideline_files(config: Config) -> list[Path]:
+    """The configured guideline and every guideline it extends, base first, so an agent
+    reads the general rules before the ones that add to or override them."""
+    files: list[Path] = []
+    name = config.guideline
+    while name is not None:
+        path = _guideline_file(name)
+        if path in files:
+            raise ValueError(f"guideline {name} extends itself")
+        files.insert(0, path)
+        if not path.is_file():
+            break
+        name = _extended_name(path)
+    return files
 
 
 def get_template_dir(config: Config, artifact_id: str) -> Path | None:

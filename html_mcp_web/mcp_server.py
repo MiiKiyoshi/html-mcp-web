@@ -181,7 +181,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             if notes.is_file():
                 read.append(str(notes))
         if state.get("guideline") is not None:
-            read.append(state["guideline"]["path"])
+            read.extend(state["guideline"]["paths"])
         return {"edit_file": str((Path(state["project_dir"]) / entry["edit_file"]).resolve()), "read": read}
 
     @mcp.tool(structured_output=False)

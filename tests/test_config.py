@@ -7,7 +7,7 @@ from html_mcp_web.config import (
     Config,
     create_config,
     find_config,
-    get_guideline_file,
+    get_guideline_files,
     get_main_file,
     get_template_dir,
     load_config,
@@ -116,7 +116,7 @@ def test_guideline_is_a_named_user_file(tmp_path: Path, monkeypatch) -> None:
         "artifacts": {"slides": artifact()},
         "guideline": "team-meeting",
     })
-    assert get_guideline_file(config) == guideline
+    assert get_guideline_files(config) == [guideline]
     assert config.to_dict()["guideline"] == "team-meeting"
     with pytest.raises(ValueError, match="directory name"):
         Config.from_dict({"artifacts": {"slides": artifact()}, "guideline": "../private"})
@@ -127,12 +127,36 @@ def test_a_user_guideline_overrides_the_built_in_one(tmp_path: Path, monkeypatch
     monkeypatch.setattr(config_module, "USER_CONFIG_DIR", user_config)
     config = Config.from_dict({"artifacts": {"slides": artifact()}, "guideline": "neutral"})
     built_in = Path(config_module.__file__).resolve().parent.parent / "guidelines" / "neutral" / "GUIDELINE.md"
-    assert get_guideline_file(config) == built_in
+    assert get_guideline_files(config) == [built_in]
     assert built_in.is_file()
     own = user_config / "guidelines" / "neutral" / "GUIDELINE.md"
     own.parent.mkdir(parents=True)
     own.write_text("# My neutral\n", encoding="utf-8")
-    assert get_guideline_file(config) == own
+    assert get_guideline_files(config) == [own]
+
+
+def test_a_guideline_extends_another_and_is_read_after_it(tmp_path: Path, monkeypatch) -> None:
+    user_config = tmp_path / ".config" / "html-mcp-web"
+    monkeypatch.setattr(config_module, "USER_CONFIG_DIR", user_config)
+    own = user_config / "guidelines" / "team-meeting" / "GUIDELINE.md"
+    own.parent.mkdir(parents=True)
+    own.write_text("---\nextends: neutral\n---\n# Team meeting\n", encoding="utf-8")
+    config = Config.from_dict({"artifacts": {"slides": artifact()}, "guideline": "team-meeting"})
+    built_in = Path(config_module.__file__).resolve().parent.parent / "guidelines" / "neutral" / "GUIDELINE.md"
+    assert get_guideline_files(config) == [built_in, own]
+
+    own.write_text("---\nextends: missing\n---\n", encoding="utf-8")
+    path = tmp_path / ".html-mcp-web.yaml"
+    path.write_text("artifacts:\n  slides:\n    label: Slides\n    layout: slides\n"
+                    "    main: artifact.html\nguideline: team-meeting\n", encoding="utf-8")
+    with pytest.raises(FileNotFoundError, match="missing"):
+        load_config(path)
+    own.write_text("---\nextends: team-meeting\n---\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="extends itself"):
+        get_guideline_files(config)
+    own.write_text("---\nextend: neutral\n---\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="takes only extends"):
+        get_guideline_files(config)
 
 
 def test_load_config_rejects_a_missing_guideline(tmp_path: Path, monkeypatch) -> None:

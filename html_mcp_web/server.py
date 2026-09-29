@@ -35,7 +35,7 @@ from .config import (
     ArtifactConfig,
     Config,
     get_content_file,
-    get_guideline_file,
+    get_guideline_files,
     get_main_file,
     get_project_dir,
     get_template_dir,
@@ -368,7 +368,7 @@ class HtmlReviewServer:
         return roots
 
     def project_state(self) -> dict[str, Any]:
-        guideline = get_guideline_file(self.config)
+        guidelines = get_guideline_files(self.config)
         return {
             # The tag of the code being served. A page stamped with another one is running
             # code this server no longer serves, and reloads itself on seeing this.
@@ -378,8 +378,9 @@ class HtmlReviewServer:
             "port": self.config.port,
             "review": {"calls": self.review_calls, "consumed": self.review_consumed,
                        "waiters": self.review_waiters},
-            "guideline": ({"name": self.config.guideline, "path": str(guideline)}
-                          if guideline is not None else None),
+            # The configured guideline and the ones it extends, base first.
+            "guideline": ({"name": self.config.guideline, "paths": [str(path) for path in guidelines]}
+                          if guidelines else None),
             "artifacts": {artifact_id: runtime.state() for artifact_id, runtime in self.artifacts.items()},
         }
 

@@ -669,7 +669,7 @@ def test_guide_lists_the_configured_guideline_by_path(
     user_config = tmp_path / "user-config"
     guideline_path = user_config / "guidelines" / "team-meeting" / "GUIDELINE.md"
     guideline_path.parent.mkdir(parents=True)
-    guideline_text = "# Team meeting\n\nNever inline this marker in discovery.\n"
+    guideline_text = "---\nextends: neutral\n---\n# Team meeting\n\nNever inline this marker in discovery.\n"
     guideline_path.write_text(guideline_text, encoding="utf-8")
     monkeypatch.setattr(config_module, "USER_CONFIG_DIR", user_config)
     config = project(tmp_path)
@@ -681,7 +681,10 @@ def test_guide_lists_the_configured_guideline_by_path(
     try:
         mcp = create_server(binding)
         guided = answer(mcp.call_tool("guide", {"artifact": "slides"}))
-        assert guided["read"][-1] == str(guideline_path)
+        # The guideline it extends comes first, so the general rules are read before
+        # the ones that add to or override them.
+        neutral = Path(config_module.__file__).resolve().parent.parent / "guidelines" / "neutral" / "GUIDELINE.md"
+        assert guided["read"][-2:] == [str(neutral), str(guideline_path)]
         assert "Never inline this marker" not in json.dumps(guided)
         # Paths are the whole of it: no resources beside them to keep in step.
         assert asyncio.run(mcp.list_resources()) == []
