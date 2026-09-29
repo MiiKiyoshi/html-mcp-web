@@ -143,7 +143,9 @@ Keep content findings separate from production checks. A successful build, prese
 
 When reporting a defect, name its type, inspect the relevant text and visual elements on every rendered page, and report the number of instances. One found example is not a deck-wide review. Report changes and remaining defects rather than search mechanics or dismissed candidates.
 
-Treat a reviewer question as a request for an answer unless it explicitly requests a change. Read a correction for the understanding it requests rather than copying its words mechanically. Preserve requester-specified exact wording. If exact wording conflicts with another rule, report the conflict instead of silently changing it.
+Treat a reviewer question as a request for an answer unless it explicitly requests a change. Preserve requester-specified exact wording. If exact wording conflicts with another rule, report the conflict instead of silently changing it.
+
+Before choosing an edit, read the comment together with the discussion it continues and the passage or visual it refers to, and identify what the reader needs to understand. Make that understanding available where the reader needs it, rather than merely adding requested words or removing a criticized term. After editing, read the affected explanation in order and check it against the original comment. The change is complete when it resolves the requested issue while preserving the explanation's purpose.
 
 Within a requested fix, make every judgment needed to complete that fix. Align the lead and takeaway, remove repetition, add missing support, and repair another defect on the same page when it affects the requested result. Do not change unrelated pages. Report an out-of-scope defect with the rule it breaks.
 
