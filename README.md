@@ -113,7 +113,7 @@ port: 8765
 | `guideline` | A writing guideline the agent follows, such as the built-in `neutral`. |
 | `watch` | Files whose saves refresh the page. |
 | `ignore` | Patterns excluded even when they match `watch`. |
-| `port` | This folder's review page port. |
+| `port` | This folder's review page port. Any free port works. Init picks the first free one from 8765, so each folder can have its own. |
 
 ## Your own templates and guidelines
 
