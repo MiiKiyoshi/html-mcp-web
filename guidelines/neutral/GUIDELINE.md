@@ -34,6 +34,8 @@ Derive each content page's reader question from what the requester is trying to 
 - Method: `input → selection or transformation → executor → modification boundary → output`
 - Result: `comparison conditions → fixed conditions → measurement → observed difference → response or decision question`
 
+For a multi-step method, make the execution traceable across the explanation. At each step needed to understand the method, show who acts, what is received and produced, and how the result determines what happens next. Where execution branches, repeats, stops, or rejects an input, state the deciding condition and the resulting action rather than only naming the check.
+
 Give each claim one owner slide. Repeat it only to add a consequence or interpretation. A file, module, component, or broad topic is not a reader question. Verify the real connection before combining subjects.
 
 Build one question chain per page. Each element answers the question raised before it, beginning with what the preceding page established. Source order does not define the chain. State what a reduction or transformation preserves and discards. Express the reader's new understanding without incidental names or counts. A defined named object under review may appear in the title and conclusion. If a page conflicts with an earlier establishment, resolve or report the conflict rather than writing around it.
