@@ -130,7 +130,7 @@ For a new deck or a deck-wide review, audit every rendered page as its intended 
 7. Does every element answer a question the reader has at that point?
 8. Does the lead still describe the finished page?
 
-For the last two checks, assess each element against what the page already shows and what earlier pages have established. Remove it in thought and cut it if nothing needed to answer the current reader question is lost. Add visible support for any part of the lead left unanswered.
+For the last two checks, assess each element against what the page already shows and what earlier pages have established. Remove it in thought and cut it if nothing needed to answer the current reader question is lost. After moving or adding an explanation, recheck the remaining text and visuals that address the same point, keeping them only if they still serve a distinct purpose needed on that page. Add visible support for any part of the lead left unanswered.
 
 Check rendered geometry before accepting it:
 
