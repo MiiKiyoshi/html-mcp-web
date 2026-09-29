@@ -22,7 +22,7 @@ Plan in three passes:
 2. Cluster facts by one causal chain, comparison, mechanism, or decision question. Do not choose slide count yet.
 3. Give each cluster a title, one interrogative reader question, required evidence, observation, response, visual form, prerequisite, successor, and expected density.
 
-Map every top-level section and sibling before authoring. Order sections by what the reader must know first. Put a method before the setup that exercises it, then show the observed results.
+Map every top-level section and sibling before authoring. Order sections by what the reader must know first. Distinguish prerequisite background from the method, design, or findings being explained, based on each page's role in the current explanation rather than its source or novelty. Headings must accurately describe the role or subject of the content they label. Use subheadings or introductory text to clarify a broad, required heading, not to contradict it. Put a method before the setup that exercises it, then show the observed results.
 
 Do not require one section order for every technical deck. A useful progress-update sequence is Cover, Recap, Summary of Progress, Methods, Experimental Setup, Results, optional Discussion, and Next Plan. Treat it as an example because a design review, decision review, and research update answer different audience questions. When using it, Recap connects prior context to the result now needed, Summary of Progress contains only work and status since that context, and Next Plan is exactly one final slide with evidence-derived actions or an explicit statement that no next action is needed.
 
