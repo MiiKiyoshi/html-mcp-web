@@ -4,7 +4,7 @@
 
 Review an AI agent's HTML slides or report from the rendered page, on a desktop, tablet, or phone, while Claude Code or Codex edits the source. Hand the finished slides over as an editable PowerPoint deck.
 
-If it helps your reviews, a star is very welcome.
+> ⭐ **If this helps your reviews, please give it a star.** It helps others find the project.
 
 **[Slides example](examples/neutral-slides/)**
 
