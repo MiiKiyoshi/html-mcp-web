@@ -28,7 +28,7 @@ Do not require one section order for every technical deck. A useful progress-upd
 
 ### Give each slide a contract
 
-Each content slide owns one reader question and only the claims required to answer it. Choose a chain that matches the page:
+Derive each content page's reader question from what the requester is trying to understand or decide, rather than from the material available to present. Read follow-up requests with the preceding exchange to determine whether they continue the same question or change it. Include only claims and evidence that answer that question. Do not substitute an answer to a different question merely because it is easier to measure or already documented. Choose a chain that matches the page:
 
 - Status: `current state → evidence → constraint → response → decision`
 - Method: `input → selection or transformation → executor → modification boundary → output`
