@@ -395,11 +395,11 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             raise ValueError("target needs page")
         if result["errors"]:
             result["note"] = (
-                "Treat these as geometric unless the user or a visual check finds a content "
-                "problem. First combine labels, clarify column ownership, move blocks, or "
-                "separate an independent claim, and change font size or padding only after "
-                "that. Do not rewrite or remove content just to clear an error. Then check "
-                "layout() and image() for the page again.")
+                "Before fitting, check that the page answers one reader question: split "
+                "independent questions, or an explanation too dense to read, across pages. "
+                "Otherwise combine labels, clarify column ownership, or move blocks, and change "
+                "font size or padding only after that. Do not shrink, rewrite, or remove "
+                "content just to clear an error. Then check layout() and image() for the page again.")
         return result
 
     @mcp.tool(structured_output=False)
