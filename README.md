@@ -72,11 +72,11 @@ print every page.
 
 ![The review page on a tablet and a phone, zoomed into a slide: the commented phrase above, its thread below.](docs/mobile.png)
 
-Forward the folder's port over SSH, from Termux on Android or iSH on iOS. Use that port in
-place of 8765.
+Forward the port you chose at init over SSH, from Termux on Android or iSH on iOS, then open
+`http://localhost:<port>` in the phone's browser.
 
 ```
-ssh -L 8765:localhost:8765 <server>
+ssh -L <port>:localhost:<port> <server>
 ```
 
 ## Configuration
