@@ -117,18 +117,18 @@ Begin each script paragraph that explains visible content with a square-brackete
 
 ## Verify
 
-For a new deck or a deck-wide review, audit every rendered page as its intended reader. For a local fix, audit the changed pages and inspect any other pages whose definitions, claims, or shared layout the change affects. Repair each applicable failed check. Apply evidence, lead, and claim checks to content pages, with the pending-placeholder evidence exemption. Check cover, contents, and divider pages for their orientation purpose, scripts, and geometry:
+For a new deck or a deck-wide review, audit every rendered page as its intended reader. For a local fix, audit the changed pages and inspect any other pages whose definitions, claims, or shared layout the change affects. When another page summarizes or illustrates changed content, check whether it still answers its reader question accurately and sufficiently. Check for newly missing information as well as contradictions, and preserve the page's level of detail when addressing either. Repair each applicable failed check. Apply evidence, lead, and claim checks to content pages, with the pending-placeholder evidence exemption. Check cover, contents, and divider pages for their orientation purpose, scripts, and geometry:
 
 1. Can the reader check measured or computed values by counting or arithmetic? On a concept or design page, can the reader trace each step of the mechanism diagram to its source or rule? On a background page without arithmetic, does each factual item trace to a named source?
 2. Is each quantity identified as measured, source-reported, assumed, or computed, with its source or derivation?
 3. Does each explanatory note have a clear referent, including a figure element, table column, or the page-wide claim it qualifies?
-4. Can the intended reader understand each term, figure value, and code example using established meanings and the explanations given here or earlier? Could any wording still lead them to misunderstand the intended object, action, or relationship in that context? Check short forms such as leads, takeaways, captions, and labels using only the context available to the audience. For each action described, identify who performs it and what it applies to or produces, then compare that reading with the intended meaning. Revise wording that could reasonably lead to a materially different understanding in that context or depends on information only the author has.
+4. Can the intended reader understand each term, figure value, and code example using established meanings and the explanations given here or earlier? Could any wording still lead them to misunderstand the intended object, action, or relationship in that context? Check short forms such as leads, takeaways, captions, and labels using only the context available to the audience. For each action described, identify who performs it and what it applies to or produces. For each relationship described, identify the objects involved and how they are related. Compare these readings with the intended meaning. Revise wording that could reasonably lead to a materially different understanding in that context or depends on information only the author has.
 5. Can the presenter explain the page by pointing rather than reading?
 6. Are unchanged structures drawn once per page, with later reuse serving that page's reader question?
 7. Does every element answer a question the reader has at that point?
 8. Does the lead still describe the finished page?
 
-For the last two checks, remove each element in thought. Cut it if the page loses nothing. Add visible support for any part of the lead left unanswered.
+For the last two checks, assess each element against what the page already shows and what earlier pages have established. Remove it in thought and cut it if nothing needed to answer the current reader question is lost. Add visible support for any part of the lead left unanswered.
 
 Check rendered geometry before accepting it:
 
