@@ -924,3 +924,17 @@ def test_layout_says_at_once_when_nothing_can_check(tmp_path: Path, monkeypatch)
         assert "Firefox is not installed" in result["unchecked"]
     finally:
         binding.stop()
+
+
+def test_unknown_arguments_are_refused_and_schemas_are_compact(tmp_path: Path) -> None:
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    from html_mcp_web.mcp_server import create_server
+
+    mcp = create_server(ProjectBinding(tmp_path))
+    with pytest.raises(ToolError) as error:
+        asyncio.run(mcp.call_tool("image", {"artifact": "slides", "no_such": 1}))
+    assert str(error.value).startswith("image does not take no_such. It takes: artifact, ")
+    # FastMCP adds a title to every schema and a null default to every optional field.
+    schemas = json.dumps([tool.inputSchema for tool in asyncio.run(mcp.list_tools())])
+    assert '"title"' not in schemas and '"default": null' not in schemas

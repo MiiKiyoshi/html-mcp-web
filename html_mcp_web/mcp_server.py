@@ -27,9 +27,46 @@ from .mcp_contract import (
 
 try:
     from mcp.server.fastmcp import Context, FastMCP, Image
+    from mcp.server.fastmcp.exceptions import ToolError
     from pydantic import Field
 
     from .mcp_client import INIT_GUIDE, ProjectBinding, ProjectSetupError
+
+    def _compact_schema(node: Any, in_properties: bool = False) -> None:
+        """Drop pydantic's generated titles and null defaults. A field that is itself
+        named title stays, because it is a key of a properties mapping."""
+        if isinstance(node, dict):
+            if not in_properties:
+                node.pop("title", None)
+                if "default" in node and node["default"] is None:
+                    del node["default"]
+            for key, value in node.items():
+                _compact_schema(value, in_properties=key == "properties" and not in_properties)
+        elif isinstance(node, list):
+            for item in node:
+                _compact_schema(item)
+
+    class _Server(FastMCP):
+        """FastMCP with compact tool schemas that rejects arguments a tool does not
+        take. Every client that loads a tool pays for its schema, and FastMCP would
+        otherwise drop an unknown argument silently."""
+
+        async def list_tools(self):
+            tools = await super().list_tools()
+            for tool in tools:
+                tool.description = " ".join(tool.description.split())
+                _compact_schema(tool.inputSchema)
+            return tools
+
+        async def call_tool(self, name, arguments):
+            tool = next((t for t in await self.list_tools() if t.name == name), None)
+            if tool is not None:
+                accepted = list(tool.inputSchema["properties"])
+                unknown = sorted(set(arguments) - set(accepted))
+                if unknown:
+                    raise ToolError(f"{name} does not take {', '.join(unknown)}. "
+                                    f"It takes: {', '.join(accepted) or 'no arguments'}.")
+            return await super().call_tool(name, arguments)
 
     MISSING_MCP: ImportError | None = None
 except ImportError as error:
@@ -109,7 +146,7 @@ def _compact(tool):
 
 def create_server(binding: "ProjectBinding") -> "FastMCP":
     _check_dependencies()
-    mcp = FastMCP(
+    mcp = _Server(
         "html-mcp-web",
         instructions=(
             "Work from read_comments(new=True), and pass ids to reread a whole thread. "
