@@ -55,7 +55,7 @@ Apply these tests to visible technical content and speaker sentences. Judge orie
 3. It avoids inflated scale, completion, abstraction, or importance.
 4. It answers the page's reader question.
 
-Keep field terms as the field writes them. Explain project-specific terms, choices, and measurements, and define field terms the audience may not know. Define an internal name where the reader first needs it. Prefer a common term and introduce a new term only when the explanation uses it. Use one name per object across the deck.
+Choose terms that convey the intended meaning without misleading the reader in context. Use established field terms in the field's own form for technical concepts and familiar plain language otherwise. If readers could reasonably misunderstand the object, action, or relationship even after considering the surrounding text, figures, and earlier explanations, revise the wording or supply the missing context. Do not assume that wording familiar from the author's code, notes, or discussions is familiar to readers, and do not use code names, literal translations, or labels coined while working as substitutes for explaining the object or action. Use an internal name or introduce a new term when readers need the name itself, and define it at first use. Explain field terms the audience may not know, as well as project-specific choices and measurements. Use terms consistently for the same meaning throughout the deck.
 
 A concept page answers its reader question by linking two parts: what the concept is and is for in source-grounded general terms, and how the page's example uses it. A label or type signature alone is insufficient. A mechanism diagram can carry both parts when it shows their relationship. Show the concept's general scope as well as the instance.
 
@@ -122,7 +122,7 @@ Audit every rendered page as its intended reader. Repair each applicable failed 
 1. Can the reader check measured or computed values by counting or arithmetic? On a concept or design page, can the reader trace each step of the mechanism diagram to its source or rule? On a background page without arithmetic, does each factual item trace to a named source?
 2. Is each quantity identified as measured, source-reported, assumed, or computed, with its source or derivation?
 3. Does each explanatory note have a clear referent, including a figure element, table column, or the page-wide claim it qualifies?
-4. Is every project-specific term, figure value, and code example defined here or earlier?
+4. Can the intended reader understand each term, figure value, and code example using established meanings and the explanations given here or earlier? Could any wording still lead them to misunderstand the intended object, action, or relationship in that context?
 5. Can the presenter explain the page by pointing rather than reading?
 6. Are unchanged structures drawn once per page, with later reuse serving that page's reader question?
 7. Does every element answer a question the reader has at that point?
