@@ -82,11 +82,13 @@ Choose wording by the meaning the intended reader can reasonably take in context
 
 4.8 By default a content page has one short lead and one takeaway. The lead states the problem, comparison, or definition that makes the page necessary and contains no procedure, evidence, result, conclusion, or count repeated below. The takeaway states the one conclusion the visible content supports and adds no new evidence. Cover, contents, and divider pages are exempt.
 
+4.9 Write prose without semicolons in slide text, captions, table cells, speaker scripts, and planning documents. Separate distinct statements and use an explicit conjunction when their relationship matters.
+
 ## Article 5. Form and relationships
 
 Choose the form that makes the intended relationships and distinctions perceptible, and let nothing in the presentation imply a relationship the explanation does not support.
 
-5.1 Work out the drawing before the prose whenever the content is a change over time, a spatial arrangement, a branch, a merge, a loop, a mechanism, a sequence, or a state change. If a relationship cannot yet be drawn, report what is missing and continue with independent pages. Do not add a second rendering of what the page's code or text already shows. A short sentence or list may carry a simple relationship a diagram would not explain better.
+5.1 Work out the drawing before the prose whenever the content is a change over time, a spatial arrangement, a branch, a merge, a loop, a mechanism, a sequence, or a state change. If a relationship cannot yet be drawn, report what is missing and continue with independent pages. Do not add a second rendering of what the page's code or text already shows. Use short sentences or parallel list items for simple relationships that a diagram would not explain better.
 
 5.2 Give each relationship the form that matches it, such as a directed path for a sequence, a branch for one input under conditions, convergence for conditions entering one evaluation, aligned inputs, stages, and outputs on shared axes for compared alternatives, a tree for a hierarchy, before-action-after for a state change, a table or shared-axis chart for an exact comparison, cards or bullets for independent peers, and an evidence-to-action chain for status. Label an edge with its relation unless the drawing's convention already makes it clear, and put operations on their operands.
 
