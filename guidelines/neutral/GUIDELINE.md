@@ -46,7 +46,7 @@ Compare presentation alternatives by how well they serve the reader's question a
 
 ### Align title, lead, evidence, and takeaway
 
-For a deck organized into sections, format each section's content-page title as `<section name> — <page topic>`. Use a short noun phrase for the page topic, naming the page's object or comparison rather than its conclusion or an incidental source label. A defined API, file format, or dataset under review may name the page. Use a causal title only when the evidence distinguishes that cause from plausible alternatives. The title, central visual, and takeaway must support one proposition.
+For a deck organized into sections, format each section's content-page title as `<section name> — <page topic>`. Use a short noun phrase for the page topic, naming the page's object or comparison rather than its conclusion or an incidental source label. A defined API, file format, or dataset under review may name the page. The title, central visual, and takeaway must support one proposition.
 
 By default, each content slide has one short lead and one takeaway. The lead states the problem, comparison, or definition that makes the page necessary. It does not contain procedure, evidence, result, conclusion, or a count repeated below. The takeaway states the one conclusion supported by the visible content and adds no new evidence. The page chain is `problem or question → visible method or evidence → applied method or result`. Cover, contents, and divider pages are exempt.
 
@@ -67,7 +67,7 @@ Use text to label visual relationships. A short sentence or list may carry a sim
 
 ### Make evidence checkable
 
-Report any conflict between approved material and current evidence without silently changing the approved decision or suppressing the observation. Name the source of a causal explanation. If that source has not been inspected, state only the observed value. When roles differ, identify the selector, executor, input state, modification boundary, and resulting state. Do not credit one component with calculations or mutations performed by another.
+Report any conflict between approved material and current evidence without silently changing the approved decision or suppressing the observation. Name the source of a causal explanation. If that source has not been inspected, state only the observed value. Present a cause as established anywhere in the deck only when the evidence distinguishes it from plausible alternatives. Otherwise distinguish the observation from any proposed explanation. When roles differ, identify the selector, executor, input state, modification boundary, and resulting state. Do not credit one component with calculations or mutations performed by another.
 
 Record provenance during planning. Counts name what is counted and how groups form the total. Names presented as current project commands, paths, or implementations must exist there. Label external examples and proposed components as such. When reusing a published figure, preserve its identity and cite its number and source. A redraw with different conventions is a new figure.
 
@@ -121,7 +121,7 @@ Begin each script paragraph that explains visible content with a square-brackete
 
 ## Verify
 
-For a new deck or a deck-wide review, audit every rendered page as its intended reader. For a local fix, audit the changed pages and inspect any other pages whose definitions, claims, or shared layout the change affects. When another page summarizes or illustrates changed content, check whether it still answers its reader question accurately and sufficiently. Check for newly missing information as well as contradictions, and preserve the page's level of detail when addressing either. Repair each applicable failed check. Apply evidence, lead, and claim checks to content pages, with the pending-placeholder evidence exemption. Check cover, contents, and divider pages for their orientation purpose, scripts, and geometry:
+For a new deck or a deck-wide review, audit every rendered page as its intended reader. For a local fix, audit the changed pages. For a change to the system, configuration, or data the deck describes, audit the pages that describe it, including pages not edited. In both cases, inspect any other pages whose definitions, claims, or shared layout the change affects. When another page summarizes or illustrates changed content, check whether it still answers its reader question accurately and sufficiently. Check for newly missing information as well as contradictions, and preserve the page's level of detail when addressing either. Repair each applicable failed check. Apply evidence, lead, and claim checks to content pages, with the pending-placeholder evidence exemption. Check cover, contents, and divider pages for their orientation purpose, scripts, and geometry:
 
 1. Can the reader check measured or computed values by counting or arithmetic? On a concept or design page, can the reader trace each step of the mechanism diagram to its source or rule? On a background page without arithmetic, does each factual item trace to a named source?
 2. Is each quantity identified as measured, source-reported, assumed, or computed, with its source or derivation?
