@@ -20,7 +20,7 @@ Establish what the requester wants the reader to understand or decide, what that
 
 1.4 Include drafting, revision, or submission history only when the reader needs it to understand the content, assess its evidence, or act on it. Otherwise keep it in planning records.
 
-1.5 Exclude self-evaluation, inflated claims, process narration, and maintenance detail that changes no method, measurement, or decision. Repeat established information only when the repetition serves a distinct need.
+1.5 Exclude self-evaluation, inflated claims, process narration, and maintenance detail that changes no method, measurement, or decision. Repeat established information only when the repetition serves a distinct need. Omit incidental names and counts that do not help the reader identify what matters, understand the explanation, assess the evidence, or act on it. Do not restate a visible count unless stating it serves one of those purposes.
 
 ## Article 2. Claims and evidence
 
