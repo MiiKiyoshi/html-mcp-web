@@ -162,8 +162,11 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        # The setup guide's path is as long as the install location; the rest is bounded.
-        assert len(mcp.instructions) - len(str(INIT_GUIDE)) < 550
+        # The setup guide's path and the startup folder are as long as they are; the rest is bounded.
+        assert len(mcp.instructions) - len(str(INIT_GUIDE)) - len(str(binding.start_dir)) < 650
+        # Setup needs to know which folder this process binds from, and that it never looks below.
+        assert f"started in {binding.start_dir}." in mcp.instructions
+        assert "never a subfolder's" in mcp.instructions
         for needed in ("read_comments(new=True)", "guide()", "layout()", "image()", "write_comments",
                        "listen()", "init.md"):
             assert needed in mcp.instructions, needed

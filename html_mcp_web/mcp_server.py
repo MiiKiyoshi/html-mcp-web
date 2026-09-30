@@ -155,7 +155,9 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "write_comments. When the wording is the reviewer's to decide, suggest instead of "
             "editing. The reviewer resolves threads. Call listen() when the user asks "
             "to listen and follow how. Reuse its process, and do not poll or duplicate it. "
-            f"Setup: read {INIT_GUIDE}."
+            f"Setup: read {INIT_GUIDE}. This process started in {binding.start_dir}. On its "
+            "first successful binding it uses the nearest .html-mcp-web.yaml at or above that "
+            "folder, never a subfolder's, and keeps it."
         ),
     )
 
