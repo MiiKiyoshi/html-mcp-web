@@ -394,6 +394,56 @@ async def test_headless_check_runs_while_a_different_artifact_is_reviewed(client
     assert scheduled == ["slides"]
 
 
+async def test_an_open_review_page_that_does_not_check_leaves_it_to_headless(client, monkeypatch) -> None:
+    """A tab in the background, a screen that is off, or a slide show holds the review
+    page open without measuring it. The layout answer must still arrive."""
+    import shutil
+
+    test_client, review = client
+    idle_viewer = object()
+    review.websockets.add(idle_viewer)
+    review.websocket_artifacts[idle_viewer] = "slides"
+    runtime = review.artifacts["slides"]
+    launched: list[str] = []
+
+    class Headless:
+        def terminate(self) -> None:
+            pass
+
+        async def wait(self) -> int:
+            return 0
+
+    async def headless_browser(program, *args, **kwargs):
+        # Stands in for the headless page, which measures and posts at once.
+        launched.append(program)
+        runtime.layout_revision = runtime.space_revision = runtime.revision
+        runtime.layout_errors = []
+        return Headless()
+
+    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", headless_browser)
+    monkeypatch.setattr(HtmlReviewServer, "REVIEW_PAGE_CHECK_SECONDS", 0.5)
+    state = await (await test_client.get("/artifacts/slides/layout")).json()
+    assert launched == ["firefox"]
+    assert state["errors"] == [] and "unchecked" not in state
+
+
+async def test_an_open_review_page_that_does_not_check_is_named_when_nothing_else_can(client, monkeypatch) -> None:
+    import shutil
+
+    test_client, review = client
+    idle_viewer = object()
+    review.websockets.add(idle_viewer)
+    review.websocket_artifacts[idle_viewer] = "slides"
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    monkeypatch.setattr(HtmlReviewServer, "REVIEW_PAGE_CHECK_SECONDS", 0.5)
+    monkeypatch.setattr(HtmlReviewServer, "LAYOUT_CHECK_SECONDS", 0.5)
+    state = await (await test_client.get("/artifacts/slides/layout")).json()
+    # Why the check could not run, and what the reader can do about it.
+    assert state["errors"] is None
+    assert "background tab" in state["unchecked"] and "Bring it to the front" in state["unchecked"]
+
+
 async def test_editing_a_thread_entry_rewrites_it_in_place(client) -> None:
     test_client, review = client
     response = await test_client.post(

@@ -301,6 +301,12 @@ class HtmlReviewServer:
     # again. Under the MCP client's own timeouts, and short enough that a stopped server
     # is noticed within a minute.
     REVIEW_POLL_TIMEOUT = 55.0
+    # How long an open review page gets to report a layout check before a headless one
+    # runs anyway. A visible page reports within seconds, and a page in a background tab,
+    # on a screen that is off, or in a slide show never does.
+    REVIEW_PAGE_CHECK_SECONDS = 10.0
+    # How long a layout answer waits for any check to report before it says so.
+    LAYOUT_CHECK_SECONDS = 45.0
 
     def __init__(self, config: Config):
         self.config = config
@@ -789,7 +795,8 @@ class HtmlReviewServer:
         runtime.layout_room = room_for_errors(errors, space_pages)
         return web.json_response(runtime.state())
 
-    async def _ensure_layout_checked(self, runtime: ArtifactRuntime, host: str) -> None:
+    async def _ensure_layout_checked(self, runtime: ArtifactRuntime, host: str,
+                                     over_review_page: bool = False) -> None:
         """Run the layout check ourselves when no review UI is viewing this artifact.
 
         The check is browser work (the page's own scripts measure it and post the result
@@ -797,12 +804,15 @@ class HtmlReviewServer:
         measurement 409'd until someone opened the UI. The measurers only need a browser,
         not a reader: a headless one pointed at this server's own page runs the same
         scripts and posts the same result. A UI viewing this artifact is left to do it
-        instead, and one check runs at a time.
+        instead, unless over_review_page says that UI had its turn and reported nothing,
+        and one check runs at a time.
         """
         import shutil as _shutil
         import tempfile
 
-        if runtime.space_revision == runtime.revision or self.has_review_ui(runtime.artifact_id):
+        if runtime.space_revision == runtime.revision:
+            return
+        if self.has_review_ui(runtime.artifact_id) and not over_review_page:
             return
         if _shutil.which("firefox") is None:
             return
@@ -839,15 +849,25 @@ class HtmlReviewServer:
             # Nothing to check: say what is missing now rather than wait on a browser.
             return web.json_response({"revision": runtime.revision, "errors": None,
                                       "error": runtime.missing_file()})
-        no_checker = _shutil.which("firefox") is None and not self.has_review_ui(runtime.artifact_id)
-        if runtime.layout_revision != runtime.revision and not no_checker:
-            if runtime.space_revision != runtime.revision:
-                await self._ensure_layout_checked(runtime, request.host)
-            # A review page that is open does the check itself; its result arrives on its own.
-            for _ in range(90):
+        no_firefox = _shutil.which("firefox") is None
+        review_page = self.has_review_ui(runtime.artifact_id)
+        no_checker = no_firefox and not review_page
+
+        async def reported(seconds: float) -> bool:
+            for _ in range(max(1, int(seconds / 0.5))):
                 if runtime.layout_revision == runtime.revision:
-                    break
+                    return True
                 await asyncio.sleep(0.5)
+            return runtime.layout_revision == runtime.revision
+
+        if runtime.layout_revision != runtime.revision and not no_checker:
+            # An open review page checks for itself, but only while it is shown: in a
+            # background tab, on a screen that is off, or in a slide show it never does.
+            # It gets a short turn, and then the headless check runs over it.
+            if not (review_page and await reported(self.REVIEW_PAGE_CHECK_SECONDS)):
+                if runtime.space_revision != runtime.revision:
+                    await self._ensure_layout_checked(runtime, request.host, over_review_page=True)
+                await reported(self.LAYOUT_CHECK_SECONDS)
         checked = runtime.layout_revision == runtime.revision
         data: dict[str, Any] = {
             "revision": runtime.revision,
@@ -855,9 +875,16 @@ class HtmlReviewServer:
         }
         if not checked:
             # Said at once when nothing can check: waiting would only end in the same answer.
-            data["unchecked"] = (
-                "Firefox is not installed and no review page is open, so nothing can check the layout"
-                if no_checker else "the layout check did not finish; try again")
+            if no_checker:
+                data["unchecked"] = ("Firefox is not installed and no review page is open, "
+                                     "so nothing can check the layout")
+            elif no_firefox:
+                data["unchecked"] = (
+                    "a review page is open but did not check this revision, and Firefox is not "
+                    "installed for a headless check. A page in a background tab, on a screen that "
+                    "is off, or in a slide show does not measure. Bring it to the front or close it")
+            else:
+                data["unchecked"] = "the layout check did not finish; try again"
         if runtime.build_error is not None:
             data["build_error"] = runtime.build_error
         return web.json_response(data)
