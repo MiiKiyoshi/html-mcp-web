@@ -46,7 +46,7 @@ Compare presentation alternatives by how well they serve the reader's question a
 
 ### Align title, lead, evidence, and takeaway
 
-Use a short noun phrase for the title. Name the page's object or comparison rather than its conclusion or an incidental source label. A defined API, file format, or dataset under review may name the page. Use a causal title only when the evidence distinguishes that cause from plausible alternatives. The title, central visual, and takeaway must support one proposition.
+For a deck organized into sections, format each section's content-page title as `<section name> — <page topic>`. Use a short noun phrase for the page topic, naming the page's object or comparison rather than its conclusion or an incidental source label. A defined API, file format, or dataset under review may name the page. Use a causal title only when the evidence distinguishes that cause from plausible alternatives. The title, central visual, and takeaway must support one proposition.
 
 By default, each content slide has one short lead and one takeaway. The lead states the problem, comparison, or definition that makes the page necessary. It does not contain procedure, evidence, result, conclusion, or a count repeated below. The takeaway states the one conclusion supported by the visible content and adds no new evidence. The page chain is `problem or question → visible method or evidence → applied method or result`. Cover, contents, and divider pages are exempt.
 
