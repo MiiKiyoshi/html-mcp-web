@@ -34,7 +34,7 @@ Derive each content page's reader question from what the requester is trying to 
 - Method: `input → selection or transformation → executor → modification boundary → output`
 - Result: `comparison conditions → fixed conditions → measurement → observed difference → response or decision question`
 
-For a multi-step method, make the execution traceable across the explanation. At each step needed to understand the method, show who acts, what is received and produced, and how the result determines what happens next. Where execution branches, repeats, stops, or rejects an input, state the deciding condition and the resulting action rather than only naming the check.
+For a method explained across pages, establish the overall problem and flow, then develop its parts in the order the reader needs to understand them. Each page should build on what is already established and make clear how its new explanation fits into that flow. Read the sequence as a whole and check that the reader can explain how the method reaches its result, without supplying missing relationships from the source or a later page. At each step needed to understand the method, show who acts, what is received and produced, and how the result determines what happens next. Where execution branches, repeats, stops, or rejects an input, state the deciding condition and the resulting action rather than only naming the check.
 
 Give each claim one owner slide. Repeat it only to add a consequence or interpretation. A file, module, component, or broad topic is not a reader question. Verify the real connection before combining subjects.
 
