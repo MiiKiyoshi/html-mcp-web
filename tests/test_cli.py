@@ -162,8 +162,8 @@ def test_mcp_check_names_the_tools_without_serving(tmp_path: Path, monkeypatch, 
     monkeypatch.chdir(tmp_path)
     assert main(["mcp", "--check"]) == 0
     said = capsys.readouterr().out
-    assert said.startswith("html-mcp: 6 tools ("), said
-    for tool in ("guide", "read_comments", "write_comments", "image", "layout", "listen"):
+    assert said.startswith("html-mcp: 7 tools ("), said
+    for tool in ("guide", "read_comments", "write_comments", "image", "layout", "listen", "setup_info"):
         assert tool in said
 
 

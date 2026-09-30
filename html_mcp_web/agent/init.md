@@ -1,11 +1,16 @@
 # Set up a folder for html review
 
 The user said "do html init", or `listen` found no config. Set up review for the current MCP
-session. Use the MCP process's startup directory, reported in its instructions, as the setup
-directory. The config belongs there. A subfolder requested for the document belongs in main
-and content, which are resolved relative to the config's directory. Inspect first and confirm
-any choices the user has not already authorized. Setup is complete only when the current MCP
-connection resolves the intended document.
+session. Read setup paths from `setup_info()`, not from the shell's current directory. Its
+startup directory is the setup directory, and the config belongs there. Configuration
+discovery searches the MCP startup directory and its parents, never its subfolders. The
+discovered config and an existing binding may differ. A successful binding is retained until
+the MCP process is restarted.
+
+A subfolder requested for the document belongs in main and content, which are resolved
+relative to the config's directory. Inspect first and confirm any choices the user has not
+already authorized. Setup is complete only when the current MCP connection resolves the
+intended document.
 
 These steps set up the current MCP session. If the user explicitly requests setup for another
 session, use that session's intended startup directory and report its verification status
@@ -13,9 +18,12 @@ separately.
 
 ## 1. Inspect (write nothing)
 
-- Find the nearest `.html-mcp-web.yaml` at or above the setup directory. Check its path,
-  configured artifacts, and port against the user's request. A missing main file alone does
-  not mean the config belongs to another project.
+- Call `setup_info()` before connecting or writing. Inspect the startup directory, discovered
+  config, and any existing binding. For the current session, use the startup directory as the
+  setup directory. Keep a document's subfolder in its configured paths rather than moving the
+  config there.
+- Check the discovered config's path, configured artifacts, and port against the user's
+  request. A missing main file alone does not mean the config belongs to another project.
   If the config belongs to the requested project, reuse it or make only the authorized
   changes. If it is in a parent directory and belongs to a different project, propose a
   config in the setup directory that takes precedence for this session without changing the
@@ -24,10 +32,11 @@ separately.
 - HTML files already in the setup directory or the subfolder the user named: `ls *.html *.htm`.
 - Port: the first free one from 8765 (`ss -ltn`, or `lsof -iTCP -sTCP:LISTEN -P -n` on macOS), also skipping the port in a
   `.tex-mcp-web.yaml` in this folder, since both tools default to 8765.
-- Templates: directory names holding `build.py` in `templates/` two levels above this file
-  and in `~/.config/html-mcp-web/templates/`.
-- Guidelines: directory names holding `GUIDELINE.md` in `guidelines/` two levels above this
-  file and in `~/.config/html-mcp-web/guidelines/`. A name in both means the user's copy.
+- List templates and guidelines from the same installation and user directories that the
+  running MCP uses, which `setup_info()` reports. Show each source directory's absolute path
+  and its entries separately, including empty or missing directories. For duplicate names,
+  identify the effective user override. Mark entries whose required build.py or GUIDELINE.md
+  is missing rather than silently falling back to the built-in copy.
 
 ## 2. Confirm
 
@@ -37,17 +46,29 @@ Show one summary, in the user's language, like:
     layout    : slides  (slides = 16:9 / report = A4)
     main      : talk2/html/slides.html  (built from content, created if missing)
     content   : talk2/html/content.html
-    template  : neutral-slides  (available: neutral-slides, neutral-report, ...)
-    guideline : neutral  (available: neutral, ...)
+    template  : not selected  (recommended: neutral-slides)
+                built-in  <absolute dir>: neutral-report, neutral-slides
+                user      <absolute dir>: house
+    guideline : not selected  (recommended: neutral)
+                built-in  <absolute dir>: neutral
+                user      <absolute dir>: team-meeting
     port      : 8766  (8765 is in use)
     watch     : *.html *.css *.js *.svg *.png *.jpg *.jpeg *.gif *.webp -> 3 files here
 
 The defaults are slides with the neutral-slides template and the neutral guideline. For a
 report they are the neutral-report template and no guideline, since neutral is written for
 slides. With a template, main is the built file and content (default `content.html`) is the
-file the user edits. Ask once. A user who asks for the defaults gets them as shown, and
-otherwise change only what the user corrects. A path choice the user has already approved is
-not asked again.
+file the user edits.
+
+Show the template and guideline choices grouped by source directory, including each
+directory's absolute path and which copy is used for duplicate names. Mark documented defaults
+as recommendations. Ask only for choices the user has not already made, including no guideline
+as an option. Apply an explicit choice or request for defaults without asking again. Do not
+treat silence as agreement. A path choice the user has already approved is not asked again.
+
+If a documented default is missing or unusable, check the installation, lookup paths, and
+overrides before presenting the list as complete or writing the configuration. Report any
+unresolved problem rather than claiming that the remaining entries are the only choices.
 
 ## 3. Write
 

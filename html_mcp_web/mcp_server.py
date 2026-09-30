@@ -155,9 +155,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "write_comments. When the wording is the reviewer's to decide, suggest instead of "
             "editing. The reviewer resolves threads. Call listen() when the user asks "
             "to listen and follow how. Reuse its process, and do not poll or duplicate it. "
-            f"Setup: read {INIT_GUIDE}. This process started in {binding.start_dir}. On its "
-            "first successful binding it uses the nearest .html-mcp-web.yaml at or above that "
-            "folder, never a subfolder's, and keeps it."
+            f"Setup: read {INIT_GUIDE}."
         ),
     )
 
@@ -488,6 +486,22 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 "[gone] means the review server is unreachable; the script keeps retrying. "
                 "[back] means it is reachable again."
             ),
+        }
+
+    @mcp.tool(structured_output=False)
+    @_compact
+    async def setup_info() -> dict[str, Any]:
+        """Report setup paths, available choices, and existing binding without connecting or changing files."""
+        from .config import find_config, list_choices
+
+        discovered = find_config(binding.start_dir)
+        bound = binding.bound_config_path()
+        return {
+            "startup_dir": str(binding.start_dir),
+            "discovered_config_path": None if discovered is None else str(discovered.resolve()),
+            "bound_config_path": None if bound is None else str(bound),
+            "templates": list_choices("templates"),
+            "guidelines": list_choices("guidelines"),
         }
 
     return mcp

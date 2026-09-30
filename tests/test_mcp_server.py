@@ -126,6 +126,7 @@ async def test_stdio_mcp_starts_without_project_config(tmp_path: Path) -> None:
                 "image",
                 "layout",
                 "listen",
+                "setup_info",
             ]
             assert all(initialized.instructions not in (tool.description or "") for tool in tools.tools)
             # Before setup, the answer is where to set up, not a tool that half works.
@@ -162,11 +163,10 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        # The setup guide's path and the startup folder are as long as they are; the rest is bounded.
-        assert len(mcp.instructions) - len(str(INIT_GUIDE)) - len(str(binding.start_dir)) < 650
-        # Setup needs to know which folder this process binds from, and that it never looks below.
-        assert f"started in {binding.start_dir}." in mcp.instructions
-        assert "never a subfolder's" in mcp.instructions
+        # The setup guide's path is as long as the install location, the rest is bounded.
+        assert len(mcp.instructions) - len(str(INIT_GUIDE)) < 550
+        # Setup lives in the guide: the instructions give its path and nothing else about it.
+        assert mcp.instructions.endswith(f"Setup: read {INIT_GUIDE}.")
         for needed in ("read_comments(new=True)", "guide()", "layout()", "image()", "write_comments",
                        "listen()", "init.md"):
             assert needed in mcp.instructions, needed
@@ -184,6 +184,7 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
             "image",
             "layout",
             "listen",
+            "setup_info",
         ]
         # A project with one artifact needs no name: nothing else would tell the agent it.
         assert "required" not in schemas["guide"]
@@ -204,6 +205,44 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         project(tmp_path)
         guided = answer(mcp.call_tool("guide", {"artifact": "slides"}))
         assert guided["edit_file"] == str(tmp_path / "slides.html")
+    finally:
+        binding.stop()
+
+
+def test_setup_info_reports_paths_and_choices_without_connecting(tmp_path: Path, monkeypatch) -> None:
+    user_config = tmp_path / "user"
+    monkeypatch.setattr(config_module, "USER_CONFIG_DIR", user_config)
+    # A user template without build.py, and one that hides the built-in of its name.
+    (user_config / "templates" / "house").mkdir(parents=True)
+    (user_config / "templates" / "neutral-slides").mkdir(parents=True)
+    parent = tmp_path / "parent"
+    child = parent / "child"
+    child.mkdir(parents=True)
+    project(parent)
+    config_path = str((parent / ".html-mcp-web.yaml").resolve())
+    binding = ProjectBinding(child)
+    try:
+        mcp = create_server(binding)
+        files = sorted(tmp_path.rglob("*"))
+        info = answer(mcp.call_tool("setup_info", {}))
+        assert info["startup_dir"] == str(child.resolve())
+        assert info["discovered_config_path"] == config_path
+        assert info["bound_config_path"] is None
+        templates = info["templates"]
+        assert templates["user"] == {"dir": str(user_config / "templates"),
+                                     "entries": ["house", "neutral-slides"]}
+        assert {"neutral-report", "neutral-slides"} <= set(templates["built_in"]["entries"])
+        assert templates["used"]["neutral-slides"] == "user"
+        assert templates["used"]["neutral-report"] == "built_in"
+        assert set(templates["incomplete"]) == {"user/house", "user/neutral-slides"}
+        # A missing user folder is reported as missing, not left out.
+        assert info["guidelines"]["user"] == {"dir": str(user_config / "guidelines"), "entries": None}
+        assert "neutral" in info["guidelines"]["built_in"]["entries"]
+        # A report only: no binding, no server, no file.
+        assert binding.bound_config_path() is None
+        assert sorted(tmp_path.rglob("*")) == files
+        answer(mcp.call_tool("guide", {"artifact": "slides"}))
+        assert answer(mcp.call_tool("setup_info", {}))["bound_config_path"] == config_path
     finally:
         binding.stop()
 

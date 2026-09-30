@@ -70,6 +70,11 @@ class ProjectBinding:
         self._shared: SharedProjectServer | None = None
         self._client: ProjectClient | None = None
 
+    def bound_config_path(self) -> Path | None:
+        """The config a successful connection bound to, or None, without connecting."""
+        with self._lock:
+            return None if self._shared is None else self._shared.config_path
+
     def connect(self) -> ProjectClient | None:
         with self._lock:
             if self._client is not None:

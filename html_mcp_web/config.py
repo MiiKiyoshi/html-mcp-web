@@ -196,11 +196,38 @@ def get_content_file(config: Config, artifact_id: str) -> Path | None:
     return None if content is None else get_project_dir(config) / content
 
 
+_REQUIRED_FILE = {"templates": "build.py", "guidelines": "GUIDELINE.md"}
+
+
+def _roots(kind: str) -> dict[str, Path]:
+    """The folders entries of kind ("templates" or "guidelines") come from. A name found
+    in the user folder is used instead of the built-in one of the same name."""
+    return {"built_in": Path(__file__).resolve().parent.parent / kind, "user": USER_CONFIG_DIR / kind}
+
+
+def list_choices(kind: str) -> dict[str, Any]:
+    """Each source folder of kind with its entries (None when the folder is missing), the
+    source each name resolves to, and entries without their required file."""
+    choices: dict[str, Any] = {}
+    used: dict[str, str] = {}
+    incomplete: list[str] = []
+    for source, root in _roots(kind).items():
+        entries = (sorted(path.name for path in root.iterdir()
+                          if path.is_dir() and not path.name.startswith((".", "_")))
+                   if root.is_dir() else None)
+        choices[source] = {"dir": str(root), "entries": entries}
+        for name in entries or []:
+            used[name] = source          # the user folder comes second and wins, as in lookup
+            if not (root / name / _REQUIRED_FILE[kind]).is_file():
+                incomplete.append(f"{source}/{name}")
+    return {**choices, "used": used, "incomplete": incomplete}
+
+
 def _guideline_file(name: str) -> Path:
-    user_guideline = USER_CONFIG_DIR / "guidelines" / name
-    if user_guideline.is_dir():
-        return (user_guideline / "GUIDELINE.md").resolve()
-    return Path(__file__).resolve().parent.parent / "guidelines" / name / "GUIDELINE.md"
+    roots = _roots("guidelines")
+    if (roots["user"] / name).is_dir():
+        return (roots["user"] / name / "GUIDELINE.md").resolve()
+    return roots["built_in"] / name / "GUIDELINE.md"
 
 
 def _extended_name(path: Path) -> str | None:
@@ -241,7 +268,7 @@ def get_template_dir(config: Config, artifact_id: str) -> Path | None:
     template = config.artifacts[artifact_id].template
     if template is None:
         return None
-    user_template = USER_CONFIG_DIR / "templates" / template
-    if user_template.is_dir():
-        return user_template
-    return Path(__file__).resolve().parent.parent / "templates" / template
+    roots = _roots("templates")
+    if (roots["user"] / template).is_dir():
+        return roots["user"] / template
+    return roots["built_in"] / template
