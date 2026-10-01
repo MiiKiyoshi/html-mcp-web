@@ -75,6 +75,32 @@ def strip_script_blocks(source: str) -> str:
 
 # A fit error names the block that spills; these are the ones a reader answers either by
 # trimming that block or by moving something to where the page still has room.
+# Code spans and inline math, whose semicolons are their notation's own.
+FLOORPLAN_NOT_PROSE = re.compile(r"`[^`]*`|\$\$.*?\$\$|\$[^$]*\$")
+
+
+def floorplan_semicolons(path: Path) -> str | None:
+    """Where a planning record uses a semicolon in its prose, as one note, or None.
+
+    Fenced blocks, code spans, and $-delimited math are not prose. Math is recognised only
+    within one line. A file that does not exist is not a problem: nothing asks for one here."""
+    if not path.is_file():
+        return None
+    lines: list[int] = []
+    fenced = False
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if line.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+            continue
+        if not fenced and ";" in FLOORPLAN_NOT_PROSE.sub("", line):
+            lines.append(number)
+    if not lines:
+        return None
+    shown = ", ".join(str(number) for number in lines[:8]) + (f" and {len(lines) - 8} more" if len(lines) > 8 else "")
+    return (f"{path.name} uses a semicolon on {'line' if len(lines) == 1 else 'lines'} {shown}. "
+            "Write separate statements instead")
+
+
 FIT_ERROR = re.compile(r"^page (\d+) .*?(?:overflows its content area|wastes its last line|exceeds the)")
 # Room worth naming: tall enough to take a line of text and wide enough to hold one.
 ROOM_CLEARANCE = 8.0
@@ -393,6 +419,8 @@ class HtmlReviewServer:
             # The configured guideline and the ones it extends, base first.
             "guideline": ({"name": self.config.guideline, "paths": [str(path) for path in guidelines]}
                           if guidelines else None),
+            # The checks that carry the neutral guideline's own rules run only where it applies.
+            "neutral_guideline": any(path.parent.name == "neutral" for path in guidelines),
             "artifacts": {artifact_id: runtime.state() for artifact_id, runtime in self.artifacts.items()},
             # Whether the layout can be checked at all: only the server checks it, with Firefox.
             "layout_checker": shutil.which("firefox") is not None,
@@ -905,6 +933,13 @@ class HtmlReviewServer:
                                  else "the layout check did not finish. Try again")
         if runtime.build_error is not None:
             data["build_error"] = runtime.build_error
+        # The planning record beside the edit file, `<artifact>.FLOORPLAN.md`, is prose too,
+        # under the neutral guideline that asks for one.
+        floorplan = None if not any(path.parent.name == "neutral" for path in get_guideline_files(self.config)) \
+            else floorplan_semicolons(
+                (runtime.content_file or runtime.main_file).parent / f"{runtime.artifact_id}.FLOORPLAN.md")
+        if floorplan is not None:
+            data["floorplan"] = floorplan
         return web.json_response(data)
 
     async def measure_space(self, request: web.Request) -> web.Response:

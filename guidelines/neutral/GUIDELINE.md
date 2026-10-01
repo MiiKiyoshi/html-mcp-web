@@ -100,7 +100,7 @@ Judge wording by what the reader understands in context, not by what the author 
 
 4.10 By default, give each content page one short lead and one takeaway. The lead states the problem, comparison, or definition that makes the page necessary. Keep procedure, evidence, results, conclusions, and counts repeated below out of it. The takeaway states the one conclusion supported by the visible content and adds no evidence. Cover, contents, and divider pages are exempt.
 
-4.11 Do not use semicolons in slide prose, captions, table cells, scripts, or planning documents. Separate distinct statements. When their relationship matters, use an explicit conjunction.
+4.11 Separate distinct statements in slide prose, captions, table cells, scripts, and planning documents. When their relationship matters, use an explicit conjunction.
 
 ## Article 5. Show the relationships
 
@@ -138,7 +138,7 @@ Unless the drawing convention explains a connection's relation, label that relat
 
 5.9 In comparison tables, make rows the compared entities or conditions and order them by a meaningful key. State units once. If columns use different measurements, give each column's source. Keep group-defining conditions with the results. A full-page table must give a complete comparison for the page's question.
 
-5.10 Keep rendered content faithful. Preserve each embedded image's source width-to-height ratio. Check the rendered ratio against the source by calculation. Measure the image content, excluding padding and letterboxing. Do not scale text or glyphs unevenly. Line wrapping is not distortion.
+5.10 An image drawn inside an SVG or as a CSS background keeps its source width-to-height ratio.
 
 ## Article 6. Give each page one job
 
@@ -160,7 +160,7 @@ Speak to what the page shows. Do not add claims only in the script.
 
 7.1 Give every page one script after planning its content. When the explanation changes, revise the script. Use the page's claim and authoritative material, grounded in visible content. Do not put a claim or number only in the script. Draw and make checkable each concept the speaker needs, or remove it. Greetings, transitions, and source citations for visible claims need not be drawn.
 
-7.2 For a paragraph about visible content, start with an unspoken bracketed direction. Name the place on the page and the order to follow, not a topic. Speak only to that place. Use complete sentences in the deck's spoken language. Do not add empty spacing paragraphs, page numbers, titles, or note labels. Keep the cover script to the opening. No script repeats another page.
+7.2 For a paragraph about visible content, start with an unspoken bracketed direction. Name the place on the page and the order to follow, not a topic. Speak only to that place. Use complete sentences in the deck's spoken language. Do not add page numbers, titles, or note labels. Keep the cover script to the opening. No script repeats another page.
 
 ## Article 8. Keep planning records
 

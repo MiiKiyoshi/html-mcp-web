@@ -1029,6 +1029,35 @@ async def test_render_page_crops_to_a_target_block(client, monkeypatch) -> None:
     assert stale.status == 409
 
 
+async def test_layout_names_semicolons_in_the_floorplan(client, monkeypatch) -> None:
+    """The planning record beside the edit file is prose as much as the deck is. Its
+    semicolons are named with the layout answer, and code, fenced blocks, and math are
+    left out. With no record there, nothing is said about one."""
+    test_client, review = client
+
+    async def unfinished(runtime, host) -> None:
+        pass
+
+    monkeypatch.setattr(review, "_ensure_layout_checked", unfinished)
+    monkeypatch.setattr(review.config, "guideline", "neutral")
+    assert "floorplan" not in await (await test_client.get("/artifacts/slides/layout")).json()
+    (review.project_dir / "slides.FLOORPLAN.md").write_text(
+        "# Plan\n"
+        "Page 1 shows the flow; it ends at the result.\n"
+        "Inline `a; b` is code.\n"
+        "Math $x; y$ and $$p; q$$ are notation.\n"
+        "```\n"
+        "x; y\n"
+        "```\n"
+        "A second line; with prose.\n", encoding="utf-8")
+    answer = await (await test_client.get("/artifacts/slides/layout")).json()
+    assert answer["floorplan"] == ("slides.FLOORPLAN.md uses a semicolon on lines 2, 8. "
+                                   "Write separate statements instead")
+    # Without the neutral guideline, whose rule this is, the record is not read.
+    monkeypatch.setattr(review.config, "guideline", None)
+    assert "floorplan" not in await (await test_client.get("/artifacts/slides/layout")).json()
+
+
 async def test_a_saved_render_is_not_an_edit(client, monkeypatch) -> None:
     """A page rendered for the reader and saved into the project matched the watched
     "*.png", and every artifact's revision moved, which threw away its layout check. The

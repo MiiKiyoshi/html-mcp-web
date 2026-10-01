@@ -1685,6 +1685,72 @@ def test_an_arrowhead_over_the_last_bend_is_reported(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_semicolons_and_stretching_are_reported_and_normal_cases_are_not(tmp_path: Path) -> None:
+    """Rules a machine can check are checked rather than left to the guideline: semicolons
+    in what the reader sees, empty spacing paragraphs in a script, a picture drawn in
+    another shape than its source, and letters stretched unevenly. Each defect is set
+    beside a normal case that looks like it and must pass: code and math, a contained
+    picture, a stretch that a transform undoes, shapes stretched with their drawing, and
+    a rotation. Everything is measured by the server's own check, through layout()."""
+    import urllib.request
+
+    picture = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAeCAIAAADRv8uKAAAALklEQVR4nO3NMQEAMAgAoLlKdjKcKa3g5wMFiKx+F/7JKhaLxWKxWCwWi8XilQGZvAF/1NUbBwAAAABJRU5ErkJggg=="
+    (tmp_path / "slides.html").write_text(f'''<!doctype html>
+<html><head><meta charset="utf-8"><title>Checks</title></head><body><main class="pages">
+  <section class="page"><div data-layout-guard>
+    <p id="prose">Alpha; beta. Gamma&#59; delta.</p>
+    <p><code>x; y</code> and <span class="katex">a; b</span></p>
+    <img id="filled" src="{picture}" style="width: 200px; height: 50px">
+    <img id="contained" src="{picture}" style="width: 200px; height: 50px; object-fit: contain">
+    <div style="transform: scale(2, 1); transform-origin: 0 0; width: 100px"><img id="widened" src="{picture}" style="width: 40px; height: 30px; object-fit: contain"></div>
+    <div style="transform: scale(0.5, 1); transform-origin: 0 0"><img id="undone" src="{picture}" style="width: 80px; height: 30px"></div>
+    <svg id="squashed" width="200" height="50" viewBox="0 0 100 50" preserveAspectRatio="none"><text x="5" y="30">label</text></svg>
+    <svg id="shapes" width="200" height="50" viewBox="0 0 100 50" preserveAspectRatio="none"><rect x="0" y="0" width="100" height="50"/></svg>
+    <svg id="turned" width="100" height="50" viewBox="0 0 100 50"><text x="5" y="30" transform="rotate(20 50 25)">turned</text></svg>
+    <div id="wide" style="transform: scaleX(1.5); transform-origin: 0 0">stretched words</div>
+    <div style="transform: rotate(5deg)">turned words</div>
+    <p style="display: none">Hidden; text.</p>
+    <svg width="10" height="10"><defs><text>Unused; label</text></defs></svg>
+    <img src="{picture}" style="display: none; width: 200px; height: 50px">
+    <div style="transform: scaleX(1.5); visibility: hidden">hidden words</div>
+  </div></section>
+  <div class="script-block" style="display: none"><div class="script-text"><p>[top] Script; with a semicolon.</p><p>&nbsp;</p><p> </p><p><br></p></div></div>
+</main></body></html>''', encoding="utf-8")
+    stretched = [
+        "page 1 <img#filled> is drawn stretched, one axis 3.00 times the other. Keep its source proportions [p1:0.2]",
+        "page 1 <img#widened> is drawn stretched, one axis 2.00 times the other. Keep its source proportions [p1:0.4.0]",
+        "page 1 <svg#squashed> draws 1 text run stretched, one axis 2.00 times the other. Scale the drawing evenly where it holds text [p1:0.6]",
+        "page 1 text in 1 place is drawn stretched by a CSS transform, one axis 1.50 times the other. Scale text evenly [p1:0.9]",
+    ]
+    neutral_only = [
+        'page 1 text uses 2 semicolons, first in "Alpha; beta. Gamma; delta.". Write separate statements instead [p1:0.0]',
+        "page 1 script has 3 empty spacing paragraphs. Remove them",
+        'page 1 script uses 1 semicolon, first in "[top] Script; with a semicolon.". Write separate statements instead',
+    ]
+    # The punctuation and spacing rules are the neutral guideline's, and hold only under it.
+    # Stretching is a defect of the rendering whatever the guideline. Hidden page content is
+    # not counted, and a script is, shown or not.
+    for guideline, expected in (("neutral", stretched + neutral_only), (None, stretched)):
+        port = available_port()
+        config_path = tmp_path / ".html-mcp-web.yaml"
+        config_path.write_text(yaml.safe_dump({
+            "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+            "watch": ["*.html"],
+            "port": port,
+            **({"guideline": guideline} if guideline else {}),
+        }, sort_keys=False), encoding="utf-8")
+        shared = SharedProjectServer(load_config(config_path))
+        try:
+            shared.ensure()
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
+                errors = json.loads(response.read())["errors"]
+            checked = [error for error in errors if "semicolon" in error or "stretched" in error or "spacing" in error]
+            assert sorted(checked) == sorted(expected), (guideline, errors)
+        finally:
+            shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_pdf_export_drives_a_browser_of_its_own() -> None:
     """Every export started its browser on marionette's default port and then attached to
     whatever held that port. Two projects printing at once each have a server of their own,

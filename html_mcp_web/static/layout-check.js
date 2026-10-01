@@ -104,6 +104,69 @@ export function createLayoutChecks(dependencies) {
     return words.trim().replace(/\s+/g, " ").slice(0, 30);
   }
 
+  // Text that is not prose: a semicolon in code or math is that notation's own.
+  const NOT_PROSE = "code, pre, kbd, samp, .katex, math, script, style, .html-mcp-highlight-layer";
+
+  // How much more one axis may be stretched than the other before a stretch is reported:
+  // a numerical tolerance. Sizes and matrices here are unrounded, so an even scale or a
+  // rotation comes out at 1 within float error.
+  const STRETCH_TOLERANCE = 0.01;
+
+  // Whether a reader sees an element: rendered, neither hidden nor transparent, and not in
+  // an SVG container that is never drawn where it is written.
+  function seen(element) {
+    return element.checkVisibility({ visibilityProperty: true, opacityProperty: true })
+      && element.closest("defs, clipPath, mask, marker, pattern") === null;
+  }
+
+  // How unevenly a 2D linear map stretches: the ratio of its larger to its smaller singular
+  // value, 1 for a rotation or an even scale. A rotation is not distortion, and two uneven
+  // transforms that undo each other come out even.
+  function unevenness(a, b, c, d) {
+    const sum = a * a + b * b + c * c + d * d;
+    const det = Math.abs(a * d - b * c);
+    const root = Math.sqrt(Math.max(0, sum * sum - 4 * det * det));
+    const small = Math.sqrt(Math.max(0, (sum - root) / 2));
+    return small === 0 ? Infinity : Math.sqrt((sum + root) / 2) / small;
+  }
+
+  // The CSS transforms from just inside a page down to an element, its own included, as one
+  // matrix. The page's own transform only scales the whole page evenly.
+  function pageTransform(page, element) {
+    const chain = [];
+    for (let node = element; node !== null && node !== page; node = node.parentElement) chain.unshift(node);
+    let matrix = new (frameWindow().DOMMatrix)();
+    for (const node of chain) {
+      const value = frameWindow().getComputedStyle(node).transform;
+      if (value && value !== "none") matrix = matrix.multiply(new (frameWindow().DOMMatrix)(value));
+    }
+    return matrix;
+  }
+
+  // The semicolons under `root`, read from the text as the browser decoded it, so an
+  // entity counts as the character it stands for. On a page only what a reader sees counts.
+  // A script is read out whether or not it is shown, so all of it counts.
+  function semicolonsIn(root, visibleOnly) {
+    const found = [];
+    const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      if (!node.data.includes(";")) continue;
+      const parent = node.parentElement;
+      if (parent === null || parent.closest(NOT_PROSE) || (visibleOnly && !seen(parent))) continue;
+      found.push({ element: parent, text: node.data, count: node.data.split(";").length - 1 });
+    }
+    return found;
+  }
+
+  function semicolonNote(where, found) {
+    const count = found.reduce((total, entry) => total + entry.count, 0);
+    const text = found[0].text.replace(/\s+/g, " ").trim();
+    const at = text.indexOf(";");
+    const quote = text.slice(Math.max(0, at - 20), at + 21);
+    return `${where} uses ${count} ${count === 1 ? "semicolon" : "semicolons"}, first in "${quote}". `
+      + "Write separate statements instead";
+  }
+
   // How far an arrowhead reaches back along its line from the end it sits on, in the
   // line's user units, or null when its direction does not follow the line. A marker's
   // own children report an empty box, since a marker is never drawn where it is
@@ -188,6 +251,23 @@ export function createLayoutChecks(dependencies) {
       }
     }
     pages = children.filter((child) => child.matches("section.page"));
+    // A speaker script follows its page. What it says is prose like the page's, and a
+    // paragraph with nothing in it is only spacing. Both are rules of the neutral
+    // guideline rather than defects of any rendering, so they hold only where it applies.
+    const neutral = state.project?.neutral_guideline === true;
+    for (const block of neutral ? root.querySelectorAll(":scope > .script-block") : []) {
+      let owner = block.previousElementSibling;
+      while (owner !== null && !owner.matches("section.page")) owner = owner.previousElementSibling;
+      const where = `page ${owner === null ? 0 : pages.indexOf(owner) + 1} script`;
+      const empty = Array.from(block.querySelectorAll("p")).filter((paragraph) =>
+        paragraph.textContent.replace(/[\s\u00a0]/g, "") === "" && paragraph.querySelector("img, svg") === null);
+      if (empty.length > 0) {
+        addError(`${where} has ${empty.length} empty spacing ${empty.length === 1 ? "paragraph" : "paragraphs"}. `
+          + "Remove them", null);
+      }
+      const marked = semicolonsIn(block, false);
+      if (marked.length > 0) addError(semicolonNote(where, marked), null);
+    }
     // Everything below is measured with the pane zoom lifted. The artifact prints at
     // its own scale, so that is the layout to judge; at a fitted zoom the browser wraps
     // text and rounds boxes differently, and the same page reports different problems
@@ -274,6 +354,81 @@ export function createLayoutChecks(dependencies) {
             + `with ${name}, which Firefox ignores, so this check and the PDF draw them unmoved. `
             + "Move them with dy instead", svg);
         }
+      }
+      const marked = neutral ? semicolonsIn(page, true) : [];
+      if (marked.length > 0) addError(semicolonNote(`page ${index + 1} text`, marked), marked[0].element);
+      // An image drawn in another shape than its source's. Inside its box, object-fit fill
+      // stretches the picture to the content box, and every other value keeps its
+      // proportions, so letterboxing and a frame of padding or border are not stretching.
+      // Outside the box, a CSS transform on the image or an ancestor can stretch it too, or
+      // undo a stretch, so the two are taken together.
+      for (const image of page.querySelectorAll("img")) {
+        if (image.closest("svg") || image.naturalWidth === 0 || image.naturalHeight === 0 || !seen(image)) continue;
+        const style = frameWindow().getComputedStyle(image);
+        let scaleX = 1;
+        let scaleY = 1;
+        if (style.objectFit === "fill") {
+          const inner = (size, ...edges) => parseFloat(size)
+            - (style.boxSizing === "border-box" ? edges.reduce((sum, edge) => sum + parseFloat(edge), 0) : 0);
+          scaleX = inner(style.width, style.paddingLeft, style.paddingRight, style.borderLeftWidth, style.borderRightWidth)
+            / image.naturalWidth;
+          scaleY = inner(style.height, style.paddingTop, style.paddingBottom, style.borderTopWidth, style.borderBottomWidth)
+            / image.naturalHeight;
+        }
+        if (!(scaleX > 0 && scaleY > 0)) continue;
+        const drawn = pageTransform(page, image).multiply(new (frameWindow().DOMMatrix)([scaleX, 0, 0, scaleY, 0, 0]));
+        const stretch = unevenness(drawn.a, drawn.b, drawn.c, drawn.d);
+        if (stretch > 1 + STRETCH_TOLERANCE) {
+          addError(`page ${index + 1} ${describeElement(image)} is drawn stretched, one axis `
+            + `${stretch.toFixed(2)} times the other. Keep its source proportions`, image);
+        }
+      }
+      // Text drawn wider or taller than its font, in an SVG through its viewBox mapping or a
+      // transform, and in HTML through CSS transforms. An SVG's screen matrix takes in every
+      // transform above it, CSS ones included. Shapes stretched with the drawing are left
+      // alone: only letters are distorted by it.
+      for (const svg of page.querySelectorAll("svg")) {
+        if (svg.parentElement?.closest("svg")) continue;
+        let count = 0;
+        let worst = 1;
+        for (const text of svg.querySelectorAll("text")) {
+          if (!seen(text)) continue;
+          const matrix = text.getScreenCTM();
+          if (matrix === null) continue;
+          const stretch = unevenness(matrix.a, matrix.b, matrix.c, matrix.d);
+          if (stretch > 1 + STRETCH_TOLERANCE) {
+            count += 1;
+            worst = Math.max(worst, stretch);
+          }
+        }
+        if (count > 0) {
+          addError(`page ${index + 1} ${describeElement(svg)} draws ${count} text ${count === 1 ? "run" : "runs"} `
+            + `stretched, one axis ${worst.toFixed(2)} times the other. Scale the drawing evenly where it `
+            + "holds text", svg);
+        }
+      }
+      const transformed = Array.from(page.querySelectorAll("*")).filter((element) =>
+        !element.closest("svg") && frameWindow().getComputedStyle(element).transform !== "none");
+      const lettered = new Set();
+      for (const element of transformed) {
+        for (const candidate of [element, ...element.querySelectorAll("*")]) {
+          if (candidate.closest("svg") || !seen(candidate)) continue;
+          if (Array.from(candidate.childNodes).some((node) => node.nodeType === 3 && node.data.trim() !== "")) {
+            lettered.add(candidate);
+          }
+        }
+      }
+      const stretchedText = Array.from(lettered)
+        .map((element) => {
+          const matrix = pageTransform(page, element);
+          return { element, stretch: unevenness(matrix.a, matrix.b, matrix.c, matrix.d) };
+        })
+        .filter((entry) => entry.stretch > 1 + STRETCH_TOLERANCE);
+      if (stretchedText.length > 0) {
+        const worst = Math.max(...stretchedText.map((entry) => entry.stretch));
+        addError(`page ${index + 1} text in ${stretchedText.length} ${stretchedText.length === 1 ? "place" : "places"} `
+          + `is drawn stretched by a CSS transform, one axis ${worst.toFixed(2)} times the other. `
+          + "Scale text evenly", stretchedText[0].element);
       }
       // An arrowhead longer than the stretch of line between it and the last bend sits
       // over the corner, and the line seems to stop under a floating triangle. The head's
