@@ -1606,6 +1606,16 @@ async function handleSocketMessage(message) {
     showAgentWaiting(message.waiters);
     return;
   }
+  // The server finished its check of a revision: the review page shows that result.
+  if (message.type === "layout_checked") {
+    if (!adoptProject(message)) return;
+    const artifact = state.project.artifacts[state.artifactId];
+    if (artifact !== undefined && artifact.revision === state.revision) {
+      state.artifact = artifact;
+      updateLayoutUi();
+    }
+    return;
+  }
   if (["artifacts_changed", "config_reloaded"].includes(message.type)) {
     if (!adoptProject(message)) return;
     if (state.project.artifacts[state.artifactId] === undefined) {

@@ -11,6 +11,7 @@ import logging
 import math
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -198,6 +199,10 @@ class ArtifactRuntime:
     layout_errors: list[str] = field(default_factory=list)
     layout_room: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     space_revision: int | None = None
+    # The token of the server's own layout check while it runs. Only a report carrying it
+    # is recorded: browsers measure a few pixels apart, and a review page on another engine
+    # or pixel ratio turned the same content's result from overflowing to clean and back.
+    check_token: str | None = None
     # What the files looked like when this revision was made. A watcher can stop
     # delivering events without saying so, and then everything downstream, the layout
     # check included, goes on describing a file nobody has read since.
@@ -301,11 +306,7 @@ class HtmlReviewServer:
     # again. Under the MCP client's own timeouts, and short enough that a stopped server
     # is noticed within a minute.
     REVIEW_POLL_TIMEOUT = 55.0
-    # How long an open review page gets to report a layout check before a headless one
-    # runs anyway. A visible page reports within seconds, and a page in a background tab,
-    # on a screen that is off, or in a slide show never does.
-    REVIEW_PAGE_CHECK_SECONDS = 10.0
-    # How long a layout answer waits for any check to report before it says so.
+    # How long the server's own layout check may take before an answer says it did not finish.
     LAYOUT_CHECK_SECONDS = 45.0
 
     def __init__(self, config: Config):
@@ -314,6 +315,9 @@ class HtmlReviewServer:
         self.static_dir = Path(__file__).parent / "static"
         self.websockets: set[web.WebSocketResponse] = set()
         self.websocket_artifacts: dict[web.WebSocketResponse, str | None] = {}
+        # The address each review page reached the server at, which the server's own layout
+        # check opens when a change it has to check arrives with no request to take one from.
+        self.websocket_hosts: dict[web.WebSocketResponse, str] = {}
         self.pdf_lock = asyncio.Lock()
         self.generated_paths: set[Path] = set()
         # The reviewer's call button. Presses are a monotonic count and the server keeps
@@ -388,6 +392,8 @@ class HtmlReviewServer:
             "guideline": ({"name": self.config.guideline, "paths": [str(path) for path in guidelines]}
                           if guidelines else None),
             "artifacts": {artifact_id: runtime.state() for artifact_id, runtime in self.artifacts.items()},
+            # Whether the layout can be checked at all: only the server checks it, with Firefox.
+            "layout_checker": shutil.which("firefox") is not None,
         }
 
     def runtime(self, request: web.Request) -> ArtifactRuntime:
@@ -408,9 +414,15 @@ class HtmlReviewServer:
         for socket in dead:
             self.websockets.discard(socket)
             self.websocket_artifacts.pop(socket, None)
+            self.websocket_hosts.pop(socket, None)
 
     def has_review_ui(self, artifact_id: str) -> bool:
         return artifact_id in self.websocket_artifacts.values()
+
+    def review_host(self, artifact_id: str) -> str | None:
+        """The address a review page showing this artifact reached the server at."""
+        return next((self.websocket_hosts[socket] for socket, shown in self.websocket_artifacts.items()
+                     if shown == artifact_id and socket in self.websocket_hosts), None)
 
     async def on_project_change(self, path: str) -> None:
         changed = Path(path).resolve()
@@ -456,6 +468,11 @@ class HtmlReviewServer:
             runtime.reset_layout()
             runtime.note_files()
         await self.broadcast({"type": "artifacts_changed", "path": str(changed.relative_to(self.project_dir)), **self.project_state()})
+        # A review page shows the server's check, so a revision one is looking at is checked now.
+        for runtime in affected:
+            host = self.review_host(runtime.artifact_id)
+            if host is not None:
+                asyncio.ensure_future(self._ensure_layout_checked(runtime, host))
 
     def static_tag(self) -> str:
         """The newest change among the files the page loads, as one path segment.
@@ -596,8 +613,8 @@ class HtmlReviewServer:
                 await self._ensure_layout_checked(runtime, request.host)
             if runtime.space_revision != runtime.revision:
                 raise web.HTTPConflict(
-                    text="space measurement is not ready for the current revision, so the target's place "
-                         "is unknown; keep the review UI open until layout checking finishes")
+                    text="the layout check of the current revision did not finish, so the target's "
+                         "place is unknown. Try again")
             if not target_ref.startswith(f"p{page}:"):
                 raise web.HTTPBadRequest(text=f"target {target_ref!r} is not on page {page}")
             space_page = next((value for value in runtime.space_pages if value["number"] == page), None)
@@ -741,8 +758,7 @@ class HtmlReviewServer:
         await self.catch_up()
         if not self.headless_check.locked():
             for runtime in self.artifacts.values():
-                if (runtime.space_revision != runtime.revision and runtime.main_file.is_file()
-                        and not self.has_review_ui(runtime.artifact_id)):
+                if runtime.space_revision != runtime.revision and runtime.main_file.is_file():
                     asyncio.ensure_future(self._ensure_layout_checked(runtime, request.host))
                     break
         return web.json_response(self.project_state())
@@ -773,6 +789,10 @@ class HtmlReviewServer:
         try:
             revision = int(data["revision"])
             produced_by = str(data["static"])
+            check = data["check"]
+            settled = data["settled"]
+            if not isinstance(settled, bool):
+                raise ValueError("settled must be true or false")
             errors = data["errors"]
             if not isinstance(errors, list) or not all(isinstance(value, str) and value for value in errors):
                 raise ValueError("errors must be a list of non-empty strings")
@@ -786,55 +806,59 @@ class HtmlReviewServer:
             raise web.HTTPConflict(
                 text=f"layout result comes from page code {produced_by}; this server serves "
                      f"{self.static_tag()}. Reload the review page.")
+        if runtime.check_token is None or check != runtime.check_token:
+            raise web.HTTPConflict(text="layout results are recorded only from the server's own check")
         if revision != runtime.revision:
             raise web.HTTPConflict(text=f"layout revision {revision} does not match current revision {runtime.revision}")
+        # Measured before its fonts or images arrived, the page reports again once they have,
+        # and that report is the one kept.
+        if not settled:
+            return web.json_response(runtime.state())
         runtime.layout_revision = revision
         runtime.layout_errors = list(errors)
         runtime.space_revision = revision
         runtime.space_pages = space_pages
         runtime.layout_room = room_for_errors(errors, space_pages)
+        await self.broadcast({"type": "layout_checked", **self.project_state()})
         return web.json_response(runtime.state())
 
-    async def _ensure_layout_checked(self, runtime: ArtifactRuntime, host: str,
-                                     over_review_page: bool = False) -> None:
-        """Run the layout check ourselves when no review UI is viewing this artifact.
+    async def _ensure_layout_checked(self, runtime: ArtifactRuntime, host: str) -> None:
+        """Run the server's own layout check of the current revision.
 
-        The check is browser work (the page's own scripts measure it and post the result
-        back), and with no browser on the page checked_revision sat at null and every
-        measurement 409'd until someone opened the UI. The measurers only need a browser,
-        not a reader: a headless one pointed at this server's own page runs the same
-        scripts and posts the same result. A UI viewing this artifact is left to do it
-        instead, unless over_review_page says that UI had its turn and reported nothing,
-        and one check runs at a time.
+        The check is browser work: the review page's scripts measure the artifact and post
+        the result back. Browsers measure a few pixels apart, and the same content
+        overflowed at one pixel ratio and fitted at another, so the result recorded is
+        always this one: a headless Firefox on this host at its default pixel ratio, the
+        browser the PDF and pptx exports print with. Its page carries a token that
+        update_layout requires, and one check runs at a time.
         """
-        import shutil as _shutil
-        import tempfile
+        import secrets
 
         if runtime.space_revision == runtime.revision:
             return
-        if self.has_review_ui(runtime.artifact_id) and not over_review_page:
-            return
-        if _shutil.which("firefox") is None:
+        if shutil.which("firefox") is None:
             return
         async with self.headless_check:
             if runtime.space_revision == runtime.revision:
                 return
+            runtime.check_token = secrets.token_urlsafe(16)
             profile = tempfile.mkdtemp(prefix="html_mcp_check_")
             process = await asyncio.create_subprocess_exec(
                 "firefox", "-headless", "-no-remote", "-profile", profile,
-                f"http://{host}/?artifact={runtime.artifact_id}",
+                f"http://{host}/?artifact={runtime.artifact_id}&check={runtime.check_token}",
                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
             )
             try:
-                for _ in range(90):
+                for _ in range(int(self.LAYOUT_CHECK_SECONDS / 0.5)):
                     if runtime.space_revision == runtime.revision:
                         return
                     await asyncio.sleep(0.5)
             finally:
+                runtime.check_token = None
                 process.terminate()
                 await process.wait()
                 await asyncio.get_running_loop().run_in_executor(
-                    None, lambda: _shutil.rmtree(profile, ignore_errors=True))
+                    None, lambda: shutil.rmtree(profile, ignore_errors=True))
 
     async def layout_state(self, request: web.Request) -> web.Response:
         """The current revision's layout errors, once a browser has checked it.
@@ -842,32 +866,14 @@ class HtmlReviewServer:
         One answer either way: the check is started or waited for here, so the agent never
         receives a count that means "not yet" and has to ask again.
         """
-        import shutil as _shutil
-
         runtime = self.runtime(request)
         if runtime.digest() is None:
             # Nothing to check: say what is missing now rather than wait on a browser.
             return web.json_response({"revision": runtime.revision, "errors": None,
                                       "error": runtime.missing_file()})
-        no_firefox = _shutil.which("firefox") is None
-        review_page = self.has_review_ui(runtime.artifact_id)
-        no_checker = no_firefox and not review_page
-
-        async def reported(seconds: float) -> bool:
-            for _ in range(max(1, int(seconds / 0.5))):
-                if runtime.layout_revision == runtime.revision:
-                    return True
-                await asyncio.sleep(0.5)
-            return runtime.layout_revision == runtime.revision
-
-        if runtime.layout_revision != runtime.revision and not no_checker:
-            # An open review page checks for itself, but only while it is shown: in a
-            # background tab, on a screen that is off, or in a slide show it never does.
-            # It gets a short turn, and then the headless check runs over it.
-            if not (review_page and await reported(self.REVIEW_PAGE_CHECK_SECONDS)):
-                if runtime.space_revision != runtime.revision:
-                    await self._ensure_layout_checked(runtime, request.host, over_review_page=True)
-                await reported(self.LAYOUT_CHECK_SECONDS)
+        no_firefox = shutil.which("firefox") is None
+        if runtime.layout_revision != runtime.revision and not no_firefox:
+            await self._ensure_layout_checked(runtime, request.host)
         checked = runtime.layout_revision == runtime.revision
         data: dict[str, Any] = {
             "revision": runtime.revision,
@@ -875,16 +881,8 @@ class HtmlReviewServer:
         }
         if not checked:
             # Said at once when nothing can check: waiting would only end in the same answer.
-            if no_checker:
-                data["unchecked"] = ("Firefox is not installed and no review page is open, "
-                                     "so nothing can check the layout")
-            elif no_firefox:
-                data["unchecked"] = (
-                    "a review page is open but did not check this revision, and Firefox is not "
-                    "installed for a headless check. A page in a background tab, on a screen that "
-                    "is off, or in a slide show does not measure. Bring it to the front or close it")
-            else:
-                data["unchecked"] = "the layout check did not finish; try again"
+            data["unchecked"] = ("Firefox is not installed, so nothing can check the layout" if no_firefox
+                                 else "the layout check did not finish. Try again")
         if runtime.build_error is not None:
             data["build_error"] = runtime.build_error
         return web.json_response(data)
@@ -912,7 +910,7 @@ class HtmlReviewServer:
             await self._ensure_layout_checked(runtime, request.host)
         if runtime.space_revision != revision:
             raise web.HTTPConflict(
-                text=f"space measurement is not ready for revision {revision}; keep the review UI open until layout checking finishes"
+                text=f"the layout check of revision {revision} did not finish, so its space is unknown. Try again"
             )
         page = next((value for value in runtime.space_pages if value["number"] == page_number), None)
         if page is None:
@@ -1374,6 +1372,7 @@ class HtmlReviewServer:
         await socket.prepare(request)
         self.websockets.add(socket)
         self.websocket_artifacts[socket] = None
+        self.websocket_hosts[socket] = request.host
         await socket.send_json({"type": "state", **self.project_state()})
         try:
             async for message in socket:
@@ -1389,9 +1388,11 @@ class HtmlReviewServer:
                     artifact_id = event.get("artifact") if event.get("type") == "active_artifact" else None
                     if artifact_id in self.artifacts:
                         self.websocket_artifacts[socket] = artifact_id
+                        asyncio.ensure_future(self._ensure_layout_checked(self.artifacts[artifact_id], request.host))
         finally:
             self.websockets.discard(socket)
             self.websocket_artifacts.pop(socket, None)
+            self.websocket_hosts.pop(socket, None)
         return socket
 
     async def start_watcher(self, app: web.Application) -> None:

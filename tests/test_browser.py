@@ -4111,12 +4111,12 @@ def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
-def test_a_settled_frame_is_not_measured_again_on_every_resize(tmp_path: Path) -> None:
-    """The layout check walks every block of every page, and it was scheduled on every
-    resize, the split being dragged included, as well as on load and on each font and
-    image arriving: a deck measured with its fonts in was measured over and over. A frame
-    measured with fonts in and images complete is left alone; a new revision is measured
-    and, once settled, left alone in turn."""
+def test_a_review_page_shows_the_servers_check_and_measures_nothing_itself(tmp_path: Path) -> None:
+    """Browsers measure a few pixels apart, and a review page on another pixel ratio turned
+    the same content from overflowing to clean and back. The server's own check is the only
+    one recorded, so a review page measures nothing: not on a resize, which once measured
+    the whole deck on every frame of a drag, and not on a new revision. It shows the
+    server's result for each revision instead."""
     slides = tmp_path / "slides.html"
     slides.write_text(slides_html(), encoding="utf-8")
     port = available_port()
@@ -4167,21 +4167,19 @@ def test_a_settled_frame_is_not_measured_again_on_every_resize(tmp_path: Path) -
                 time.sleep(0.25)
             time.sleep(1.0)
 
-        wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-frame").dataset.settled') == str(first["revision"]))
         resize_about()
         assert posts() == 0
 
-        # A new revision is measured, and once its fonts and images are in, measured no more.
+        # A new revision is checked by the server, and the page shows that check.
         slides.write_text(slides_html("Edited sentence."), encoding="utf-8")
         wait_until(lambda: get_json(f"{base}/state")["artifacts"]["slides"]["layout_check"]["checked_revision"]
                    == first["revision"] + 1)
-        wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-frame").dataset.settled') == str(first["revision"] + 1))
-        measured = posts()
-        assert measured >= 1, measured
+        wait_until(lambda: browser.execute_script('''
+          return document.querySelector("#artifact-frame").dataset.revision === "%d"
+            && document.querySelector("#artifact-status").textContent === "ready";
+        ''' % (first["revision"] + 1)))
         resize_about()
-        assert posts() == measured, (measured, posts())
+        assert posts() == 0
     finally:
         if browser is not None:
             try:

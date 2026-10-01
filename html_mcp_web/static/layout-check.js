@@ -1,5 +1,8 @@
 import { measureArtifactSpace, groupLines, elementRef } from "./space-measure.js";
 
+// Set only in the browser the server opens for its own layout check.
+const checkToken = new URLSearchParams(location.search).get("check");
+
 export function createLayoutChecks(dependencies) {
   const {
     $,
@@ -420,7 +423,8 @@ export function createLayoutChecks(dependencies) {
     // An artifact whose main file is missing is not "checking": there is nothing to check,
     // and saying otherwise reads as "wait a moment" forever.
     status.textContent = state.artifact.error ? "missing"
-      : checked ? (errors.length === 0 ? "ready" : "layout error") : "checking";
+      : checked ? (errors.length === 0 ? "ready" : "layout error")
+      : state.project.layout_checker ? "checking" : "unchecked";
     status.classList.toggle("error", errors.length > 0 || Boolean(state.artifact.error));
     renderProblems(checked, errors);
   }
@@ -488,10 +492,15 @@ export function createLayoutChecks(dependencies) {
     // new revision, and then marked the frame settled, so the real check never ran.
     const doc = frameDocument();
     if (doc.documentElement.dataset.htmlMcpRevision !== String(revision)) return;
+    // A measurement taken before the fonts or images arrive is reported, so the server knows
+    // the page is working, and is taken again once they have; only the later one is kept.
+    const settled = doc.fonts.status === "loaded" && Array.from(doc.images).every((image) => image.complete);
     const body = JSON.stringify({
       revision,
       // The code this page runs: the server records a result only from the code it serves.
       static: document.querySelector('meta[name="html-mcp-static"]')?.content ?? null,
+      check: checkToken,
+      settled,
       errors: artifactLayoutErrors(),
       // Space is reported in page pixels, so it is read at the page's own scale too.
       space: unzoomed(() => measureArtifactSpace(frameDocument())),
@@ -503,9 +512,7 @@ export function createLayoutChecks(dependencies) {
         headers: { "Content-Type": "application/json" },
         body,
       });
-      if (doc.fonts.status === "loaded" && Array.from(doc.images).every((image) => image.complete)) {
-        $("#artifact-frame").dataset.settled = String(revision);
-      }
+      if (settled) $("#artifact-frame").dataset.settled = String(revision);
     } catch (error) {
       state.layoutCheckError =
         `the layout check ran but could not be reported (${String(error.message || error)}); `
@@ -524,6 +531,10 @@ export function createLayoutChecks(dependencies) {
   }
   
   function scheduleLayoutCheck() {
+    // Only the server's own check measures, in a browser it opens with a token. A review
+    // page shows that check's result: browsers measure a few pixels apart, and a page on
+    // another pixel ratio turned the same content from overflowing to clean and back.
+    if (checkToken === null) return;
     if (state.slideShow) return;
     // A frame that has been measured with its fonts in and its images complete has
     // nothing more to say for that revision, and is left alone. The check walks every

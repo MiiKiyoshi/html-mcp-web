@@ -73,6 +73,15 @@ def space_snapshot() -> list[dict]:
     }]
 
 
+def server_check(review, artifact: str = "slides", **report) -> dict:
+    """A report from the server's own layout check: it carries the running check's token,
+    and the fonts and images had arrived when it measured."""
+    runtime = review.artifacts[artifact]
+    runtime.check_token = "token-of-the-running-check"
+    return {"revision": runtime.revision, "static": review.static_tag(), "check": runtime.check_token,
+            "settled": True, "errors": [], "space": space_snapshot(), **report}
+
+
 def test_maximal_free_regions_never_returns_zero_area() -> None:
     regions = maximal_free_regions(
         [0, 0, 100, 100],
@@ -264,8 +273,7 @@ async def test_layout_result_is_accepted_when_the_deck_measures_past_a_megabyte(
         }
         pages.append({"number": number, "bbox": [0, 0, 1280, 720],
                       "children": [f"p{number}:0"], "nodes": nodes})
-    payload = {"revision": review.artifacts["slides"].revision, "static": review.static_tag(),
-               "errors": [], "space": pages}
+    payload = server_check(review, space=pages)
     assert len(json.dumps(payload)) > 1024 * 1024
     response = await test_client.post("/artifacts/slides/layout", json=payload)
     assert response.status == 200
@@ -276,14 +284,7 @@ async def test_layout_result_is_accepted_when_the_deck_measures_past_a_megabyte(
 async def test_layout_result_tracks_current_revision(client) -> None:
     test_client, review = client
     response = await test_client.post(
-        "/artifacts/slides/layout",
-        json={
-            "revision": review.artifacts["slides"].revision,
-            "static": review.static_tag(),
-            "errors": ["page 1 exceeds the slides height"],
-            "space": space_snapshot(),
-        },
-    )
+        "/artifacts/slides/layout", json=server_check(review, errors=["page 1 exceeds the slides height"]))
     assert response.status == 200
     state = await response.json()
     assert state["layout_check"]["checked_revision"] == review.artifacts["slides"].revision
@@ -291,22 +292,15 @@ async def test_layout_result_tracks_current_revision(client) -> None:
     # The error is about fit, so the page's free rectangles come with it.
     assert [region["bbox"] for region in state["layout_check"]["room"]["1"]]
     assert state["space_revision"] == review.artifacts["slides"].revision
-    stale = await test_client.post("/artifacts/slides/layout", json={
-        "revision": review.artifacts["slides"].revision - 1,
-        "static": review.static_tag(),
-        "errors": [],
-        "space": space_snapshot(),
-    })
+    stale = await test_client.post(
+        "/artifacts/slides/layout", json=server_check(review, revision=review.artifacts["slides"].revision - 1))
     assert stale.status == 409
 
 
 async def test_space_measurement_is_revision_scoped_and_drills_into_one_block(client) -> None:
     test_client, review = client
     revision = review.artifacts["slides"].revision
-    posted = await test_client.post(
-        "/artifacts/slides/layout",
-        json={"revision": revision, "static": review.static_tag(), "errors": [], "space": space_snapshot()},
-    )
+    posted = await test_client.post("/artifacts/slides/layout", json=server_check(review))
     assert posted.status == 200
 
     page = await (await test_client.get(
@@ -394,9 +388,9 @@ async def test_headless_check_runs_while_a_different_artifact_is_reviewed(client
     assert scheduled == ["slides"]
 
 
-async def test_an_open_review_page_that_does_not_check_leaves_it_to_headless(client, monkeypatch) -> None:
-    """A tab in the background, a screen that is off, or a slide show holds the review
-    page open without measuring it. The layout answer must still arrive."""
+async def test_the_servers_own_check_answers_while_a_review_page_is_open(client, monkeypatch) -> None:
+    """A review page does not measure for the record, so layout() runs the server's own
+    check whether a page is open or not, and opens it with the token the record requires."""
     import shutil
 
     test_client, review = client
@@ -404,7 +398,7 @@ async def test_an_open_review_page_that_does_not_check_leaves_it_to_headless(cli
     review.websockets.add(idle_viewer)
     review.websocket_artifacts[idle_viewer] = "slides"
     runtime = review.artifacts["slides"]
-    launched: list[str] = []
+    launched: list[tuple[str, str]] = []
 
     class Headless:
         def terminate(self) -> None:
@@ -415,33 +409,58 @@ async def test_an_open_review_page_that_does_not_check_leaves_it_to_headless(cli
 
     async def headless_browser(program, *args, **kwargs):
         # Stands in for the headless page, which measures and posts at once.
-        launched.append(program)
+        launched.append((program, args[-1]))
         runtime.layout_revision = runtime.space_revision = runtime.revision
         runtime.layout_errors = []
         return Headless()
 
     monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.setattr(asyncio, "create_subprocess_exec", headless_browser)
-    monkeypatch.setattr(HtmlReviewServer, "REVIEW_PAGE_CHECK_SECONDS", 0.5)
     state = await (await test_client.get("/artifacts/slides/layout")).json()
-    assert launched == ["firefox"]
+    assert [program for program, _ in launched] == ["firefox"]
+    assert "?artifact=slides&check=" in launched[0][1]
     assert state["errors"] == [] and "unchecked" not in state
 
 
-async def test_an_open_review_page_that_does_not_check_is_named_when_nothing_else_can(client, monkeypatch) -> None:
+async def test_layout_says_at_once_when_nothing_can_check(client, monkeypatch) -> None:
     import shutil
 
     test_client, review = client
-    idle_viewer = object()
-    review.websockets.add(idle_viewer)
-    review.websocket_artifacts[idle_viewer] = "slides"
     monkeypatch.setattr(shutil, "which", lambda name: None)
-    monkeypatch.setattr(HtmlReviewServer, "REVIEW_PAGE_CHECK_SECONDS", 0.5)
-    monkeypatch.setattr(HtmlReviewServer, "LAYOUT_CHECK_SECONDS", 0.5)
     state = await (await test_client.get("/artifacts/slides/layout")).json()
-    # Why the check could not run, and what the reader can do about it.
     assert state["errors"] is None
-    assert "background tab" in state["unchecked"] and "Bring it to the front" in state["unchecked"]
+    assert "Firefox is not installed" in state["unchecked"]
+    # The review page learns it too, and says "unchecked" rather than "checking" forever.
+    assert (await (await test_client.get("/state")).json())["layout_checker"] is False
+
+
+async def test_only_the_servers_own_settled_check_is_recorded(client) -> None:
+    """Browsers measure a few pixels apart. The same content overflowed at one pixel ratio
+    and fitted at another, and whichever page reported decided what layout() said. Only
+    the server's own check, which carries its token, is recorded, and only once its fonts
+    and images had arrived. Review pages are told the result."""
+    test_client, review = client
+    socket = await test_client.ws_connect("/ws")
+    assert (await socket.receive_json())["type"] == "state"
+
+    # A review page measuring for itself carries no token.
+    other_browser = server_check(review, check=None, errors=["page 1 content overflows its content area (height by 3px)"])
+    refused = await test_client.post("/artifacts/slides/layout", json=other_browser)
+    assert refused.status == 409
+    assert "server's own check" in await refused.text()
+
+    # The check's first measurement, taken before its fonts arrived, is not kept.
+    early = await test_client.post("/artifacts/slides/layout", json=server_check(
+        review, settled=False, errors=["page 1 content overflows its content area (height by 40px)"]))
+    assert early.status == 200
+    assert (await early.json())["layout_check"]["checked_revision"] is None
+
+    kept = await test_client.post("/artifacts/slides/layout", json=server_check(review))
+    assert (await kept.json())["layout_check"]["checked_revision"] == review.artifacts["slides"].revision
+    told = await socket.receive_json()
+    assert told["type"] == "layout_checked"
+    assert told["artifacts"]["slides"]["layout_check"]["checked_revision"] == review.artifacts["slides"].revision
+    await socket.close()
 
 
 async def test_editing_a_thread_entry_rewrites_it_in_place(client) -> None:
@@ -972,10 +991,7 @@ async def test_render_page_crops_to_a_target_block(client, monkeypatch) -> None:
 
     test_client, review = client
     revision = review.artifacts["slides"].revision
-    posted = await test_client.post(
-        "/artifacts/slides/layout",
-        json={"revision": revision, "static": review.static_tag(), "errors": [], "space": space_snapshot()},
-    )
+    posted = await test_client.post("/artifacts/slides/layout", json=server_check(review))
     assert posted.status == 200
 
     # A real one-page PDF at the slide deck's print size, standing in for firefox.
@@ -1002,12 +1018,12 @@ async def test_render_page_crops_to_a_target_block(client, monkeypatch) -> None:
     # an unknown ref is not found, and without a fresh measurement the place is unknown.
     assert (await test_client.get("/artifacts/slides/render/page?page=2&dpi=96&target=p1%3A0")).status == 400
     assert (await test_client.get("/artifacts/slides/render/page?page=1&dpi=96&target=p1%3A9")).status == 404
-    # With this artifact open in the review UI, the server leaves checking to it, so a
-    # target whose measurement has gone stale is refused rather than measured behind the
-    # reviewer's back.
-    viewer = object()
-    review.websockets.add(viewer)
-    review.websocket_artifacts[viewer] = "slides"
+    # A measurement of an earlier revision never places the target: the server checks the
+    # current one first, and when that check does not finish the target is refused.
+    async def unfinished(runtime, host) -> None:
+        pass
+
+    monkeypatch.setattr(review, "_ensure_layout_checked", unfinished)
     review.artifacts["slides"].revision += 1
     stale = await test_client.get("/artifacts/slides/render/page?page=1&dpi=96&target=p1%3A0")
     assert stale.status == 409
@@ -1054,11 +1070,7 @@ async def test_one_broken_artifact_does_not_take_the_server_down(tmp_path: Path)
 
         # Deleting a main is a change to its artifact: without the watcher reporting it,
         # the layout measured from the deleted file stayed on offer as current.
-        posted = await test_client.post(
-            "/artifacts/good/layout",
-            json={"revision": review.artifacts["good"].revision, "static": review.static_tag(),
-                  "errors": [], "space": space_snapshot()},
-        )
+        posted = await test_client.post("/artifacts/good/layout", json=server_check(review, "good"))
         assert posted.status == 200
         (tmp_path / "good.html").unlink()
         await review.on_project_change(str(tmp_path / "good.html"))
@@ -1280,10 +1292,7 @@ async def test_a_layout_result_from_other_code_than_the_server_serves_is_refused
     page = await (await test_client.get("/")).text()
     assert f'<meta name="html-mcp-static" content="{served}">' in page
 
-    from_before = await test_client.post("/artifacts/slides/layout", json={
-        "revision": review.artifacts["slides"].revision, "static": "v1",
-        "errors": [], "space": space_snapshot(),
-    })
+    from_before = await test_client.post("/artifacts/slides/layout", json=server_check(review, static="v1"))
     assert from_before.status == 409
     assert "Reload the review page" in await from_before.text()
     state = (await (await test_client.get("/state")).json())["artifacts"]["slides"]

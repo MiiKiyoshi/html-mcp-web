@@ -377,8 +377,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         """Layout errors of the current revision: content off the page, clipped drawings,
         overlapping labels. With page, that page's errors, blocks and free space."""
         client = binding.require_client()
-        # Long enough for the server to run the check itself when no review page is open:
-        # it starts a headless browser on its own page and answers once that posts.
+        # Long enough for the server's own check, the only one recorded: it starts a headless
+        # browser on its own page and answers once that posts.
         result = await client.request_json("GET", f"/artifacts/{artifact}/layout", timeout=75.0)
         if page is not None:
             if result["errors"] is not None:

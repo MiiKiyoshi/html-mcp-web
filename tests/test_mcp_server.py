@@ -22,6 +22,7 @@ from html_mcp_web.mcp_client import CLI, INIT_GUIDE, ProjectBinding
 from html_mcp_web.mcp_contract import agent_comment, agent_comment_summary, revision_of, short_time
 from html_mcp_web.mcp_server import create_server
 from html_mcp_web.project_server import SharedProjectServer
+from html_mcp_web.server import HtmlReviewServer
 
 
 def available_port() -> int:
@@ -288,7 +289,21 @@ def test_binding_retries_after_port_collision_is_fixed(tmp_path: Path) -> None:
         owner.stop()
 
 
-def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path: Path) -> None:
+async def no_check(self, runtime, host) -> None:
+    """The tests give the layout result themselves, so the server's own check is held off."""
+
+
+def server_check(shared: SharedProjectServer, **report) -> dict:
+    """A layout report the server records: one carrying its running check's token."""
+    review = shared.runner.app["review_server"]
+    runtime = review.artifacts["slides"]
+    runtime.check_token = "token-of-the-running-check"
+    return {"revision": runtime.revision, "static": review.static_tag(), "check": runtime.check_token,
+            "settled": True, "errors": [], "space": space_snapshot(), **report}
+
+
+def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(HtmlReviewServer, "_ensure_layout_checked", no_check)
     config = project(tmp_path)
     first = SharedProjectServer(config)
     second = SharedProjectServer(config)
@@ -409,15 +424,7 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
         assert unanswered["comments"][0]["thread_entries"] == 3
         assert unanswered["comments"][0]["request"] == "Still wrong"
 
-        revision = revision_now()
-        with urllib.request.urlopen(f"{base}/state", timeout=3) as response:
-            served = json.loads(response.read().decode("utf-8"))["static"]
-        post_json(f"{base}/artifacts/slides/layout", {
-            "revision": revision,
-            "static": served,
-            "errors": [],
-            "space": space_snapshot(),
-        })
+        post_json(f"{base}/artifacts/slides/layout", server_check(first))
         measured = answer(mcp.call_tool("layout", {"artifact": "slides", "page": 1, "clearance": 12}))
         assert measured["errors"] == [] and "note" not in measured
         assert measured["children"][0]["ref"] == "p1:0"
@@ -671,7 +678,8 @@ def test_guide_for_a_templated_artifact_names_its_content_file_and_template_note
 
 
 
-def test_layout_reports_the_revisions_errors_and_a_pages_detail(tmp_path: Path) -> None:
+def test_layout_reports_the_revisions_errors_and_a_pages_detail(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(HtmlReviewServer, "_ensure_layout_checked", no_check)
     config = project(tmp_path)
     binding = ProjectBinding(tmp_path)
     try:
@@ -680,15 +688,10 @@ def test_layout_reports_the_revisions_errors_and_a_pages_detail(tmp_path: Path) 
         with urllib.request.urlopen(f"http://127.0.0.1:{config.port}/state") as response:
             state = json.loads(response.read().decode("utf-8"))
         revision = state["artifacts"]["slides"]["revision"]
-        post_json(f"http://127.0.0.1:{config.port}/artifacts/slides/layout", {
-            "revision": revision,
-            "static": state["static"],
-            "errors": [
-                "page 1 exceeds the slides height at p1:0",
-                "page 2 exceeds the slides height at p2:0",
-            ],
-            "space": space_snapshot(),
-        })
+        post_json(f"http://127.0.0.1:{config.port}/artifacts/slides/layout", server_check(binding._shared, errors=[
+            "page 1 exceeds the slides height at p1:0",
+            "page 2 exceeds the slides height at p2:0",
+        ]))
 
         whole = answer(mcp.call_tool("layout", {"artifact": "slides"}))
         assert whole["revision"] == revision
