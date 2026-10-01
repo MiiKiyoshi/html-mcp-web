@@ -536,6 +536,13 @@ def test_image_save_writes_a_png_and_returns_its_path(tmp_path: Path) -> None:
         saved = json.loads(content[0].text)
         target = Path(saved["path"])
         assert target == tmp_path / ".html-mcp-web" / "renders" / "slides-p1.png"
+        # A grey picture does not say whether the page is grey: the answer says it.
+        assert saved["grayscale"] is True
+        shown = asyncio.run(mcp.call_tool("image", {"artifact": "slides", "page": 1}))
+        assert [part.type for part in shown] == ["image", "text"]
+        assert shown[1].text == "Grayscale render. Pass grayscale=false to see colour."
+        coloured = asyncio.run(mcp.call_tool("image", {"artifact": "slides", "page": 1, "grayscale": False}))
+        assert [part.type for part in coloured] == ["image"]
         assert target.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
         assert saved["bytes"] == target.stat().st_size
         with pytest.raises(Exception, match="inside the project"):

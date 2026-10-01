@@ -693,7 +693,7 @@ class HtmlReviewServer:
         out.write_bytes(png)
         state = out.stat()
         self.saved_renders[out] = (state.st_mtime_ns, state.st_size)
-        return web.json_response({"path": str(out), "bytes": len(png), "page": page, "dpi": dpi})
+        return web.json_response({"path": str(out), "bytes": len(png), "page": page, "dpi": dpi, "grayscale": gray})
 
     async def project_file(self, request: web.Request) -> web.StreamResponse:
         relative = request.match_info["path"]

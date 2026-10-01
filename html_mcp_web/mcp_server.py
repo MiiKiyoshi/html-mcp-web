@@ -141,7 +141,7 @@ def _compact(tool):
     @functools.wraps(tool)
     async def answer(*args, **kwargs):
         result = await tool(*args, **kwargs)
-        return result if isinstance(result, Image) else json.dumps(result, ensure_ascii=False)
+        return result if isinstance(result, (Image, list)) else json.dumps(result, ensure_ascii=False)
     return answer
 
 
@@ -152,7 +152,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         instructions=(
             "Work from read_comments(new=True), and pass ids to reread a whole thread. "
             "Before writing an artifact, read what guide() lists. Within the user's editing "
-            "scope, edit, check the affected pages with layout() and image(), and reply with "
+            "scope, edit, check the affected pages with layout() and image() (grayscale=false "
+            "when colour is in question), and reply with "
             "write_comments. When the wording is the reviewer's to decide, suggest instead of "
             "editing. The reviewer resolves threads. Call listen() when the user asks "
             "to listen and follow how. Reuse its process, and do not poll or duplicate it. "
@@ -349,7 +350,9 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             params += f"&target={quote(target)}"
         if not save:
             data = await client.get_bytes(f"/artifacts/{artifact}/render/page{params}", timeout=120.0)
-            return Image(data=data, format="png")
+            # A grey picture says nothing of whether the page is grey, so a grey render says so.
+            return [Image(data=data, format="png"),
+                    "Grayscale render. Pass grayscale=false to see colour."] if grayscale else Image(data=data, format="png")
         # The server writes the file, so its watcher does not take the render for an edit.
         name = f"{artifact}-{target.replace(':', '-')}.png" if target is not None else f"{artifact}-p{page}.png"
         relative = out if out is not None else f".html-mcp-web/renders/{name}"
