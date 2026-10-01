@@ -1019,6 +1019,21 @@ function resetArtifactZoom() {
   settlePinch();
 }
 
+// The page at the top of the window, and the point on it there, in the page's own pixels.
+function readingPlace() {
+  const page = pageNear({ x: frameDocument().documentElement.clientWidth / 2, y: 0 });
+  if (page === null) return null;
+  const box = page.getBoundingClientRect();
+  return { page, y: -box.top / (box.height / page.offsetHeight) };
+}
+
+function keepReadingPlace(place) {
+  if (place === null) return;
+  const win = frameWindow();
+  const box = place.page.getBoundingClientRect();
+  win.scrollTo(win.scrollX, win.scrollY + box.top + place.y * (box.height / place.page.offsetHeight));
+}
+
 function showSelectionButton() {
   const selection = frameWindow().getSelection();
   const button = $("#selection-comment-btn");
@@ -1439,7 +1454,14 @@ function attachArtifactEvents(frame) {
     scheduleCurrentPage();
   }, { passive: true });
   win.addEventListener("resize", () => {
+    // A wider or narrower artifact draws every page at another size, and the scroll position
+    // left as it was showed some other page: hiding the comments took the reader from page 12
+    // to page 8, and showing them took the reader back. What sits at the top of the window
+    // stays there. The top, not the middle: a window that also grows taller moves its middle,
+    // and the deck read from its first line was pushed down by the difference.
+    const place = state.slideShow ? null : readingPlace();
     updatePageScale();
+    keepReadingPlace(place);
     // Dragging the split resizes the artifact on every frame. Measuring the fit of all pages
     // and redrawing the highlight boxes that often is the work that made the bar lag behind
     // the finger; the drag ends with one of each.

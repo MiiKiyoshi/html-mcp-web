@@ -1447,6 +1447,97 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_hiding_the_comments_keeps_the_page_being_read(tmp_path: Path) -> None:
+    """Hiding the comments widens the artifact, and every page is drawn larger. Left at the
+    same scroll position, the window showed page 9 where the reader had been on page 12,
+    and showing the comments again went back to 12."""
+    pages = "".join(
+        f'<section class="page"><div data-layout-guard><h1>Page {number}</h1></div></section>'
+        for number in range(1, 16))
+    (tmp_path / "slides.html").write_text(
+        f'<!doctype html><html><head><title>Long</title></head><body>'
+        f'<main class="pages">{pages}</main></body></html>', encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_sidebar_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    # The page at the top of the artifact, and how far down it the top falls.
+    reading = '''
+      const frame = document.querySelector("#artifact-frame");
+      const win = frame.contentWindow;
+      const pages = Array.from(win.document.querySelectorAll("main.pages > section.page"));
+      const index = pages.findIndex((page) => page.getBoundingClientRect().bottom > 0);
+      const box = pages[index].getBoundingClientRect();
+      return {page: index + 1, down: -box.top / box.height, width: frame.clientWidth};
+    '''
+    try:
+        shared.ensure()
+        # Narrower than a page with the comments hidden too, so the page is drawn smaller
+        # in both states and each toggle changes its size.
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "1000", "-height", "800", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=1000, height=800)
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        browser.execute_script('''
+          const win = document.querySelector("#artifact-frame").contentWindow;
+          const page = win.document.querySelectorAll("main.pages > section.page")[11];
+          const box = page.getBoundingClientRect();
+          win.scrollTo(0, win.scrollY + box.top + box.height * 0.3);
+        ''')
+        before = wait_until(lambda: browser.execute_script(reading))
+        assert before["page"] == 12, before
+        current = browser.execute_script('return document.querySelector("#pages-list .page-nav-row.active button").dataset.page')
+
+        browser.find_element("css selector", "#sidebar-toggle-btn").click()
+        hidden = wait_until(lambda: (lambda now: now if now["width"] > before["width"] + 100 else None)(
+            browser.execute_script(reading)))
+        time.sleep(0.5)
+        hidden = browser.execute_script(reading)
+        assert hidden["page"] == 12, (before, hidden)
+        assert abs(hidden["down"] - before["down"]) < 0.05, (before, hidden)
+
+        browser.find_element("css selector", "#sidebar-toggle-btn").click()
+        wait_until(lambda: browser.execute_script(reading)["width"] < hidden["width"] - 100)
+        time.sleep(0.5)
+        shown = browser.execute_script(reading)
+        assert shown["page"] == 12, (before, hidden, shown)
+        assert abs(shown["down"] - before["down"]) < 0.05, (before, hidden, shown)
+        # The page the comments list marks as the one being read is the same one again.
+        assert browser.execute_script('return document.querySelector("#pages-list .page-nav-row.active button").dataset.page') == current
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_space_is_measured_with_no_review_ui_open(tmp_path: Path) -> None:
     """A headless session has nobody's browser on the page, and every measurement 409'd
     until someone opened the UI. The server runs the check itself: the same page scripts,
