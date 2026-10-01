@@ -38,7 +38,7 @@ Distinguish established facts, inferences, assumptions, proposals, and unknowns.
 
 2.6 For each count, name the items counted and how groups form the total. Label illustrative and assumed values, and check their calculations separately. For conceptual curves and diagrams, verify the relationships a reader would infer, including ordering, crossings, and any relative size used to convey meaning. Support these relationships with a source or an appropriate check, and state the conditions on which they depend. Omit unsupported relationships. Labeling a drawing conceptual does not make them valid. An illustrative example can explain a rule, but cannot serve as evidence of a measured result.
 
-2.7 Cite sources needed to support claims or interpret evidence. Credit borrowed material. If you change it, identify the adaptation.
+2.7 Cite sources needed to support claims or interpret evidence. Attribute a rule or claim to its primary source, not to the repository or summary used to obtain it. Include only the source details needed to identify the source or qualify the claim. Credit borrowed material. If you change it, say that it is adapted.
 
 2.8 When several actors or components take part, identify their roles. Show who selects, who executes, what each actor receives after any selection or transformation, the limits of its changes, and the resulting state. Do not credit one actor with another's work. Check that commands, paths, files, and implementations presented as existing do exist. Label external examples and proposed components.
 
