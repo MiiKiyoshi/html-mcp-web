@@ -1601,6 +1601,44 @@ def test_a_layout_problem_leads_to_its_element(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_svg_text_moved_in_a_way_firefox_ignores_is_reported(tmp_path: Path) -> None:
+    """Subscripts written with baseline-shift dropped through their boxes in a reviewer's
+    Chromium, while Firefox, which this check and the PDF use, drew them on the baseline
+    and the check passed them. Placement that Firefox ignores is reported, and dy, which
+    both draw alike, is not. Neither is a dominant-baseline on the text element, which
+    Firefox honours."""
+    import urllib.request
+
+    (tmp_path / "slides.html").write_text('''<!doctype html>
+<html><head><meta charset="utf-8"><title>Shift</title></head><body><main class="pages">
+  <section class="page"><div data-layout-guard>
+    <svg id="shifted" viewBox="0 0 400 100" width="400" height="100">
+      <text x="10" y="40" font-size="20">t<tspan baseline-shift="sub">0</tspan> and t<tspan style="baseline-shift: sub">1</tspan></text>
+      <text x="10" y="80" font-size="20" dominant-baseline="middle">centred</text>
+      <text x="200" y="80" font-size="20">a<tspan dy="4">2</tspan><tspan dy="-4"> </tspan></text>
+    </svg>
+  </div></section>
+</main></body></html>''', encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    try:
+        shared.ensure()
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
+            errors = json.loads(response.read())["errors"]
+        moved = [error for error in errors if " places " in error]
+        assert moved == ["page 1 <svg#shifted> places 2 text runs with baseline-shift, which Firefox ignores, "
+                         "so this check and the PDF draw them unmoved. Move them with dy instead [p1:0.0]"], errors
+    finally:
+        shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_pdf_export_drives_a_browser_of_its_own() -> None:
     """Every export started its browser on marionette's default port and then attached to
     whatever held that port. Two projects printing at once each have a server of their own,

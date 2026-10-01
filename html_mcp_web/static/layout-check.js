@@ -207,6 +207,27 @@ export function createLayoutChecks(dependencies) {
             + `on a ${Math.round(last)}px tail`, block);
         }
       }
+      // Text placed with baseline-shift, alignment-baseline, or a tspan's dominant-baseline
+      // is moved by Chromium and left on the baseline by Firefox, the browser this check
+      // and the PDF use. Subscripts dropped through boxes and table rules in a reviewer's
+      // browser while the check, measuring them unmoved, passed them. dy and y move text
+      // the same way in both.
+      for (const svg of page.querySelectorAll("svg")) {
+        const shifted = new Map();
+        for (const text of svg.querySelectorAll("text, tspan, textPath")) {
+          const style = text.getAttribute("style") ?? "";
+          const names = ["baseline-shift", "alignment-baseline"];
+          if (text.tagName !== "text") names.push("dominant-baseline");
+          for (const name of names) {
+            if (text.hasAttribute(name) || style.includes(name)) shifted.set(name, (shifted.get(name) ?? 0) + 1);
+          }
+        }
+        for (const [name, count] of shifted) {
+          addError(`page ${index + 1} ${describeElement(svg)} places ${count} text ${count === 1 ? "run" : "runs"} `
+            + `with ${name}, which Firefox ignores, so this check and the PDF draw them unmoved. `
+            + "Move them with dy instead", svg);
+        }
+      }
       // An SVG viewport hides whatever falls outside its viewBox, and no box-model
       // measurement sees it: the element reports the same scroll and client size
       // either way. getBBox holds the drawing's geometry, which is what the viewBox has
