@@ -1447,6 +1447,99 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_slide_previews_open_from_the_first_button_and_lead_to_a_page(tmp_path: Path) -> None:
+    """Scrolling a long deck to one page was slow. The first button of the workspace bar,
+    with Fit right after it, opens a column of slide previews at the pane's left that
+    scrolls on its own, and the deck moves over to make room. A click on a preview goes to
+    that page and marks it. The same button folds the column away."""
+    pages = "".join(
+        f'<section class="page"><div data-layout-guard><h1>Page {number}</h1></div></section>'
+        for number in range(1, 16))
+    (tmp_path / "slides.html").write_text(
+        f'<!doctype html><html><head><title>Long</title></head><body>'
+        f'<main class="pages">{pages}</main></body></html>', encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_previews_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    geometry = '''
+      const pane = document.querySelector("#artifact-pane");
+      const frame = document.querySelector("#artifact-frame").getBoundingClientRect();
+      const thumbs = document.querySelector("#thumbs-frame").contentDocument;
+      return {open: pane.classList.contains("thumbs-open"),
+              shown: getComputedStyle(document.querySelector("#thumbs-pane")).display !== "none",
+              frameLeft: frame.left - pane.getBoundingClientRect().left,
+              previews: thumbs ? thumbs.querySelectorAll("main.pages > section.page").length : 0,
+              scrolls: thumbs ? thumbs.documentElement.scrollHeight > thumbs.documentElement.clientHeight : false};
+    '''
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "1400", "-height", "900", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=1400, height=900)
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        order = browser.execute_script(
+            'return Array.from(document.querySelector(".workspace-toolbar").children).map((child) => child.id || child.className)')
+        assert order[:2] == ["thumbs-btn", "zoom-reset-btn"], order
+        closed = browser.execute_script(geometry)
+        assert not closed["open"] and not closed["shown"] and abs(closed["frameLeft"]) <= 1, closed
+
+        browser.find_element("css selector", "#thumbs-btn").click()
+        opened = wait_until(lambda: (lambda now: now if now["previews"] == 15 else None)(
+            browser.execute_script(geometry)))
+        assert opened["open"] and opened["shown"] and abs(opened["frameLeft"] - 200) <= 1, opened
+        assert opened["scrolls"], opened
+
+        browser.execute_script('''
+          const thumbs = document.querySelector("#thumbs-frame").contentDocument;
+          thumbs.querySelectorAll("main.pages > section.page")[11]
+            .dispatchEvent(new MouseEvent("click", {bubbles: true}));
+        ''')
+        wait_until(lambda: browser.execute_script('''
+          const win = document.querySelector("#artifact-frame").contentWindow;
+          const page = win.document.querySelectorAll("main.pages > section.page")[11];
+          const thumbs = document.querySelector("#thumbs-frame").contentDocument;
+          return Math.abs(page.getBoundingClientRect().top) < 30
+            && thumbs.querySelectorAll("main.pages > section.page")[11].classList.contains("html-mcp-thumb-current");
+        '''))
+
+        browser.find_element("css selector", "#thumbs-btn").click()
+        folded = browser.execute_script(geometry)
+        assert not folded["open"] and not folded["shown"] and abs(folded["frameLeft"]) <= 1, folded
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_hiding_the_comments_keeps_the_page_being_read(tmp_path: Path) -> None:
     """Hiding the comments widens the artifact, and every page is drawn larger. Left at the
     same scroll position, the window showed page 9 where the reader had been on page 12,

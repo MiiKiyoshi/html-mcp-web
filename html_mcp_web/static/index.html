@@ -35,6 +35,15 @@
     <main class="layout view-preview">
       <div id="workspace">
         <div class="workspace-toolbar">
+          <button id="thumbs-btn" type="button" title="Show or hide slide previews"
+                  aria-label="Show or hide slide previews" aria-pressed="false">
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+              <rect x="1.5" y="1.5" width="4.5" height="3.2" rx=".6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+              <rect x="1.5" y="6.4" width="4.5" height="3.2" rx=".6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+              <rect x="1.5" y="11.3" width="4.5" height="3.2" rx=".6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+              <rect x="7.8" y="1.5" width="6.7" height="13" rx=".8" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            </svg>
+          </button>
           <button id="zoom-reset-btn" class="zoom-reset hidden" type="button"
                   title="Back to the size the pane fits">Fit</button>
           <nav class="view-tabs" aria-label="Workspace view">
@@ -44,6 +53,9 @@
           </nav>
         </div>
         <section id="artifact-pane">
+          <aside id="thumbs-pane" aria-label="Slide previews">
+            <iframe id="thumbs-frame" title="Slide previews" tabindex="-1"></iframe>
+          </aside>
           <iframe id="artifact-frame" class="artifact-frame active" title="Agent-generated HTML artifact" tabindex="-1"></iframe>
           <button id="selection-comment-btn" class="selection-comment hidden" type="button">Comment</button>
           <div id="presentation-controls" class="presentation-controls" aria-label="Slide show controls">

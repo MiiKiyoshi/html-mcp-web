@@ -173,6 +173,18 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .artifact-frame.active { z-index: 1; }
 .artifact-frame:not(.active) { z-index: 0; pointer-events: none; }
 #artifact-pane:fullscreen { width: 100vw; height: 100vh; background: #111; }
+/* Slide previews: the deck drawn small in a column at the pane's left, scrolled on its own,
+   with the deck itself moved over to make room. */
+#thumbs-btn { display: inline-flex; align-items: center; padding: .1rem .4rem; line-height: 1; }
+#thumbs-btn svg { display: block; }
+#thumbs-btn.active { background: var(--accent-soft); border-color: var(--accent); }
+#thumbs-pane { display: none; position: absolute; top: 0; bottom: 0; left: 0; width: 200px; border-right: 1px solid var(--line); background: #efede6; z-index: 2; }
+#thumbs-frame { display: block; width: 100%; height: 100%; border: 0; background: #efede6; }
+#artifact-pane.thumbs-open #thumbs-pane { display: block; }
+#artifact-pane.thumbs-open .artifact-frame { left: 200px; width: calc(100% - 200px); }
+#artifact-pane:fullscreen #thumbs-pane, #artifact-pane.slide-show #thumbs-pane { display: none; }
+#artifact-pane.thumbs-open:fullscreen .artifact-frame,
+#artifact-pane.thumbs-open.slide-show .artifact-frame { left: 0; width: 100%; }
 
 .presentation-controls {
   position: absolute;
@@ -219,7 +231,6 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .selection-comment:hover { color: white; background: #506277; }
 
 .zoom-reset {
-  margin-left: auto;
   padding: .1rem .55rem;
   border-radius: 3px;
   font-size: .82rem;

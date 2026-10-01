@@ -530,6 +530,75 @@ function renderPages() {
   }
 }
 
+// Slide previews: a second frame of the same artifact, drawn small in a column at the
+// pane's left, so a preview is the page itself. A click goes to that page, and the page
+// being read is marked and kept in view.
+const thumbsOpen = () => $("#artifact-pane").classList.contains("thumbs-open");
+
+function setThumbsOpen(open) {
+  $("#artifact-pane").classList.toggle("thumbs-open", open);
+  $("#thumbs-btn").classList.toggle("active", open);
+  $("#thumbs-btn").setAttribute("aria-pressed", String(open));
+  localStorage.setItem("htmlMcpThumbsOpen", open ? "1" : "0");
+  if (open) loadThumbs();
+}
+
+function loadThumbs() {
+  const frame = $("#thumbs-frame");
+  const wanted = `${state.artifactId}@${state.revision}`;
+  if (frame.dataset.loaded === wanted) {
+    markCurrentThumb();
+    return;
+  }
+  frame.dataset.loaded = wanted;
+  frame.src = `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}`;
+}
+
+function thumbPages() {
+  const doc = $("#thumbs-frame").contentDocument;
+  return doc === null ? [] : Array.from(doc.querySelectorAll("body > main.pages > section.page"));
+}
+
+// The previews take the column's width, less a margin: measured, since the column can be
+// laid out after the frame loads.
+function scaleThumbs() {
+  const doc = $("#thumbs-frame").contentDocument;
+  const first = thumbPages()[0];
+  if (doc === null || first === undefined || doc.documentElement.clientWidth <= 24) return;
+  doc.documentElement.style.setProperty(
+    "--html-mcp-page-scale", String((doc.documentElement.clientWidth - 24) / first.offsetWidth));
+}
+
+function installThumbs() {
+  const doc = $("#thumbs-frame").contentDocument;
+  if (doc === null || thumbPages().length === 0) return;
+  doc.documentElement.dataset.htmlMcpScriptsHidden = "";
+  scaleThumbs();
+  doc.defaultView.addEventListener("resize", scaleThumbs);
+  const style = doc.createElement("style");
+  style.textContent = `
+    body > main.pages > section.page { cursor: pointer; }
+    body > main.pages > section.page * { pointer-events: none !important; }
+    body > main.pages > section.page.html-mcp-thumb-current {
+      outline: calc(3px / var(--html-mcp-page-scale)) solid #e0955a !important;
+    }`;
+  doc.head.appendChild(style);
+  doc.addEventListener("click", (event) => {
+    const page = event.target.closest?.("body > main.pages > section.page");
+    if (page) jumpToPage(thumbPages().indexOf(page) + 1);
+  });
+  markCurrentThumb();
+}
+
+function markCurrentThumb() {
+  if (!thumbsOpen()) return;
+  const pages = thumbPages();
+  for (const [index, page] of pages.entries()) {
+    page.classList.toggle("html-mcp-thumb-current", index + 1 === state.currentPage);
+  }
+  pages[state.currentPage - 1]?.scrollIntoView({ block: "nearest" });
+}
+
 function updateCurrentPage() {
   const number = visiblePageNumber();
   if (number === state.currentPage) return;
@@ -541,6 +610,7 @@ function updateCurrentPage() {
     updatePresentationControls();
   }
   renderPages();
+  markCurrentThumb();
 }
 
 function scheduleCurrentPage() {
@@ -1496,6 +1566,7 @@ function attachArtifactEvents(frame) {
 function loadArtifact(preserveView) {
   const iframe = frameFor(state.artifactId);
   showFrame(iframe);
+  if (thumbsOpen()) loadThumbs();
   if (state.loadedRevision === state.revision) return;
   if (preserveView && iframe.contentWindow !== null) {
     state.pendingView = { x: iframe.contentWindow.scrollX, y: iframe.contentWindow.scrollY };
@@ -1840,6 +1911,8 @@ function attachControls() {
     const collapsed = $(".layout").classList.toggle("sidebar-collapsed");
     localStorage.setItem("htmlMcpSidebarCollapsed", collapsed ? "1" : "0");
   });
+  $("#thumbs-btn").addEventListener("click", () => setThumbsOpen(!thumbsOpen()));
+  $("#thumbs-frame").addEventListener("load", installThumbs);
   $("#scripts-btn").addEventListener("click", () => {
     localStorage.setItem("htmlMcpScriptsHidden", scriptsHidden() ? "0" : "1");
     applyScriptVisibility();
@@ -1951,6 +2024,7 @@ async function init() {
   await refreshState();
   await refreshComments();
   loadArtifact(false);
+  setThumbsOpen(localStorage.getItem("htmlMcpThumbsOpen") === "1");
   const savedView = localStorage.getItem("htmlMcpWorkspaceView");
   if (["source", "split"].includes(savedView)) await setWorkspaceView(savedView);
   connectWebSocket();
