@@ -106,7 +106,7 @@ Judge wording by what the reader understands in context, not by what the author 
 
 Choose a form that makes the intended relationships and distinctions clear. Do not let the presentation imply an unsupported relationship.
 
-5.1 Plan the drawing before prose for time changes, spatial arrangements, branches, merges, loops, mechanisms, sequences, or state changes. If you cannot draw a relationship yet, report what is missing and continue independent pages. Do not add a second rendering of what the page's drawing, code, or text already shows. For a simple relationship that gains nothing from a diagram, use short sentences or parallel list items.
+5.1 Plan the drawing before prose for time changes, spatial arrangements, branches, merges, loops, mechanisms, sequences, or state changes. If you cannot draw a relationship yet, report what is missing and continue independent pages. Do not add a second rendering of what the page's drawing, code, or text already shows. This includes connectors that repeat a relation stated by a label or expression within the drawing, unless they are needed to answer the page's question. For a simple relationship that gains nothing from a diagram, use short sentences or parallel list items.
 
 5.2 Match the form to the relationship. Examples:
 
