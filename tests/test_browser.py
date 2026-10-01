@@ -1538,6 +1538,69 @@ def test_hiding_the_comments_keeps_the_page_being_read(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_layout_problem_leads_to_its_element(tmp_path: Path) -> None:
+    """A layout error in the Problems tab scrolls to the element behind it. The review page
+    no longer measures, so it had no element of its own for an error and went only to the
+    page. The server's check names the element by its ref, and the ref leads back to it."""
+    (tmp_path / "slides.html").write_text(problem_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_problem_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "1400", "-height", "900", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=1400, height=900)
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "layout error"'))
+        browser.execute_script('document.querySelector(\'[data-tab="problems"]\').click()')
+        # A message whose ref goes below the page's first level, so the page alone is not it.
+        shown = browser.execute_script('''
+          const item = Array.from(document.querySelectorAll("#problems-list .problem.clickable"))
+            .find((problem) => /\\[p1:\\d+\\.[\\d.]+\\]$/.test(problem.textContent));
+          if (!item) return null;
+          const ref = item.textContent.match(/\\[p(\\d+):([\\d.]+)\\]$/);
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          let element = doc.querySelectorAll("body > main.pages > section.page")[Number(ref[1]) - 1];
+          for (const index of ref[2].split(".")) element = element.children[Number(index)];
+          item.click();
+          return {text: item.textContent, width: element.style.outlineWidth, kind: element.style.outlineStyle};
+        ''')
+        assert shown is not None
+        assert (shown["width"], shown["kind"]) == ("3px", "solid"), shown
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_pdf_export_drives_a_browser_of_its_own() -> None:
     """Every export started its browser on marionette's default port and then attached to
     whatever held that port. Two projects printing at once each have a server of their own,

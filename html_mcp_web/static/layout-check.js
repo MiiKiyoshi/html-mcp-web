@@ -67,7 +67,6 @@ export function createLayoutChecks(dependencies) {
   // Maps each layout error text to the element that produced it, so a click on
   // the Problems tab can reveal the spot. Rebuilt on every local layout check;
   // errors checked by another browser fall back to page-number parsing.
-  const problemTargets = new Map();
   
   // Runs read() with the page zoom lifted and puts it back before returning, so a
   // measurement that the zoom would distort is taken in the artifact's own scale.
@@ -106,7 +105,6 @@ export function createLayoutChecks(dependencies) {
   }
 
   function artifactLayoutErrors() {
-    problemTargets.clear();
     const doc = frameDocument();
     const root = doc.querySelector("body > main.pages");
     if (root === null) return ['artifact body must contain exactly one <main class="pages"> element'];
@@ -128,7 +126,6 @@ export function createLayoutChecks(dependencies) {
         } catch (error) { /* an element outside its page keeps the plain message */ }
       }
       errors.push(message);
-      if (element) problemTargets.set(message, element);
     };
     if (extra.length > 0) {
       addError(`artifact body must contain only <main class="pages">: found ${extra.map(describeElement).join(", ")}`, extra[0]);
@@ -463,15 +460,23 @@ export function createLayoutChecks(dependencies) {
     count.classList.toggle("hidden", problems.length === 0);
   }
   
+  // The element behind a layout error. The review page measures nothing itself, and the
+  // server's check names the element by its ref at the end of the message, a path of
+  // child positions from the page down. An error without a ref falls back to its page.
+  function errorTarget(text) {
+    const ref = text.match(/\[p(\d+):([\d.]+)\]$/);
+    const number = (ref ?? text.match(/^page (\d+)/) ?? [])[1];
+    const page = artifactPages()[Number(number) - 1] ?? null;
+    if (page === null || ref === null) return page;
+    let element = page;
+    for (const index of ref[2].split(".")) element = element?.children[Number(index)];
+    return element ?? page;
+  }
+
   // Scrolls the artifact to the element behind a layout error and flashes an
-  // outline on it. When the error came from a check run in another browser the
-  // element map is empty, so the page number in the text is the fallback.
+  // outline on it.
   function revealProblem(text) {
-    let target = problemTargets.get(text);
-    if (!target || !target.isConnected) {
-      const match = text.match(/^page (\d+)/);
-      target = match ? artifactPages()[Number(match[1]) - 1] : null;
-    }
+    const target = errorTarget(text);
     if (!target) return;
     target.scrollIntoView({ behavior: "smooth", block: "center" });
     const previous = target.style.outline;
