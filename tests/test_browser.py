@@ -1639,6 +1639,52 @@ def test_svg_text_moved_in_a_way_firefox_ignores_is_reported(tmp_path: Path) -> 
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_an_arrowhead_over_the_last_bend_is_reported(tmp_path: Path) -> None:
+    """A routed arrow ended with 9 units of line after its last bend under a head about
+    11 units long. The head sat over the corner and the line seemed to stop under a
+    floating triangle, and the check said nothing. A head is reported when it leaves less
+    than two stroke widths of line visible after the bend, and a long last stretch, a
+    straight arrow, and a small head drawn in user units are not."""
+    import urllib.request
+
+    (tmp_path / "slides.html").write_text('''<!doctype html>
+<html><head><meta charset="utf-8"><title>Arrows</title></head><body><main class="pages">
+  <section class="page"><div data-layout-guard>
+    <svg id="flow" viewBox="0 0 300 140" width="300" height="140">
+      <defs>
+        <marker id="big" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+          <path d="M0,0 L7,3.5 L0,7 z"/></marker>
+        <marker id="small" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto"
+                markerUnits="userSpaceOnUse"><path d="M0,0 L6,3 L0,6 z"/></marker>
+      </defs>
+      <path id="covered" d="M10,10 L100,10 L100,19" stroke="#333" stroke-width="1.8" fill="none" marker-end="url(#big)"/>
+      <path id="clear" d="M10,40 L100,40 L100,80" stroke="#333" stroke-width="1.8" fill="none" marker-end="url(#big)"/>
+      <path id="straight" d="M150,10 L162,10" stroke="#333" stroke-width="1.8" fill="none" marker-end="url(#big)"/>
+      <path id="userspace" d="M150,40 L240,40 L240,50" stroke="#333" stroke-width="1.8" fill="none" marker-end="url(#small)"/>
+    </svg>
+  </div></section>
+</main></body></html>''', encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    try:
+        shared.ensure()
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
+            errors = json.loads(response.read())["errors"]
+        covered = [error for error in errors if "arrowhead" in error]
+        assert covered == ["page 1 <svg#flow> <path#covered> ends with a 9-unit line after its last bend under "
+                           "a 10.8-unit arrowhead, so the head covers the bend. Shorten the head or move the "
+                           "bend back [p1:0.0.1]"], errors
+    finally:
+        shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_pdf_export_drives_a_browser_of_its_own() -> None:
     """Every export started its browser on marionette's default port and then attached to
     whatever held that port. Two projects printing at once each have a server of their own,

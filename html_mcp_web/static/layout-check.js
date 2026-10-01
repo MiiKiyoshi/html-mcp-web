@@ -104,6 +104,53 @@ export function createLayoutChecks(dependencies) {
     return words.trim().replace(/\s+/g, " ").slice(0, 30);
   }
 
+  // How far an arrowhead reaches back along its line from the end it sits on, in the
+  // line's user units, or null when its direction does not follow the line. A marker's
+  // own children report an empty box, since a marker is never drawn where it is
+  // written, so they are measured as a hidden copy in the drawing for that moment.
+  function arrowheadReach(marker, strokeWidth, atStart) {
+    const orient = marker.getAttribute("orient") ?? "0";
+    if (!orient.startsWith("auto")) return null;
+    const copy = marker.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "g");
+    copy.setAttribute("visibility", "hidden");
+    for (const child of marker.children) copy.appendChild(child.cloneNode(true));
+    marker.ownerSVGElement.appendChild(copy);
+    let box;
+    try {
+      box = copy.getBBox();
+    } finally {
+      copy.remove();
+    }
+    if (box.width === 0) return null;
+    const view = marker.viewBox?.baseVal;
+    const width = marker.markerWidth.baseVal.value;
+    const height = marker.markerHeight.baseVal.value;
+    const scale = (view && view.width > 0 && view.height > 0 ? Math.min(width / view.width, height / view.height) : 1)
+      * (marker.markerUnits.baseVal === SVGMarkerElement.SVG_MARKERUNITS_STROKEWIDTH ? strokeWidth : 1);
+    const refX = marker.refX.baseVal.value;
+    // At the start, a head turned with auto-start-reverse points out of the line like the
+    // one at the end, and one turned with auto points into it.
+    const reach = atStart && orient === "auto" ? box.x + box.width - refX : refX - box.x;
+    return Math.max(0, reach) * scale;
+  }
+
+  // The distance from an end of a line to the nearest bend within `limit` of it, or null
+  // when the line runs straight that far.
+  function bendWithin(line, atStart, limit) {
+    const total = line.getTotalLength();
+    const at = (distance) => line.getPointAtLength(atStart ? distance : total - distance);
+    const heading = (from, to) => Math.atan2(to.y - from.y, to.x - from.x);
+    const step = 0.25;
+    if (total < step * 4) return null;
+    const end = heading(at(step), at(0));
+    for (let distance = step; distance + step <= Math.min(limit, total); distance += step) {
+      let turn = Math.abs(heading(at(distance + step), at(distance)) - end);
+      if (turn > Math.PI) turn = 2 * Math.PI - turn;
+      if (turn > Math.PI / 6) return distance;
+    }
+    return null;
+  }
+
   function artifactLayoutErrors() {
     const doc = frameDocument();
     const root = doc.querySelector("body > main.pages");
@@ -226,6 +273,31 @@ export function createLayoutChecks(dependencies) {
           addError(`page ${index + 1} ${describeElement(svg)} places ${count} text ${count === 1 ? "run" : "runs"} `
             + `with ${name}, which Firefox ignores, so this check and the PDF draw them unmoved. `
             + "Move them with dy instead", svg);
+        }
+      }
+      // An arrowhead longer than the stretch of line between it and the last bend sits
+      // over the corner, and the line seems to stop under a floating triangle. The head's
+      // reach back along the line is compared with the distance to the bend, and a head
+      // that leaves less than two stroke widths of line visible before it is reported.
+      for (const svg of page.querySelectorAll("svg")) {
+        for (const line of svg.querySelectorAll("path, line, polyline")) {
+          const style = frameWindow().getComputedStyle(line);
+          const strokeWidth = parseFloat(style.strokeWidth) || 1;
+          for (const atStart of [false, true]) {
+            const named = (atStart ? style.markerStart : style.markerEnd).match(/url\(["']?#([^"')]+)["']?\)/);
+            const marker = named ? line.ownerDocument.getElementById(named[1]) : null;
+            if (!(marker instanceof frameWindow().SVGMarkerElement)) continue;
+            const reach = arrowheadReach(marker, strokeWidth, atStart);
+            if (reach === null || reach === 0) continue;
+            const bend = bendWithin(line, atStart, reach + 2 * strokeWidth);
+            if (bend === null) continue;
+            const round = (value) => Math.round(value * 10) / 10;
+            addError(`page ${index + 1} ${describeElement(svg)} ${describeElement(line)} `
+              + (atStart ? `starts with a ${round(bend)}-unit line before its first bend`
+                : `ends with a ${round(bend)}-unit line after its last bend`)
+              + ` under a ${round(reach)}-unit arrowhead, so the head covers the bend. `
+              + "Shorten the head or move the bend back", line);
+          }
         }
       }
       // An SVG viewport hides whatever falls outside its viewBox, and no box-model
