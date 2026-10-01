@@ -320,6 +320,8 @@ class HtmlReviewServer:
         self.websocket_hosts: dict[web.WebSocketResponse, str] = {}
         self.pdf_lock = asyncio.Lock()
         self.generated_paths: set[Path] = set()
+        # The renders this server saved into the project, as each file looked once written.
+        self.saved_renders: dict[Path, tuple[int, int]] = {}
         # The reviewer's call button. Presses are a monotonic count and the server keeps
         # the consumption watermark, so a press is never lost to timing: made while nobody
         # waits, it answers the next wait at once (the first design froze the watermark
@@ -435,6 +437,14 @@ class HtmlReviewServer:
         if changed in self.generated_paths:
             self.generated_paths.remove(changed)
             return
+        # A render saved for the reader is no change to any artifact. Saved into the project,
+        # it matched the watched "*.png" and moved every artifact's revision, which threw
+        # away the layout check each time a page was rendered for the user.
+        if changed in self.saved_renders:
+            with contextlib.suppress(FileNotFoundError):
+                state = changed.stat()
+                if (state.st_mtime_ns, state.st_size) == self.saved_renders[changed]:
+                    return
         affected: list[ArtifactRuntime] = []
         for runtime in self.artifacts.values():
             source = runtime.content_file or runtime.main_file
@@ -645,7 +655,17 @@ class HtmlReviewServer:
                     min(page_bbox[3], y + h + margin) * scale,
                 )
             png = doc[page - 1].get_pixmap(dpi=dpi, colorspace=colorspace, clip=clip).tobytes("png")
-        return web.Response(body=png, content_type="image/png")
+        if "save" not in request.query:
+            return web.Response(body=png, content_type="image/png")
+        # Saved here rather than by the caller, so the server knows the file as its own.
+        out = (self.project_dir / request.query["save"]).resolve()
+        if not out.is_relative_to(self.project_dir):
+            raise web.HTTPBadRequest(text="save must stay inside the project directory")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(png)
+        state = out.stat()
+        self.saved_renders[out] = (state.st_mtime_ns, state.st_size)
+        return web.json_response({"path": str(out), "bytes": len(png), "page": page, "dpi": dpi})
 
     async def project_file(self, request: web.Request) -> web.StreamResponse:
         relative = request.match_info["path"]

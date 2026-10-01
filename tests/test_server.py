@@ -1029,6 +1029,40 @@ async def test_render_page_crops_to_a_target_block(client, monkeypatch) -> None:
     assert stale.status == 409
 
 
+async def test_a_saved_render_is_not_an_edit(client, monkeypatch) -> None:
+    """A page rendered for the reader and saved into the project matched the watched
+    "*.png", and every artifact's revision moved, which threw away its layout check. The
+    server saves the render itself and knows the file as its own."""
+    import fitz
+
+    test_client, review = client
+    with fitz.open() as made:
+        made.new_page(width=960, height=540)
+        pdf = made.tobytes()
+
+    async def printed(runtime):
+        return pdf
+
+    monkeypatch.setattr(review, "_pdf", printed)
+    runtime = review.artifacts["slides"]
+    revision = runtime.revision
+    saved = await (await test_client.get(
+        "/artifacts/slides/render/page?page=1&dpi=96&save=html/review_png/p1.png")).json()
+    out = Path(saved["path"])
+    assert out == review.project_dir / "html" / "review_png" / "p1.png"
+    assert out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+    await review.on_project_change(str(out))
+    assert runtime.revision == revision
+
+    # A picture the server did not save, or one changed since, is still an edit.
+    out.write_bytes(out.read_bytes() + b"changed")
+    await review.on_project_change(str(out))
+    assert runtime.revision == revision + 1
+
+    outside = await test_client.get("/artifacts/slides/render/page?page=1&dpi=96&save=../escape.png")
+    assert outside.status == 400
+
+
 async def test_one_broken_artifact_does_not_take_the_server_down(tmp_path: Path) -> None:
     """A main file can be missing mid-session (the reviewer renaming it, a build not run
     yet). That is the artifact's own problem: it is reported on the artifact, and the

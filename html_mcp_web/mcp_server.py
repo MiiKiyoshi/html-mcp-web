@@ -347,21 +347,14 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         params = f"?page={page}&dpi={dpi}&gray={'1' if grayscale else '0'}"
         if target is not None:
             params += f"&target={quote(target)}"
-        data = await client.get_bytes(
-            f"/artifacts/{artifact}/render/page{params}",
-            timeout=120.0,
-        )
         if not save:
+            data = await client.get_bytes(f"/artifacts/{artifact}/render/page{params}", timeout=120.0)
             return Image(data=data, format="png")
-        project_dir = Path((await client.request_json("GET", "/state"))["project_dir"])
+        # The server writes the file, so its watcher does not take the render for an edit.
         name = f"{artifact}-{target.replace(':', '-')}.png" if target is not None else f"{artifact}-p{page}.png"
-        out_path = ((project_dir / out) if out is not None
-                    else project_dir / ".html-mcp-web" / "renders" / name).resolve()
-        if not out_path.is_relative_to(project_dir.resolve()):
-            raise ValueError("out must stay inside the project directory")
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_bytes(data)
-        return {"path": str(out_path), "bytes": len(data), "page": page, "dpi": dpi}
+        relative = out if out is not None else f".html-mcp-web/renders/{name}"
+        return await client.request_json(
+            "GET", f"/artifacts/{artifact}/render/page{params}&save={quote(relative)}", timeout=120.0)
 
     @mcp.tool(structured_output=False)
     @_compact
