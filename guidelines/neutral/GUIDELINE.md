@@ -160,7 +160,7 @@ Speak to what the page shows. Do not add claims only in the script.
 
 7.1 Give every page one script after planning its content. When the explanation changes, revise the script. Use the page's claim and authoritative material, grounded in visible content. Do not put a claim or number only in the script. Draw and make checkable each concept the speaker needs, or remove it. Greetings, transitions, and source citations for visible claims need not be drawn.
 
-7.2 For a paragraph about visible content, start with an unspoken bracketed direction. Name the place on the page and the order to follow, not a topic. Speak only to that place. Use complete sentences in the deck's spoken language. Do not add page numbers, titles, or note labels. Keep the cover script to the opening. No script repeats another page.
+7.2 For a paragraph about visible content, start with an unspoken bracketed direction. Name the place on the page and the order to follow, not a topic. Speak only to that place. The direction binds the paragraph to the visible explanation, rather than merely cueing the speaker. Check that the objects and relationships each sentence explains can be followed at the indicated places in the stated order. If they cannot, revise the drawing, the paragraph, or their order so they agree. Remove content only if the reader does not need it. Use complete sentences in the deck's spoken language. Do not add page numbers, titles, or note labels. Keep the cover script to the opening. No script repeats another page.
 
 ## Article 8. Keep planning records
 
