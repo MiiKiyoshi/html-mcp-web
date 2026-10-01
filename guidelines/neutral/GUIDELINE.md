@@ -40,7 +40,7 @@ Distinguish established facts, inferences, assumptions, proposals, and unknowns.
 
 2.7 Cite sources needed to support claims or interpret evidence. Credit borrowed material. If you change it, identify the adaptation.
 
-2.8 When several actors or components take part, identify their roles. Show who selects, who executes, what it receives, the limits of its changes, and the resulting state. Do not credit one actor with another's work. Check that commands, paths, files, and implementations presented as existing do exist. Label external examples and proposed components.
+2.8 When several actors or components take part, identify their roles. Show who selects, who executes, what each actor receives after any selection or transformation, the limits of its changes, and the resulting state. Do not credit one actor with another's work. Check that commands, paths, files, and implementations presented as existing do exist. Label external examples and proposed components.
 
 2.9 If approved material and current evidence disagree, report the conflict. Do not silently change the approved decision or suppress the observation. Do not let secondary material reinterpret an established decision. This includes code, logs, earlier decks, and handoff notes. If approved wording, tables, or figures express the required content, reuse them.
 
@@ -106,7 +106,7 @@ Judge wording by what the reader understands in context, not by what the author 
 
 Choose a form that makes the intended relationships and distinctions clear. Do not let the presentation imply an unsupported relationship.
 
-5.1 Plan the drawing before prose for time changes, spatial arrangements, branches, merges, loops, mechanisms, sequences, or state changes. If you cannot draw a relationship yet, report what is missing and continue independent pages. Do not add a second rendering of what the page's code or text already shows. For a simple relationship that gains nothing from a diagram, use short sentences or parallel list items.
+5.1 Plan the drawing before prose for time changes, spatial arrangements, branches, merges, loops, mechanisms, sequences, or state changes. If you cannot draw a relationship yet, report what is missing and continue independent pages. Do not add a second rendering of what the page's drawing, code, or text already shows. For a simple relationship that gains nothing from a diagram, use short sentences or parallel list items.
 
 5.2 Match the form to the relationship. Examples:
 
@@ -124,7 +124,7 @@ Choose a form that makes the intended relationships and distinctions clear. Do n
 
 Unless the drawing convention explains a connection's relation, label that relation. Put operations on their operands.
 
-5.3 Read the rendered drawing using its visual conventions. Follow each connection. Check that endpoints, exits, entries, labels, and any direction convey its intended relation. A flow must show its start, order, and destination. Use placement, spacing, and alignment to make grouping and separation clear. Repair paths and arrangements that hide intended relationships or suggest unintended ones.
+5.3 Read the rendered drawing using its visual conventions. Follow each connection. Check that endpoints, exits, entries, labels, and any direction convey its intended relation. A flow must show its start, order, and destination. Use placement, spacing, alignment, and consistent color cues to make grouping and separation clear. Repair paths and arrangements that hide intended relationships or suggest unintended ones.
 
 5.4 Make each independent column complete in its reading order. Align matching items across compared columns and show the match.
 
@@ -200,7 +200,7 @@ Answer the question asked and make the change requested. Restore the understandi
 
 10.2 Before answering or editing, read the comment, its discussion, and the material it refers to. Identify its subject and the explanation, proposal, or change it requests. Keep its distinctions and do not reintroduce what it rejects. If materially different readings remain, ask one focused question.
 
-10.3 Put the requested understanding where the reader needs it. Adding requested words or removing a criticized term is not enough. After editing, read the explanation in order against the original comment. Within a requested fix, make every judgment the fix needs. Include other repairs on that page that affect the fix. Do not change unrelated pages. Report out-of-scope defects with the rule broken and the pages checked.
+10.3 Put the requested understanding where the reader needs it. Adding requested words or removing a criticized term is not enough. After editing, read the explanation in order against the original comment. Within a requested fix, make every judgment the fix needs. Check the rest of the page for the same underlying defect and repair affected elements within the authorized scope. Do not change unrelated pages. Report out-of-scope defects with the rule broken and the pages checked.
 
 10.4 Answer directly and state the change's status briefly. Add only what the reviewer needs to assess it or decide the next step. Examples include an unseen change, a departure from the request, or unfinished work.
 
