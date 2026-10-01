@@ -36,7 +36,7 @@ Distinguish established facts, inferences, assumptions, proposals, and unknowns.
 
 2.5 Identify each quantity as measured, source-reported, assumed, or computed. Give its source or derivation. Generate reported results and derived numbers from primary data, then check them against the generator's output. Show the inputs and rule needed to recompute a value. Apply each rule to the whole object, including the hard case.
 
-2.6 For each count, name the items counted and how groups form the total. Label illustrative and assumed values, and check their calculations separately. An illustrative example can explain a rule, but cannot serve as evidence of a measured result.
+2.6 For each count, name the items counted and how groups form the total. Label illustrative and assumed values, and check their calculations separately. For conceptual curves and diagrams, verify the relationships a reader would infer, including ordering, crossings, and any relative size used to convey meaning. Support these relationships with a source or an appropriate check, and state the conditions on which they depend. Omit unsupported relationships. Labeling a drawing conceptual does not make them valid. An illustrative example can explain a rule, but cannot serve as evidence of a measured result.
 
 2.7 Cite sources needed to support claims or interpret evidence. Credit borrowed material. If you change it, identify the adaptation.
 
@@ -106,7 +106,7 @@ Judge wording by what the reader understands in context, not by what the author 
 
 Choose a form that makes the intended relationships and distinctions clear. Do not let the presentation imply an unsupported relationship.
 
-5.1 Plan the drawing before prose for time changes, spatial arrangements, branches, merges, loops, mechanisms, sequences, or state changes. If you cannot draw a relationship yet, report what is missing and continue independent pages. Do not add a second rendering of what the page's drawing, code, or text already shows. This includes connectors that repeat a relation stated by a label or expression within the drawing, unless they are needed to answer the page's question. For a simple relationship that gains nothing from a diagram, use short sentences or parallel list items.
+5.1 Plan the drawing before prose for time changes, spatial arrangements, branches, merges, loops, mechanisms, sequences, or state changes. When a relationship is needed to follow the argument and can be shown visually, make it visible in the drawing. Do not draw only the objects and leave prose to supply their essential relationship. Use labels to identify what is shown and state conditions the drawing cannot convey. If you cannot draw a relationship yet, report what is missing and continue independent pages. Do not add a second rendering of what the page's drawing, code, or text already shows. This includes connectors that repeat a relation stated by a label or expression within the drawing, unless they are needed to answer the page's question. For a simple relationship that gains nothing from a diagram, use short sentences or parallel list items.
 
 5.2 Match the form to the relationship. Examples:
 
