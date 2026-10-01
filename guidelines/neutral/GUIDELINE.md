@@ -48,7 +48,7 @@ Distinguish established facts, inferences, assumptions, proposals, and unknowns.
 
 Show the relationships the reader needs to understand. Establish each prerequisite before using it. Do not leave needed relationships for the reader to reconstruct.
 
-3.1 For an explanation spanning pages, state its question and order the parts so the reader can follow them. Show how each part builds on earlier explanations and contributes to the whole. Read the whole sequence to check that it answers the reader's question. Check for unstated relationships and definitions given only after they are needed.
+3.1 Before drafting an explanation that spans pages, state its question and work backward from the understanding the later pages require to plan a connected path from what the reader already knows. At each step, identify the reader's next question and how the words and drawing will answer it at that page's level of explanation. Show how each part builds on earlier explanations and contributes to the whole. Read the whole sequence to check that it answers the reader's question. Check for unstated relationships and definitions given only after they are needed.
 
 3.2 For each needed process step, show the actor, inputs, outputs, and how the output determines the next step. For a branch, repeat, stop, or rejected input, state the condition and resulting action. Naming the check is not enough.
 
