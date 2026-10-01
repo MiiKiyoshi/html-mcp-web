@@ -1538,6 +1538,45 @@ def test_hiding_the_comments_keeps_the_page_being_read(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_pdf_export_drives_a_browser_of_its_own() -> None:
+    """Every export started its browser on marionette's default port and then attached to
+    whatever held that port. Two projects printing at once each have a server of their own,
+    so nothing kept their exports apart: one attached to the other's browser and failed with
+    "No data received over socket", or saved a page of the other project's deck."""
+    import socket
+    import threading
+
+    import fitz
+
+    from html_mcp_web.pdf_export import print_artifact_pdf
+
+    holder = socket.socket()
+    try:
+        holder.bind(("127.0.0.1", 2828))
+    except OSError:
+        pytest.skip("port 2828 is already in use")
+    holder.listen()
+
+    # Something else on the default port, as another export's browser would be: it takes
+    # the connection and says nothing.
+    def answer_nothing() -> None:
+        while True:
+            try:
+                connection, _ = holder.accept()
+            except OSError:
+                return
+            connection.close()
+
+    threading.Thread(target=answer_nothing, daemon=True).start()
+    try:
+        pdf = print_artifact_pdf("data:text/html,<p>the page this export was asked for</p>", "slides")
+    finally:
+        holder.close()
+    with fitz.open(stream=pdf, filetype="pdf") as doc:
+        assert "the page this export was asked for" in doc[0].get_text()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_space_is_measured_with_no_review_ui_open(tmp_path: Path) -> None:
     """A headless session has nobody's browser on the page, and every measurement 409'd
     until someone opened the UI. The server runs the check itself: the same page scripts,
