@@ -2,168 +2,210 @@
 
 ## Preamble
 
-A deck exists so that its audience can understand or decide something. This guideline governs what a technical deck says and shows. Template documentation governs page structure, components, and production checks.
+A deck helps its reader understand or decide something. This guideline governs what a technical deck says and shows. Template documentation governs page structure, components, and production checks.
 
 Work within the authorized scope. Within it, when rules pull in different directions, keep every claim accurate and checkable first, and then make the explanation understandable to its intended reader. If a requester's explicit constraint conflicts with either, report the conflict instead of silently changing the constraint or the content.
 
-Each article states a principle, and its clauses are ways of meeting it. A clause governs every form of the situation it describes. Examples introduced with "such as" illustrate and never limit. Named forms such as the title, lead, takeaway, and script are defaults that serve the principles. Adapt a form that obscures meaning or repeats content rather than dropping needed explanation to satisfy it.
+Each article gives a principle and rules for applying it. Apply a rule wherever its conditions hold. Examples illustrate a rule, not its limits. Named forms, such as titles, leads, takeaways, and scripts, are defaults. If a form obscures meaning or repeats content, adapt the form. Do not cut needed explanation to preserve it.
 
-## Article 1. Purpose and the reader
+## Article 1. Answer the reader's question
 
-Establish what the requester wants the reader to understand or decide, what that reader already knows, and what remains to be understood. Include what bridges that gap and nothing that does not.
+Establish what the requester wants the reader to understand or decide. Find what the reader already knows and include only what closes the gap.
 
-1.1 State the deck's purpose and audience before planning. Derive each page's reader question from what the requester is trying to understand or decide, using the current request and the discussion it continues, not from the material available to present. When a follow-up changes the question, the current request governs.
+1.1 State the deck's purpose and reader before planning. Derive each page's question from what the requester wants to understand or decide. Use the current request and its discussion, not available material. If a follow-up changes the question, follow the current request.
 
-1.2 Include only claims and evidence that answer the page's question. Do not substitute an answer to a different question because it is easier to measure, already documented, or already drawn.
+1.2 Include only claims and evidence that answer the page's question. Do not answer a different question because it is easier to measure, documented, or drawn.
 
-1.3 Let the reader's question determine the level of detail. Include a detail only when the reader needs it to understand the explanation, assess the evidence, or act on it. Apply this test to details from source and working material as well, including internal names, file organization, tool operation, and intermediate outputs.
+1.3 Let the question set the detail. Include a detail only to help the reader understand, assess evidence, or act. Apply this test to source and working material, including internal names, file organization, tool operation, and intermediate outputs.
 
-1.4 Include drafting, revision, or submission history only when the reader needs it to understand the content, assess its evidence, or act on it. Otherwise keep it in planning records.
+1.4 Keep drafting, revision, and submission history in planning records. Include it on a page only when the reader needs it to understand, assess evidence, or act.
 
-1.5 Exclude self-evaluation, inflated claims, process narration, and maintenance detail that changes no method, measurement, or decision. Repeat established information only when the repetition serves a distinct need. Omit incidental names and counts that do not help the reader identify what matters, understand the explanation, assess the evidence, or act on it. Do not restate a visible count unless stating it serves one of those purposes.
+1.5 Cut self-evaluation, inflated claims, and process narration. Cut maintenance detail that changes no method, measurement, or decision. Repeat established information only for a distinct need. Keep incidental names and counts only when they help the reader identify what matters, understand, assess evidence, or act. Apply the same test before restating a visible count.
 
-## Article 2. Claims and evidence
+## Article 2. Support each claim
 
-Distinguish what is established, inferred, assumed, proposed, or unknown, and support each claim with the kind of evidence that establishes it.
+Distinguish established facts, inferences, assumptions, proposals, and unknowns. Use evidence that establishes the kind of claim being made.
 
-2.1 Distinguish observations, definitions, assumptions, proposals, and pending work wherever they appear. Do not present a proposal as a decision or a planned result as an observation. Mark pending results as pending, and never present a provisional value as final.
+2.1 Distinguish observations, definitions, assumptions, proposals, and pending work wherever they appear. Do not present a proposal as a decision or a planned result as an observation. Mark pending results. Do not present provisional values as final.
 
-2.2 Match each claim to the kind of source that establishes it: authoritative design descriptions for intended design, implementation sources for how something is built, and primary measurements or execution records for what happened. Use several kinds together when the question needs them, without letting evidence for one kind of claim stand in for another. Use secondary material only to fill a specific gap, and check current sources for facts that can change. Sources establish what is true. They do not decide what the page explains or how deeply.
+2.2 Match the source to the claim. Use authoritative design descriptions for intended design, implementation sources for how something is built, and primary measurements or execution records for what happened. If the question needs several source types, use them together. Do not substitute one kind of evidence for another. Use secondary material only to fill a specific gap. Check current sources for facts that can change. Sources establish truth, not the page's question or level of detail.
 
-2.3 Present a cause as established only when the evidence distinguishes it from plausible alternatives, and name the source of that evidence. Otherwise state the observation and label any explanation as proposed.
+2.3 Establish a cause only with evidence that distinguishes it from plausible alternatives. Name that evidence's source. Otherwise, state the observation and label the explanation as proposed.
 
-2.4 Give every content page a check the reader can perform. Measured or computed values come with a counting or arithmetic check, such as a sum, a difference, a complete enumeration, a source row, or a set derived from a shown rule. A mechanism or design page may instead offer a diagram whose every step traces to its source or rule. A background page traces each factual item to a named source. Remove a claim that has no such support, or mark it unresolved.
+2.4 Give every content page a check the reader can perform. For measured or computed values, show a counting or arithmetic check. Examples include a sum, difference, full enumeration, source row, or set derived from a shown rule. A mechanism or design page can use a diagram with every step traced to a source or rule. On a background page, trace each factual item to a named source. Remove unsupported claims or mark them unresolved.
 
-2.5 Identify every quantity as measured, source-reported, assumed, or computed, with its source or derivation. Generate reported results and their derived numbers from primary data and check them against the generator's output. Make computed values recomputable from the shown inputs and rule, and apply a rule to the whole object it describes, including the hard case. Counts name what is counted and how groups form the total. Label illustrative or assumed values and check their calculations separately. A labeled illustrative example may explain a rule but never stands in for evidence of a measured result.
+2.5 Identify each quantity as measured, source-reported, assumed, or computed. Give its source or derivation. Generate reported results and derived numbers from primary data, then check them against the generator's output. Show the inputs and rule needed to recompute a value. Apply each rule to the whole object, including the hard case.
 
-2.6 Cite sources needed to support claims or interpret evidence, and credit borrowed material. Identify adaptations when material has been changed.
+2.6 For each count, name the items counted and how groups form the total. Label illustrative and assumed values, and check their calculations separately. An illustrative example can explain a rule, but cannot serve as evidence of a measured result.
 
-2.7 When several actors or components take part, identify which one selects, which one executes, what it receives, where its changes stop, and what state results. Do not credit one with the work of another. Names presented as existing commands, paths, files, or implementations must exist, and external examples and proposed components are labeled as such.
+2.7 Cite sources needed to support claims or interpret evidence. Credit borrowed material. If you change it, identify the adaptation.
 
-2.8 When approved material and current evidence disagree, report the conflict. Do not silently change the approved decision or suppress the observation, and do not let secondary material such as code, logs, earlier decks, or handoff notes reinterpret an established decision. Reuse approved wording, tables, and figures when they already express the required content.
+2.8 When several actors or components take part, identify their roles. Show who selects, who executes, what it receives, the limits of its changes, and the resulting state. Do not credit one actor with another's work. Check that commands, paths, files, and implementations presented as existing do exist. Label external examples and proposed components.
 
-## Article 3. Coherent explanation
+2.9 If approved material and current evidence disagree, report the conflict. Do not silently change the approved decision or suppress the observation. Do not let secondary material reinterpret an established decision. This includes code, logs, earlier decks, and handoff notes. If approved wording, tables, or figures express the required content, reuse them.
 
-Organize the explanation around the relationships the reader must understand, establish each prerequisite before relying on it, and leave no required relationship for the reader to reconstruct.
+## Article 3. Connect the explanation
 
-3.1 For an explanation spanning pages, orient the reader to the question being answered and develop the parts in the order needed to understand it. Make clear how each part builds on earlier explanations and contributes to the whole. Read the sequence as a whole and check that it answers the reader's question without relying on unstated relationships or on definitions introduced only after they are needed.
+Show the relationships the reader needs to understand. Establish each prerequisite before using it. Do not leave needed relationships for the reader to reconstruct.
 
-3.2 For each step needed to understand a process or method, show who acts, its inputs and outputs, and how its result determines what happens next. Where it branches, repeats, stops, or rejects an input, state the deciding condition and the resulting action rather than only naming the check.
+3.1 For an explanation spanning pages, state its question and order the parts so the reader can follow them. Show how each part builds on earlier explanations and contributes to the whole. Read the whole sequence to check that it answers the reader's question. Check for unstated relationships and definitions given only after they are needed.
 
-3.3 Choose a chain that matches each page, such as `current state → evidence → constraint → response → decision` for status, `input → selection or transformation → executor → modification boundary → output` for a method, and `comparison conditions → fixed conditions → measurement → observed difference → response or decision question` for a result. Within a page, each element answers the question raised before it, starting from what earlier pages established. Source order does not define this chain. State what a reduction or transformation keeps and discards.
+3.2 For each needed process step, show the actor, inputs, outputs, and how the output determines the next step. For a branch, repeat, stop, or rejected input, state the condition and resulting action. Naming the check is not enough.
 
-3.4 When a choice or omission affects what the reader must understand, state its reason: the goal or constraint it serves and how the chosen structure or behavior serves it.
+3.3 Choose a chain that fits the page. For example:
 
-3.5 Place each explanation where the reader first needs it. Answer a question that an element raises at that element or just before it. Show an output where it is produced and its use where it is consumed. Refer backward by a named object, never by page position, and do not announce later pages. A deliberately unresolved question may point forward only to say where it will close. Move a page that depends on a later value.
+- Status: `current state → evidence → constraint → response → decision`
+- Method: `input → selection or transformation → executor → modification boundary → output`
+- Result: `comparison conditions → fixed conditions → measurement → observed difference → response or decision question`
 
-3.6 Give each claim one owner page, and repeat it elsewhere only to add a consequence or interpretation. A file, module, component, or broad topic is not a reader question. Verify a real connection before combining subjects. Resolve or report a conflict with an earlier page rather than writing around it.
+Start from what earlier pages established. Each element answers the question raised before it. Source order does not set this chain. State what a reduction or transformation keeps and discards.
 
-3.7 Order sections by what the reader must know first. Distinguish prerequisite background from the subject being explained by each page's role in the current explanation, not by its source or novelty. Headings must accurately describe the role or subject of the content they label. Use subheadings or introductory text to clarify a broad, required heading, not to contradict it. By default, present a method before the setup that exercises it, and the setup before the observed results. No single section order suits every deck. For a progress update, a useful order is Cover, Recap, Summary of Progress, Methods, Experimental Setup, Results, optional Discussion, and Next Plan. When it is used, Recap connects prior context to the result now needed, Summary of Progress covers only work since that context, and Next Plan is exactly one final page of evidence-derived actions or a statement that none is needed.
+3.4 If a choice or omission affects understanding, explain why. Name its goal or constraint and how the chosen structure or behavior serves it.
 
-3.8 A concept is explained by what it is and what it is for, in general terms grounded in a source, and by how the page's example uses it. Choose an example that shows the purpose as well as the working, keep the conditions that make it useful, and show the concept's general scope as well as the instance. A label or type signature alone does not explain a concept.
+3.5 Put an explanation where it is first needed. Answer a question at the element that raises it, or just before. Show an output where it is produced and its use where it is consumed. Refer backward by object name, not page position. Do not announce later pages, except to say where a deliberately open question will close. Move a page that depends on a later value.
 
-## Article 4. Meaning and reference
+3.6 Give each claim one owner page. Repeat it elsewhere only to add a consequence or interpretation. A file, module, component, or broad topic is not a reader question. Check that a real connection exists before combining subjects. Resolve or report a conflict with an earlier page.
 
-Choose wording by the meaning the intended reader can reasonably take in context, not by the meaning familiar to the author.
+3.7 Order sections by what the reader must know first. Distinguish background from the subject by its role in this explanation, not its source or novelty. Make headings match the content's role or subject. Use subheadings or introductory text to clarify a broad required heading, not contradict it. By default, put the method before its experimental setup, then the observed results.
 
-4.1 Every visible line and every spoken sentence is understandable to a first-time reader without project-specific context. This applies to titles, leads, takeaways, captions, labels, notes, source lines, and scripts alike.
+3.8 Choose the section order for the deck. A progress update can use this sequence:
 
-4.2 Judge wording by the meaning the intended reader would reasonably take from the page and what came before it, not by what the author can explain was intended. For each action described, identify who performs it and what it acts on or produces, and for each relationship, the objects and how they relate. Revise wording that could lead to a materially different reading or that depends on information only the author has. Apply this to familiar words used in a technical sense as well as to specialized labels.
+Cover → Recap → Summary of Progress → Methods → Experimental Setup → Results → optional Discussion → Next Plan.
 
-4.3 Use established terms directly when they are clear to the intended reader, in the field's own form, and familiar plain language otherwise. When identifying a particular item, use its displayed or previously established name. When defining it, state its kind and role in terms the reader can understand. Add explanations or groupings when they convey meaning the names alone do not.
+In this sequence, Recap connects prior context to the result now needed. Summary of Progress covers only work since that context. Next Plan is exactly one final page with evidence-derived actions or a statement that none is needed.
 
-4.4 Wording familiar from the author's code, notes, or discussions is not familiar to the reader. Do not use code names, literal translations, or labels coined while working as substitutes for explaining the object or action. Introduce an internal name only when the reader needs the name itself, and define it at first use. Define every term at its first use or name the earlier element that defines it, and never rely on a later definition. Check a legend, glossary, notation table, or other reference aid against the material it explains: each unfamiliar term or symbol needed to understand that material is explained there or earlier, and each entry clearly connects the label or symbol, its established name if any, and its meaning.
+3.9 Explain what a concept is, what it is for, and how the example uses it. Ground its general definition in a source. Choose an example that shows both purpose and operation. Keep the conditions that make the concept useful and show its scope beyond the example. A label or type signature is not an explanation.
 
-4.5 Use one term and one visual notation for one meaning throughout the deck. Give objects distinct names or explicit indices whenever the explanation relies on their difference, and preserve that distinction in the definitions and expressions built from them. Reduce notation only when no required distinction is lost. Build later explanations on meanings already introduced instead of defining them again.
+## Article 4. Make the meaning clear
 
-4.6 Name quantities rather than their typography or screen position. Write digits for counts, keep numeric assignments visually separate, and reserve mathematical symbols for their mathematical meaning. Pair each equation with its meaning in words, one equation per step of a multi-step definition. Name every input, output, and source of a computation, give each symbol one role, and keep assumed and solved values distinct. Use example values the reader can interpret without project context, and make them participate in the page's example. Use the form required by each step rather than silently substituting assumed and solved values for one another.
+Judge wording by what the reader understands in context, not by what the author intended.
 
-4.7 In a deck organized into sections, format each content-page title as `<section name> — <page topic>`. Use a short noun phrase for the page topic, naming the page's object or comparison rather than its conclusion or an incidental source label. A defined API, file format, or dataset under review may name the page. The title, central visual, and takeaway support one proposition.
+4.1 Make every visible line and spoken sentence understandable without prior project context. This includes titles, leads, takeaways, captions, labels, notes, source lines, and scripts. Judge each line by the meaning a first-time reader gets from it and earlier explanations. Correct wording that suggests a materially different meaning or depends on information only the author has. Check familiar words used technically as well as specialized labels.
 
-4.8 By default a content page has one short lead and one takeaway. The lead states the problem, comparison, or definition that makes the page necessary and contains no procedure, evidence, result, conclusion, or count repeated below. The takeaway states the one conclusion the visible content supports and adds no new evidence. Cover, contents, and divider pages are exempt.
+4.2 For each action, identify the actor and what it acts on or produces. For each relationship, identify the objects and how they relate. If the reader knows an established field term, use its usual form. Otherwise, use familiar plain language.
 
-4.9 Write prose without semicolons in slide text, captions, table cells, speaker scripts, and planning documents. Separate distinct statements and use an explicit conjunction when their relationship matters.
+4.3 To identify an item, use its displayed or established name. To define it, explain its kind and role. If names alone do not convey the meaning, add explanations or groupings.
 
-## Article 5. Form and relationships
+4.4 Do not assume readers know wording from your code, notes, or discussions. Do not use code names, literal translations, or working labels in place of an explanation. Introduce an internal name only when the reader needs the name itself.
 
-Choose the form that makes the intended relationships and distinctions perceptible, and let nothing in the presentation imply a relationship the explanation does not support.
+4.5 Define each term at first use or name its earlier definition. Never rely on a later definition. Check each legend, glossary, or notation table against what it explains. Explain every needed unfamiliar term or symbol there or earlier. Connect each entry's label or symbol to its meaning and any established name.
 
-5.1 Work out the drawing before the prose whenever the content is a change over time, a spatial arrangement, a branch, a merge, a loop, a mechanism, a sequence, or a state change. If a relationship cannot yet be drawn, report what is missing and continue with independent pages. Do not add a second rendering of what the page's code or text already shows. Use short sentences or parallel list items for simple relationships that a diagram would not explain better.
+4.6 Use one term and one visual notation for each meaning throughout the deck. Give objects distinct names or explicit indices whenever the explanation relies on their difference. Preserve that distinction in the definitions and expressions built from them. Simplify notation only without losing a required distinction. Build on earlier meanings instead of defining them again.
 
-5.2 Give each relationship the form that matches it, such as a directed path for a sequence, a branch for one input under conditions, convergence for conditions entering one evaluation, aligned inputs, stages, and outputs on shared axes for compared alternatives, a tree for a hierarchy, before-action-after for a state change, a table or shared-axis chart for an exact comparison, cards or bullets for independent peers, and an evidence-to-action chain for status. Label an edge with its relation unless the drawing's convention already makes it clear, and put operations on their operands.
+4.7 Name quantities, not their typography or screen position. Use digits for counts. Separate numeric assignments visually. Reserve mathematical symbols for mathematical meanings. Pair each equation with its meaning in words, with one equation per step of a multi-step definition.
 
-5.3 Read the rendered drawing using its visual conventions. Follow each connection and check that its endpoints, exit and entry points, direction where applicable, and labels convey the intended relationship. For a flow, make its start, order, and destination clear from the drawing itself. Check that placement, spacing, and alignment make grouping and separation clear. Rework ambiguous paths and arrangements that suggest unintended relationships or hide intended ones. Complete independent columns in their own reading order. Align corresponding items across compared columns and make the matching explicit.
+4.8 Name every input, output, and source in a computation. Give each symbol one role and distinguish assumed values from solved values. Use the form each step requires, without silently substituting one for the other. Use example values that need no project context and take part in the page's example.
 
-5.4 Compare approaches against the reader's goal and actual constraints. Before rejecting one for a limitation of its current presentation, check whether a different organization or form resolves that limitation without losing necessary content. Reuse an established way of explaining the same relationship when it helps the reader. Preserve required content and explicit constraints, but adapt reused material and its arrangement when they no longer serve the current explanation.
+4.9 For a deck with sections, use `<section name> — <page topic>` for each content-page title. Use a short noun phrase for the topic. Name the object or comparison, not the conclusion or an incidental source label. A defined API, file format, or dataset under review can name the page. Make the title, central visual, and takeaway support the same point.
 
-5.5 Explain a mechanism with one hand-checkable instance. When a model is the claim, show its input and response. Put per-case measurements and fitted plots on result pages. In any example, keep the conditions and relationships needed for the understanding it is meant to provide, and simplify details that do not contribute to that understanding. Draw an unchanged structure once with its changing values, and redraw it only when the structure changes or a later page's question needs it. Show both states and their difference for a change, draw a full curve only when its shape matters, and keep calculation-only quantities out of drawings unless their relationship is the claim.
+4.10 By default, give each content page one short lead and one takeaway. The lead states the problem, comparison, or definition that makes the page necessary. Keep procedure, evidence, results, conclusions, and counts repeated below out of it. The takeaway states the one conclusion supported by the visible content and adds no evidence. Cover, contents, and divider pages are exempt.
 
-5.6 Caption every data or relationship figure with what is drawn and the data it uses, and letter multiple figures in reading order. Every name, label, number, caption, and note in a figure resolves to a visible referent, and each compared case has an identifiable representation. Remove a note that has no referent or repeats the figure, and replace notation that needs a disclaimer.
+4.11 Do not use semicolons in slide prose, captions, table cells, scripts, or planning documents. Separate distinct statements. When their relationship matters, use an explicit conjunction.
 
-5.7 In a comparison table, rows are the compared entities or conditions ordered by a meaningful key, units appear once, the source of each column is stated when columns come from different measurements, and group-defining conditions stay with the results. A full-page table holds a complete comparison.
+## Article 5. Show the relationships
 
-5.8 Keep rendered content faithful. An embedded image keeps its source width-to-height ratio. Compare the rendered image content's width-to-height ratio with the source arithmetically, excluding surrounding padding or letterboxing. Text and glyphs are never scaled unevenly. Line wrapping that changes a text box's shape is not distortion.
+Choose a form that makes the intended relationships and distinctions clear. Do not let the presentation imply an unsupported relationship.
 
-## Article 6. Pages
+5.1 Plan the drawing before prose for time changes, spatial arrangements, branches, merges, loops, mechanisms, sequences, or state changes. If you cannot draw a relationship yet, report what is missing and continue independent pages. Do not add a second rendering of what the page's code or text already shows. For a simple relationship that gains nothing from a diagram, use short sentences or parallel list items.
 
-Give each page one distinct contribution that the reader can take in at a readable size.
+5.2 Match the form to the relationship. Examples:
 
-6.1 A content page answers one reader question with sufficient evidence and a page-worthy visual, then stops. Complete one causal chain or comparison in one place, keeping inputs, transformation, and output together and keeping changed and fixed variables together. Keep the evidence needed to check the page on the page.
+| Relationship | Form |
+| --- | --- |
+| Sequence | Directed path |
+| One input under conditions | Branch |
+| Conditions entering one evaluation | Convergence |
+| Compared alternatives | Aligned inputs, stages, and outputs on shared axes |
+| Hierarchy | Tree |
+| State change | Before, action, after |
+| Exact comparison | Table or shared-axis chart |
+| Independent peers | Cards or bullets |
+| Status | Evidence-to-action chain |
 
-6.2 Only content that carries the answer counts as occupied space, whatever a layout report says. Whitespace shows grouping and hierarchy. For a page that looks half empty, check whether its answer is complete. Only if incomplete, merge it without duplicating claim ownership, add missing evidence or explanation, or remove it.
+Unless the drawing convention explains a connection's relation, label that relation. Put operations on their operands.
 
-6.3 Choose the page count that makes the explanation understandable, and group content by the question it answers rather than by available space. Before adjusting layout, check that the page answers one question with the definitions, evidence, and relationships it needs. Split independent questions. Divide an explanation too dense to read at a readable size into successive questions, each answered on its own page. Remove redundancy, but never shrink or cut needed explanation to fit a page count.
+5.3 Read the rendered drawing using its visual conventions. Follow each connection. Check that endpoints, exits, entries, labels, and any direction convey its intended relation. A flow must show its start, order, and destination. Use placement, spacing, and alignment to make grouping and separation clear. Repair paths and arrangements that hide intended relationships or suggest unintended ones.
 
-6.4 A change of wording, coordinates, or spacing alone does not create new claim boundaries. When the question, evidence chain, or claim ownership is wrong, restart planning for the affected explanation and recheck the affected pages. Cosmetic edits never close a structural defect.
+5.4 Make each independent column complete in its reading order. Align matching items across compared columns and show the match.
 
-6.5 Cover, contents, and divider pages serve orientation and are exempt from density and evidence requirements, as are marked pending placeholders.
+5.5 Compare approaches against the reader's goal and actual constraints. Before rejecting an approach for its presentation, check whether another arrangement or form preserves the content and solves the problem. If an established way to explain the same relationship helps the reader, reuse it. Adapt reused material that no longer serves the explanation. Preserve needed content and explicit constraints.
 
-## Article 7. Speaker scripts
+5.6 Explain a mechanism with one instance the reader can check by hand. For a claim about a model, show its input and response. Put per-case measurements and fitted plots on result pages. In examples, keep the conditions and relationships needed for understanding. Simplify the rest.
 
-Each page's script speaks to what the page shows and adds no claim the page does not carry.
+5.7 Draw an unchanged structure once with its changing values. Redraw it only when the structure changes or a later page's question needs it. For a change, show both states and their difference. Draw a full curve only when its shape matters. Keep calculation-only quantities out of drawings unless their relationship is the claim.
 
-7.1 Every page has one script, written after the page is planned and revised whenever its explanation changes. It is derived from the page's owned claim and authoritative material, grounded in what is visible, and never the only place a claim or number appears. A concept the speaker needs is drawn and checkable, or removed. Greetings, transitions, and source citations supporting visible claims need not be drawn.
+5.8 Caption each data or relationship figure with what it shows and the data it uses. Letter multiple figures in reading order. Give each figure's names, labels, numbers, captions, and notes a visible referent. Make each compared case identifiable. Remove notes with no referent or those that repeat the figure. Replace notation that needs a disclaimer.
 
-7.2 Each script paragraph that explains visible content begins with a bracketed, unspoken direction naming the place on the page and the order to traverse it, and speaks only to that place. The direction is not a topic label. Write complete sentences in the deck's spoken language without spacing paragraphs, page numbers, titles, or note labels. The cover script is the opening only, and no script repeats another page.
+5.9 In comparison tables, make rows the compared entities or conditions and order them by a meaningful key. State units once. If columns use different measurements, give each column's source. Keep group-defining conditions with the results. A full-page table must give a complete comparison.
 
-## Article 8. Planning records
+5.10 Keep rendered content faithful. Preserve each embedded image's source width-to-height ratio. Check the rendered ratio against the source by calculation. Measure the image content, excluding padding and letterboxing. Do not scale text or glyphs unevenly. Line wrapping is not distortion.
 
-Plan before building and record sources, history, and decisions in the planning record. Include them on the page when required by Articles 1 and 2.
+## Article 6. Give each page one job
 
-8.1 Plan outside the deck, in `<artifact>.FLOORPLAN.md` beside the edit file, and update it before adding, splitting, or removing a page. Record each page's reader question, its sources and revision history, and a term ledger naming the page and element that defines every project-specific term. Fix a missing or late definition before handoff.
+Give each page one distinct contribution at a readable size.
 
-8.2 Identify the authoritative sources for the deck's direction and terminology before inventorying candidate content. Plan in three passes. Inventory each candidate fact with its primary evidence and anything that affects its use. Cluster facts by one causal chain, comparison, mechanism, or decision question before choosing a page count. Give each cluster a title, one interrogative reader question, required evidence, observation, response, visual form, prerequisite, successor, and expected density.
+6.1 Give each content page one question, enough evidence, and a visual that justifies a page. Answer that question, then stop. Complete the causal chain or comparison in one place. Keep inputs, transformation, and output together. Keep changed and fixed variables together. Keep the evidence needed to check the page on that page.
 
-8.3 Map every section and its siblings before writing. Determine from primary evidence whether results exist, and if they are pending, omit result-dependent claims or keep a marked placeholder. A local fix plans only the sections it affects and updates only their entries.
+6.2 Count only content that carries the answer as occupied space, regardless of layout reports. Use whitespace for grouping and hierarchy. If a page looks half empty, check whether its answer is complete. Only if incomplete, merge it without duplicating claims, add missing evidence or explanation, or remove it.
 
-## Article 9. Verification and revision
+6.3 Set page count and grouping by the reader's questions, not by available space. Before adjusting layout, check that the page has the definitions, evidence, and relationships its question needs. Split independent questions. If one explanation is too dense at a readable size, divide it into successive questions with complete answers on separate pages. Remove repetition. Never shrink or cut needed explanation to fit a page count.
 
-Check the finished deck as its intended reader will meet it, and after any change, check everything that depends on what changed.
+6.4 Wording, coordinate, or spacing changes alone do not create new claim boundaries. If the question, evidence chain, or claim ownership is wrong, replan the affected explanation and recheck its pages. Cosmetic edits do not fix structural defects.
 
-9.1 Audit every rendered page as its intended reader for a new deck or a deck-wide review. For any other change, including an edit, a deletion, a change of meaning, or a change to the system, configuration, or data the deck describes, audit the pages that carry or describe what changed, edited or not, and every page whose definitions, claims, summaries, examples, conclusions, or layout depend on it. Check them for newly missing information as well as contradictions, and preserve each page's level of detail.
+6.5 Cover, contents, and divider pages are orientation pages. They and marked pending placeholders are exempt from density and evidence requirements.
 
-9.2 On each content page, confirm that the reader can perform its check, that every quantity's kind and source are identified, that every note has a referent, that every term and value is understandable from what the reader has, that the presenter can explain the page by pointing, that unchanged structure is drawn once, that every element answers a question the reader has at that point, and that the lead still describes the finished page. Trace the reading order suggested by the rendered layout. At each element, check that the explanation needed to understand it is available there or has already been introduced.
+## Article 7. Write scripts from the page
 
-9.3 Assess each element against the meaning already conveyed by the wording, visual structure, and conventions available to the reader. Remove it in thought and cut it if no information or guidance needed for the current question is lost. Apply the same test to each page against what earlier pages have established. Keep a page only if it contributes understanding or guidance needed for the current question that is not already available. When revising or removing a page, relocate any still-needed prerequisites and update dependent explanations. After moving, adding, or removing an explanation, recheck everything else that addresses the same point.
+Speak to what the page shows. Do not add claims only in the script.
 
-9.4 Repair each applicable failed check and add visible support for any part of the lead left unanswered. Check cover, contents, and divider pages for their orientation purpose, scripts, and geometry. Use the template's layout checks for clipping and overlap before acceptance.
+7.1 Give every page one script after planning its content. When the explanation changes, revise the script. Use the page's claim and authoritative material, grounded in visible content. Do not put a claim or number only in the script. Draw and make checkable each concept the speaker needs, or remove it. Greetings, transitions, and source citations for visible claims need not be drawn.
 
-9.5 Keep content findings separate from production checks. A clean build, preserved edits, and clean geometry show that the artifact was produced as intended, not that the explanation works.
+7.2 For a paragraph about visible content, start with an unspoken bracketed direction. Name the place on the page and the order to follow, not a topic. Speak only to that place. Use complete sentences in the deck's spoken language. Do not add empty spacing paragraphs, page numbers, titles, or note labels. Keep the cover script to the opening. No script repeats another page.
 
-## Article 10. Review
+## Article 8. Keep planning records
 
-Answer what the reviewer asks, change what the reviewer asks to change, and restore the understanding the comment asks for.
+Plan before building. Record sources, history, and decisions outside the deck. Put them on a page only as required by its question or evidence.
 
-10.1 Treat a reviewer's question as a request for an answer unless it explicitly asks for a change. Preserve wording the requester explicitly specifies as exact, and report a conflict between that wording and another rule instead of silently changing it.
+8.1 Keep `<artifact>.FLOORPLAN.md` beside the edit file. Update it before adding, splitting, or removing a page. Record each page's question, sources, and revision history. Keep a term ledger that names the page and element defining each project-specific term. Fix missing or late definitions before handoff.
 
-10.2 Before answering or editing, read the comment together with the discussion it continues and the material it refers to. Identify its subject and what it asks you to explain, propose, or change, and keep the distinctions it makes without reinstating what it rejects. If materially different readings remain, ask one focused question.
+8.2 Identify authoritative sources for direction and terminology before collecting candidate content. Plan in three passes:
 
-10.3 An edit makes the requested understanding available where the reader needs it. Adding requested words or removing a criticized term is not enough. After editing, read the affected explanation in order against the original comment. Within a requested fix, make every judgment the fix needs, including repairs on the same page that affect it, and do not change unrelated pages. Report an out-of-scope defect with the rule it breaks and the pages checked.
+1. Inventory each candidate fact, its primary evidence, and anything affecting its use.
+2. Cluster facts by a causal chain, comparison, mechanism, or decision question before choosing page count.
+3. Give each cluster a title, one reader question phrased as a question, evidence, observation, response, visual form, prerequisite, successor, and expected density.
 
-10.4 Answer the question directly and state the change's status briefly. Add only what the reviewer needs to assess the change or decide the next step, such as a change not visible on the page, a departure from the request, or work left undone.
+8.3 Map every section and its siblings before writing. Check primary evidence to determine whether results exist. If results are pending, omit claims that depend on them or keep a marked placeholder. For a local fix, plan only affected sections and update only their entries.
 
-10.5 Within the authorized scope, place requested content where the reader needs it and respect explicit placement constraints. Do not assume that an existing page must absorb the addition. Redistribute material or add pages when understanding requires it, and ask before exceeding the scope or an explicit page limit. If the same question returns after revision, re-examine the explanation's structure, missing premise, and reading of the question rather than patching its wording again.
+## Article 9. Check the finished explanation
 
-10.6 Before regenerating any page from another source, carry every applied review change into that source, and confirm afterward that the regenerated page keeps them.
+Read the finished deck as its reader. After a change, check what depends on it.
 
-10.7 A deck-wide defect review names each defect type, inspects every rendered page for it, and reports the count. One example found is not a deck-wide review. Report changes and remaining defects, not search mechanics.
+9.1 For a new deck or a deck-wide review, read every rendered page. For other changes, read all pages that carry or describe the change, including unedited pages. Include pages whose definitions, claims, summaries, examples, conclusions, or layout depend on it. This applies to edits, deletions, changed meanings, and changes in the system, configuration, or data described. Check for newly missing information and contradictions. Preserve each page's level of detail.
+
+9.2 On each content page, recheck the evidence, meanings, and drawings against Articles 2, 4, and 5. Check that the presenter can explain it by pointing. Follow the reading order of the rendered layout. At each element, check that its explanation is available there or earlier. Check that every element answers the reader's question at that point and that the lead still fits the page.
+
+9.3 Test each element against the meaning already conveyed by words, visual structure, and conventions. Remove it in thought. If the reader loses no information or guidance needed for the current question, cut it. Test each page against earlier pages in the same way. Keep it only for needed understanding or guidance not already available.
+
+9.4 If a page changes or is removed, move any prerequisites still needed and update dependent explanations. After moving, adding, or removing an explanation, recheck everything else that addresses the same point.
+
+9.5 Repair each failed check that applies. Add visible support for any part of the lead left unanswered. Check orientation pages for their purpose, scripts, and geometry. Before acceptance, use the template's layout checks for clipping and overlap.
+
+9.6 Separate content findings from production checks. A clean build, preserved edits, and clean geometry show successful production, not a working explanation.
+
+## Article 10. Resolve the review request
+
+Answer the question asked and make the change requested. Restore the understanding the comment asks for.
+
+10.1 Answer a reviewer's question without editing unless it explicitly asks for a change. Preserve wording the requester explicitly specifies as exact. If it conflicts with another rule, report the conflict instead of silently changing it.
+
+10.2 Before answering or editing, read the comment, its discussion, and the material it refers to. Identify its subject and the explanation, proposal, or change it requests. Keep its distinctions and do not reintroduce what it rejects. If materially different readings remain, ask one focused question.
+
+10.3 Put the requested understanding where the reader needs it. Adding requested words or removing a criticized term is not enough. After editing, read the explanation in order against the original comment. Within a requested fix, make every judgment the fix needs. Include other repairs on that page that affect the fix. Do not change unrelated pages. Report out-of-scope defects with the rule broken and the pages checked.
+
+10.4 Answer directly and state the change's status briefly. Add only what the reviewer needs to assess it or decide the next step. Examples include an unseen change, a departure from the request, or unfinished work.
+
+10.5 Place requested content where needed within the authorized scope. Respect explicit placement constraints. Do not assume an existing page must hold an addition. When understanding requires it, redistribute content or add pages. Ask before exceeding the scope or an explicit page limit. If the same question returns after revision, reconsider the structure, missing premise, and interpretation of the question instead of patching the wording.
+
+10.6 Before regenerating a page, carry every applied review change into its source. Check that the regenerated page keeps those changes.
+
+10.7 For a deck-wide defect review, name each defect type, inspect every rendered page for it, and report the count. One example is not a deck-wide review. Report changes and remaining defects, not search mechanics.
