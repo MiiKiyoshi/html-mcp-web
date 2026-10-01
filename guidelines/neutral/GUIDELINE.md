@@ -12,7 +12,7 @@ Each article gives a principle and rules for applying it. Apply a rule wherever 
 
 Establish what the requester wants the reader to understand or decide. Find what the reader already knows and include only what closes the gap.
 
-1.1 State the deck's purpose and reader before planning. Derive each page's question from what the requester wants to understand or decide. Use the current request and its discussion, not available material. If a follow-up changes the question, follow the current request.
+1.1 State the purpose, audience, and intended use before planning. For a live presentation, make the explanation followable at the speaker's pace without requiring the audience to read dense text while listening. Derive each page's question from what the requester wants to understand or decide. Use the current request and its discussion, not available material. If a follow-up changes the question, follow the current request.
 
 1.2 Include only claims and evidence that answer the page's question. Do not answer a different question because it is easier to measure, documented, or drawn.
 
@@ -62,7 +62,7 @@ Start from what earlier pages established. Each element answers the question rai
 
 3.4 If a choice or omission affects understanding, explain why. Name its goal or constraint and how the chosen structure or behavior serves it.
 
-3.5 Put an explanation where it is first needed. Answer a question at the element that raises it, or just before. Show an output where it is produced and its use where it is consumed. Refer backward by object name, not page position. Do not announce later pages, except to say where a deliberately open question will close. Move a page that depends on a later value.
+3.5 Put an explanation where it is first needed. Answer a question at the element that raises it, or just before. Show an output where it is produced and its use where it is consumed. Refer to the object itself, not the title or location of an earlier explanation. At each use, include only the prior information needed to follow the current explanation without looking elsewhere or recalling details no longer visible. Do not announce later pages, except to say where a deliberately open question will close. Move a page that depends on a later value.
 
 3.6 Give each claim one owner page. Repeat it elsewhere only to add a consequence or interpretation. A file, module, component, or broad topic is not a reader question. Check that a real connection exists before combining subjects. Resolve or report a conflict with an earlier page.
 
@@ -88,7 +88,7 @@ Judge wording by what the reader understands in context, not by what the author 
 
 4.4 Do not assume readers know wording from your code, notes, or discussions. Do not use code names, literal translations, or working labels in place of an explanation. Introduce an internal name only when the reader needs the name itself.
 
-4.5 Define each term at first use or name its earlier definition. Never rely on a later definition. Check each legend, glossary, or notation table against what it explains. Explain every needed unfamiliar term or symbol there or earlier. Connect each entry's label or symbol to its meaning and any established name.
+4.5 Define each unfamiliar term at first use. At later uses, make its meaning clear from the established terminology and the local context. Never rely on a later definition. Check each legend, glossary, or notation table against what it explains. Explain every needed unfamiliar term or symbol there or earlier. Connect each entry's label or symbol to its meaning and any established name.
 
 4.6 Use one term and one visual notation for each meaning throughout the deck. Give objects distinct names or explicit indices whenever the explanation relies on their difference. Preserve that distinction in the definitions and expressions built from them. Simplify notation only without losing a required distinction. Build on earlier meanings instead of defining them again.
 
@@ -134,7 +134,7 @@ Unless the drawing convention explains a connection's relation, label that relat
 
 5.7 Draw an unchanged structure once with its changing values. Redraw it only when the structure changes or a later page's question needs it. For a change, show both states and their difference. Draw a full curve only when its shape matters. Keep calculation-only quantities out of drawings unless their relationship is the claim.
 
-5.8 Caption each data or relationship figure with what it shows and the data it uses. Letter multiple figures in reading order. Give each figure's names, labels, numbers, captions, and notes a visible referent. Make each compared case identifiable. Remove notes with no referent or those that repeat the figure. Replace notation that needs a disclaimer.
+5.8 Use captions and notes to identify what the figure shows and guide attention through the relationships needed for the page's question. Keep data, conditions, and brief source attribution needed to interpret or assess the figure visible. Put supporting detail that serves neither purpose in the record. Letter multiple figures in reading order. Give each figure's names, labels, numbers, captions, and notes a visible referent. Make each compared case identifiable. Remove notes with no referent or those that repeat the figure. Replace notation that needs a disclaimer.
 
 5.9 In comparison tables, make rows the compared entities or conditions and order them by a meaningful key. State units once. If columns use different measurements, give each column's source. Keep group-defining conditions with the results. A full-page table must give a complete comparison for the page's question.
 
