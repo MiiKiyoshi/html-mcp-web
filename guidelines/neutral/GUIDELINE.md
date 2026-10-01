@@ -96,7 +96,7 @@ Judge wording by what the reader understands in context, not by what the author 
 
 4.8 Name every input, output, and source in a computation. Give each symbol one role and distinguish assumed values from solved values. Use the form each step requires, without silently substituting one for the other. Use example values that need no project context and take part in the page's example.
 
-4.9 For a deck with sections, use `<section name> — <page topic>` for each content-page title. Use a short noun phrase for the topic. Name the object or comparison, not the conclusion or an incidental source label. A defined API, file format, or dataset under review can name the page. Make the title, central visual, and takeaway support the same point.
+4.9 For a deck with sections, use `<section name> — <page topic>` for each content-page title. Use a short noun phrase that identifies this page's specific subject within its section. Use the established name for that subject, and distinguish a detail from the whole it belongs to. Name the object or comparison, not the conclusion or an incidental source label. A defined API, file format, or dataset under review can name the page. Make the title, central visual, and takeaway support the same point.
 
 4.10 By default, give each content page one short lead and one takeaway. The lead states the problem, comparison, or definition that makes the page necessary. Keep procedure, evidence, results, conclusions, and counts repeated below out of it. The takeaway states the one conclusion supported by the visible content and adds no evidence. Cover, contents, and divider pages are exempt.
 
@@ -136,7 +136,7 @@ Unless the drawing convention explains a connection's relation, label that relat
 
 5.8 Caption each data or relationship figure with what it shows and the data it uses. Letter multiple figures in reading order. Give each figure's names, labels, numbers, captions, and notes a visible referent. Make each compared case identifiable. Remove notes with no referent or those that repeat the figure. Replace notation that needs a disclaimer.
 
-5.9 In comparison tables, make rows the compared entities or conditions and order them by a meaningful key. State units once. If columns use different measurements, give each column's source. Keep group-defining conditions with the results. A full-page table must give a complete comparison.
+5.9 In comparison tables, make rows the compared entities or conditions and order them by a meaningful key. State units once. If columns use different measurements, give each column's source. Keep group-defining conditions with the results. A full-page table must give a complete comparison for the page's question.
 
 5.10 Keep rendered content faithful. Preserve each embedded image's source width-to-height ratio. Check the rendered ratio against the source by calculation. Measure the image content, excluding padding and letterboxing. Do not scale text or glyphs unevenly. Line wrapping is not distortion.
 
