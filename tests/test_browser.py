@@ -3777,6 +3777,77 @@ def test_archived_threads_have_their_own_view_and_picked_archive_action(tmp_path
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@pytest.mark.skipif(not Path("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf").is_file(),
+                    reason="a wide face to arrive late is needed")
+def test_a_label_is_broken_again_when_its_face_arrives_late(tmp_path: Path) -> None:
+    """A reviewer saw a label broken with a narrower face's widths while the deck's face
+    was drawn, so its first line ran past the drawing's edge: no break ran after that face
+    arrived. Here the face arrives after the page has loaded and after fonts.ready, and the
+    label is broken again with the face it is now drawn in, every line inside its width."""
+    import base64
+
+    from html_mcp_web.slides import build
+
+    sentence = "one two three four five six seven eight nine ten eleven twelve"
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<!doctype html>\n<meta charset="utf-8">\n<title>Late</title>\n'
+        '<body data-author="A" data-meta="B">\n'
+        '<section data-title="Late">'
+        '<svg viewBox="0 0 1000 400" width="1000" height="400">'
+        '<text id="late" x="12" y="30" font-size="16" data-wrap="160" '
+        f'style="font-family: \'Late Face\', \'DejaVu Serif\', serif">{sentence}</text>'
+        '</svg></section>\n'
+        "</body>\n", encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, Path(__file__).resolve().parents[1] / "templates" / "neutral-slides")
+    face = base64.b64encode(Path("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf").read_bytes()).decode()
+
+    profile = tempfile.mkdtemp(prefix="html_mcp_late_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    lines = """return Array.from(document.querySelectorAll("#late tspan"))
+                .map((line) => [line.textContent, line.getComputedTextLength()]);"""
+    try:
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(html.as_uri())
+        wait_until(lambda: browser.execute_script(
+            'return document.fonts.status === "loaded" && document.getElementById("late").dataset.lines'))
+        before = browser.execute_script(lines)
+        assert all(width <= 160.5 for _, width in before), before
+        # The wide face arrives now, long after the page and fonts.ready.
+        browser.execute_script(f"""
+          const face = new FontFace("Late Face", "url(data:font/ttf;base64,{face})");
+          document.fonts.add(face);
+          face.load();
+        """)
+        wait_until(lambda: browser.execute_script(
+            'return Array.from(document.fonts).some((f) => f.family.includes("Late Face") && f.status === "loaded")'))
+        after = wait_until(lambda: (lambda now: now if len(now) > len(before) else None)(browser.execute_script(lines)))
+        assert all(width <= 160.5 for _, width in after), after
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_label_given_a_box_takes_the_size_the_box_holds(tmp_path: Path) -> None:
     """data-fit names a box, and the deck chooses the size as well: the largest in the
     range whose lines stay inside the box's height and read tight. Cards of a row then
