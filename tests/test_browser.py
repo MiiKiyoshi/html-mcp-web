@@ -1748,12 +1748,14 @@ def test_svg_text_moved_in_a_way_firefox_ignores_is_reported(tmp_path: Path) -> 
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
-def test_an_arrowhead_over_the_last_bend_is_reported(tmp_path: Path) -> None:
+def test_an_arrowhead_that_leaves_too_little_line_is_reported(tmp_path: Path) -> None:
     """A routed arrow ended with 9 units of line after its last bend under a head about
-    11 units long. The head sat over the corner and the line seemed to stop under a
-    floating triangle, and the check said nothing. A head is reported when it leaves less
-    than two stroke widths of line visible after the bend, and a long last stretch, a
-    straight arrow, and a small head drawn in user units are not."""
+    11 units long, and the head sat over the corner. A drop from a bus was a straight
+    10-unit line under a 7-unit head, so 3 units of line showed and the head seemed to
+    touch the bus it left from. A head is reported when the straight stretch it sits on,
+    back to the last bend or to where the line begins, leaves less than half the head's
+    length, or two stroke widths, of line visible. A long last stretch, a short straight
+    arrow whose line still shows, and a small head drawn in user units are not."""
     import urllib.request
 
     (tmp_path / "slides.html").write_text('''<!doctype html>
@@ -1765,10 +1767,13 @@ def test_an_arrowhead_over_the_last_bend_is_reported(tmp_path: Path) -> None:
           <path d="M0,0 L7,3.5 L0,7 z"/></marker>
         <marker id="small" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto"
                 markerUnits="userSpaceOnUse"><path d="M0,0 L6,3 L0,6 z"/></marker>
+        <marker id="seven" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7"
+                markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
       </defs>
       <path id="covered" d="M10,10 L100,10 L100,19" stroke="#333" stroke-width="1.8" fill="none" marker-end="url(#big)"/>
       <path id="clear" d="M10,40 L100,40 L100,80" stroke="#333" stroke-width="1.8" fill="none" marker-end="url(#big)"/>
-      <path id="straight" d="M150,10 L162,10" stroke="#333" stroke-width="1.8" fill="none" marker-end="url(#big)"/>
+      <path id="drop" d="M150,10 L150,20" stroke="#333" stroke-width="1.5" fill="none" marker-end="url(#seven)"/>
+      <path id="shaft" d="M200,10 L200,31" stroke="#333" stroke-width="2" fill="none" marker-end="url(#big)"/>
       <path id="userspace" d="M150,40 L240,40 L240,50" stroke="#333" stroke-width="1.8" fill="none" marker-end="url(#small)"/>
     </svg>
   </div></section>
@@ -1788,7 +1793,63 @@ def test_an_arrowhead_over_the_last_bend_is_reported(tmp_path: Path) -> None:
         covered = [error for error in errors if "arrowhead" in error]
         assert covered == ["page 1 <svg#flow> <path#covered> ends with a 9-unit line after its last bend under "
                            "a 10.8-unit arrowhead, so the head covers the bend. Shorten the head or move the "
-                           "bend back [p1:0.0.1]"], errors
+                           "bend back [p1:0.0.1]",
+                           "page 1 <svg#flow> <path#drop> is a 10-unit straight line under a 7-unit arrowhead, "
+                           "so only 3 units of line show behind the head. Shorten the head or lengthen the line "
+                           "[p1:0.0.3]"], errors
+    finally:
+        shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_box_that_runs_past_the_box_it_is_drawn_in_is_reported(tmp_path: Path) -> None:
+    """A step box drawn inside an execution box ended 2 units below it once the outer box
+    was shortened, and the check said nothing. That box is reported. Boxes that cross or
+    meet an edge on purpose are not: a box near the edge of the front outline in a stack
+    of equal offset outlines, which crosses the outlines behind, a tag set half over a
+    corner, a header band as wide as its box, the parts of a scaled icon inside a box,
+    and two boxes side by side."""
+    import urllib.request
+
+    (tmp_path / "slides.html").write_text('''<!doctype html>
+<html><head><meta charset="utf-8"><title>Boxes</title></head><body><main class="pages">
+  <section class="page"><div data-layout-guard>
+    <svg id="boxes" viewBox="0 0 400 280" width="400" height="280">
+      <rect id="exec" x="10" y="10" width="180" height="78" fill="#fff" stroke="#000"/>
+      <rect id="step" x="18" y="44" width="164" height="46" fill="#fff" stroke="#888"/>
+      <rect x="212" y="22" width="120" height="80" fill="#fff" stroke="#000"/>
+      <rect x="206" y="16" width="120" height="80" fill="#fff" stroke="#000"/>
+      <rect x="200" y="10" width="120" height="80" fill="#fff" stroke="#000"/>
+      <rect id="staged" x="204" y="40" width="100" height="30" fill="#eee" stroke="#888"/>
+      <rect x="10" y="120" width="180" height="60" fill="#fff" stroke="#000"/>
+      <rect id="tag" x="165" y="112" width="40" height="20" fill="#fd0" stroke="#000"/>
+      <rect x="210" y="120" width="120" height="60" fill="#fff" stroke="#000"/>
+      <rect id="band" x="210" y="120" width="120" height="18" fill="#ccd" stroke="#000"/>
+      <rect x="10" y="200" width="180" height="60" fill="#fff" stroke="#000"/>
+      <g transform="translate(20,205) scale(0.4)">
+        <rect x="0" y="0" width="100" height="100" fill="#ccc"/>
+        <rect x="20" y="20" width="60" height="20" fill="#fff"/>
+      </g>
+      <rect x="210" y="200" width="60" height="60" fill="#fff" stroke="#000"/>
+      <rect x="270" y="200" width="60" height="60" fill="#fff" stroke="#000"/>
+    </svg>
+  </div></section>
+</main></body></html>''', encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    try:
+        shared.ensure()
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
+            errors = json.loads(response.read())["errors"]
+        past = [error for error in errors if "runs past the box it is drawn in" in error]
+        assert past == ["page 1 <svg#boxes> <rect#step> runs past the box it is drawn in (bottom by 2). "
+                        "Fit it inside or grow the box [p1:0.0.1]"], errors
     finally:
         shared.stop()
 

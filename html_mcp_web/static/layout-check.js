@@ -430,28 +430,43 @@ export function createLayoutChecks(dependencies) {
           + `is drawn stretched by a CSS transform, one axis ${worst.toFixed(2)} times the other. `
           + "Scale text evenly", stretchedText[0].element);
       }
-      // An arrowhead longer than the stretch of line between it and the last bend sits
-      // over the corner, and the line seems to stop under a floating triangle. The head's
-      // reach back along the line is compared with the distance to the bend, and a head
-      // that leaves less than two stroke widths of line visible before it is reported.
+      // An arrowhead needs plain line behind it to read as an arrow. The straight stretch
+      // it sits on runs back to the last bend, or to where the line begins, often a
+      // junction with another line or a box edge. A 10-unit drop from a bus under a 7-unit
+      // head showed 3 units of line, and the head seemed to touch the corner it left from.
+      // A head is reported when the line it leaves visible is shorter than half the head,
+      // or than two stroke widths for a small head. Half a head keeps a short arrow whose
+      // line still shows, as 8 units behind a 12.6-unit head do. On a straight line
+      // headed at both ends, both heads share the line and it is reported once.
       for (const svg of page.querySelectorAll("svg")) {
         for (const line of svg.querySelectorAll("path, line, polyline")) {
           const style = frameWindow().getComputedStyle(line);
           const strokeWidth = parseFloat(style.strokeWidth) || 1;
-          for (const atStart of [false, true]) {
+          const reaches = [false, true].map((atStart) => {
             const named = (atStart ? style.markerStart : style.markerEnd).match(/url\(["']?#([^"')]+)["']?\)/);
             const marker = named ? line.ownerDocument.getElementById(named[1]) : null;
-            if (!(marker instanceof frameWindow().SVGMarkerElement)) continue;
-            const reach = arrowheadReach(marker, strokeWidth, atStart);
-            if (reach === null || reach === 0) continue;
-            const bend = bendWithin(line, atStart, reach + 2 * strokeWidth);
-            if (bend === null) continue;
+            if (!(marker instanceof frameWindow().SVGMarkerElement)) return 0;
+            return arrowheadReach(marker, strokeWidth, atStart) ?? 0;
+          });
+          for (const atStart of [false, true]) {
+            const reach = reaches[atStart ? 1 : 0];
+            if (reach === 0) continue;
+            const shaft = Math.max(reach / 2, 2 * strokeWidth);
+            const bend = bendWithin(line, atStart, reach + shaft);
+            const other = reaches[atStart ? 0 : 1];
+            if (bend === null && other > 0 && atStart) continue;
+            const run = bend ?? line.getTotalLength();
+            const visible = run - reach - (bend === null ? other : 0);
+            if (visible >= shaft) continue;
             const round = (value) => Math.round(value * 10) / 10;
-            addError(`page ${index + 1} ${describeElement(svg)} ${describeElement(line)} `
-              + (atStart ? `starts with a ${round(bend)}-unit line before its first bend`
-                : `ends with a ${round(bend)}-unit line after its last bend`)
-              + ` under a ${round(reach)}-unit arrowhead, so the head covers the bend. `
-              + "Shorten the head or move the bend back", line);
+            const stretch = bend === null ? `is a ${round(run)}-unit straight line`
+              : atStart ? `starts with a ${round(run)}-unit line before its first bend`
+                : `ends with a ${round(run)}-unit line after its last bend`;
+            const shown = visible > 0 ? `only ${round(visible)} units of line show behind the head`
+              : bend === null ? "the head covers the line" : "the head covers the bend";
+            addError(`page ${index + 1} ${describeElement(svg)} ${describeElement(line)} ${stretch}`
+              + ` under a ${round(reach)}-unit arrowhead, so ${shown}. `
+              + (bend === null ? "Shorten the head or lengthen the line" : "Shorten the head or move the bend back"), line);
           }
         }
       }
@@ -602,6 +617,53 @@ export function createLayoutChecks(dependencies) {
           addError(
             `page ${index + 1} ${describeElement(svg.element)} label "${labelWords(label.text)}" runs past its box (${past.join(", ")})`,
             svg.element);
+        }
+        // A box drawn inside another stays inside it: a step box ended 2 units below the
+        // box it sat in once that box was shortened. A rect is held by the smallest rect
+        // larger on both axes that holds its centre, and among holders of one size, the
+        // one it fits best, so the front outline of a stack of equal offset copies holds
+        // what is drawn in it. It is reported when it crosses that holder's edge by more
+        // than a unit but by less than a quarter of its own size on that axis: a tag set
+        // half over a corner crosses on purpose. A rect that paints nothing, or is turned,
+        // takes no part.
+        const drawnRects = Array.from(svg.element.querySelectorAll("rect"))
+          .filter((rect) => rect.closest("defs, symbol, clipPath, mask, pattern, marker") === null)
+          .filter((rect) => {
+            const paint = doc.defaultView.getComputedStyle(rect);
+            const ctm = rect.getCTM();
+            return (paint.fill !== "none" || paint.stroke !== "none") && ctm !== null && ctm.b === 0 && ctm.c === 0;
+          })
+          .map((rect) => ({ rect, box: inViewport(rect) }))
+          .filter((entry) => entry.box !== null);
+        const overshoot = (inner, outer) => [
+          ["left", outer.left - inner.left, inner.right - inner.left],
+          ["right", inner.right - outer.right, inner.right - inner.left],
+          ["top", outer.top - inner.top, inner.bottom - inner.top],
+          ["bottom", inner.bottom - outer.bottom, inner.bottom - inner.top],
+        ];
+        const crossing = (inner, outer) => overshoot(inner, outer).reduce((sum, [, amount]) => sum + Math.max(0, amount), 0);
+        let poking = 0;
+        for (const { rect, box } of drawnRects) {
+          const width = box.right - box.left;
+          const height = box.bottom - box.top;
+          const x = (box.left + box.right) / 2;
+          const y = (box.top + box.bottom) / 2;
+          const area = (other) => Math.round((other.right - other.left) * (other.bottom - other.top));
+          const holder = drawnRects
+            .map((entry) => entry.box)
+            .filter((other) => other.right - other.left > width + 1 && other.bottom - other.top > height + 1
+              && other.left < x && x < other.right && other.top < y && y < other.bottom)
+            .sort((a, b) => area(a) - area(b) || crossing(box, a) - crossing(box, b))[0];
+          if (holder === undefined) continue;
+          const sides = overshoot(box, holder);
+          if (sides.some(([, amount, size]) => amount >= size / 4)) continue;
+          const crossed = sides.filter(([, amount]) => amount > 1).map(([side, amount]) => `${side} by ${Math.round(amount)}`);
+          if (crossed.length === 0 || poking >= 3) continue;
+          poking += 1;
+          addError(
+            `page ${index + 1} ${describeElement(svg.element)} ${describeElement(rect)} runs past the box it is drawn in `
+            + `(${crossed.join(", ")}). Fit it inside or grow the box`,
+            rect);
         }
         // A label the deck wrapped (data-wrap) records its line count in data-lines; one
         // that needs more lines than its box allows (data-max-lines) is reported with both.
