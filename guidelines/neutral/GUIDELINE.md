@@ -144,7 +144,7 @@ Check the finished deck as its intended reader will meet it, and after any chang
 
 9.2 On each content page, confirm that the reader can perform its check, that every quantity's kind and source are identified, that every note has a referent, that every term and value is understandable from what the reader has, that the presenter can explain the page by pointing, that unchanged structure is drawn once, that every element answers a question the reader has at that point, and that the lead still describes the finished page. Trace the reading order suggested by the rendered layout. At each element, check that the explanation needed to understand it is available there or has already been introduced.
 
-9.3 Test each element by removing it in thought, and cut it if nothing the current question needs is lost. After moving, adding, or removing an explanation, recheck everything else that addresses the same point.
+9.3 Assess each element against the meaning already conveyed by the wording, visual structure, and conventions available to the reader. Remove it in thought and cut it if no information or guidance needed for the current question is lost. After moving, adding, or removing an explanation, recheck everything else that addresses the same point.
 
 9.4 Repair each applicable failed check and add visible support for any part of the lead left unanswered. Check cover, contents, and divider pages for their orientation purpose, scripts, and geometry. Use the template's layout checks for clipping and overlap before acceptance.
 
