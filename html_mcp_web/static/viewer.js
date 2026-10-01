@@ -534,6 +534,10 @@ function renderPages() {
 // pane's left, so a preview is the page itself. A click goes to that page, and the page
 // being read is marked and kept in view.
 const thumbsOpen = () => $("#artifact-pane").classList.contains("thumbs-open");
+// How many previews stay wholly in sight above and below the marked one. Counted in
+// previews rather than as a share of the column, so a short screen and a tall one both
+// show the same neighbours.
+const THUMB_NEIGHBOURS = 2;
 
 function setThumbsOpen(open) {
   $("#artifact-pane").classList.toggle("thumbs-open", open);
@@ -596,7 +600,19 @@ function markCurrentThumb() {
   for (const [index, page] of pages.entries()) {
     page.classList.toggle("html-mcp-thumb-current", index + 1 === state.currentPage);
   }
-  pages[state.currentPage - 1]?.scrollIntoView({ block: "nearest" });
+  // The marked preview stays a margin inside the column, not at its edge: scrolled to the
+  // nearest edge, it sat at the top whenever the deck was read upward, and the previews of
+  // the pages just above it were out of sight.
+  const current = pages[state.currentPage - 1];
+  const win = $("#thumbs-frame").contentWindow;
+  if (current === undefined || win === null) return;
+  const box = current.getBoundingClientRect();
+  // One preview's step down the column, gap included. A column too short for the
+  // neighbours on both sides keeps the marked preview in its middle instead.
+  const step = pages.length > 1 ? pages[1].getBoundingClientRect().top - pages[0].getBoundingClientRect().top : box.height;
+  const margin = Math.min(THUMB_NEIGHBOURS * step, (win.innerHeight - box.height) / 2);
+  if (box.top < margin) win.scrollBy(0, box.top - margin);
+  else if (box.bottom > win.innerHeight - margin) win.scrollBy(0, box.bottom - (win.innerHeight - margin));
 }
 
 function updateCurrentPage() {

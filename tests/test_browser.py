@@ -1520,6 +1520,22 @@ def test_slide_previews_open_from_the_first_button_and_lead_to_a_page(tmp_path: 
             && thumbs.querySelectorAll("main.pages > section.page")[11].classList.contains("html-mcp-thumb-current");
         '''))
 
+        # Read upward: the marked preview stays inside the column rather than at its top
+        # edge, so the previews of the two pages just above it are wholly in sight.
+        browser.execute_script('''
+          const win = document.querySelector("#artifact-frame").contentWindow;
+          const page = win.document.querySelectorAll("main.pages > section.page")[5];
+          win.scrollTo(0, win.scrollY + page.getBoundingClientRect().top);
+        ''')
+        placed = wait_until(lambda: browser.execute_script('''
+          const thumbs = document.querySelector("#thumbs-frame");
+          const pages = thumbs.contentDocument.querySelectorAll("main.pages > section.page");
+          if (!pages[5].classList.contains("html-mcp-thumb-current")) return null;
+          return {twoAbove: pages[3].getBoundingClientRect().top,
+                  marked: pages[5].getBoundingClientRect().top};
+        '''))
+        assert placed["twoAbove"] >= -1 and placed["marked"] > 0, placed
+
         browser.find_element("css selector", "#thumbs-btn").click()
         folded = browser.execute_script(geometry)
         assert not folded["open"] and not folded["shown"] and abs(folded["frameLeft"]) <= 1, folded
