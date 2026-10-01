@@ -10,7 +10,7 @@ Each article gives a principle and rules for applying it. Apply a rule wherever 
 
 ## Article 1. Answer the reader's question
 
-Establish what the requester wants the reader to understand or decide. Find what the reader already knows and include only what closes the gap.
+Establish what the requester wants the reader to understand or decide. Find what the reader already knows, retain the field terms they understand, and include only what closes the gap.
 
 1.1 State the purpose, audience, and intended use before planning. For a live presentation, make the explanation followable at the speaker's pace without requiring the audience to read dense text while listening. Derive each page's question from what the requester wants to understand or decide. Use the current request and its discussion, not available material. If a follow-up changes the question, follow the current request.
 
