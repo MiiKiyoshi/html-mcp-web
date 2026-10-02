@@ -4,7 +4,7 @@
 
 A deck helps its reader understand or decide something. This guideline governs what a technical deck says and shows. Template documentation governs page structure, components, and production checks.
 
-Work within the authorized scope. Within it, when rules pull in different directions, keep every claim accurate and checkable first, and then make the explanation understandable to its intended reader. If a requester's explicit constraint conflicts with either, report the conflict instead of silently changing the constraint or the content.
+Work within the authorized scope. Within it, make the intended explanation understandable to its reader as a condition of acceptance. Ground stated claims and reported values, and apply the level of detail and fidelity needed to answer the reader's question. If a requester's explicit constraint conflicts with either of these, report the conflict instead of silently changing the constraint or the content.
 
 Each article gives a principle and rules for applying it. Apply a rule wherever its conditions hold. Examples illustrate a rule, not its limits. Named forms, such as titles, leads, takeaways, and scripts, are defaults. If a form obscures meaning or repeats content, adapt the form. Do not cut needed explanation to preserve it.
 
@@ -36,7 +36,7 @@ Distinguish established facts, inferences, assumptions, proposals, and unknowns.
 
 2.5 Identify each quantity as measured, source-reported, assumed, or computed. Give its source or derivation. Generate reported results and derived numbers from primary data, then check them against the generator's output. Show the inputs and rule needed to recompute a value. Apply each rule to the whole object, including the hard case.
 
-2.6 For each count, name the items counted and how groups form the total. Label illustrative and assumed values, and check their calculations separately. For conceptual curves and diagrams, verify the relationships a reader would infer, including ordering, crossings, and any relative size used to convey meaning. Support these relationships with a source or an appropriate check, and state the conditions on which they depend. Omit unsupported relationships. Labeling a drawing conceptual does not make them valid. An illustrative example can explain a rule, but cannot serve as evidence of a measured result.
+2.6 For each count, name the items counted and how groups form the total. Label illustrative and assumed values, and check their calculations separately. For conceptual curves and diagrams, verify the relationships a reader would infer, including ordering, crossings, and relative size when it conveys the relationship being explained. Require exact proportions only when they are needed to answer the page's question. Support these relationships with a source or an appropriate check, and state the conditions on which they depend. Omit unsupported relationships. Labeling a drawing conceptual does not make them valid. An illustrative example can explain a rule, but cannot serve as evidence of a measured result.
 
 2.7 Cite sources needed to support claims or interpret evidence. Attribute a rule or claim to its primary source, not to the repository or summary used to obtain it. Include only the source details needed to identify the source or qualify the claim. Credit borrowed material. If you change it, say that it is adapted.
 
