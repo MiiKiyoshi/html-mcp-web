@@ -168,7 +168,7 @@ Plan before building. Record sources, history, and decisions outside the deck. P
 
 8.1 Keep `<artifact>.FLOORPLAN.md` beside the edit file. Update it before adding, splitting, or removing a page. Record each page's question, sources, and revision history. Keep a term ledger that names the page and element defining each project-specific term. Fix missing or late definitions before handoff.
 
-8.2 Identify authoritative sources for direction and terminology before collecting candidate content. Plan in three passes:
+8.2 Identify authoritative sources for direction and terminology and inspect requested visual references before collecting candidate content. When using a drafting tool that accepts images, supply the reference images themselves as inputs. Plan in three passes:
 
 1. Inventory each candidate fact, its primary evidence, and anything affecting its use.
 2. Cluster facts by a causal chain, comparison, mechanism, or decision question before choosing page count.
@@ -188,7 +188,7 @@ Read the finished deck as its reader. After a change, check what depends on it.
 
 9.4 If a page changes or is removed, move any prerequisites still needed and update dependent explanations. After moving, adding, or removing an explanation, recheck everything else that addresses the same point.
 
-9.5 Repair each failed check that applies. Add visible support for any part of the lead left unanswered. Check orientation pages for their purpose, scripts, and geometry. Before acceptance, use the template's layout checks for clipping and overlap.
+9.5 Repair each failed check that applies to the decision a draft serves. For a layout draft that will be redrawn, fix defects that affect the requested visual comparison and repair the rest in the redraw before acceptance. Add visible support for any part of the lead left unanswered. Check orientation pages for their purpose, scripts, and geometry. Before acceptance, use the template's layout checks for clipping and overlap.
 
 9.6 Separate content findings from production checks. A clean build, preserved edits, and clean geometry show successful production, not a working explanation.
 
