@@ -128,7 +128,7 @@ Unless the drawing convention explains a connection's relation, label that relat
 
 5.4 Make each independent column complete in its reading order. Align matching items across compared columns and show the match.
 
-5.5 Compare approaches against the reader's goal and actual constraints. Before rejecting an approach for its presentation, check whether another arrangement or form preserves the content and solves the problem. If an established way to explain the same relationship helps the reader, reuse it. Adapt reused material that no longer serves the explanation. Preserve needed content and explicit constraints.
+5.5 Compare approaches against the reader's goal and actual constraints. Before rejecting an approach for its presentation, check whether another arrangement or form preserves the content and solves the problem. If an established way to explain the same relationship helps the reader, reuse it. When that form is a standard plot, use a plotting tool that provides the required axes, scales, and annotations rather than rebuilding them by hand. Adapt reused material that no longer serves the explanation. Preserve needed content and explicit constraints.
 
 5.6 Explain a mechanism with one instance the reader can check by hand. For a claim about a model, show its input and response. Put per-case measurements and fitted plots on result pages. In examples, keep the conditions and relationships needed for understanding. When the reader needs to connect a concept to code, a file format, or a record, retain the relevant source excerpt and show the correspondence. Simplify only details that this explanation does not need.
 
