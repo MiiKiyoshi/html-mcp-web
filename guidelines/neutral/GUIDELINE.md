@@ -198,7 +198,7 @@ Answer the question asked and make the change requested. Restore the understandi
 
 10.1 Answer a reviewer's question without editing unless it explicitly asks for a change. Preserve wording the requester explicitly specifies as exact. If it conflicts with another rule, report the conflict instead of silently changing it.
 
-10.2 Before answering or editing, read the comment, its discussion, and the material it refers to. Identify its subject and the explanation, proposal, or change it requests. Keep its distinctions and do not reintroduce what it rejects. If materially different readings remain, ask one focused question.
+10.2 Before answering or editing, read the comment, its discussion, and the material it refers to. Identify its subject and the explanation, proposal, or change it requests. Interpret connected instructions together, and resolve what each applies to after any requested move or removal. Keep its distinctions and do not reintroduce what it rejects. If materially different readings remain, ask one focused question.
 
 10.3 Put the requested understanding where the reader needs it. Adding requested words or removing a criticized term is not enough. After editing, read the explanation in order against the original comment. Within a requested fix, make every judgment the fix needs. Check the rest of the page for the same underlying defect and repair affected elements within the authorized scope. Do not change unrelated pages. Report out-of-scope defects with the rule broken and the pages checked.
 
