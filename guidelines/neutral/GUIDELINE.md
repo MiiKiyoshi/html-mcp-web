@@ -98,7 +98,7 @@ Judge wording by what the reader understands in context, not by what the author 
 
 4.9 For a deck with sections, use `<section name> — <page topic>` for each content-page title. Use a short noun phrase that identifies this page's specific subject within its section. Use the established name for that subject, and distinguish a detail from the whole it belongs to. Name the object or comparison, not the conclusion or an incidental source label. A defined API, file format, or dataset under review can name the page. Make the title, central visual, and takeaway support the same point.
 
-4.10 By default, give each content page one short lead and one takeaway. The lead states the problem, comparison, or definition that makes the page necessary. Keep procedure, evidence, results, conclusions, and counts repeated below out of it. The takeaway states the one conclusion supported by the visible content and adds no evidence. Cover, contents, and divider pages are exempt.
+4.10 By default, give each content page one short lead and one takeaway. Read the lead after the explanation that prepares it, or from the reader's starting knowledge if there is none. It should introduce the unresolved problem, comparison, or needed definition, without summarizing the page's procedure, evidence, results, or answer. The takeaway states the one conclusion the page is meant to establish and its visible content supports. Remove a clause if it adds nothing to that conclusion or the conditions and distinctions needed to understand it. Cover, contents, and divider pages are exempt.
 
 4.11 Separate distinct statements in slide prose, captions, table cells, scripts, and planning documents. When their relationship matters, use an explicit conjunction.
 
