@@ -41,6 +41,7 @@ const state = {
   selectionPointerDown: false,
   selectionSettle: null,
   pageFrame: null,
+  thumbRedraw: null,
   currentPage: null,
   slideShow: false,
   presentationPointer: null,
@@ -627,6 +628,26 @@ function markCurrentThumb() {
   window.htmlMcpTrace?.(`thumb p=${state.currentPage}/${pages.length} box=${Math.round(box.top)},${Math.round(box.bottom)}`
     + ` in=${win.innerHeight} m=${Math.round(margin)} y=${Math.round(before)}>${Math.round(win.scrollY)}`
     + ` ${win.document.readyState} sc=${win.document.documentElement.style.getPropertyValue("--html-mcp-page-scale") || "-"}`);
+}
+
+// Safari draws a frame's scroll apart from the page's script. While the deck coasts after
+// a flick, the column's scroll position moved with each page but the column stayed drawn
+// where it was (a trace read y=252 beside a column drawn near 621), and setting the same
+// position again changes nothing. So once the deck has stopped, the column is moved by a
+// pixel and back, which makes the browser draw it where its position says.
+function scheduleThumbRedraw() {
+  clearTimeout(state.thumbRedraw);
+  state.thumbRedraw = setTimeout(() => {
+    state.thumbRedraw = null;
+    const win = $("#thumbs-frame").contentWindow;
+    if (!thumbsOpen() || win === null) return;
+    const y = win.scrollY;
+    win.scrollTo(0, y > 0 ? y - 1 : y + 1);
+    setTimeout(() => {
+      win.scrollTo(0, y);
+      window.htmlMcpTrace?.(`thumb-redraw y=${Math.round(y)}`);
+    }, 50);
+  }, 200);
 }
 
 function updateCurrentPage() {
@@ -1552,6 +1573,7 @@ function attachArtifactEvents(frame) {
     }
     hideSelectionButton();
     scheduleCurrentPage();
+    scheduleThumbRedraw();
   }, { passive: true });
   win.addEventListener("resize", () => {
     // A wider or narrower artifact draws every page at another size, and the scroll position
