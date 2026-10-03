@@ -12,7 +12,12 @@ footer bar, so overflow is reported the same way.
 ```html
 <section data-layout="contents" data-title="Contents">
   <ol>
-    <li>Background</li>
+    <li>Background
+      <ul>
+        <li>Context</li>
+        <li>Question</li>
+      </ul>
+    </li>
     <li><span class="venue">Venue</span>Name of the work<span class="by">(authors)</span></li>
   </ol>
 </section>
@@ -25,7 +30,10 @@ footer bar, so overflow is reported the same way.
 
 - `contents`: `data-title` draws the heading and the rule under it, and each `<li>` takes
   its number from a CSS counter, so list order is the numbering. `span.venue` sets
-  smaller text before the name and `span.by` after it.
+  smaller text before the name and `span.by` after it. For sub-items, end the `<li>`
+  with one `<ul>` after its own text. The sub-items do not affect numbering and appear
+  as unnumbered lines aligned under the item's text, each in smaller type with a short
+  rule before it.
 - `divider`: `data-no` is the number in the capsule, `p.label` is its text, and an
   optional `img.shot` places a picture to the right.
 

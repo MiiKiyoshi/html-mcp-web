@@ -254,3 +254,24 @@ def test_an_appendix_is_counted_apart_from_the_deck(tmp_path: Path) -> None:
     # itself.
     plain = re.findall(r'<span class="pageno">([^<]*)</span>', deck(""))
     assert plain == ["1 / 5", "2 / 5", "3 / 5", "4 / 5", "5 / 5"], plain
+
+
+def test_contents_item_with_a_sub_list_wraps_its_own_text() -> None:
+    from html_mcp_web.slides.build import contents_list
+
+    built = contents_list('''<ol>
+  <li>Speed
+    <ul><li>Direct Wire Model</li><li>Overall</li></ul>
+  </li>
+  <li><span class="venue">Venue</span>Name<ul><li>Part</li></ul></li>
+  <li>Summary</li>
+</ol>''')
+
+    assert ('<li class="has-sub"><span class="entry">Speed\n    </span>'
+            '<ul><li>Direct Wire Model</li><li>Overall</li></ul></li>') in built
+    assert '<li class="has-sub"><span class="entry"><span class="venue">Venue</span>Name</span><ul>' in built
+    assert "<li>Summary</li>" in built
+    with pytest.raises(ValueError, match="one ul of sub-items"):
+        contents_list("<ol><li>Speed<ul><li>Part</li></ul>after</li></ol>")
+    with pytest.raises(ValueError, match="one ul of sub-items"):
+        contents_list("<ol><li>Speed<ol><li>Part</li></ol></li></ol>")

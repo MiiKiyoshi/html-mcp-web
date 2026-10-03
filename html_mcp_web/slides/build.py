@@ -188,6 +188,33 @@ def script_block(script_html: str) -> str:
     return f'\n    <div class="script-block">\n      <div class="script-text">{script_html}</div>\n    </div>'
 
 
+def contents_list(body_html: str) -> str:
+    # A contents item may end in a ul of unnumbered sub-items. Its own text goes into
+    # span.entry and the item is marked has-sub, so skeleton.css can set the sub-list
+    # under that text beside whatever number the skin draws.
+    body = ContentParser()
+    body.feed(body_html)
+    body.close()
+    for listing in body.root.children:
+        if not isinstance(listing, Element) or listing.tag != "ol":
+            continue
+        for item in listing.children:
+            if not isinstance(item, Element):
+                continue
+            lists = [index for index, child in enumerate(item.children)
+                     if isinstance(child, Element) and child.tag in ("ul", "ol")]
+            if not lists:
+                continue
+            at = lists[0]
+            tail = item.children[at + 1:]
+            if item.children[at].tag != "ul" or any(not isinstance(child, str) or child.strip() for child in tail):
+                raise ValueError("a contents item takes one ul of sub-items after its own text")
+            classes = item.attributes["class"].split() if "class" in item.attributes else []
+            item.attributes["class"] = " ".join(["has-sub", *classes])
+            item.children = [Element("span", {"class": "entry"}, item.children[:at]), item.children[at]]
+    return body.root.inner_html()
+
+
 def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
     content = parse_template_content(content_path)
     skin = Skin(skin_dir)
@@ -231,7 +258,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
                 heading = f"<h2>{section.title}</h2>\n        <div class=\"rule\"></div>" if section.title else ""
                 inner = f'''      <div class="wide" data-layout-guard>
         {heading}
-{section.body_html}
+{contents_list(section.body_html)}
       </div>'''
             else:
                 body_html = section.body_html

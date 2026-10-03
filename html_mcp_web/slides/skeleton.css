@@ -164,6 +164,38 @@
   font-weight: 650;
   text-align: center;
 }
+/* An item ending in a ul of sub-items, which the builder marks has-sub, is a grid. The
+   skin's number keeps its own box in the first column, or its absolute place, and the
+   item's text (span.entry) and the sub-list share the second column, so in every skin
+   the sub-items start under the text. The selectors outrank a skin's .contents li. */
+.contents ol > li.has-sub {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  height: auto;
+}
+.contents li.has-sub > .entry { grid-column: 2; grid-row: 1; }
+.contents li.has-sub > ul { grid-column: 2; grid-row: 2; margin: 0.2em 0 0; padding: 0; list-style: none; }
+.contents li li {
+  display: block;
+  height: auto;
+  margin: 0;
+  padding: 0 0 0 0.9em;
+  font-size: 0.68em;
+  font-weight: 400;
+  line-height: 1.45;
+}
+/* A sub-item takes a short rule in the text colour, not a number. It hangs in the
+   item's left padding and middle alignment centres it on the font's lowercase letters. */
+.contents li li::before {
+  all: unset;
+  content: "";
+  display: inline-block;
+  vertical-align: middle;
+  width: 0.4em;
+  margin: 0 0.35em 0 -0.75em;
+  border-top: 1px solid currentColor;
+}
 .contents .venue, .divider .venue { margin-right: 10px; color: var(--accent); font-size: 17px; }
 .contents .by, .divider .by { margin-left: 10px; color: #9fb1ae; font-size: 17px; }
 
