@@ -134,6 +134,26 @@ The body box carries `data-layout-guard`, so clipped overflow is reported.
 Check the current artifact with `layout(artifact=...)`: it waits for the check, and an
 empty `errors` means the current revision has no layout errors.
 
+## Planning files
+
+Keep `<artifact>.FLOORPLAN.md` beside the edit file and outside the deck. Update it before adding, splitting, or removing pages. Record page questions, sources, and revision history. Include a term ledger naming the page and element that defines each unfamiliar term. Fix missing or late definitions before handoff.
+
+## Visual reference inputs
+
+When a drafting tool accepts images, supply requested visual reference images as inputs. A description of the reference does not replace the images.
+
+## Connector routing
+
+For box-and-arrow diagrams, prefer horizontal and vertical connectors unless another route clarifies the relationship. Join connectors entering the same element near their sources. Split connectors leaving the same element near their targets. Keep branches short and the common segment long. Preserve direction and make each source-to-target relationship unambiguous. Follow the content guideline's rules for entry and exit sides and for which paths may merge.
+
+## Standard plots
+
+Use a plotting tool that supplies the required axes, scales, and annotations for a standard plot. Do not rebuild these by hand.
+
+## Embedded image proportions
+
+Preserve the source width-to-height ratio of images embedded inside SVG or used as CSS backgrounds. Check the rendered image itself, excluding padding and letterboxing. Do not treat a clean automated layout report as proof that these images retain their proportions.
+
 ## Report template
 
 `neutral-report` builds an A4 report from the same content format (one section per
