@@ -33,7 +33,10 @@ footer bar, so overflow is reported the same way.
   smaller text before the name and `span.by` after it. For sub-items, end the `<li>`
   with one `<ul>` after its own text. The sub-items do not affect numbering and appear
   as unnumbered lines aligned under the item's text, each in smaller type with a short
-  rule before it.
+  rule before it. When the list looks too large or does not fit, set `data-scale` on the
+  section to a positive number, as in `data-scale="0.8"`, to scale the whole list,
+  numbers and sub-items included, from its top left. The heading and its rule keep their
+  size, and the layout check uses the scaled list size.
 - `divider`: `data-no` is the number in the capsule, `p.label` is its text, and an
   optional `img.shot` places a picture to the right.
 

@@ -151,6 +151,11 @@
 /* Space under the last item holds nothing, so it does not count against the page. The
    selector outranks a skin's .contents li. */
 .contents ol > li:last-child { margin-bottom: 0; }
+/* data-scale on a contents section marks the area scaled and sets --contents-scale. The
+   list scales from its top left corner, numbers and sub-items included, so it starts
+   where the skin places it. A transform leaves the list's height in the flow unscaled,
+   so the list takes none and the guard measures the list as drawn. */
+.contents .wide.scaled > ol { height: 0; transform: scale(var(--contents-scale)); transform-origin: 0 0; }
 .contents li::before {
   counter-increment: item;
   content: counter(item, decimal-leading-zero);

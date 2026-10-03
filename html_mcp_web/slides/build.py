@@ -256,7 +256,14 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
             bottom = stack(skin.slot("full_bottom_left"), "page-bottom-left")
             if section.layout == "contents":
                 heading = f"<h2>{section.title}</h2>\n        <div class=\"rule\"></div>" if section.title else ""
-                inner = f'''      <div class="wide" data-layout-guard>
+                # data-scale sizes the list, numbers and sub-items included, in any skin.
+                wide = 'class="wide" data-layout-guard'
+                if "data-scale" in section.attributes:
+                    scale = section.attributes["data-scale"].strip()
+                    if not re.fullmatch(r"\d*\.?\d+", scale) or float(scale) == 0:
+                        raise ValueError(f'a contents data-scale is a positive number such as "0.8", not "{scale}"')
+                    wide = f'class="wide scaled" data-layout-guard style="--contents-scale: {scale}"'
+                inner = f'''      <div {wide}>
         {heading}
 {contents_list(section.body_html)}
       </div>'''

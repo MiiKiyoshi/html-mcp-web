@@ -275,3 +275,20 @@ def test_contents_item_with_a_sub_list_wraps_its_own_text() -> None:
         contents_list("<ol><li>Speed<ul><li>Part</li></ul>after</li></ol>")
     with pytest.raises(ValueError, match="one ul of sub-items"):
         contents_list("<ol><li>Speed<ol><li>Part</li></ol></li></ol>")
+
+
+def test_contents_data_scale_marks_the_area_and_takes_only_a_positive_number(tmp_path: Path) -> None:
+    from html_mcp_web.slides.build import build
+
+    skin = REPO / "templates" / "neutral-slides"
+    content = tmp_path / "content.html"
+    deck = '''<title>Deck</title><body data-author="R" data-meta="Lab">
+<section data-layout="contents" data-scale="{}"><ol><li>One</li></ol></section></body>'''
+    content.write_text(deck.format("0.8"), encoding="utf-8")
+    build(content, tmp_path / "slides.html", skin)
+    assert ('<div class="wide scaled" data-layout-guard style="--contents-scale: 0.8">'
+            in (tmp_path / "slides.html").read_text(encoding="utf-8"))
+    for wrong in ("small", "0", "-1"):
+        content.write_text(deck.format(wrong), encoding="utf-8")
+        with pytest.raises(ValueError, match="data-scale"):
+            build(content, tmp_path / "slides.html", skin)
