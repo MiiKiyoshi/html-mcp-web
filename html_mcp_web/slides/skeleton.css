@@ -148,6 +148,9 @@
   font-size: 25px;
   line-height: 42px;
 }
+/* Space under the last item holds nothing, so it does not count against the page. The
+   selector outranks a skin's .contents li. */
+.contents ol > li:last-child { margin-bottom: 0; }
 .contents li::before {
   counter-increment: item;
   content: counter(item, decimal-leading-zero);
@@ -175,15 +178,16 @@
   height: auto;
 }
 .contents li.has-sub > .entry { grid-column: 2; grid-row: 1; }
-.contents li.has-sub > ul { grid-column: 2; grid-row: 2; margin: 0.2em 0 0; padding: 0; list-style: none; }
+.contents li.has-sub > ul { grid-column: 2; grid-row: 2; margin: 0.1em 0 0; padding: 0; list-style: none; }
+/* Sub-items are one-line labels, so they take a label's line spacing. */
 .contents li li {
   display: block;
   height: auto;
   margin: 0;
   padding: 0 0 0 0.9em;
-  font-size: 0.68em;
+  font-size: 0.65em;
   font-weight: 400;
-  line-height: 1.45;
+  line-height: 1.25;
 }
 /* A sub-item takes a short rule in the text colour, not a number. It hangs in the
    item's left padding and middle alignment centres it on the font's lowercase letters. */
