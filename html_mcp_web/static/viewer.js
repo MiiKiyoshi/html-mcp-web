@@ -41,7 +41,6 @@ const state = {
   selectionPointerDown: false,
   selectionSettle: null,
   pageFrame: null,
-  thumbRedraw: null,
   currentPage: null,
   slideShow: false,
   presentationPointer: null,
@@ -539,6 +538,13 @@ const thumbsOpen = () => $("#artifact-pane").classList.contains("thumbs-open");
 // previews rather than as a share of the column, so a short screen and a tall one both
 // show the same neighbours.
 const THUMB_NEIGHBOURS = 2;
+// The column follows the page being read by moving its previews, not by scrolling. Safari
+// did not draw a frame's scroll set from script while the deck was moving, so in traces the
+// column's scroll position kept up (y=375>252) while the column stayed drawn pages behind
+// and the marked preview slid off its top. A transform is drawn with the frame's next paint.
+// The distance moved is handed to the column's own scroll as soon as the reader turns to the
+// column, so it scrolls on from what is shown.
+let thumbShift = 0;
 
 function setThumbsOpen(open) {
   $("#artifact-pane").classList.toggle("thumbs-open", open);
@@ -592,12 +598,33 @@ function installThumbs() {
     const page = event.target.closest?.("body > main.pages > section.page");
     if (page) jumpToPage(thumbPages().indexOf(page) + 1);
   });
+  // A new document starts unmoved. Not passive, so the browser waits for the hand-over
+  // before it scrolls the column on a wheel or a touch.
+  thumbShift = 0;
+  for (const kind of ["wheel", "touchstart", "pointerdown", "keydown"]) {
+    doc.addEventListener(kind, settleThumbShift, { capture: true, passive: false });
+  }
   // Under ?trace, every scroll the column takes, so one the viewer did not ask for shows
   // as a line of its own beside the thumb lines.
   doc.defaultView.addEventListener("scroll", () => {
     window.htmlMcpTrace?.(`thumb-scroll y=${Math.round(doc.defaultView.scrollY)}`);
   }, { passive: true });
   markCurrentThumb();
+}
+
+function shiftThumbs(shift) {
+  thumbShift = shift;
+  const holder = $("#thumbs-frame").contentDocument?.querySelector("body > main.pages");
+  if (holder) holder.style.transform = shift === 0 ? "" : `translateY(${-shift}px)`;
+}
+
+function settleThumbShift() {
+  const win = $("#thumbs-frame").contentWindow;
+  if (thumbShift === 0 || win === null) return;
+  const shown = win.scrollY + thumbShift;
+  shiftThumbs(0);
+  win.scrollTo(0, shown);
+  window.htmlMcpTrace?.(`thumb-settle y=${Math.round(shown)}`);
 }
 
 function markCurrentThumb() {
@@ -620,34 +647,21 @@ function markCurrentThumb() {
   // neighbours on both sides keeps the marked preview in its middle instead.
   const step = pages.length > 1 ? pages[1].getBoundingClientRect().top - pages[0].getBoundingClientRect().top : box.height;
   const margin = Math.min(THUMB_NEIGHBOURS * step, (win.innerHeight - box.height) / 2);
-  const before = win.scrollY;
-  if (box.top < margin) win.scrollBy(0, box.top - margin);
-  else if (box.bottom > win.innerHeight - margin) win.scrollBy(0, box.bottom - (win.innerHeight - margin));
-  // Under ?trace, what the column did for this page: the preview's box before the scroll,
-  // the margin kept, and the column's scroll before and after, with the frame's state.
+  // Where the column is drawn from, and how far it may go: the last preview's bottom, plus
+  // the body's padding, ends it. Boxes are read as drawn, so they include the shift.
+  const shown = win.scrollY + thumbShift;
+  const end = Math.max(0, pages[pages.length - 1].getBoundingClientRect().bottom + shown + 8 - win.innerHeight);
+  let wanted = shown;
+  if (box.top < margin) wanted = shown + box.top - margin;
+  else if (box.bottom > win.innerHeight - margin) wanted = shown + box.bottom - (win.innerHeight - margin);
+  wanted = Math.min(Math.max(wanted, 0), end);
+  if (wanted !== shown) shiftThumbs(wanted - win.scrollY);
+  // Under ?trace, what the column did for this page: the preview's box before the move,
+  // the margin kept, and where the column was drawn from before and after, with the
+  // column's own scroll and the frame's state.
   window.htmlMcpTrace?.(`thumb p=${state.currentPage}/${pages.length} box=${Math.round(box.top)},${Math.round(box.bottom)}`
-    + ` in=${win.innerHeight} m=${Math.round(margin)} y=${Math.round(before)}>${Math.round(win.scrollY)}`
+    + ` in=${win.innerHeight} m=${Math.round(margin)} y=${Math.round(shown)}>${Math.round(wanted)} s=${Math.round(win.scrollY)}`
     + ` ${win.document.readyState} sc=${win.document.documentElement.style.getPropertyValue("--html-mcp-page-scale") || "-"}`);
-}
-
-// Safari draws a frame's scroll apart from the page's script. While the deck coasts after
-// a flick, the column's scroll position moved with each page but the column stayed drawn
-// where it was (a trace read y=252 beside a column drawn near 621), and setting the same
-// position again changes nothing. So once the deck has stopped, the column is moved by a
-// pixel and back, which makes the browser draw it where its position says.
-function scheduleThumbRedraw() {
-  clearTimeout(state.thumbRedraw);
-  state.thumbRedraw = setTimeout(() => {
-    state.thumbRedraw = null;
-    const win = $("#thumbs-frame").contentWindow;
-    if (!thumbsOpen() || win === null) return;
-    const y = win.scrollY;
-    win.scrollTo(0, y > 0 ? y - 1 : y + 1);
-    setTimeout(() => {
-      win.scrollTo(0, y);
-      window.htmlMcpTrace?.(`thumb-redraw y=${Math.round(y)}`);
-    }, 50);
-  }, 200);
 }
 
 function updateCurrentPage() {
@@ -1573,7 +1587,6 @@ function attachArtifactEvents(frame) {
     }
     hideSelectionButton();
     scheduleCurrentPage();
-    scheduleThumbRedraw();
   }, { passive: true });
   win.addEventListener("resize", () => {
     // A wider or narrower artifact draws every page at another size, and the scroll position
