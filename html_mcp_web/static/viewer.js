@@ -591,6 +591,11 @@ function installThumbs() {
     const page = event.target.closest?.("body > main.pages > section.page");
     if (page) jumpToPage(thumbPages().indexOf(page) + 1);
   });
+  // Under ?trace, every scroll the column takes, so one the viewer did not ask for shows
+  // as a line of its own beside the thumb lines.
+  doc.defaultView.addEventListener("scroll", () => {
+    window.htmlMcpTrace?.(`thumb-scroll y=${Math.round(doc.defaultView.scrollY)}`);
+  }, { passive: true });
   markCurrentThumb();
 }
 
