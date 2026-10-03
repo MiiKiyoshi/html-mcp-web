@@ -56,3 +56,6 @@ Render the affected page with `image()` and read it as the intended audience. Us
 explanation is understandable. Read that page's blocks and free space, which the same
 call returns, only when the rendered page leaves a placement or spacing question
 unresolved.
+After your own checks pass, complete the
+[independent review](COMPONENTS.md#independent-review) before handing off a new deck
+or a deck-wide revision.

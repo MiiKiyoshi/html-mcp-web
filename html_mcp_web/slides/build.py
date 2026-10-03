@@ -313,7 +313,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
             rest = body.root.inner_html({id(closing)})
         footer = f'<footer class="bbar">{pageno}{label_html(footer_label)}</footer>'
         pages.append(f'''    <section class="page">
-      <header class="tbar"><h2>{section.title}</h2>{images(skin.slot("tbar_logo"), "tbar-logo")}</header>
+      <header class="tbar" data-layout-bar><h2>{section.title}</h2>{images(skin.slot("tbar_logo"), "tbar-logo")}</header>
       <div class="body" data-layout-guard>
 {opening}
         <div class="rest">

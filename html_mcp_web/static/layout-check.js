@@ -292,6 +292,37 @@ export function createLayoutChecks(dependencies) {
           addError(`page ${index + 1} content overflows its content area (${axes}${over})`, guard);
         }
       }
+      // A title bar sits outside the content guard and does not clip, so a title that
+      // wrapped to a second line spilled above and below the bar, and ran under the bar's
+      // corner logo, on a page the guard passed. A template marks such a fixed-height bar
+      // with data-layout-bar, and its text lines must stay inside it and clear of its images.
+      for (const bar of page.querySelectorAll("[data-layout-bar]")) {
+        const box = bar.getBoundingClientRect();
+        const lines = [];
+        const walker = doc.createTreeWalker(bar, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+          if (node.nodeValue.trim() === "" || node.parentElement.closest("svg") !== null) continue;
+          const range = doc.createRange();
+          range.selectNodeContents(node);
+          lines.push(...Array.from(range.getClientRects()));
+        }
+        if (lines.length === 0) continue;
+        const spill = Math.max(
+          box.top - Math.min(...lines.map((line) => line.top)),
+          Math.max(...lines.map((line) => line.bottom)) - box.bottom,
+          box.left - Math.min(...lines.map((line) => line.left)),
+          Math.max(...lines.map((line) => line.right)) - box.right);
+        if (spill > 1) {
+          addError(`page ${index + 1} title bar text overflows its bar by ${Math.round(spill)}px`, bar);
+        }
+        for (const picture of bar.querySelectorAll("img, svg")) {
+          const area = picture.getBoundingClientRect();
+          if (area.width === 0 || area.height === 0) continue;
+          const hit = lines.some((line) => Math.min(line.right, area.right) - Math.max(line.left, area.left) > 1
+            && Math.min(line.bottom, area.bottom) - Math.max(line.top, area.top) > 1);
+          if (hit) addError(`page ${index + 1} title bar text overlaps ${describeElement(picture)}`, picture);
+        }
+      }
       // A block whose last line holds only a few characters wastes a full line of
       // height, and on a slide that line is what the block above or below it needed:
       // the fix is a sentence trimmed to fit. On a report page the text is flowing

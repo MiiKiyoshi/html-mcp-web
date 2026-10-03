@@ -69,6 +69,13 @@ def problem_html() -> str:
     return '''<!doctype html>
 <html><head><meta charset="utf-8"><title>Problems</title></head><body>
 <main class="pages"><section class="page">
+  <!-- A title too long for its fixed-height bar wraps to a second line, spills above and
+       below the bar, and runs under the logo in the bar's corner. -->
+  <header data-layout-bar style="display: flex; align-items: center; position: relative; width: 600px; height: 40px">
+    <h2 style="flex: 1; margin: 0; font-size: 24px">A page title long enough to wrap onto a second line in this bar</h2>
+    <img id="bar-logo" alt="" style="position: absolute; right: 0; top: 4px; width: 120px; height: 32px"
+      src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACwAAAAAAQABAAACAkQBADs=">
+  </header>
   <div data-layout-guard style="width: 900px; height: 180px; overflow: hidden">
     <!-- The formula carries the shape KaTeX emits: a MathML copy holding the TeX source,
          hidden the way KaTeX hides it, beside the glyphs the reader sees. -->
@@ -703,6 +710,8 @@ def test_browser_review_contract(tmp_path: Path) -> None:
             else None
         ))
         assert any("overflows its content area" in error for error in errors)
+        assert any(re.search(r"title bar text overflows its bar by \d+px", error) for error in errors)
+        assert any("title bar text overlaps <img#bar-logo>" in error for error in errors)
         # The page that spills is measured for room, so the answer to an overflow can be a
         # move rather than a cut.
         assert "1" in get_json(f"{base}/state")["artifacts"]["slides"]["layout_check"]["room"]

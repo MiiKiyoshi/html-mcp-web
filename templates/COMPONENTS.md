@@ -6,8 +6,8 @@ Read the sections needed for the current figure or page.
 
 A section is a body page with a title bar unless `data-layout` names one of the two
 full-bleed pages. Those two drop the title bar and fill the page, which is how a deck
-marks where one part ends and the next begins. Their guard covers the area above the
-footer bar, so overflow is reported the same way.
+marks where one part ends and the next begins. On these pages, the layout check reports
+overflow anywhere above the footer bar, just as it reports body overflow.
 
 ```html
 <section data-layout="contents" data-title="Contents">
@@ -141,7 +141,8 @@ or more of a side empty is reported as holding space it does not draw in, two la
 printed over each other are reported as a collision, and a label that runs past the
 sides of the rect it sits on is reported with the side and by how much.
 
-The body box carries `data-layout-guard`, so clipped overflow is reported.
+The layout check reports clipped body content and title text that extends outside the
+title bar or overlaps an image in it.
 Check the current artifact with `layout(artifact=...)`: it waits for the check, and an
 empty `errors` means the current revision has no layout errors.
 
@@ -164,6 +165,23 @@ Use a plotting tool that supplies the required axes, scales, and annotations for
 ## Embedded image proportions
 
 Preserve the source width-to-height ratio of images embedded inside SVG or used as CSS backgrounds. Check the rendered image itself, excluding padding and letterboxing. Do not treat a clean automated layout report as proof that these images retain their proportions.
+
+## Independent review
+
+Start after `layout()` returns an empty `errors` list and the content guideline's Article 7 checks pass. Run one review round by default, with another only at the requester's direction.
+
+Use a reader who did not build the deck, such as a new agent or session. Give that reader only the built deck to view, page images from `image()`, and the instruction below. Do not provide the guideline, template documentation, planning files, sources, or an account of how the deck was made.
+
+Record one row per finding in a table with columns `Page`, `Finding as stated`, `Kind`, `Decision`, and `Action or reason`. Use `wording`, `logic`, `inconsistency`, or `layout` for kind and `adopt`, `reject`, or `hold` for decision. Hold changes that alter meaning or structure for the requester's decision. Fix adopted findings, rerun your content and layout checks on affected pages, and include the table in the handoff report.
+
+Copy this instruction to the reviewer:
+
+```text
+Review every supplied page as a reader, using only the rendered deck. Do not inspect markup or hidden notes, consult other material, or edit the deck.
+Read for wording that interrupts understanding, including undefined terms, phrases without an actor or action, and several terms used for one meaning. Read titles, leads, and takeaways in order for jumps, repetition, and conclusions without premises. On each page, check whether visible evidence supports the takeaway and whether comparisons identify both sides.
+Always check for titles or takeaways that contradict figures, evaluative words such as sufficient, limited, or negligible without support on the page, later pages that repeat earlier ones, and contents or overviews that disagree with the body. Check for conflicting values of the same quantity under the same conditions, totals that do not add up, unexplained changes in units or periods, and values with no source or derivation that are not labeled illustrative or assumed.
+Seek at least three specific findings and order them by what to fix first. For each, give the page number, quote the relevant visible text, and explain the problem. For conflicts across pages, identify and quote both pages. Report only findings supported by what is visible. If fewer than three are supported, report those and state that fewer were found.
+```
 
 ## Report template
 

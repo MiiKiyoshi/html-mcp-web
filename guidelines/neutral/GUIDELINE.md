@@ -128,9 +128,11 @@ In every diagram, enclose separately labeled parts and stages in separate panels
 
 5.8 Use captions and notes to identify content and guide attention. Keep necessary data, conditions, limitations, and brief attribution visible. Put other supporting detail in records. Label multiple figures and their parts, including stages, with (a), (b), (c) in reading order. Give labels, numbers, captions, and notes visible referents and identify compared cases. Apply 1.3 to redundant labels. Repair unclear drawing relationships instead of explaining around them. Keep labels needed for identification, conventions, conditions, or relations not otherwise clear. Replace misleading notation rather than disclaiming its implication. Retain assumptions or limitations needed to interpret the claim, but omit irrelevant departures from measured detail.
 
-5.9 In comparison tables, use rows for entities or conditions by default. Transpose when that makes comparison clearer. Order entries meaningfully, state units once, and identify sources of differing measurements. Keep group conditions with results. A full-page table must complete the comparison its question requires.
+5.9 In comparison tables, use rows for entities or conditions by default. Transpose when that makes comparison clearer. Each row must belong to the set named by the row header, at the same level of grouping. Apply the same rule to columns. Put conclusions and facts of another kind outside the table, in a takeaway or note. Aggregates computed from member rows or columns may remain if labeled and visually set apart. Order entries meaningfully, state units once, and identify sources of differing measurements. Keep group conditions with results. A full-page table must complete the comparison its question requires.
 
 5.10 When extending an existing deck, use representative pages as visual references. Reuse palette, typography, line and arrow styles, and panel-label placement. Use existing visual distinctions before adding new ones and preserve their meanings when adapting figures.
+
+5.11 For a plotted quantity with a defined range, choose the axis range by the claim. Show the full defined range when the claim concerns the value's size, and draw a reference line when a stated threshold matters. When the claim concerns differences between close values, crop the axis to show those differences and visibly mark the cropped range.
 
 ## Article 6. Speak from the page
 
