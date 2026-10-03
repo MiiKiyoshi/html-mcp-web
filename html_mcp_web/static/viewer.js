@@ -605,14 +605,23 @@ function markCurrentThumb() {
   // the pages just above it were out of sight.
   const current = pages[state.currentPage - 1];
   const win = $("#thumbs-frame").contentWindow;
-  if (current === undefined || win === null) return;
+  if (current === undefined || win === null) {
+    window.htmlMcpTrace?.(`thumb p=${state.currentPage}/${pages.length} not in the column`);
+    return;
+  }
   const box = current.getBoundingClientRect();
   // One preview's step down the column, gap included. A column too short for the
   // neighbours on both sides keeps the marked preview in its middle instead.
   const step = pages.length > 1 ? pages[1].getBoundingClientRect().top - pages[0].getBoundingClientRect().top : box.height;
   const margin = Math.min(THUMB_NEIGHBOURS * step, (win.innerHeight - box.height) / 2);
+  const before = win.scrollY;
   if (box.top < margin) win.scrollBy(0, box.top - margin);
   else if (box.bottom > win.innerHeight - margin) win.scrollBy(0, box.bottom - (win.innerHeight - margin));
+  // Under ?trace, what the column did for this page: the preview's box before the scroll,
+  // the margin kept, and the column's scroll before and after, with the frame's state.
+  window.htmlMcpTrace?.(`thumb p=${state.currentPage}/${pages.length} box=${Math.round(box.top)},${Math.round(box.bottom)}`
+    + ` in=${win.innerHeight} m=${Math.round(margin)} y=${Math.round(before)}>${Math.round(win.scrollY)}`
+    + ` ${win.document.readyState} sc=${win.document.documentElement.style.getPropertyValue("--html-mcp-page-scale") || "-"}`);
 }
 
 function updateCurrentPage() {
