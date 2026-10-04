@@ -229,17 +229,24 @@
 }
 /* A sub-item takes a short solid bar in the text colour, not a number. It hangs in the
    item's left padding, and middle alignment centres it on the font's lowercase letters.
-   A one-pixel line looked like a faint typed dash and thinned below a pixel in a list
-   scaled by data-scale, so the bar never draws thinner than 2px. */
+   It is about as thick as the stems of the item's regular-weight letters, since a thicker
+   bar outweighs the text it marks. A one-pixel line looked like a faint typed dash and
+   thinned below a pixel in a list scaled by data-scale, so the bar never draws thinner
+   than 2px.
+   The bar is a box five times its thickness squeezed by scaleY. A box this thin, given
+   its thickness as its height, was rounded to a whole pixel at its own position on the
+   line, so bars on neighbouring items came out 2px and 3px thick on screen and in print.
+   The squeezed box is rounded once in its own space, the same on every line. */
 .contents li li::before {
   all: unset;
   content: "";
   display: inline-block;
   vertical-align: middle;
   width: 0.5em;
-  height: max(0.14em, calc(2px / var(--contents-scale, 1)));
+  height: max(0.5em, calc(10px / var(--contents-scale, 1)));
   margin: 0 0.3em 0 -0.8em;
   background: currentColor;
+  transform: scaleY(0.2);
 }
 .contents .venue, .divider .venue { margin-right: 10px; color: var(--accent); font-size: 17px; }
 .contents .by, .divider .by { margin-left: 10px; color: #9fb1ae; font-size: 17px; }
