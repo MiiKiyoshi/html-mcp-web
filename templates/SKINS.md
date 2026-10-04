@@ -24,7 +24,7 @@ The body box may extend to the footer bar. For chrome that rises into the body f
 bottom left, set `--bottom-left-width` to the distance from the page's left edge to the
 chrome's right edge, and `--bottom-left-height` to how far it rises above the body box's
 bottom edge. The body reserves that height below its content across the full width, with
-the references line in that strip to the right of the chrome. Both values default to
+the references in that strip to the right of the chrome. Both values default to
 `0`. The layout check reports content text that overlaps chrome in a page corner.
 
 `footer_label` and `cover_footer_label` put text at the right of the footer bar;

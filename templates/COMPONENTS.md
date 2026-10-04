@@ -81,8 +81,9 @@ remaining height.
   `<text>` of an inline `<svg>`. References are numbered in the order first cited across
   the deck. Each citation shows bracketed numbers such as `[1]` or `[2, 1]`, kept on one
   line in a wrapped label. Each citing body page lists only its own references with those
-  numbers in one small line aligned to the right at the bottom of the body, below the
-  takeaway. Uncited references are not shown. Missing or duplicate reference IDs and
+  numbers in small type at the bottom right of the body, below the takeaway, one per line
+  with their left edges aligned and the longest line ending at the body's right edge.
+  Uncited references are not shown. Missing or duplicate reference IDs and
   undefined citation keys stop the build, as do citations in scripts or on cover,
   contents, or divider pages.
 - `p.units` sits directly above a measurement table and states the units once
