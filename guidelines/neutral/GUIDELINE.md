@@ -164,4 +164,4 @@ Restore the understanding requested, not merely the requested words.
 
 8.4 Before regenerating a page, carry applied review changes into its source and check that they survive regeneration.
 
-8.5 Answer directly and report status briefly, including only what the reviewer needs to assess the change or decide the next step. For a deck-wide defect review, identify each defect type, inspect every rendered page, and report its count. Report changes and remaining defects, not search mechanics.
+8.5 Answer directly and report status briefly, including only what the reviewer needs to assess the change or decide the next step. When a check confirms an error in a claim or drawing under review, state what was wrong before explaining the correction. For a deck-wide defect review, identify each defect type, inspect every rendered page, and report its count. Report changes and remaining defects, not search mechanics.
