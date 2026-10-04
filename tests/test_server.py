@@ -1404,3 +1404,45 @@ async def test_an_agent_rewrites_its_own_entries_through_the_batch_update(client
     stored = await (await test_client.get(f"/artifacts/slides/comments/{comment['id']}")).json()
     assert stored["thread"][1]["text"] == "better answer" and stored["thread"][1]["at"] == agent["at"]
     assert "updated_at" in stored["thread"][1] and stored["updated"] != replied["updated"][0]["updated"]
+
+
+async def test_a_result_from_older_checker_code_is_checked_again(client, monkeypatch) -> None:
+    import shutil
+
+    test_client, review = client
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    posted = await test_client.post(
+        "/artifacts/slides/layout", json=server_check(review, errors=["page 1 exceeds the slides height"]))
+    assert posted.status == 200
+    state = await (await test_client.get("/artifacts/slides/layout")).json()
+    assert state["errors"] == ["page 1 exceeds the slides height"]
+    # The served page code, which is the checker, changes under an unedited revision: the
+    # result made with the old rules is dropped, and the revision is unchecked until the
+    # check runs again.
+    monkeypatch.setattr(review, "static_tag", lambda: "v-newer-checker")
+    state = await (await test_client.get("/artifacts/slides/layout")).json()
+    assert state["errors"] is None and "unchecked" in state
+
+
+async def test_check_profiles_and_browsers_do_not_outlive_their_check(client, tmp_path, monkeypatch) -> None:
+    import os
+    import tempfile
+    import time
+
+    _, review = client
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    stale = tmp_path / "html_mcp_check_stale"
+    stale.mkdir()
+    (stale / "prefs.js").write_text("user_pref", encoding="utf-8")
+    old = time.time() - 2 * review.STALE_PROFILE_SECONDS
+    os.utime(stale, (old, old))
+    fresh = tmp_path / "html_mcp_check_fresh"
+    fresh.mkdir()
+    # A start removes what a server killed mid-check left, and leaves a running check's.
+    await review.sweep_check_profiles(None)
+    assert not stale.exists() and fresh.exists()
+    # A server that stops mid-check ends the browser and removes its profile.
+    process = await asyncio.create_subprocess_exec("sleep", "30")
+    review.check_runs.add((process, str(fresh)))
+    await review.stop_checks(None)
+    assert process.returncode is not None and not fresh.exists() and not review.check_runs

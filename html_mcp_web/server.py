@@ -16,6 +16,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -225,6 +226,10 @@ class ArtifactRuntime:
     layout_errors: list[str] = field(default_factory=list)
     layout_room: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     space_revision: int | None = None
+    # The tag of the page code that made the stored result. The page code is the checker,
+    # and a result kept after it changed went on answering for a revision nobody edited:
+    # a deck saved seconds before new rules arrived reported no errors under them.
+    layout_static: str | None = None
     # The token of the server's own layout check while it runs. Only a report carrying it
     # is recorded: browsers measure a few pixels apart, and a review page on another engine
     # or pixel ratio turned the same content's result from overflowing to clean and back.
@@ -296,6 +301,7 @@ class ArtifactRuntime:
         self.layout_room = {}
         self.space_revision = None
         self.space_pages = []
+        self.layout_static = None
 
     def stamp(self, path: Path | None) -> tuple[int, int] | None:
         """What a file looks like from outside: when it was written and how long it is."""
@@ -365,6 +371,9 @@ class HtmlReviewServer:
         self.review_waiters = 0
         self.closing = False
         self.headless_check = asyncio.Lock()
+        # The checking browser and its profile while a check runs, so a server that stops
+        # mid-check can still end the browser and remove the profile.
+        self.check_runs: set[tuple[asyncio.subprocess.Process, str]] = set()
         # One catch-up at a time: a rebuild takes seconds, and every state read asks.
         self.catching_up = asyncio.Lock()
         self.artifacts = self._create_artifacts(config)
@@ -647,6 +656,7 @@ class HtmlReviewServer:
         target_ref = request.query.get("target")
         target_box = None
         if target_ref is not None:
+            self.drop_stale_layout()
             if runtime.space_revision != runtime.revision:
                 await self._ensure_layout_checked(runtime, request.host)
             if runtime.space_revision != runtime.revision:
@@ -804,6 +814,7 @@ class HtmlReviewServer:
         # tab had nothing that ran the check it waited for. The check is started here, one
         # at a time, and a later state carries its result.
         await self.catch_up()
+        self.drop_stale_layout()
         if not self.headless_check.locked():
             for runtime in self.artifacts.values():
                 if runtime.space_revision != runtime.revision and runtime.main_file.is_file():
@@ -865,6 +876,7 @@ class HtmlReviewServer:
         runtime.layout_revision = revision
         runtime.layout_errors = list(errors)
         runtime.space_revision = revision
+        runtime.layout_static = produced_by
         runtime.space_pages = space_pages
         runtime.layout_room = room_for_errors(errors, space_pages)
         await self.broadcast({"type": "layout_checked", **self.project_state()})
@@ -896,6 +908,8 @@ class HtmlReviewServer:
                 f"http://{host}/?artifact={runtime.artifact_id}&check={runtime.check_token}",
                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
             )
+            run = (process, profile)
+            self.check_runs.add(run)
             try:
                 for _ in range(int(self.LAYOUT_CHECK_SECONDS / 0.5)):
                     if runtime.space_revision == runtime.revision:
@@ -903,10 +917,12 @@ class HtmlReviewServer:
                     await asyncio.sleep(0.5)
             finally:
                 runtime.check_token = None
+                # Shielded, so a cancelled check still waits for its browser to exit before
+                # the profile goes: removed under a running browser, files came back into it.
                 process.terminate()
-                await process.wait()
-                await asyncio.get_running_loop().run_in_executor(
-                    None, lambda: shutil.rmtree(profile, ignore_errors=True))
+                await asyncio.shield(process.wait())
+                shutil.rmtree(profile, ignore_errors=True)
+                self.check_runs.discard(run)
 
     async def layout_state(self, request: web.Request) -> web.Response:
         """The current revision's layout errors, once a browser has checked it.
@@ -920,6 +936,7 @@ class HtmlReviewServer:
             return web.json_response({"revision": runtime.revision, "errors": None,
                                       "error": runtime.missing_file()})
         no_firefox = shutil.which("firefox") is None
+        self.drop_stale_layout()
         if runtime.layout_revision != runtime.revision and not no_firefox:
             await self._ensure_layout_checked(runtime, request.host)
         checked = runtime.layout_revision == runtime.revision
@@ -961,6 +978,7 @@ class HtmlReviewServer:
             raise web.HTTPBadRequest(text=str(error)) from error
         if revision != runtime.revision:
             raise web.HTTPConflict(text=f"requested revision {revision} does not match current revision {runtime.revision}")
+        self.drop_stale_layout()
         if runtime.space_revision != revision:
             await self._ensure_layout_checked(runtime, request.host)
         if runtime.space_revision != revision:
@@ -1456,6 +1474,41 @@ class HtmlReviewServer:
     async def stop_watcher(self, app: web.Application) -> None:
         self.watcher.stop()
 
+    # A check profile older than this belongs to no running check, which takes at most
+    # LAYOUT_CHECK_SECONDS.
+    STALE_PROFILE_SECONDS = 600.0
+
+    async def sweep_check_profiles(self, app: web.Application) -> None:
+        # A server killed mid-check never reaches its cleanup, and its profile stays in the
+        # temporary directory: a machine collected 1232 of them, 12GB, in nine days. Each
+        # start removes this user's stale ones.
+        now = time.time()
+        for profile in Path(tempfile.gettempdir()).glob("html_mcp_check_*"):
+            try:
+                info = profile.stat()
+            except FileNotFoundError:
+                continue
+            if info.st_uid == os.getuid() and now - info.st_mtime > self.STALE_PROFILE_SECONDS:
+                shutil.rmtree(profile, ignore_errors=True)
+
+    async def stop_checks(self, app: web.Application) -> None:
+        for process, profile in list(self.check_runs):
+            if process.returncode is None:
+                process.terminate()
+                with contextlib.suppress(asyncio.TimeoutError):
+                    await asyncio.wait_for(process.wait(), timeout=5)
+            shutil.rmtree(profile, ignore_errors=True)
+        self.check_runs.clear()
+
+    def drop_stale_layout(self) -> None:
+        # A stored result holds for the checker code that made it. Once the served page
+        # code changes, every result made with the old code is dropped and the next read
+        # checks again.
+        tag = self.static_tag()
+        for runtime in self.artifacts.values():
+            if runtime.layout_static is not None and runtime.layout_static != tag:
+                runtime.reset_layout()
+
     def create_app(self) -> web.Application:
         # The layout check posts a measurement of every block on every page, which grows
         # with the deck: a 26-page deck measured 1.2MB and aiohttp's default ceiling of 1MB
@@ -1498,7 +1551,9 @@ class HtmlReviewServer:
         app.router.add_post("/wait-review/ack", self.ack_review)
         app.router.add_get("/ws", self.websocket)
         app.on_startup.append(self.start_watcher)
+        app.on_startup.append(self.sweep_check_profiles)
         app.on_shutdown.append(self.release_waiters)
+        app.on_cleanup.append(self.stop_checks)
         app.on_cleanup.append(self.stop_watcher)
         return app
 
