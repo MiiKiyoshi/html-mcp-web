@@ -188,31 +188,44 @@ def script_block(script_html: str) -> str:
     return f'\n    <div class="script-block">\n      <div class="script-text">{script_html}</div>\n    </div>'
 
 
-def contents_list(body_html: str) -> str:
+def contents_list(body_html: str, count: str | None) -> tuple[str, int]:
     # A contents item may end in a ul of unnumbered sub-items. Its own text goes into
     # span.entry and the item is marked has-sub, so skeleton.css can set the sub-list
-    # under that text beside whatever number the skin draws.
+    # under that text beside whatever number the skin draws. Sub-items make a list long
+    # and narrow, leaving the right of the page empty, so a list with sub-items under two
+    # or more outer items takes two columns. count, from data-columns, overrides that.
+    # Returns the list and its column count.
     body = ContentParser()
     body.feed(body_html)
     body.close()
-    for listing in body.root.children:
-        if not isinstance(listing, Element) or listing.tag != "ol":
+    items = [item for listing in body.root.children if isinstance(listing, Element) and listing.tag == "ol"
+             for item in listing.children if isinstance(item, Element)]
+    nested = []
+    for item in items:
+        lists = [index for index, child in enumerate(item.children)
+                 if isinstance(child, Element) and child.tag in ("ul", "ol")]
+        if not lists:
             continue
-        for item in listing.children:
-            if not isinstance(item, Element):
-                continue
-            lists = [index for index, child in enumerate(item.children)
-                     if isinstance(child, Element) and child.tag in ("ul", "ol")]
-            if not lists:
-                continue
-            at = lists[0]
-            tail = item.children[at + 1:]
-            if item.children[at].tag != "ul" or any(not isinstance(child, str) or child.strip() for child in tail):
-                raise ValueError("a contents item takes one ul of sub-items after its own text")
-            classes = item.attributes["class"].split() if "class" in item.attributes else []
-            item.attributes["class"] = " ".join(["has-sub", *classes])
-            item.children = [Element("span", {"class": "entry"}, item.children[:at]), item.children[at]]
-    return body.root.inner_html()
+        at = lists[0]
+        tail = item.children[at + 1:]
+        if item.children[at].tag != "ul" or any(not isinstance(child, str) or child.strip() for child in tail):
+            raise ValueError("a contents item takes one ul of sub-items after its own text")
+        classes = item.attributes["class"].split() if "class" in item.attributes else []
+        item.attributes["class"] = " ".join(["has-sub", *classes])
+        item.children = [Element("span", {"class": "entry"}, item.children[:at]), item.children[at]]
+        nested.append(item)
+    columns = 2 if nested and len(items) > 1 else 1
+    if count is not None:
+        if not re.fullmatch(r"[1-9]", count.strip()):
+            raise ValueError(f'a contents data-columns is a whole number from 1 to 9, not "{count.strip()}"')
+        columns = int(count)
+    if columns > 1:
+        # In a column the skin's one-line item would wrap piece by piece, so the text of
+        # every item becomes one span.entry beside its number.
+        for item in items:
+            if all(item is not other for other in nested):
+                item.children = [Element("span", {"class": "entry"}, item.children)]
+    return body.root.inner_html(), columns
 
 
 def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
@@ -254,18 +267,27 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
             footer = f'<footer class="bbar">{pageno}</footer>'
             art = images(skin.slot("full_art"), "full-art")
             bottom = stack(skin.slot("full_bottom_left"), "page-bottom-left")
+            kind = section.layout
             if section.layout == "contents":
                 heading = f"<h2>{section.title}</h2>\n        <div class=\"rule\"></div>" if section.title else ""
+                listing, columns = contents_list(section.body_html, section.attributes.get("data-columns"))
+                classes, style = ["wide"], []
                 # data-scale sizes the list, numbers and sub-items included, in any skin.
-                wide = 'class="wide" data-layout-guard'
                 if "data-scale" in section.attributes:
                     scale = section.attributes["data-scale"].strip()
                     if not re.fullmatch(r"\d*\.?\d+", scale) or float(scale) == 0:
                         raise ValueError(f'a contents data-scale is a positive number such as "0.8", not "{scale}"')
-                    wide = f'class="wide scaled" data-layout-guard style="--contents-scale: {scale}"'
-                inner = f'''      <div {wide}>
+                    classes.append("scaled")
+                    style.append(f"--contents-scale: {scale}")
+                    listing = f'<div class="list">{listing}</div>'
+                if columns > 1:
+                    classes.append("columns")
+                    style.append(f"--contents-columns: {columns}")
+                    kind = "contents columns"
+                styled = f' style="{"; ".join(style)}"' if style else ""
+                inner = f'''      <div class="{" ".join(classes)}" data-layout-guard{styled}>
         {heading}
-{contents_list(section.body_html)}
+{listing}
       </div>'''
             else:
                 body_html = section.body_html
@@ -281,7 +303,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
 {body_html.strip()}
         </div>{shot}
       </div>'''
-            pages.append(f'''    <section class="page {section.layout}">
+            pages.append(f'''    <section class="page {kind}">
       <div class="page-ground"></div>{art}
 {inner}
       {bottom}

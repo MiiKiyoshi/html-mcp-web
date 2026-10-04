@@ -259,22 +259,43 @@ def test_an_appendix_is_counted_apart_from_the_deck(tmp_path: Path) -> None:
 def test_contents_item_with_a_sub_list_wraps_its_own_text() -> None:
     from html_mcp_web.slides.build import contents_list
 
-    built = contents_list('''<ol>
+    built, columns = contents_list('''<ol>
   <li>Speed
     <ul><li>Direct Wire Model</li><li>Overall</li></ul>
   </li>
   <li><span class="venue">Venue</span>Name<ul><li>Part</li></ul></li>
   <li>Summary</li>
-</ol>''')
+</ol>''', None)
 
     assert ('<li class="has-sub"><span class="entry">Speed\n    </span>'
             '<ul><li>Direct Wire Model</li><li>Overall</li></ul></li>') in built
     assert '<li class="has-sub"><span class="entry"><span class="venue">Venue</span>Name</span><ul>' in built
-    assert "<li>Summary</li>" in built
+    # Sub-items under more than one outer item put the list in two columns, and there the
+    # text of an item without sub-items becomes one entry too.
+    assert columns == 2
+    assert '<li><span class="entry">Summary</span></li>' in built
     with pytest.raises(ValueError, match="one ul of sub-items"):
-        contents_list("<ol><li>Speed<ul><li>Part</li></ul>after</li></ol>")
+        contents_list("<ol><li>Speed<ul><li>Part</li></ul>after</li></ol>", None)
     with pytest.raises(ValueError, match="one ul of sub-items"):
-        contents_list("<ol><li>Speed<ol><li>Part</li></ol></li></ol>")
+        contents_list("<ol><li>Speed<ol><li>Part</li></ol></li></ol>", None)
+
+
+def test_contents_columns_follow_sub_items_unless_data_columns_names_a_count() -> None:
+    from html_mcp_web.slides.build import contents_list
+
+    nested = "<ol><li>One<ul><li>a</li></ul></li><li>Two</li></ol>"
+    plain = "<ol><li>One</li><li>Two</li></ol>"
+    assert contents_list(nested, None)[1] == 2
+    assert contents_list(nested, "1") == ('<ol><li class="has-sub"><span class="entry">One</span>'
+                                          '<ul><li>a</li></ul></li><li>Two</li></ol>', 1)
+    # One outer item has nothing to split, and a plain list stays whole unless asked.
+    assert contents_list("<ol><li>One<ul><li>a</li><li>b</li></ul></li></ol>", None)[1] == 1
+    assert contents_list(plain, None) == (plain, 1)
+    assert contents_list(plain, "2") == ('<ol><li><span class="entry">One</span></li>'
+                                         '<li><span class="entry">Two</span></li></ol>', 2)
+    for wrong in ("two", "0", "10"):
+        with pytest.raises(ValueError, match="data-columns"):
+            contents_list(plain, wrong)
 
 
 def test_contents_data_scale_marks_the_area_and_takes_only_a_positive_number(tmp_path: Path) -> None:
@@ -286,8 +307,13 @@ def test_contents_data_scale_marks_the_area_and_takes_only_a_positive_number(tmp
 <section data-layout="contents" data-scale="{}"><ol><li>One</li></ol></section></body>'''
     content.write_text(deck.format("0.8"), encoding="utf-8")
     build(content, tmp_path / "slides.html", skin)
-    assert ('<div class="wide scaled" data-layout-guard style="--contents-scale: 0.8">'
-            in (tmp_path / "slides.html").read_text(encoding="utf-8"))
+    built = (tmp_path / "slides.html").read_text(encoding="utf-8")
+    assert '<div class="wide scaled" data-layout-guard style="--contents-scale: 0.8">' in built
+    # The scaled list sits in a wrapper that takes no height in the flow.
+    assert '<div class="list"><ol>' in built
+    content.write_text(deck.replace(' data-scale="{}"', ""), encoding="utf-8")
+    build(content, tmp_path / "slides.html", skin)
+    assert 'class="list"' not in (tmp_path / "slides.html").read_text(encoding="utf-8")
     for wrong in ("small", "0", "-1"):
         content.write_text(deck.format(wrong), encoding="utf-8")
         with pytest.raises(ValueError, match="data-scale"):

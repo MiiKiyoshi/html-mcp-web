@@ -28,15 +28,24 @@ overflow anywhere above the footer bar, just as it reports body overflow.
 </section>
 ```
 
-- `contents`: `data-title` draws the heading and the rule under it, and each `<li>` takes
-  its number from a CSS counter, so list order is the numbering. `span.venue` sets
+- `contents`: `data-title` draws the heading and the rule under it, and each `<li>`
+  takes its number from a CSS counter, so list order is the numbering. `span.venue` sets
   smaller text before the name and `span.by` after it. For sub-items, end the `<li>`
   with one `<ul>` after its own text. The sub-items do not affect numbering and appear
-  as unnumbered lines aligned under the item's text, each in smaller type with a small
-  filled square in the text colour before it. When the list looks too large or does not
-  fit, set `data-scale` on the section to a positive number, as in `data-scale="0.8"`,
-  to scale the whole list, numbers and sub-items included, from its top left. The
-  heading and its rule keep their size, and the layout check uses the scaled list size.
+  as unnumbered lines aligned under the item's text, each in smaller type with a short
+  solid bar in the text colour before it. When at least two outer items have sub-items,
+  the list uses two columns by default. Items fill the left column from top to bottom,
+  then the right, without splitting an outer item across columns. Set `data-columns` on
+  the section to a whole number from 1 to 9 to choose the column count. For example,
+  `data-columns="1"` keeps one column, and `data-columns="2"` gives two columns even
+  without sub-items. In columns, long items wrap and the layout check reports a wasted
+  last line. With columns, any skin picture behind the list fades to keep the text
+  readable. To fit or fill the page, try columns at full size before scaling. When the
+  list looks too large or does not fit, set `data-scale` on the section to a positive
+  number, as in `data-scale="0.8"`, to scale the whole list, numbers and sub-items
+  included, from its top left. Reducing the scale leaves unused space on the right even
+  with columns. The heading and its rule keep their size, and the layout check uses the
+  scaled list size.
 - `divider`: `data-no` is the number in the capsule, `p.label` is its text, and an
   optional `img.shot` places a picture to the right.
 

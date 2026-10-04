@@ -151,11 +151,20 @@
 /* Space under the last item holds nothing, so it does not count against the page. The
    selector outranks a skin's .contents li. */
 .contents ol > li:last-child { margin-bottom: 0; }
-/* data-scale on a contents section marks the area scaled and sets --contents-scale. The
-   list scales from its top left corner, numbers and sub-items included, so it starts
-   where the skin places it. A transform leaves the list's height in the flow unscaled,
-   so the list takes none and the guard measures the list as drawn. */
-.contents .wide.scaled > ol { height: 0; transform: scale(var(--contents-scale)); transform-origin: 0 0; }
+/* data-scale on a contents section marks the area scaled, sets --contents-scale, and
+   wraps the list in div.list. The list scales from its top left corner, numbers and
+   sub-items included, so it starts where the skin places it. A transform leaves the
+   list's height in the flow unscaled, so the wrapper takes no height and the guard
+   measures the list as drawn. The list itself keeps its height, which its columns need. */
+.contents .wide.scaled > .list { height: 0; }
+.contents .wide.scaled > .list > ol { transform: scale(var(--contents-scale)); transform-origin: 0 0; }
+/* The builder sets a list with sub-items under two or more outer items in two columns,
+   or in the count data-columns names, and marks the area and the page columns. Items
+   fill the left column first, no item breaks across columns, and the skin's picture
+   behind the list fades so the right column reads over it. */
+.contents .wide.columns ol { columns: var(--contents-columns); column-gap: 48px; }
+.contents .wide.columns ol > li { break-inside: avoid; }
+.contents.columns .full-art { opacity: 0.3; }
 .contents li::before {
   counter-increment: item;
   content: counter(item, decimal-leading-zero);
@@ -172,17 +181,18 @@
   font-weight: 650;
   text-align: center;
 }
-/* An item ending in a ul of sub-items, which the builder marks has-sub, is a grid. The
-   skin's number keeps its own box in the first column, or its absolute place, and the
-   item's text (span.entry) and the sub-list share the second column, so in every skin
-   the sub-items start under the text. The selectors outrank a skin's .contents li. */
-.contents ol > li.has-sub {
+/* An item ending in a ul of sub-items, which the builder marks has-sub, is a grid, and
+   so is every item of a list in columns. The skin's number keeps its own box in the
+   first column, or its absolute place, and the item's text (span.entry) and the sub-list
+   share the second column, so in every skin the sub-items start under the text and a
+   wrapped item wraps as one paragraph. The selectors outrank a skin's .contents li. */
+.contents ol > li.has-sub, .contents .wide.columns ol > li {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   height: auto;
 }
-.contents li.has-sub > .entry { grid-column: 2; grid-row: 1; }
+.contents li > .entry { grid-column: 2; grid-row: 1; }
 .contents li.has-sub > ul { grid-column: 2; grid-row: 2; margin: 0.1em 0 0; padding: 0; list-style: none; }
 /* Sub-items are one-line labels, so they take a label's line spacing. */
 .contents li li {
@@ -194,18 +204,18 @@
   font-weight: 400;
   line-height: 1.25;
 }
-/* A sub-item takes a small filled square in the text colour, not a number. It hangs in
-   the item's left padding, and middle alignment centres it on the font's lowercase
-   letters. A one-pixel line read as a typed hyphen and thinned below a pixel in a list
-   scaled by data-scale, so the square never draws under 3px. */
+/* A sub-item takes a short solid bar in the text colour, not a number. It hangs in the
+   item's left padding, and middle alignment centres it on the font's lowercase letters.
+   A one-pixel line looked like a faint typed dash and thinned below a pixel in a list
+   scaled by data-scale, so the bar never draws thinner than 2px. */
 .contents li li::before {
   all: unset;
   content: "";
   display: inline-block;
   vertical-align: middle;
-  width: max(0.3em, calc(3px / var(--contents-scale, 1)));
-  height: max(0.3em, calc(3px / var(--contents-scale, 1)));
-  margin: 0 0.45em 0 -0.75em;
+  width: 0.5em;
+  height: max(0.14em, calc(2px / var(--contents-scale, 1)));
+  margin: 0 0.3em 0 -0.8em;
   background: currentColor;
 }
 .contents .venue, .divider .venue { margin-right: 10px; color: var(--accent); font-size: 17px; }
