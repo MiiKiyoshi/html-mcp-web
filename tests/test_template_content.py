@@ -355,6 +355,29 @@ def test_citations_number_by_first_use_and_list_on_their_page(tmp_path: Path) ->
         build(content, tmp_path / "slides.html", skin)
 
 
+def test_a_citation_inside_an_svg_is_a_tspan_numbered_with_the_rest(tmp_path: Path) -> None:
+    """An HTML span inside an svg <text> ends the drawing where the browser reads it, so a
+    citation there becomes a tspan. It takes its number in document order with the
+    citations around it and is listed on its page like them."""
+    from html_mcp_web.slides.build import build
+
+    content = tmp_path / "content.html"
+    content.write_text('''<title>Deck</title><body data-author="R" data-meta="Lab">
+<ol class="references">
+  <li id="elmore">W. C. Elmore, 1948.</li>
+  <li id="obrien">P. R. O'Brien and T. L. Savarino, 1989.</li>
+</ol>
+<section data-title="One"><svg viewBox="0 0 300 40"><text x="4" y="20" data-wrap="290">Shielding <cite>obrien, elmore</cite> holds</text><rect x="0" y="0" width="300" height="40"/></svg>
+<p>Moment <cite>elmore</cite>.</p></section>
+</body>''', encoding="utf-8")
+    build(content, tmp_path / "slides.html", REPO / "templates" / "neutral-slides")
+    built = (tmp_path / "slides.html").read_text(encoding="utf-8")
+    assert '<text x="4" y="20" data-wrap="290">Shielding <tspan class="cite">[1, 2]</tspan> holds</text>' in built
+    assert 'Moment <span class="cite">[2]</span>' in built
+    assert ('<p class="refs"><span>[1] P. R. O\'Brien and T. L. Savarino, 1989.</span>'
+            '<span>[2] W. C. Elmore, 1948.</span></p>') in built
+
+
 def test_references_need_an_id_each_and_once(tmp_path: Path) -> None:
     content_file = tmp_path / "content.html"
     deck = '<title>Deck</title><body data-author="R" data-meta="Lab"><ol class="references">{}</ol><section data-title="P"><p>x</p></section></body>'

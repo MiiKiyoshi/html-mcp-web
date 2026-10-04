@@ -84,8 +84,16 @@
     };
   };
 
+  // A bracketed run, a citation such as [5, 6] or an interval, stays on one line and
+  // whole: its spaces are held as word joiners, which the breaking does not read as
+  // spaces, and are measured and shown as spaces again, and no hyphen goes inside it.
+  const JOIN = "⁠";
+  const spaced = (piece) => piece.replaceAll(JOIN, " ");
+
   const linesOf = (words, width, measure) => {
-    const items = tex.layoutItemsFromString(words, measure, hyphenate);
+    const held = words.replace(/\[[^\][]*\]/g, (run) => run.replaceAll(" ", JOIN));
+    const items = tex.layoutItemsFromString(held, (piece) => measure(spaced(piece)),
+      (word) => (word.includes("[") ? [word] : hyphenate(word)));
     // TeX may set a line's spaces narrower than they were drawn to fit one more word, and
     // then the line's own letters run past the width: on the last line, which is not
     // stretched to the width and so keeps what it was given, that ran 6px out of a 188px
@@ -103,7 +111,7 @@
       }
       // A break inside a word carries a hyphen, and the hyphen is part of that line.
       if (items[to].type === "penalty" && items[to].width > 0) shown += "-";
-      lines.push(shown.trim());
+      lines.push(spaced(shown.trim()));
     }
     return lines;
   };

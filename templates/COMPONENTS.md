@@ -77,9 +77,10 @@ remaining height.
 - `p.note` carries one explanatory note, and `ul.notes` carries several, one per `li`
 - `<ol class="references">` defines the deck's references once, directly in `<body>`
   outside all sections, with one `<li id="key">…</li>` per reference. Cite a key with
-  `<cite>key</cite>` or several with `<cite>key1, key2</cite>`. References are numbered
-  in the order first cited across the deck. Each citation shows bracketed numbers such
-  as `[1]` or `[2, 1]`. Each citing body page lists only its own references with those
+  `<cite>key</cite>` or several with `<cite>key1, key2</cite>`, in text or inside the
+  `<text>` of an inline `<svg>`. References are numbered in the order first cited across
+  the deck. Each citation shows bracketed numbers such as `[1]` or `[2, 1]`, kept on one
+  line in a wrapped label. Each citing body page lists only its own references with those
   numbers in one small line aligned to the right at the bottom of the body, below the
   takeaway. Uncited references are not shown. Missing or duplicate reference IDs and
   undefined citation keys stop the build, as do citations in scripts or on cover,

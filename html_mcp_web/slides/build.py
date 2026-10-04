@@ -233,7 +233,8 @@ def cite_references(body_html: str, references: dict[str, str], numbers: dict[st
     # A <cite> names one or more references by key, separated by commas, and becomes
     # their numbers in brackets. A reference takes its number where the deck first cites
     # it, so numbers holds the deck's numbering so far. Returns the content and the keys
-    # this page cites, in number order.
+    # this page cites, in number order. Inside an svg the numbers are a tspan: an HTML
+    # span there ends the drawing where it stands when the browser reads the page.
     if "<cite" not in body_html:
         return body_html, []
     body = ContentParser()
@@ -241,12 +242,12 @@ def cite_references(body_html: str, references: dict[str, str], numbers: dict[st
     body.close()
     cited: list[str] = []
 
-    def visit(element: Element) -> None:
+    def visit(element: Element, in_svg: bool) -> None:
         for index, child in enumerate(element.children):
             if not isinstance(child, Element):
                 continue
             if child.tag != "cite":
-                visit(child)
+                visit(child, in_svg or child.tag == "svg")
                 continue
             keys = [key.strip() for key in child.text().split(",")]
             for key in keys:
@@ -256,9 +257,9 @@ def cite_references(body_html: str, references: dict[str, str], numbers: dict[st
                 if key not in cited:
                     cited.append(key)
             label = ", ".join(str(numbers[key]) for key in keys)
-            element.children[index] = Element("span", {"class": "cite"}, [f"[{label}]"])
+            element.children[index] = Element("tspan" if in_svg else "span", {"class": "cite"}, [f"[{label}]"])
 
-    visit(body.root)
+    visit(body.root, False)
     return body.root.inner_html(), sorted(cited, key=numbers.__getitem__)
 
 

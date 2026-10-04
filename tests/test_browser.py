@@ -3700,11 +3700,14 @@ def test_a_long_svg_label_wraps_to_its_width(tmp_path: Path) -> None:
     width, in the deck itself: left ragged, centred on x, justified through the spaces of
     every line but the last, balanced to even lengths. Wrapped, it stays inside the rect
     it sits on, and its lines are no collision. A label that needs more lines than
-    data-max-lines allows is reported by the layout check with both counts."""
+    data-max-lines allows is reported by the layout check with both counts. A bracketed
+    run such as a citation stays whole on one line at every width."""
     from html_mcp_web.slides import build
 
     sentence = ("a sentence long enough to need several lines inside a narrow card, "
                 "so that each way of breaking it can be told from the others")
+    bracketed = "the load [12, 15, 18] and the moment [3, 4] set the delay"
+    bracket_widths = range(96, 156, 10)
     content = tmp_path / "content.html"
     content.write_text(
         '<!doctype html>\n<meta charset="utf-8">\n<title>Wrap</title>\n'
@@ -3719,7 +3722,11 @@ def test_a_long_svg_label_wraps_to_its_width(tmp_path: Path) -> None:
         f'<text id="capped" x="12" y="300" font-size="13.5" data-wrap="196" data-max-lines="2">{sentence}</text>'
         '<text id="hyphen" x="520" y="300" font-size="13.5" data-wrap="120" data-align="justify">'
         'the intermediate representation carries the leakage optimisation</text>'
-        '</svg></section>\n'
+        '</svg>'
+        '<svg id="brackets" viewBox="0 0 1000 120" width="1000" height="120">'
+        + "".join(f'<text id="bracket{width}" x="{10 + index * 165}" y="20" font-size="13.5" '
+                  f'data-wrap="{width}">{bracketed}</text>' for index, width in enumerate(bracket_widths))
+        + '</svg></section>\n'
         "</body>\n", encoding="utf-8")
     html = tmp_path / "slides.html"
     build(content, html, Path(__file__).resolve().parents[1] / "templates" / "neutral-slides")
@@ -3747,7 +3754,7 @@ def test_a_long_svg_label_wraps_to_its_width(tmp_path: Path) -> None:
         browser.start_session()
         browser.navigate(html.as_uri())
         wait_until(lambda: browser.execute_script(
-            'return document.querySelectorAll("text[data-lines]").length === 6'))
+            f'return document.querySelectorAll("text[data-lines]").length === {6 + len(bracket_widths)}'))
 
         def read_back(lines):
             # A word broken across lines keeps its hyphen on the first of them, so the
@@ -3761,11 +3768,11 @@ const lines = (id) => Array.from(document.querySelectorAll(`#${id} tspan`)).map(
   spacing: line.getAttribute("word-spacing"), text: line.textContent}));
 const span = (id) => { const b = document.getElementById(id).getBBox(); return [b.x, b.x + b.width]; };
 return {left: lines("left"), justify: lines("justify"), center: lines("center"), balance: lines("balance"),
-        hyphen: lines("hyphen"),
+        hyphen: lines("hyphen"), brackets: arguments[0].map(lines),
         anchor: getComputedStyle(document.getElementById("center")).textAnchor,
         centerSpan: span("center"), leftSpan: span("left"),
         capped: document.getElementById("capped").dataset.lines};
-""")
+""", script_args=[[f"bracket{width}" for width in bracket_widths]])
         left = seen["left"]
         assert len(left) >= 3, left
         # Every line fits the width, starts at x, and steps down by the line height; the
@@ -3805,6 +3812,10 @@ return {left: lines("left"), justify: lines("justify"), center: lines("center"),
         assert any(line["text"].endswith("-") for line in hyphen), hyphen
         assert read_back(hyphen) == "the intermediate representation carries the leakage optimisation"
         assert all(line["width"] <= 120.5 for line in hyphen), hyphen
+        # A bracketed run is never broken across lines or hyphenated inside.
+        for width, lines in zip(bracket_widths, seen["brackets"], strict=True):
+            assert len(lines) >= 2 and read_back(lines) == bracketed, (width, lines)
+            assert all(line["text"].count("[") == line["text"].count("]") for line in lines), (width, lines)
 
         # The review server's layout check: the wrapped label on the rect is inside it, its
         # lines are no collision, and the capped label is reported with both counts.
