@@ -34,6 +34,30 @@ def test_nested_section_markup_stays_inside_page_body(tmp_path: Path) -> None:
     assert content.sections[0].script_html == "<p>Page script.</p>"
 
 
+def test_a_row_starting_under_a_spanned_cell_marks_its_column(tmp_path: Path) -> None:
+    """The first column is aligned by :first-child, so a row whose first column is
+    spanned from above names its first cell's real column for the style to use. Rows in
+    the header count their own spans, and a span stops at its row group."""
+    content = tmp_path / "content.html"
+    content.write_text('''<title>T</title><body data-author="A" data-meta="B">
+<section data-title="Table"><table>
+<thead><tr><th rowspan="2">Design</th><th rowspan="2">STA</th><th colspan="2">Time</th></tr>
+<tr><th>init</th><th>sum</th></tr></thead>
+<tbody><tr><td rowspan="2">aes</td><td>custom</td><td>31</td><td>818</td></tr>
+<tr><td>OpenSTA</td><td>22</td><td>1510</td></tr>
+<tr><td colspan="2">all</td><td>53</td><td>2328</td></tr></tbody>
+</table></section></body>''', encoding="utf-8")
+    body = parse_template_content(content).sections[0].body_html
+    assert '<tr><th>init</th>' not in body and '<tr><th data-column="3">init</th>' in body
+    assert '<tr><td data-column="2">OpenSTA</td>' in body
+    assert '<tr><td rowspan="2">aes</td>' in body and '<tr><td colspan="2">all</td>' in body
+    assert body.count("data-column") == 2
+    content.write_text(content.read_text(encoding="utf-8").replace('rowspan="2">aes', 'rowspan="two">aes'),
+                       encoding="utf-8")
+    with pytest.raises(ValueError, match='rowspan is a whole number, not "two"'):
+        parse_template_content(content)
+
+
 def test_page_kinds_carry_their_own_attributes(tmp_path: Path) -> None:
     content_file = tmp_path / "content.html"
     content_file.write_text('''<!doctype html>

@@ -60,3 +60,6 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
 th { font-weight: 650; letter-spacing: .025em; }
 th, td { text-align: right; }
 th:first-child, td:first-child { text-align: left; }
+/* A row whose first column is spanned from above starts in a later column, and the
+   builder gives that first cell its column number, so it aligns with its column. */
+th:first-child[data-column], td:first-child[data-column] { text-align: right; }

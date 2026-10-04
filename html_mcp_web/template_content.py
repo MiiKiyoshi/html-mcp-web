@@ -123,6 +123,40 @@ def _script_child(element: Element) -> Element | None:
     return matches[0] if matches else None
 
 
+def _mark_shifted_rows(section: Element) -> None:
+    # The components align a table's first column to the left and the rest to the right,
+    # by :first-child. A row whose first column is taken by a cell spanning down from
+    # above starts in a later column, and its first cell would take the first column's
+    # alignment. That cell gets its column as data-column, which keeps its own column's
+    # alignment. A rowspan reaches no further than its row group.
+    def span(cell: Element, name: str) -> int:
+        value = cell.attributes.get(name, "1").strip() or "1"
+        if not value.isdigit():
+            raise ValueError(f'a table cell\'s {name} is a whole number, not "{value}"')
+        return int(value)
+
+    for table in _elements(section, "table"):
+        groups = [table] + [child for child in table.children if isinstance(child, Element)
+                            and child.tag in {"thead", "tbody", "tfoot"}]
+        for group in groups:
+            rows = [child for child in group.children if isinstance(child, Element) and child.tag == "tr"]
+            covered: dict[int, int] = {}
+            for row in rows:
+                column = 1
+                cells = [child for child in row.children if isinstance(child, Element) and child.tag in {"td", "th"}]
+                for index, cell in enumerate(cells):
+                    while covered.get(column, 0) > 0:
+                        column += 1
+                    if index == 0 and column > 1:
+                        cell.attributes["data-column"] = str(column)
+                    down = span(cell, "rowspan") or len(rows)
+                    across = span(cell, "colspan") or 1
+                    if down > 1:
+                        covered.update((spanned, down) for spanned in range(column, column + across))
+                    column += across
+                covered = {spanned: left - 1 for spanned, left in covered.items() if left > 1}
+
+
 def parse_template_content(path: Path) -> TemplateContent:
     parser = ContentParser()
     parser.feed(path.read_text(encoding="utf-8"))
@@ -148,6 +182,7 @@ def parse_template_content(path: Path) -> TemplateContent:
         if layout == "body" and "data-title" not in section.attributes:
             raise ValueError("each direct body section requires data-title")
         script = _script_child(section)
+        _mark_shifted_rows(section)
         sections.append(ContentSection(
             title=section.attributes.get("data-title", "").strip(),
             body_html=section.inner_html({id(script)} if script is not None else set()).strip(),

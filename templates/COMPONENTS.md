@@ -90,7 +90,8 @@ remaining height.
   (`ΔTNS: ns · power: %`), instead of repeating them in footnotes; keep the same form on
   every slide that shows measurements
 - standard `table`; `table.dense` when the rows outgrow its spacing; `table.tight` for a
-  wide numeric table whose cells must not wrap
+  wide numeric table whose cells must not wrap. The first column aligns left and the
+  others right, each cell by the column it stands in under `rowspan` and `colspan`
 - `pos` and `neg` mark an improvement and a regression, `sep` draws a column boundary,
   and `nw` keeps a short label or status cell on one line
 - `grid3` containing `metric` cards, optionally marked `win` or `lose`
