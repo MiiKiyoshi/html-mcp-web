@@ -887,11 +887,12 @@ export function createLayoutChecks(dependencies) {
         // A connector that leaves a box by one side in a short stub and then turns to pass
         // another side of that box, or that enters by one side after a short stub turned
         // from beyond another, takes a bend it does not need: leaving or entering by that
-        // other side reaches the same path directly. The other side must be one the
-        // reading order permits (outputs at the right or bottom, inputs at the left or top,
-        // any side for a return arrow), and the straight piece that replaces the stub and
-        // turn must cross no other connector, label or box. A stub is at most three head
-        // lengths, 24 units when the connector has no head.
+        // other side reaches the same path directly. The reading order's sides (outputs at
+        // the right or bottom, inputs at the left or top) are a default that a visibly
+        // simpler route overrides, so any side counts, the default ones tried first, as
+        // long as the straight piece that replaces the stub and turn crosses no other
+        // connector, label or box. A stub is at most three head lengths, 24 units when the
+        // connector has no head.
         const cornersOf = (line) => {
           const tag = line.tagName.toLowerCase();
           let points = [];
@@ -962,17 +963,17 @@ export function createLayoutChecks(dependencies) {
           const corners = cornersOf(connector.line);
           if (corners === null || corners.length < 3 || detours >= 3) continue;
           const stubMost = Math.max(24, 3 * Math.max(...connector.heads));
-          const sides = backward(connector) ? Object.keys(normals) : null;
+          // One report per connector, and the end the reader looks at, its head, comes first.
           const ends = [
-            { join: connector.joins[0], stub: [corners[0], corners[1]], next: [corners[1], corners[2]], leaving: true },
             { join: connector.joins[1], stub: [corners.at(-2), corners.at(-1)], next: [corners.at(-3), corners.at(-2)], leaving: false },
+            { join: connector.joins[0], stub: [corners[0], corners[1]], next: [corners[1], corners[2]], leaving: true },
           ];
           for (const { join, stub, next, leaving } of ends) {
             if (join === null || detours >= 3) continue;
             const stubLength = units(stub[1].x - stub[0].x, stub[1].y - stub[0].y);
             if (stubLength > stubMost) continue;
             const { box } = attached.get(join.key);
-            const allowed = sides ?? (leaving ? ["right", "bottom"] : ["left", "top"]);
+            const allowed = leaving ? ["right", "bottom", "top", "left"] : ["left", "top", "bottom", "right"];
             const heading = unit(next[0], next[1]);
             const far = leaving ? next[1] : next[0];
             // The turn must lie far enough past the other side to use it: room for a short
@@ -993,6 +994,7 @@ export function createLayoutChecks(dependencies) {
                 ? `leaves ${panelName(box)} by its ${join.side} side, turns after ${Math.round(stubLength)} units and passes its ${other} side. Leave by the ${other} side`
                 : `enters ${panelName(box)} by its ${join.side} side after turning ${Math.round(stubLength)} units short of it from beyond its ${other} side. Enter by the ${other} side`),
               connector.line);
+            break;
           }
         }
         // A label the deck wrapped (data-wrap) records its line count in data-lines; one

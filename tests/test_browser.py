@@ -159,6 +159,10 @@ def problem_html() -> str:
       <rect x="130" y="100" width="100" height="24" fill="#fff" stroke="#333"/>
       <rect x="130" y="128" width="100" height="24" fill="#fff" stroke="#333"/>
       <path d="M110,126 L110,140 L128,140" fill="none" stroke="#333" stroke-width="1.5" marker-end="url(#tip)"/>
+      <!-- An input rises from below its box and turns into the left side through an
+           18-unit stub, where entering the bottom side straight up is simpler. -->
+      <rect x="300" y="100" width="100" height="40" fill="#fff" stroke="#333"/>
+      <path d="M250,190 L280,190 L280,120 L298,120" fill="none" stroke="#333" stroke-width="1.5" marker-end="url(#tip)"/>
     </svg>
     <p id="ordinary" style="font-size: 20px; width: 900px">This second paragraph wraps onto
       two lines as well, and its final line carries a perfectly ordinary amount of text.</p>
@@ -781,9 +785,13 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         # A stub and a turn past another side of the same box is reported with the side to
         # use. A branch that splits just above stacked boxes is not.
         detours = [error for error in errors if "svg#detours" in error and "connector (" in error]
-        assert len(detours) == 1
-        assert ("connector (110,30)→(300,80) leaves the box at (10,10) by its right side, turns after "
-                "15 units and passes its bottom side. Leave by the bottom side") in detours[0]
+        assert len(detours) == 2
+        assert any("connector (110,30)→(300,80) leaves the box at (10,10) by its right side, turns after "
+                   "15 units and passes its bottom side. Leave by the bottom side" in error for error in detours)
+        # The side defaults give way to a simpler route: an input may enter the bottom.
+        assert any("connector (250,190)→(298,120) enters the box at (300,100) by its left side after turning "
+                   "18 units short of it from beyond its bottom side. Enter by the bottom side" in error
+                   for error in detours)
         assert any("svg#idle> reserves space it does not draw in (right 51%" in error
                    for error in errors)
         banded = next(error for error in errors if "svg#banded" in error)
