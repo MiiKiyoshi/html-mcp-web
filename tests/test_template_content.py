@@ -318,3 +318,49 @@ def test_contents_data_scale_marks_the_area_and_takes_only_a_positive_number(tmp
         content.write_text(deck.format(wrong), encoding="utf-8")
         with pytest.raises(ValueError, match="data-scale"):
             build(content, tmp_path / "slides.html", skin)
+
+
+def test_citations_number_by_first_use_and_list_on_their_page(tmp_path: Path) -> None:
+    from html_mcp_web.slides.build import build
+
+    skin = REPO / "templates" / "neutral-slides"
+    content = tmp_path / "content.html"
+    deck = '''<title>Deck</title><body data-author="R" data-meta="Lab">
+<ol class="references">
+  <li id="elmore">W. C. Elmore, 1948.</li>
+  <li id="obrien">P. R. O'Brien and T. L. Savarino, 1989.</li>
+</ol>
+<section data-title="One"><p>Effective load <cite>obrien</cite>.</p>{one}</section>
+<section data-title="Two"><p>Moment <cite>elmore, obrien</cite>.</p></section>
+</body>'''
+    content.write_text(deck.format(one=""), encoding="utf-8")
+    build(content, tmp_path / "slides.html", skin)
+    built = (tmp_path / "slides.html").read_text(encoding="utf-8")
+    one, two = built.split('<h2>Two</h2>')
+    # Numbers follow the first citation in the deck, and each page lists only its own.
+    assert 'Effective load <span class="cite">[1]</span>' in one
+    assert '<p class="refs"><span>[1] P. R. O\'Brien and T. L. Savarino, 1989.</span></p>' in one
+    assert 'Moment <span class="cite">[2, 1]</span>' in two
+    assert ('<p class="refs"><span>[1] P. R. O\'Brien and T. L. Savarino, 1989.</span>'
+            '<span>[2] W. C. Elmore, 1948.</span></p>') in two
+    for wrong, message in (('<p><cite>missing</cite></p>', "does not define"),
+                           ('<aside class="script"><p><cite>elmore</cite></p></aside>', "belongs in the content")):
+        content.write_text(deck.format(one=wrong), encoding="utf-8")
+        with pytest.raises(ValueError, match=message):
+            build(content, tmp_path / "slides.html", skin)
+    content.write_text(deck.format(one="").replace(
+        '<section data-title="Two">', '<section data-layout="contents"><ol><li><cite>elmore</cite></li></ol></section>'
+        '<section data-title="Two">'), encoding="utf-8")
+    with pytest.raises(ValueError, match="belongs in the content"):
+        build(content, tmp_path / "slides.html", skin)
+
+
+def test_references_need_an_id_each_and_once(tmp_path: Path) -> None:
+    content_file = tmp_path / "content.html"
+    deck = '<title>Deck</title><body data-author="R" data-meta="Lab"><ol class="references">{}</ol><section data-title="P"><p>x</p></section></body>'
+    content_file.write_text(deck.format('<li id="a">A</li>'), encoding="utf-8")
+    assert parse_template_content(content_file).references == {"a": "A"}
+    for wrong, message in (('<li>A</li>', "li with an id"), ('<li id="a">A</li><li id="a">B</li>', "defined twice")):
+        content_file.write_text(deck.format(wrong), encoding="utf-8")
+        with pytest.raises(ValueError, match=message):
+            parse_template_content(content_file)

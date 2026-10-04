@@ -48,6 +48,7 @@
   height: var(--body-height);
   margin-top: 10px;
   padding: var(--body-padding);
+  padding-bottom: var(--bottom-left-height, 0px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -59,8 +60,30 @@
   width: 100%;
   max-width: none;
   margin-top: var(--lead-gap);
+  margin-bottom: 0;
   text-align: center;
 }
+/* A page's references sit in one small line at the bottom right of the body, below the
+   takeaway. A skin whose bottom-left chrome rises into the body sets --bottom-left-width,
+   the chrome's right edge from the page's left side, and --bottom-left-height, how far
+   it rises above the body's bottom. The body keeps that height free under its content,
+   and the line drops into it beside the chrome. */
+.body > .refs {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-end;
+  column-gap: 1.2em;
+  min-height: var(--bottom-left-height, 0px);
+  margin: 6px 0 calc(-1 * var(--bottom-left-height, 0px));
+  padding-left: var(--bottom-left-width, 0px);
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: right;
+}
+.cite { white-space: nowrap; }
 /* A picture keeps its own proportions. The body is a column flex box, and its default
    stretch handed an image with no stated width the whole column: max-height then cut only
    the height, so a 4:3 figure was drawn 1196x300, at 4:1. Centred because that is where a

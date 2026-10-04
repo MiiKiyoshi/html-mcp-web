@@ -323,6 +323,31 @@ export function createLayoutChecks(dependencies) {
           if (hit) addError(`page ${index + 1} title bar text overlaps ${describeElement(picture)}`, picture);
         }
       }
+      // Chrome drawn over a page corner, such as a logo stack at the bottom left, is
+      // marked data-layout-keepout. A content area may reach beside it, so text in a
+      // guard that runs into it is reported, once per text block and picture.
+      const corners = Array.from(page.querySelectorAll("[data-layout-keepout] > *"))
+        .map((picture) => ({ picture, area: picture.getBoundingClientRect() }))
+        .filter(({ area }) => area.width > 0 && area.height > 0);
+      for (const guard of corners.length > 0 ? page.querySelectorAll("[data-layout-guard]") : []) {
+        const reported = new Set();
+        const walker = doc.createTreeWalker(guard, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+          if (node.nodeValue.trim() === "" || node.parentElement.closest(".katex-mathml") !== null) continue;
+          const range = doc.createRange();
+          range.selectNodeContents(node);
+          const lines = Array.from(range.getClientRects());
+          for (const { picture, area } of corners) {
+            const block = node.parentElement;
+            if (reported.has(block) || !lines.some((line) =>
+              Math.min(line.right, area.right) - Math.max(line.left, area.left) > 1
+              && Math.min(line.bottom, area.bottom) - Math.max(line.top, area.top) > 1)) continue;
+            reported.add(block);
+            addError(`page ${index + 1} text "${readableText(block).slice(0, 24)}…" runs into the corner `
+              + `${describeElement(picture)}`, block);
+          }
+        }
+      }
       // A block whose last line holds only a few characters wastes a full line of
       // height, and on a slide that line is what the block above or below it needed:
       // the fix is a sentence trimmed to fit. On a report page the text is flowing

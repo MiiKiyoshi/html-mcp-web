@@ -76,6 +76,10 @@ def problem_html() -> str:
     <img id="bar-logo" alt="" style="position: absolute; right: 0; top: 4px; width: 120px; height: 32px"
       src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACwAAAAAAQABAAACAkQBADs=">
   </header>
+  <!-- A logo drawn over the page corner, with the first paragraph below running under it. -->
+  <div data-layout-keepout style="position: absolute; left: 0; top: 44px"><img id="corner-logo" alt=""
+    style="display: block; width: 60px; height: 24px"
+    src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACwAAAAAAQABAAACAkQBADs="></div>
   <div data-layout-guard style="width: 900px; height: 180px; overflow: hidden">
     <!-- The formula carries the shape KaTeX emits: a MathML copy holding the TeX source,
          hidden the way KaTeX hides it, beside the glyphs the reader sees. -->
@@ -712,6 +716,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert any("overflows its content area" in error for error in errors)
         assert any(re.search(r"title bar text overflows its bar by \d+px", error) for error in errors)
         assert any("title bar text overlaps <img#bar-logo>" in error for error in errors)
+        assert any("runs into the corner <img#corner-logo>" in error for error in errors)
         # The page that spills is measured for room, so the answer to an overflow can be a
         # move rather than a cut.
         assert "1" in get_json(f"{base}/state")["artifacts"]["slides"]["layout_check"]["room"]

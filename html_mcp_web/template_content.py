@@ -96,6 +96,8 @@ class TemplateContent:
     cover_script_html: str
     sections: list[ContentSection]
     subtitle: str = ""
+    # A reference's markup by its key, from the body's ol.references.
+    references: dict[str, str] = field(default_factory=dict)
 
 
 def _elements(root: Element, tag: str) -> list[Element]:
@@ -154,6 +156,20 @@ def parse_template_content(path: Path) -> TemplateContent:
             attributes=dict(section.attributes),
         ))
     cover_script = _script_child(body)
+    lists = [child for child in body.children if isinstance(child, Element) and child.tag == "ol"
+             and "references" in child.attributes.get("class", "").split()]
+    if len(lists) > 1:
+        raise ValueError("content takes at most one ol.references")
+    references = {}
+    for entry in lists[0].children if lists else []:
+        if not isinstance(entry, Element):
+            continue
+        key = entry.attributes.get("id", "").strip()
+        if entry.tag != "li" or not key:
+            raise ValueError("each entry of ol.references is an li with an id")
+        if key in references:
+            raise ValueError(f'reference "{key}" is defined twice')
+        references[key] = entry.inner_html().strip()
     return TemplateContent(
         title=html.unescape(titles[0].text()).strip(),
         author=body.attributes["data-author"].strip(),
@@ -161,4 +177,5 @@ def parse_template_content(path: Path) -> TemplateContent:
         cover_script_html=cover_script.inner_html().strip() if cover_script is not None else "",
         sections=sections,
         subtitle=body.attributes.get("data-sub", "").strip(),
+        references=references,
     )

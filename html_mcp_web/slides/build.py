@@ -173,7 +173,8 @@ def stack(uris: list[str], class_name: str) -> str:
     if not uris:
         return ""
     inner = "".join(f'<img src="{uri}" alt="">' for uri in uris)
-    return f'<div class="{class_name}">{inner}</div>'
+    # Chrome stacked in a page corner is marked so the layout check keeps text off it.
+    return f'<div class="{class_name}" data-layout-keepout>{inner}</div>'
 
 
 def label_html(text: str) -> str:
@@ -228,6 +229,39 @@ def contents_list(body_html: str, count: str | None) -> tuple[str, int]:
     return body.root.inner_html(), columns
 
 
+def cite_references(body_html: str, references: dict[str, str], numbers: dict[str, int]) -> tuple[str, list[str]]:
+    # A <cite> names one or more references by key, separated by commas, and becomes
+    # their numbers in brackets. A reference takes its number where the deck first cites
+    # it, so numbers holds the deck's numbering so far. Returns the content and the keys
+    # this page cites, in number order.
+    if "<cite" not in body_html:
+        return body_html, []
+    body = ContentParser()
+    body.feed(body_html)
+    body.close()
+    cited: list[str] = []
+
+    def visit(element: Element) -> None:
+        for index, child in enumerate(element.children):
+            if not isinstance(child, Element):
+                continue
+            if child.tag != "cite":
+                visit(child)
+                continue
+            keys = [key.strip() for key in child.text().split(",")]
+            for key in keys:
+                if key not in references:
+                    raise ValueError(f'<cite> names "{key}", which ol.references does not define')
+                numbers.setdefault(key, len(numbers) + 1)
+                if key not in cited:
+                    cited.append(key)
+            label = ", ".join(str(numbers[key]) for key in keys)
+            element.children[index] = Element("span", {"class": "cite"}, [f"[{label}]"])
+
+    visit(body.root)
+    return body.root.inner_html(), sorted(cited, key=numbers.__getitem__)
+
+
 def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
     content = parse_template_content(content_path)
     skin = Skin(skin_dir)
@@ -257,7 +291,14 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
     </section>{script_block(content.cover_script_html)}''']
 
     footer_label = skin.label("footer_label")
+    # A citation is numbered on the page that shows it and listed in that page's line.
+    numbers: dict[str, int] = {}
+    misplaced = "a <cite> belongs in the content of a body page, not in a script or another page kind"
+    if "<cite" in content.cover_script_html:
+        raise ValueError(misplaced)
     for page_number, section in enumerate(content.sections, 2):
+        if "<cite" in section.script_html or (section.layout != "body" and "<cite" in section.body_html):
+            raise ValueError(misplaced)
         script = script_block(section.script_html)
         in_appendix = appendix_at is not None and page_number - 2 >= appendix_at
         counted = (f"A{page_number - 2 - appendix_at + 1} / A{appendix_count}" if in_appendix
@@ -313,9 +354,10 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
 
         # Opening and closing summaries bound the body; only the content between them
         # shares the remaining height. The closing summary uses the skin's lead styling.
-        lead = re.match(r'\s*<p class="lead">.*?</p>', section.body_html, re.S)
+        content_html, cited = cite_references(section.body_html, content.references, numbers)
+        lead = re.match(r'\s*<p class="lead">.*?</p>', content_html, re.S)
         opening = lead.group(0).strip() if lead is not None else ""
-        rest = section.body_html[lead.end():] if lead is not None else section.body_html
+        rest = content_html[lead.end():] if lead is not None else content_html
         body = ContentParser()
         body.feed(rest)
         body.close()
@@ -333,6 +375,10 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
             closing.attributes["class"] = " ".join(classes)
             takeaway = closing.to_html()
             rest = body.root.inner_html({id(closing)})
+        refs = ""
+        if cited:
+            entries = "".join(f"<span>[{numbers[key]}] {content.references[key]}</span>" for key in cited)
+            refs = f'\n<p class="refs">{entries}</p>'
         footer = f'<footer class="bbar">{pageno}{label_html(footer_label)}</footer>'
         pages.append(f'''    <section class="page">
       <header class="tbar" data-layout-bar><h2>{section.title}</h2>{images(skin.slot("tbar_logo"), "tbar-logo")}</header>
@@ -341,7 +387,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
         <div class="rest">
 {rest.strip()}
         </div>
-{takeaway}
+{takeaway}{refs}
       </div>
       {stack(skin.slot("page_bottom_left"), "page-bottom-left")}
       {footer}

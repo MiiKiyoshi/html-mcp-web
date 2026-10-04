@@ -60,8 +60,9 @@ chapter from the next as often as it opens an appendix.
 
 Blocks spread down the body rather than stacking at its top, so a page with little on it
 does not leave a dead band above the footer. A first `p.lead` stays with the title and
-an optional final `p.takeaway` stays at the bottom of the body. Neither participates in
-the spread; only the content between them shares the remaining height.
+an optional final `p.takeaway` stays near the bottom of the body, above any references.
+Neither participates in the spread, so only the content between them shares the
+remaining height.
 
 - `p.lead` is the one-line summary under the title; normal `p` carries prose
 - `p.takeaway` is the concluding line at the bottom. Put at most one as the last direct
@@ -71,8 +72,16 @@ the spread; only the content between them shares the remaining height.
   PowerPoint has room for minor font-metric differences; its text is centred, while the
   lead keeps its own alignment and width.
   Write `<p class="takeaway">The concluding statement.</p>`; skins only style its appearance.
-- `p.note` is a single footnote, `ul.notes` takes over once two or more independent
-  remarks pile up, one per `li`
+- `p.note` carries one explanatory note, and `ul.notes` carries several, one per `li`
+- `<ol class="references">` defines the deck's references once, directly in `<body>`
+  outside all sections, with one `<li id="key">…</li>` per reference. Cite a key with
+  `<cite>key</cite>` or several with `<cite>key1, key2</cite>`. References are numbered
+  in the order first cited across the deck. Each citation shows bracketed numbers such
+  as `[1]` or `[2, 1]`. Each citing body page lists only its own references with those
+  numbers in one small line aligned to the right at the bottom of the body, below the
+  takeaway. Uncited references are not shown. Missing or duplicate reference IDs and
+  undefined citation keys stop the build, as do citations in scripts or on cover,
+  contents, or divider pages.
 - `p.units` sits directly above a measurement table and states the units once
   (`ΔTNS: ns · power: %`), instead of repeating them in footnotes; keep the same form on
   every slide that shows measurements
