@@ -374,6 +374,9 @@ class HtmlReviewServer:
         # The checking browser and its profile while a check runs, so a server that stops
         # mid-check can still end the browser and remove the profile.
         self.check_runs: set[tuple[asyncio.subprocess.Process, str]] = set()
+        # The tasks running a check. A task left pending when the loop closed never reached
+        # its cleanup, and its browser outlived the server.
+        self.check_tasks: set[asyncio.Task] = set()
         # One catch-up at a time: a rebuild takes seconds, and every state read asks.
         self.catching_up = asyncio.Lock()
         self.artifacts = self._create_artifacts(config)
@@ -892,12 +895,20 @@ class HtmlReviewServer:
         browser the PDF and pptx exports print with. Its page carries a token that
         update_layout requires, and one check runs at a time.
         """
-        import secrets
-
         if runtime.space_revision == runtime.revision:
             return
-        if shutil.which("firefox") is None:
+        if shutil.which("firefox") is None or self.closing:
             return
+        task = asyncio.current_task()
+        self.check_tasks.add(task)
+        try:
+            await self._run_layout_check(runtime, host)
+        finally:
+            self.check_tasks.discard(task)
+
+    async def _run_layout_check(self, runtime: ArtifactRuntime, host: str) -> None:
+        import secrets
+
         async with self.headless_check:
             if runtime.space_revision == runtime.revision:
                 return
@@ -919,7 +930,9 @@ class HtmlReviewServer:
                 runtime.check_token = None
                 # Shielded, so a cancelled check still waits for its browser to exit before
                 # the profile goes: removed under a running browser, files came back into it.
-                process.terminate()
+                # A browser that already exited cannot be signalled, and the profile still goes.
+                with contextlib.suppress(ProcessLookupError):
+                    process.terminate()
                 await asyncio.shield(process.wait())
                 shutil.rmtree(profile, ignore_errors=True)
                 self.check_runs.discard(run)
@@ -1492,9 +1505,16 @@ class HtmlReviewServer:
                 shutil.rmtree(profile, ignore_errors=True)
 
     async def stop_checks(self, app: web.Application) -> None:
+        # A running check is cancelled and awaited, so its own cleanup ends the browser and
+        # removes the profile. Whatever is left after that is ended here.
+        running = [task for task in self.check_tasks if task is not asyncio.current_task()]
+        for task in running:
+            task.cancel()
+        await asyncio.gather(*running, return_exceptions=True)
         for process, profile in list(self.check_runs):
             if process.returncode is None:
-                process.terminate()
+                with contextlib.suppress(ProcessLookupError):
+                    process.terminate()
                 with contextlib.suppress(asyncio.TimeoutError):
                     await asyncio.wait_for(process.wait(), timeout=5)
             shutil.rmtree(profile, ignore_errors=True)
