@@ -110,6 +110,8 @@ remaining height.
   it. The element takes the width it is given and stops at its `max-height`, and the
   drawing keeps the `viewBox` proportions inside that, so a `viewBox` of another shape
   leaves a band down both sides or across the top and bottom that nothing can use.
+  Within each SVG panel, lay out the content for that panel's width and height while
+  preserving grouping and reading order.
   Give the `viewBox` the size the figure is drawn at, not a smaller box scaled up: a
   browser misplaces its own selection inside an svg that scales, by the scale factor, so
   the handles a reader drags to widen a selection on a touch screen sit away from the
