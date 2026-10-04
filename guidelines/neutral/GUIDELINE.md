@@ -2,7 +2,7 @@
 
 ## Preamble
 
-A technical deck helps its reader understand or decide something. This guideline governs what it says and shows. Template documentation governs page structure, components, and production procedures. Automated checks help find defects but do not replace the author's checks.
+A technical deck helps its reader understand or decide something. This guideline governs what it says and shows. Template documentation governs page structure, components, and production procedures. Automated checks and other reviewers' verdicts help find defects but do not replace the author's own checks.
 
 Work within the authorized scope. Acceptance requires both an understandable explanation and grounded claims and values. Let the reader's question set the detail and fidelity. If an explicit requester constraint conflicts with these requirements, report the conflict without silently changing either.
 
