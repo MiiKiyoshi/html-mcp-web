@@ -4473,6 +4473,11 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path) ->
             'return document.querySelector(\'meta[name="html-mcp-static"]\').content')
         assert stamped == get_json(f"http://127.0.0.1:{port}/state")["static"]
         browser.execute_script('document.body.dataset.sameLoad = "yes";')
+        # The reader is partway down the deck. The reload once put them back at the top.
+        frame_window = 'document.querySelector("#artifact-frame")?.contentWindow'
+        browser.execute_script(f'{frame_window}.scrollTo(0, 400);')
+        read_at = wait_until(lambda: browser.execute_script(
+            f'const win = {frame_window}; return win && win.scrollY > 300 ? win.scrollY : null;'))
 
         # The code moves on: a static file is newer than the page's tag. A change to the
         # deck then reaches the page as a state carrying the new tag.
@@ -4485,6 +4490,10 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path) ->
             'return meta && document.body.dataset.sameLoad !== "yes" ? meta.content : null;'))
         assert reloaded == get_json(f"http://127.0.0.1:{port}/state")["static"]
         assert reloaded != stamped
+        # The reloaded page shows the deck where the reader left it.
+        restored = wait_until(lambda: browser.execute_script(
+            f'const win = {frame_window}; return win && win.scrollY > 0 ? win.scrollY : null;'))
+        assert abs(restored - read_at) <= 2
     finally:
         os.utime(moved, (kept.st_atime, kept.st_mtime))
         if browser is not None:

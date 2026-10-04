@@ -1612,6 +1612,9 @@ function attachArtifactEvents(frame) {
     const view = state.pendingView;
     state.pendingView = null;
     win.requestAnimationFrame(() => win.scrollTo(view.x, view.y));
+  } else {
+    const place = recalledReadingPlace();
+    if (place !== null) win.requestAnimationFrame(() => keepReadingPlace(place));
   }
   renderHighlights();
   updateLayoutUi();
@@ -1643,6 +1646,37 @@ function loadArtifact(preserveView) {
   iframe.src = `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}`;
 }
 
+// A reload for newer viewer code starts the deck again from its first page. The page learns
+// of the new code from the next state it gets, which is the agent's next edit, so the
+// reader was sent back to page 1 by an edit made after an update. The page at the top of
+// the window and the point on it go through the reload in this tab's session storage.
+const READING_PLACE = "htmlMcpReadingPlace";
+
+function rememberReadingPlace() {
+  try {
+    if (state.slideShow || state.artifactId === null || frameDocument() === null) return;
+    const place = readingPlace();
+    if (place === null) return;
+    sessionStorage.setItem(READING_PLACE, JSON.stringify(
+      { artifact: state.artifactId, page: artifactPages().indexOf(place.page), y: place.y }));
+  } catch {
+    // Storage refused, as a private window may: the reload starts at the top as before.
+  }
+}
+
+function recalledReadingPlace() {
+  let saved = null;
+  try {
+    saved = JSON.parse(sessionStorage.getItem(READING_PLACE) ?? "null");
+    sessionStorage.removeItem(READING_PLACE);
+  } catch {
+    return null;
+  }
+  if (saved === null || saved.artifact !== state.artifactId) return null;
+  const page = artifactPages()[saved.page];
+  return page === undefined ? null : { page, y: saved.y };
+}
+
 // The tag of the code this page was built with, stamped into it by the server.
 const servedStatic = () => document.querySelector('meta[name="html-mcp-static"]')?.content ?? null;
 
@@ -1651,6 +1685,7 @@ const servedStatic = () => document.querySelector('meta[name="html-mcp-static"]'
 // changes. Every state, whether asked for or sent, passes through here.
 function adoptProject(project) {
   if ((project.static ?? null) !== servedStatic()) {
+    rememberReadingPlace();
     location.reload();
     return false;
   }
