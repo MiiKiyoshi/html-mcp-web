@@ -364,3 +364,17 @@ def test_references_need_an_id_each_and_once(tmp_path: Path) -> None:
         content_file.write_text(deck.format(wrong), encoding="utf-8")
         with pytest.raises(ValueError, match=message):
             parse_template_content(content_file)
+
+
+def test_the_authoring_skeleton_keeps_its_lead_under_the_title(tmp_path: Path) -> None:
+    from html_mcp_web.slides.build import build
+
+    # The skeleton in the authoring guide carries a comment before its lead. Copied as it
+    # is, the lead still stays with the title rather than joining the spread content.
+    guide = (REPO / "templates" / "README.md").read_text(encoding="utf-8")
+    skeleton = guide.split("```html\n", 1)[1].split("```", 1)[0]
+    content = tmp_path / "content.html"
+    content.write_text(skeleton, encoding="utf-8")
+    build(content, tmp_path / "slides.html", REPO / "templates" / "neutral-slides")
+    body = (tmp_path / "slides.html").read_text(encoding="utf-8").split('<div class="body" data-layout-guard>')[1]
+    assert body.index('<p class="lead">Page introduction.</p>') < body.index('<div class="rest">')

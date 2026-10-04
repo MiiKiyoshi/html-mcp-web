@@ -64,7 +64,9 @@ an optional final `p.takeaway` stays near the bottom of the body, above any refe
 Neither participates in the spread, so only the content between them shares the
 remaining height.
 
-- `p.lead` is the one-line summary under the title; normal `p` carries prose
+- `p.lead` is an optional introduction on one line under the title. Follow the
+  configured content guideline for whether to include it and what it says. Normal `p`
+  carries prose.
 - `p.takeaway` is the concluding line at the bottom. Put at most one as the last direct
   paragraph of a body section, after its figure, table, or other content. It works with
   or without a lead. The common builder applies the skin's `lead` class to it, so both

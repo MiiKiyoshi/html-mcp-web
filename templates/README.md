@@ -19,7 +19,8 @@ the main file on save. Build failures appear as `build_error` in `layout()`.
 <body data-author="Author" data-meta="Affiliation|Second line">
 <aside class="script"><p>Cover speaker notes.</p></aside>
 <section data-title="Page title">
-  <p class="lead">The question this page answers.</p>
+  <!-- Optional lead. Follow the configured guideline for its use and wording. -->
+  <p class="lead">Page introduction.</p>
   <!-- Figure, table, or other content. -->
   <p class="takeaway">The answer supported by the content.</p>
   <aside class="script"><p>Speaker notes for this page.</p></aside>
