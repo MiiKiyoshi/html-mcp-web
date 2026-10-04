@@ -158,6 +158,10 @@ run past its `viewBox` is reported as cut off, a drawing that leaves a quarter
 or more of a side empty is reported as holding space it does not draw in, two labels
 printed over each other are reported as a collision, and a label that runs past the
 sides of the rect it sits on is reported with the side and by how much.
+The check also warns when an arrowhead or the line just before it overlaps a label or
+crosses another connector, excluding endpoint joins and lines that lie along one another.
+A separate warning names the box and the existing connection when a return arrow running
+left or up enters an occupied side of the box while another side is unused.
 
 The layout check reports clipped body content and title text that extends outside the
 title bar or overlaps an image in it.

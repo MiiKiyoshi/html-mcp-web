@@ -128,6 +128,25 @@ def problem_html() -> str:
       <line x1="20" y1="30" x2="380" y2="30" stroke="#333" stroke-width="3" marker-end="url(#arrow)"/>
       <rect x="0" y="0" width="120" height="60" fill="none" stroke="#333" stroke-width="2"/>
     </svg>
+    <!-- A return arrow enters the first box on its right side, where the box's output
+         leaves, while its other sides are free. Two forward inputs enter the box below on
+         one side, a normal fan-in. The last arrow runs over a label just before its box. -->
+    <svg id="arrows" viewBox="0 0 460 210" width="460" height="210">
+      <defs><marker id="head" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+      <rect x="10" y="10" width="100" height="60" fill="#fff" stroke="#333"/>
+      <rect x="170" y="10" width="100" height="60" fill="#fff" stroke="#333"/>
+      <path d="M110,40 L168,40" fill="none" stroke="#333" stroke-width="2" marker-end="url(#head)"/>
+      <path d="M220,70 L220,100 L130,100 L130,55 L112,55" fill="none" stroke="#333" stroke-width="2" marker-end="url(#head)"/>
+      <rect x="10" y="120" width="60" height="30" fill="#fff" stroke="#333"/>
+      <rect x="10" y="165" width="60" height="30" fill="#fff" stroke="#333"/>
+      <rect x="150" y="130" width="100" height="60" fill="#fff" stroke="#333"/>
+      <path d="M70,135 L100,135 L100,150 L148,150" fill="none" stroke="#333" stroke-width="2" marker-end="url(#head)"/>
+      <path d="M70,180 L100,180 L100,170 L148,170" fill="none" stroke="#333" stroke-width="2" marker-end="url(#head)"/>
+      <rect x="380" y="20" width="60" height="40" fill="#fff" stroke="#333"/>
+      <text x="345" y="44" font-size="12">note</text>
+      <path d="M300,40 L378,40" fill="none" stroke="#333" stroke-width="2" marker-end="url(#head)"/>
+    </svg>
     <p id="ordinary" style="font-size: 20px; width: 900px">This second paragraph wraps onto
       two lines as well, and its final line carries a perfectly ordinary amount of text.</p>
     <!-- One line tall, but the box set low at the end sits too far under the text for the
@@ -738,6 +757,14 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert any("svg#cut> draws outside its viewBox and is cut off (bottom by 10)" in error
                    for error in errors)
         assert not any("svg#quiet" in error for error in errors)
+        # A return arrow that crowds a busy side while another side is free is reported with
+        # its box and the connection beside it. A fan-in of forward inputs is not.
+        returns = [error for error in errors if "return arrow" in error]
+        assert len(returns) == 1
+        assert "(220,70)→(112,55) enters the box at (10,10) on its right side beside (110,40)→(168,40)" in returns[0]
+        assert "left and top and bottom sides are clear" in returns[0]
+        heads = [error for error in errors if "svg#arrows" in error and "arrowhead of" in error]
+        assert len(heads) == 1 and 'runs over the label "note"' in heads[0]
         assert any("svg#idle> reserves space it does not draw in (right 51%" in error
                    for error in errors)
         banded = next(error for error in errors if "svg#banded" in error)

@@ -721,6 +721,160 @@ export function createLayoutChecks(dependencies) {
             + `(${crossed.join(", ")}). Fit it inside or grow the box`,
             rect);
         }
+        // Where arrows meet boxes. A connector is a path, line or polyline; an end with an
+        // arrowhead enters, the other end leaves. An end attaches to the side of the
+        // smallest box (a painted rect at least 16 units on each side) that it lies on,
+        // within the head's length for an entering end and 3 units for a leaving one.
+        // Points are read in the svg's viewport space, as the labels are.
+        const at = (element, point) => {
+          const m = element.getCTM();
+          return { x: m.a * point.x + m.c * point.y + m.e, y: m.b * point.x + m.d * point.y + m.f };
+        };
+        const panels = drawnRects.map((entry) => entry.box)
+          .filter((box) => box.right - box.left >= 16 && box.bottom - box.top >= 16);
+        const connectors = [];
+        for (const line of svg.element.querySelectorAll("path, line, polyline")) {
+          if (line.closest("defs, symbol, clipPath, mask, pattern, marker") !== null || line.getCTM() === null) continue;
+          const total = line.getTotalLength();
+          if (!(total > 0)) continue;
+          const style = doc.defaultView.getComputedStyle(line);
+          const strokeWidth = parseFloat(style.strokeWidth) || 1;
+          const heads = [true, false].map((atStart) => {
+            const named = (atStart ? style.markerStart : style.markerEnd).match(/url\(["']?#([^"')]+)["']?\)/);
+            const marker = named ? line.ownerDocument.getElementById(named[1]) : null;
+            return marker instanceof frameWindow().SVGMarkerElement ? (arrowheadReach(marker, strokeWidth, atStart) ?? 0) : 0;
+          });
+          connectors.push({
+            line, total, strokeWidth, heads,
+            guide: heads[0] === 0 && heads[1] === 0 && style.strokeDasharray !== "none",
+            ends: [at(line, line.getPointAtLength(0)), at(line, line.getPointAtLength(total))],
+          });
+        }
+        const sideOf = (point, reach) => {
+          const near = Math.max(3, reach + 2);
+          let found = null;
+          for (const box of panels) {
+            const within = (low, high, value) => low - near <= value && value <= high + near;
+            const gaps = [
+              ["left", Math.abs(point.x - box.left), within(box.top, box.bottom, point.y)],
+              ["right", Math.abs(point.x - box.right), within(box.top, box.bottom, point.y)],
+              ["top", Math.abs(point.y - box.top), within(box.left, box.right, point.x)],
+              ["bottom", Math.abs(point.y - box.bottom), within(box.left, box.right, point.x)],
+            ].filter(([, gap, along]) => along && gap <= near).sort((a, b) => a[1] - b[1]);
+            if (gaps.length === 0) continue;
+            const area = (box.right - box.left) * (box.bottom - box.top);
+            if (found === null || area < found.area) found = { box, side: gaps[0][0], area };
+          }
+          return found;
+        };
+        const attached = new Map();
+        for (const connector of connectors) {
+          connector.joins = connector.ends.map((point, end) => {
+            const enters = connector.heads[end] > 0;
+            const join = sideOf(point, enters ? connector.heads[end] : 0);
+            if (join === null) return null;
+            const key = `${join.box.left},${join.box.top},${join.box.right},${join.box.bottom}`;
+            if (!attached.has(key)) attached.set(key, { box: join.box, sides: { left: [], right: [], top: [], bottom: [] } });
+            attached.get(key).sides[join.side].push({ connector, enters });
+            return { key, side: join.side };
+          });
+        }
+        const round = (value) => Math.round(value);
+        const trace = (connector) => {
+          const [from, to] = connector.ends;
+          return `(${round(from.x)},${round(from.y)})→(${round(to.x)},${round(to.y)})`;
+        };
+        const panelName = (box) => {
+          const first = labels
+            .filter(({ box: label }) => label.left >= box.left && label.right <= box.right
+              && label.top >= box.top && label.bottom <= box.bottom)
+            .sort((a, b) => a.box.top - b.box.top || a.box.left - b.box.left)[0];
+          return `the box at (${round(box.left)},${round(box.top)})`
+            + (first === undefined ? "" : ` holding "${labelWords(first.text)}"`);
+        };
+        // A return arrow, one that runs back left or up against the reading order, that
+        // enters a box on a side where another connection already sits while another
+        // side of that box has none, crowds the busy side. Arrows entering one side
+        // together in the reading order, a fan-in, are normal and not reported.
+        let crowded = 0;
+        for (const connector of connectors) {
+          const [from, to] = connector.ends;
+          if (connector.heads[1] === 0 || connector.joins[1] === null) continue;
+          const back = (to.x < from.x - 3 && to.y <= from.y + 3) || (to.y < from.y - 3 && to.x <= from.x + 3);
+          if (!back) continue;
+          const { key, side } = connector.joins[1];
+          const { box, sides } = attached.get(key);
+          const others = sides[side].filter((entry) => entry.connector !== connector);
+          const clear = Object.entries(sides).filter(([, entries]) => entries.length === 0).map(([name]) => name);
+          if (others.length === 0 || clear.length === 0 || crowded >= 3) continue;
+          crowded += 1;
+          addError(
+            `page ${index + 1} ${describeElement(svg.element)} return arrow ${trace(connector)} enters ${panelName(box)} `
+            + `on its ${side} side beside ${others.map((entry) => trace(entry.connector)).join(", ")}, while its `
+            + `${clear.join(" and ")} ${clear.length === 1 ? "side is" : "sides are"} clear. Enter by a clear side`,
+            connector.line);
+        }
+        // An arrowhead, with the stretch of line just before it, that runs over a label or
+        // crosses another connector makes the target unclear. The stretch covers the head
+        // and twice its length of line before it. Lines that meet at an end, as an arrow
+        // into a bus, a branch out of it, the arms of a merge or arrows into one target do,
+        // are joined rather than crossed, and a line laid along another, as a span arrow on
+        // a reference line is, runs with it. A dashed line without a head is a guide, not a
+        // connector. None of these is reported.
+        const traced = new Map();
+        const pointsOf = (connector) => {
+          if (!traced.has(connector)) {
+            const points = [];
+            for (let step = 0; step <= Math.ceil(connector.total / 2); step++) {
+              points.push(at(connector.line, connector.line.getPointAtLength(Math.min(connector.total, step * 2))));
+            }
+            traced.set(connector, points);
+          }
+          return traced.get(connector);
+        };
+        const heading = (points, index) => {
+          const a = points[Math.max(0, index - 1)];
+          const b = points[Math.min(points.length - 1, index + 1)];
+          const length = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+          return { x: (b.x - a.x) / length, y: (b.y - a.y) / length };
+        };
+        const tangles = new Set();
+        for (const connector of connectors) {
+          for (const end of [0, 1]) {
+            const reach = connector.heads[end];
+            if (reach === 0 || tangles.size >= 3) continue;
+            const stretch = Math.min(connector.total, 3 * reach);
+            const approach = [];
+            for (let step = 0; step <= 12; step++) {
+              const along = (stretch * step) / 12;
+              approach.push(at(connector.line, connector.line.getPointAtLength(end === 1 ? connector.total - along : along)));
+            }
+            const label = labels.find(({ box }) => approach.some((point) => box.left < point.x && point.x < box.right
+              && box.top < point.y && point.y < box.bottom));
+            let crossed = null;
+            const tip = connector.ends[end];
+            for (const other of connectors) {
+              if (other === connector || crossed !== null || other.guide) continue;
+              if (other.ends.some((point) => Math.hypot(point.x - tip.x, point.y - tip.y) <= reach + 2)) continue;
+              const near = (connector.strokeWidth + other.strokeWidth) / 2 + 0.5;
+              const ends = [...connector.ends, ...other.ends];
+              const points = pointsOf(other);
+              for (let spot = 0; spot < points.length && crossed === null; spot++) {
+                const point = points[spot];
+                if (ends.some((tip) => Math.hypot(tip.x - point.x, tip.y - point.y) <= near + 2)) continue;
+                const touch = approach.findIndex((sample) => Math.hypot(sample.x - point.x, sample.y - point.y) <= near);
+                if (touch < 0) continue;
+                const mine = heading(approach, touch);
+                const theirs = heading(points, spot);
+                if (Math.abs(mine.x * theirs.y - mine.y * theirs.x) >= 0.3) crossed = other;
+              }
+            }
+            if (label === undefined && crossed === null) continue;
+            tangles.add(`page ${index + 1} ${describeElement(svg.element)} arrowhead of ${trace(connector)} runs over `
+              + (label !== undefined ? `the label "${labelWords(label.text)}"` : `the connector ${trace(crossed)}`));
+          }
+        }
+        for (const message of tangles) addError(message, svg.element);
         // A label the deck wrapped (data-wrap) records its line count in data-lines; one
         // that needs more lines than its box allows (data-max-lines) is reported with both.
         for (const text of svg.element.querySelectorAll("text[data-max-lines]")) {
