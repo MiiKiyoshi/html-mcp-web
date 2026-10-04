@@ -96,7 +96,7 @@ Judge language by what the reader understands, not the author's intention.
 
 Make needed relationships visible without implying unsupported ones.
 
-5.1 Plan drawings before prose for mechanisms, arrangements, sequences, branches, merges, loops, and changes. Show relationships that the argument needs and that can be drawn. Do not show only objects and leave prose to supply their essential relationship. Use sentences or parallel list items only for simple relationships that gain nothing from a diagram. If a relationship cannot yet be drawn, report what is missing and continue independent pages. Add a second representation only when it supplies needed guidance or a check.
+5.1 Plan drawings before prose for mechanisms, arrangements, sequences, branches, merges, loops, and changes. Show relationships that the argument needs and that can be drawn. Do not show only objects and leave prose to supply their essential relationship. For a simple relationship that gains nothing from a diagram, use an equation, short sentences, or parallel list items. If a relationship cannot yet be drawn, report what is missing and continue independent pages. Add a second representation only when it supplies needed guidance or a check.
 
 5.2 Match the form to the relationship. Examples:
 
