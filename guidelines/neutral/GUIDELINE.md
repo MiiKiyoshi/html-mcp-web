@@ -76,7 +76,7 @@ Recap connects prior context to the result now needed. Summary of Progress cover
 
 Judge language by what the reader understands, not the author's intention.
 
-4.1 Make every visible line and spoken sentence understandable from the reader's knowledge and earlier explanations. Correct misleading wording and dependence on private context, including familiar words used technically. Use known field terms in their usual form and otherwise use plain language. Code names, literal translations, working labels, and type signatures do not replace explanations. Apply 1.3 before introducing an internal name.
+4.1 Make every visible line and spoken sentence understandable from the reader's knowledge and earlier explanations. Correct misleading wording and dependence on private context, including familiar words used technically. Use established domain terms in their usual form. Where no established term fits, describe the concept in words the reader knows. Code names, literal translations, working labels, and type signatures do not replace explanations. Apply 1.3 before introducing an internal name.
 
 4.2 Identify each action's actor and object or output. Name steps by their object and operation at the level explained, not by a hidden substep. Identify the objects in each relationship and how they relate. Describe special cases through conditions and effects the reader understands. Include implementation mechanisms only when needed. Do not invent a domain explanation for an implementation condition without evidence of their correspondence.
 
