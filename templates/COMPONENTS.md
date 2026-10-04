@@ -180,7 +180,7 @@ When a drafting tool accepts images, supply requested visual reference images as
 
 ## Connector routing
 
-For box-and-arrow diagrams, prefer horizontal and vertical connectors unless another route clarifies the relationship. Join connectors entering the same element near their sources. Split connectors leaving the same element near their targets. Keep branches short and the common segment long. Preserve direction and make each source-to-target relationship unambiguous. Follow the content guideline's rules for entry and exit sides and for which paths may merge.
+For box-and-arrow diagrams, prefer horizontal and vertical connectors unless another route clarifies the relationship. Join connectors entering the same element near their sources. Split connectors leaving the same element near their targets. Keep branches short and the common segment long. Preserve direction and make each source-to-target relationship unambiguous. Follow the content guideline's rules for entry and exit sides and for which paths may merge. Remove a bend or detour when another permitted entry or exit side avoids it without changing reading order or intended connections, obscuring junctions, or adding crossings or label overlaps.
 
 ## Standard plots
 
