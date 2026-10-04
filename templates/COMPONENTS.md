@@ -115,7 +115,8 @@ remaining height.
   the handles a reader drags to widen a selection on a touch screen sit away from the
   letters and collapse the selection when pressed. The review page's highlight and comment
   button are computed from the letters themselves and are right either way
-- `<img>` for a raster figure; give it a `max-height` so the body stays inside its box
+- `<img>` carries a raster figure. Give it a `max-height` so the body stays inside its
+  box. Check [image proportions and readability](#image-proportions-and-readability).
 
 Math is written as TeX between `$…$` (inline) or `$$…$$` (display); `\(…\)` and
 `\[…\]` work too. The builder renders it with KaTeX and embeds the renderer and its fonts
@@ -189,9 +190,9 @@ For box-and-arrow diagrams, prefer horizontal and vertical connectors unless ano
 
 Use a plotting tool that supplies the required axes, scales, and annotations for a standard plot. Do not rebuild these by hand.
 
-## Embedded image proportions
+## Image proportions and readability
 
-Preserve the source width-to-height ratio of images embedded inside SVG or used as CSS backgrounds. Check the rendered image itself, excluding padding and letterboxing. Do not treat a clean automated layout report as proof that these images retain their proportions.
+Preserve the source width-to-height ratio of images, including `<img>` figures, images inside SVG, and CSS backgrounds. At the intended display or export size, check the rendered image itself, excluding padding and letterboxing, for correct proportions and readable text and marks needed by the page. A clean layout report does not establish correct proportions or readability.
 
 ## Independent review
 
