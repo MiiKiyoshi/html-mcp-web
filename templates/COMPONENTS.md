@@ -164,6 +164,9 @@ The check also warns when an arrowhead or the line just before it overlaps a lab
 crosses another connector, excluding endpoint joins and lines that lie along one another.
 A separate warning names the box and the existing connection when a return arrow running
 left or up enters an occupied side of the box while another side is unused.
+The check also warns when a connector takes a short detour around its box and names
+another permitted side that provides a straight route clear of connectors, labels and
+boxes.
 
 The layout check reports clipped body content and title text that extends outside the
 title bar or overlaps an image in it.

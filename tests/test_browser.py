@@ -147,6 +147,19 @@ def problem_html() -> str:
       <text x="345" y="44" font-size="12">note</text>
       <path d="M300,40 L378,40" fill="none" stroke="#333" stroke-width="2" marker-end="url(#head)"/>
     </svg>
+    <!-- An output leaves its box by the right side in a 15-unit stub and turns down past
+         the box's bottom side, which it could have left by directly. Below, a branch splits
+         two units above the second of two stacked boxes and enters it from the left, which
+         is normal. -->
+    <svg id="detours" viewBox="0 0 460 200" width="460" height="200">
+      <defs><marker id="tip" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+      <rect x="10" y="10" width="100" height="40" fill="#fff" stroke="#333"/>
+      <path d="M110,30 L125,30 L125,80 L300,80" fill="none" stroke="#333" stroke-width="1.5" marker-end="url(#tip)"/>
+      <rect x="130" y="100" width="100" height="24" fill="#fff" stroke="#333"/>
+      <rect x="130" y="128" width="100" height="24" fill="#fff" stroke="#333"/>
+      <path d="M110,126 L110,140 L128,140" fill="none" stroke="#333" stroke-width="1.5" marker-end="url(#tip)"/>
+    </svg>
     <p id="ordinary" style="font-size: 20px; width: 900px">This second paragraph wraps onto
       two lines as well, and its final line carries a perfectly ordinary amount of text.</p>
     <!-- One line tall, but the box set low at the end sits too far under the text for the
@@ -765,6 +778,12 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert "left and top and bottom sides are clear" in returns[0]
         heads = [error for error in errors if "svg#arrows" in error and "arrowhead of" in error]
         assert len(heads) == 1 and 'runs over the label "note"' in heads[0]
+        # A stub and a turn past another side of the same box is reported with the side to
+        # use. A branch that splits just above stacked boxes is not.
+        detours = [error for error in errors if "svg#detours" in error and "connector (" in error]
+        assert len(detours) == 1
+        assert ("connector (110,30)→(300,80) leaves the box at (10,10) by its right side, turns after "
+                "15 units and passes its bottom side. Leave by the bottom side") in detours[0]
         assert any("svg#idle> reserves space it does not draw in (right 51%" in error
                    for error in errors)
         banded = next(error for error in errors if "svg#banded" in error)

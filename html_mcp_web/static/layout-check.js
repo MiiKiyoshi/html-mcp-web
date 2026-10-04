@@ -780,8 +780,14 @@ export function createLayoutChecks(dependencies) {
           });
         }
         const round = (value) => Math.round(value);
+        // Points are read in the svg's viewport and reported in its own units, the ones its
+        // source is written in.
+        const shown = (point) => ({
+          x: (point.x - placed.x) / placed.scaleX + view.x, y: (point.y - placed.y) / placed.scaleY + view.y,
+        });
+        const units = (dx, dy) => Math.hypot(dx / placed.scaleX, dy / placed.scaleY);
         const trace = (connector) => {
-          const [from, to] = connector.ends;
+          const [from, to] = connector.ends.map(shown);
           return `(${round(from.x)},${round(from.y)})→(${round(to.x)},${round(to.y)})`;
         };
         const panelName = (box) => {
@@ -789,19 +795,22 @@ export function createLayoutChecks(dependencies) {
             .filter(({ box: label }) => label.left >= box.left && label.right <= box.right
               && label.top >= box.top && label.bottom <= box.bottom)
             .sort((a, b) => a.box.top - b.box.top || a.box.left - b.box.left)[0];
-          return `the box at (${round(box.left)},${round(box.top)})`
+          const corner = shown({ x: box.left, y: box.top });
+          return `the box at (${round(corner.x)},${round(corner.y)})`
             + (first === undefined ? "" : ` holding "${labelWords(first.text)}"`);
         };
         // A return arrow, one that runs back left or up against the reading order, that
         // enters a box on a side where another connection already sits while another
         // side of that box has none, crowds the busy side. Arrows entering one side
         // together in the reading order, a fan-in, are normal and not reported.
+        const backward = (connector) => {
+          const [from, to] = connector.ends;
+          return (to.x < from.x - 3 && to.y <= from.y + 3) || (to.y < from.y - 3 && to.x <= from.x + 3);
+        };
         let crowded = 0;
         for (const connector of connectors) {
-          const [from, to] = connector.ends;
           if (connector.heads[1] === 0 || connector.joins[1] === null) continue;
-          const back = (to.x < from.x - 3 && to.y <= from.y + 3) || (to.y < from.y - 3 && to.x <= from.x + 3);
-          if (!back) continue;
+          if (!backward(connector)) continue;
           const { key, side } = connector.joins[1];
           const { box, sides } = attached.get(key);
           const others = sides[side].filter((entry) => entry.connector !== connector);
@@ -875,6 +884,117 @@ export function createLayoutChecks(dependencies) {
           }
         }
         for (const message of tangles) addError(message, svg.element);
+        // A connector that leaves a box by one side in a short stub and then turns to pass
+        // another side of that box, or that enters by one side after a short stub turned
+        // from beyond another, takes a bend it does not need: leaving or entering by that
+        // other side reaches the same path directly. The other side must be one the
+        // reading order permits (outputs at the right or bottom, inputs at the left or top,
+        // any side for a return arrow), and the straight piece that replaces the stub and
+        // turn must cross no other connector, label or box. A stub is at most three head
+        // lengths, 24 units when the connector has no head.
+        const cornersOf = (line) => {
+          const tag = line.tagName.toLowerCase();
+          let points = [];
+          if (tag === "line") {
+            points = [{ x: line.x1.baseVal.value, y: line.y1.baseVal.value },
+                      { x: line.x2.baseVal.value, y: line.y2.baseVal.value }];
+          } else if (tag === "polyline") {
+            points = Array.from(line.points, (point) => ({ x: point.x, y: point.y }));
+          } else {
+            const tokens = (line.getAttribute("d") || "").match(/[a-zA-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/g) || [];
+            let x = 0;
+            let y = 0;
+            let command = "";
+            for (let cursor = 0; cursor < tokens.length;) {
+              if (/[a-zA-Z]/.test(tokens[cursor])) {
+                command = tokens[cursor++];
+                if (!/[MmLlHhVv]/.test(command)) return null;
+                continue;
+              }
+              const take = () => Number(tokens[cursor++]);
+              if (command === "M" || command === "L") { x = take(); y = take(); }
+              else if (command === "m" || command === "l") { x += take(); y += take(); }
+              else if (command === "H") x = take();
+              else if (command === "h") x += take();
+              else if (command === "V") y = take();
+              else y += take();
+              points.push({ x, y });
+              if (command === "M") command = "L";
+              if (command === "m") command = "l";
+            }
+          }
+          const placed = points.map((point) => at(line, point));
+          return placed.filter((point, spot) => spot === 0
+            || Math.hypot(point.x - placed[spot - 1].x, point.y - placed[spot - 1].y) > 0.5);
+        };
+        const normals = { left: { x: -1, y: 0 }, right: { x: 1, y: 0 }, top: { x: 0, y: -1 }, bottom: { x: 0, y: 1 } };
+        const beyond = (point, box, side) => (side === "left" ? point.x < box.left - 1
+          : side === "right" ? point.x > box.right + 1 : side === "top" ? point.y < box.top - 1 : point.y > box.bottom + 1);
+        const past = (point, box, side) => (side === "left" ? (box.left - point.x) / placed.scaleX
+          : side === "right" ? (point.x - box.right) / placed.scaleX
+            : side === "top" ? (box.top - point.y) / placed.scaleY : (point.y - box.bottom) / placed.scaleY);
+        const unit = (from, to) => {
+          const length = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+          return { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
+        };
+        const clearRun = (connector, box, from, to) => {
+          const steps = Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / 2));
+          for (let step = 0; step <= steps; step++) {
+            const point = { x: from.x + ((to.x - from.x) * step) / steps, y: from.y + ((to.y - from.y) * step) / steps };
+            if (labels.some(({ box: label }) => label.left < point.x && point.x < label.right
+              && label.top < point.y && point.y < label.bottom)) return false;
+            if (panels.some((other) => other !== box && !(other.left <= box.left && other.right >= box.right
+              && other.top <= box.top && other.bottom >= box.bottom)
+              && other.left < point.x && point.x < other.right && other.top < point.y && point.y < other.bottom)) return false;
+            for (const other of connectors) {
+              if (other === connector || other.guide) continue;
+              const near = (connector.strokeWidth + other.strokeWidth) / 2 + 0.5;
+              if (pointsOf(other).some((spot) => Math.hypot(spot.x - point.x, spot.y - point.y) <= near)) return false;
+            }
+          }
+          return true;
+        };
+        const onSide = (box, side, toward) => (side === "left" || side === "right"
+          ? { x: side === "left" ? box.left : box.right, y: Math.min(box.bottom - 4, Math.max(box.top + 4, toward.y)) }
+          : { x: Math.min(box.right - 4, Math.max(box.left + 4, toward.x)), y: side === "top" ? box.top : box.bottom });
+        let detours = 0;
+        for (const connector of connectors) {
+          const corners = cornersOf(connector.line);
+          if (corners === null || corners.length < 3 || detours >= 3) continue;
+          const stubMost = Math.max(24, 3 * Math.max(...connector.heads));
+          const sides = backward(connector) ? Object.keys(normals) : null;
+          const ends = [
+            { join: connector.joins[0], stub: [corners[0], corners[1]], next: [corners[1], corners[2]], leaving: true },
+            { join: connector.joins[1], stub: [corners.at(-2), corners.at(-1)], next: [corners.at(-3), corners.at(-2)], leaving: false },
+          ];
+          for (const { join, stub, next, leaving } of ends) {
+            if (join === null || detours >= 3) continue;
+            const stubLength = units(stub[1].x - stub[0].x, stub[1].y - stub[0].y);
+            if (stubLength > stubMost) continue;
+            const { box } = attached.get(join.key);
+            const allowed = sides ?? (leaving ? ["right", "bottom"] : ["left", "top"]);
+            const heading = unit(next[0], next[1]);
+            const far = leaving ? next[1] : next[0];
+            // The turn must lie far enough past the other side to use it: room for a short
+            // run when leaving, for the head when entering. Branches that split just above
+            // stacked boxes pass their sides by a few units and are left alone.
+            const space = leaving ? 12 : 1.5 * connector.heads[1];
+            const other = allowed.find((side) => side !== join.side
+              && (heading.x * normals[side].x + heading.y * normals[side].y) * (leaving ? 1 : -1) >= 0.9
+              && beyond(far, box, side) && past(far, box, side) >= space);
+            if (other === undefined) continue;
+            const start = onSide(box, other, leaving ? stub[1] : stub[0]);
+            const reach = normals[other].x !== 0 ? { x: far.x, y: start.y } : { x: start.x, y: far.y };
+            if (!clearRun(connector, box, start, reach)) continue;
+            detours += 1;
+            addError(
+              `page ${index + 1} ${describeElement(svg.element)} connector ${trace(connector)} `
+              + (leaving
+                ? `leaves ${panelName(box)} by its ${join.side} side, turns after ${Math.round(stubLength)} units and passes its ${other} side. Leave by the ${other} side`
+                : `enters ${panelName(box)} by its ${join.side} side after turning ${Math.round(stubLength)} units short of it from beyond its ${other} side. Enter by the ${other} side`),
+              connector.line);
+          }
+        }
         // A label the deck wrapped (data-wrap) records its line count in data-lines; one
         // that needs more lines than its box allows (data-max-lines) is reported with both.
         for (const text of svg.element.querySelectorAll("text[data-max-lines]")) {
