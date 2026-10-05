@@ -343,10 +343,20 @@ def contents_list(body_html: str, count: str | None) -> tuple[str, int | None]:
     # under that text beside whatever number the skin draws. Sub-items make a list long,
     # and one with two or more outer items takes two columns when one column overflows,
     # which the page decides. count, from data-columns, names the count instead. Returns
-    # the list and its column count, None when the page decides.
+    # the list and its column count, None when the page decides. The numbers come from a
+    # CSS counter, which an ol's start attribute does not move, so a list continued on a
+    # second contents page with start="3" has its counter set to begin there.
     body = ContentParser()
     body.feed(body_html)
     body.close()
+    for listing in body.root.children:
+        if not isinstance(listing, Element) or listing.tag != "ol" or "start" not in listing.attributes:
+            continue
+        start = listing.attributes["start"].strip()
+        if not re.fullmatch(r"[1-9]\d*", start):
+            raise ValueError(f'a contents <ol start> is a whole number from 1, not "{start}"')
+        style = listing.attributes.get("style", "").strip().rstrip(";")
+        listing.attributes["style"] = (f"{style}; " if style else "") + f"counter-reset: item {int(start) - 1}"
     items = [item for listing in body.root.children if isinstance(listing, Element) and listing.tag == "ol"
              for item in listing.children if isinstance(item, Element)]
     nested = []

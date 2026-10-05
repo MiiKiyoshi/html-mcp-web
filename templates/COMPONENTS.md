@@ -29,7 +29,9 @@ overflow anywhere above the footer bar, just as it reports body overflow.
 ```
 
 - `contents`: `data-title` draws the heading and the rule under it, and each `<li>`
-  takes its number from a CSS counter, so list order is the numbering. `span.venue` sets
+  takes its number from a CSS counter, so list order is the numbering. A list too long for
+  one page continues on another `contents` page whose `<ol start="3">` begins at 03, so the
+  numbers run on across both. `span.venue` sets
   smaller text before the name and `span.by` after it. For sub-items, end the `<li>`
   with one `<ul>` after its own text. The sub-items do not affect numbering and appear
   as unnumbered lines aligned under the item's text, each in smaller type with a short

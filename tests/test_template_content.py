@@ -360,6 +360,18 @@ def test_contents_columns_are_left_to_the_page_unless_data_columns_names_a_count
             contents_list(plain, wrong)
 
 
+def test_a_contents_list_continued_on_another_page_starts_its_counter_where_it_left_off() -> None:
+    from html_mcp_web.slides.build import contents_list
+
+    assert contents_list('<ol start="3"><li>Speed</li></ol>', None)[0] == (
+        '<ol start="3" style="counter-reset: item 2"><li>Speed</li></ol>')
+    assert contents_list('<ol start="3" style="margin: 0;"><li>Speed</li></ol>', None)[0] == (
+        '<ol start="3" style="margin: 0; counter-reset: item 2"><li>Speed</li></ol>')
+    for wrong in ("0", "three", "-1"):
+        with pytest.raises(ValueError, match="contents <ol start>"):
+            contents_list(f'<ol start="{wrong}"><li>Speed</li></ol>', None)
+
+
 def test_contents_data_scale_marks_the_area_and_takes_only_a_positive_number(tmp_path: Path) -> None:
     from html_mcp_web.slides.build import build
 
