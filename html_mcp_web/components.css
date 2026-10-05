@@ -14,7 +14,9 @@
   --paper: #fffefd;
   --good: #2f756a;
   --bad: #a24b47;
-  --mono: ui-monospace, monospace;
+  /* Deck Mono is the code face the builders embed, so the layout check and every reader
+     measure the same letters. A skin that names another face embeds it too. */
+  --mono: "Deck Mono", ui-monospace, monospace;
   --code-bg: #ecefef;
 
   /* Safari measures a line of text one way when it can take its simplified path and

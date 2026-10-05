@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import html_mcp_web
+from html_mcp_web.slides.build import mono_face
 from html_mcp_web.template_content import parse_template_content
 
 
@@ -58,7 +59,7 @@ def build(content_path: Path, output_path: Path) -> None:
   <title>{content.title}</title>
   <style>
 {css}
-  </style>
+  </style>{mono_face(chr(10).join(pages))}
 </head>
 <body>
   <main class="pages">

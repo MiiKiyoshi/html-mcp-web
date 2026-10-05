@@ -4884,3 +4884,60 @@ def test_a_review_page_shows_the_servers_check_and_measures_nothing_itself(tmp_p
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_code_is_set_in_the_bundled_face_in_a_korean_document(tmp_path: Path) -> None:
+    """Firefox drew code in a Korean document in a CJK face half an em wide per letter,
+    while Chrome and Safari drew 0.6 em, so the layout check passed code lines that ran out
+    of their box on the reader's screen. The deck carries its code face, and a line of code
+    measures 0.6 em a letter whatever the document's language."""
+    from html_mcp_web.slides import build
+
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<!doctype html>\n<meta charset="utf-8">\n<title>Code</title>\n'
+        '<body data-author="A" data-meta="B">\n'
+        '<section data-title="Code"><pre id="code">' + "x" * 40 + '</pre></section>\n'
+        "</body>\n", encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, Path(__file__).resolve().parents[1] / "templates" / "neutral-slides")
+    assert 'font-family: "Deck Mono"' in html.read_text(encoding="utf-8")
+
+    profile = tempfile.mkdtemp(prefix="html_mcp_mono_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(html.as_uri())
+        wait_until(lambda: browser.execute_script("return document.fonts.status === 'loaded'"))
+        per_letter = browser.execute_script("""
+document.documentElement.lang = "ko";
+return document.fonts.ready.then(() => {
+  const code = document.getElementById("code");
+  const range = document.createRange();
+  range.selectNodeContents(code);
+  return range.getBoundingClientRect().width / 40 / parseFloat(getComputedStyle(code).fontSize);
+});
+""")
+        assert abs(per_letter - 0.6) < 0.01, per_letter
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)

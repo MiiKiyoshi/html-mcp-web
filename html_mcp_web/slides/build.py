@@ -292,6 +292,23 @@ def _descendants(element: Element) -> list[Element]:
     return found
 
 
+MONO = HERE / "vendor" / "noto-sans-mono"
+
+
+def mono_face(html_text: str) -> str:
+    """The code face, embedded when the document sets code. Left to the system, Firefox
+    drew code in a Korean document in a CJK face half an em wide per letter while Chrome
+    and Safari drew 0.6 em, so the layout check passed lines that ran out of their box on
+    the reader's screen. Every browser now draws the one face it measures."""
+    if "<pre" not in html_text and "<code" not in html_text:
+        return ""
+    faces = "".join(
+        f'@font-face {{ font-family: "Deck Mono"; font-weight: {weight}; '
+        f'src: url(fonts/NotoSansMono-{name}.woff2) format("woff2"); }}\n'
+        for weight, name in ((400, "Regular"), (700, "Bold")))
+    return f"\n  <style>\n{inline_woff2(faces, MONO)}  </style>"
+
+
 def math_bundle() -> tuple[str, str]:
     """KaTeX for the head and the foot, everything inlined so the file opens offline.
 
@@ -577,7 +594,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
 {SKELETON.read_text(encoding="utf-8")}
 /* ---- skin: {skin_dir.name} ---- */
 {skin.css}
-  </style>{math[0]}
+  </style>{mono_face(body_html)}{math[0]}
 </head>
 <body>
   <main class="pages">

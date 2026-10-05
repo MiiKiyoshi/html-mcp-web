@@ -38,7 +38,9 @@ deck then wraps text identically on every machine that opens it. That is also wh
 lets the review server's layout check speak for what the reader will see: left to the
 reader's own fonts, a line that fits on one machine folds on another. Subset the face
 to the characters decks use (`fontTools.subset` writes woff2) so two weights stay near
-1 MB rather than 10.
+1 MB rather than 10. Code is set in `--mono`, which names Deck Mono, a subset of Noto
+Sans Mono that the builder embeds whenever a document sets code. A skin that sets
+`--mono` to another face embeds that face the same way.
 
 The pptx export rebuilds every deck the same way from its rendered HTML, so a skin needs
 no pptx of its own; its look already lives in `skin.css`. The only thing `skin.json` can
