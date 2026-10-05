@@ -327,16 +327,18 @@ def test_inline_svg_is_embedded_as_vector_math_stays_raster(tmp_path: Path) -> N
     result = export_pptx(html.as_uri(), out, tmp_path, None)
     diagram = next(p for p in result["pages"] if p["title"] == "Diagram")
     formula = next(p for p in result["pages"] if p["title"] == "Formula")
-    # A figure holding a formula in a foreignObject goes in as a picture: PowerPoint's
-    # svg drawing leaves the formula out.
+    # A formula written in a figure's foreignObject is lifted over the svg, so the figure
+    # still goes in as a vector and the formula as a picture of its own.
     figure = next(p for p in result["pages"] if p["title"] == "Figure formula")
-    assert diagram["vector_svgs"] == 1 and formula["vector_svgs"] == 0 and figure["vector_svgs"] == 0
+    assert diagram["vector_svgs"] == 1 and formula["vector_svgs"] == 0 and figure["vector_svgs"] == 1
     with zipfile.ZipFile(out) as archive:
         svg_parts = [n for n in archive.namelist() if n.endswith(".svg")]
-        assert len(svg_parts) == 1
+        assert len(svg_parts) == 2
         # The embedded svg's viewBox aspect is normalized to the picture frame so PowerPoint,
         # which fills the frame, does not stretch the drawing.
-        svg_text = archive.read(svg_parts[0]).decode("utf-8")
+        diagram_rels = archive.read("ppt/slides/_rels/slide2.xml.rels").decode("utf-8")
+        svg_name = re.search(r'Target="\.\./media/([^"]+\.svg)"', diagram_rels).group(1)
+        svg_text = archive.read(f"ppt/media/{svg_name}").decode("utf-8")
         vb = [float(v) for v in re.search(r'viewBox="([^"]+)"', svg_text).group(1).split()]
         pic = next(sh for sh in pptx.Presentation(str(out)).slides[1].shapes if sh.shape_type is not None and "PICTURE" in str(sh.shape_type))
         assert abs(vb[2] / vb[3] - pic.width / pic.height) < 0.01

@@ -148,22 +148,40 @@ def test_math_deck_carries_katex_offline(tmp_path: Path) -> None:
 
 def test_a_formula_in_a_figure_goes_in_a_foreign_object(tmp_path: Path) -> None:
     """The renderer puts HTML in place of a formula and an svg <text> draws none, so a
-    formula there vanished. It stops the build, naming the formula; one in a
-    <foreignObject> builds, and a lone dollar in a label is no formula."""
+    formula there vanished. It stops the build, naming the formula, and a lone dollar in
+    a label is no formula. A formula in a <foreignObject> builds, lifted into a layer
+    over the svg in the viewBox's units, with an unfilled rect keeping its place."""
     from html_mcp_web.slides.build import build
 
     content = tmp_path / "content.html"
     deck = ('<title>Deck</title><body data-author="R" data-meta="Lab"><section data-title="Figure">'
-            '<svg viewBox="0 0 300 100"><text x="4" y="20">{label}</text>'
-            '<foreignObject x="4" y="40" width="200" height="40"><div>$C_{{tot}}$</div></foreignObject>'
+            '<svg viewBox="10 0 300 100"><text x="14" y="20">{label}</text>'
+            '<foreignObject x="14" y="40" width="200" height="40"><div>$C_{{tot}}$</div></foreignObject>'
             '</svg></section></body>')
+    skin = REPO / "templates" / "neutral-slides"
     content.write_text(deck.format(label="cost in $ per unit"), encoding="utf-8")
-    build(content, tmp_path / "slides.html", REPO / "templates" / "neutral-slides")
+    build(content, tmp_path / "slides.html", skin)
     built = (tmp_path / "slides.html").read_text(encoding="utf-8")
-    assert "<div>$C_{tot}$</div></foreignobject>" in built and "renderMathInElement" in built
+    pages = built.split('<main class="pages">')[1].split("</main>")[0]
+    assert "foreignobject" not in pages.lower() and "renderMathInElement" in built
+    assert ('<rect x="14" y="40" width="200" height="40" fill="none" data-html-slot></rect></svg>'
+            '<div class="svg-html-layer" data-viewbox="300 100" style="width: 300px; height: 100px">'
+            '<div class="svg-html-box" style="left: 4px; top: 40px; width: 200px; height: 40px">'
+            '<div>$C_{tot}$</div></div></div></div>') in built
+    assert '<div class="svg-html"><svg viewbox="10 0 300 100">' in built and "svg-html-layer\")" in built
     content.write_text(deck.format(label=r"total $C = \sum C_i$"), encoding="utf-8")
     with pytest.raises(ValueError, match=r'the formula "\$C = \\sum C_i\$" in an svg <text> is not drawn'):
-        build(content, tmp_path / "slides.html", REPO / "templates" / "neutral-slides")
+        build(content, tmp_path / "slides.html", skin)
+    # The layer needs the viewBox's units and the svg's own placement of them.
+    figure = deck.format(label="plain")
+    for wrong, message in ((figure.replace(' viewBox="10 0 300 100"', ""), "needs a viewBox"),
+                           (figure.replace("<foreignObject", "<g><foreignObject").replace("</foreignObject>", "</foreignObject></g>"),
+                            "directly in its <svg>"),
+                           (figure.replace("<svg", "<p><svg").replace("</svg>", "</svg></p>"), "outside a <p>"),
+                           (figure.replace('height="40"', 'height="forty"'), 'number for height, not "forty"')):
+        content.write_text(wrong, encoding="utf-8")
+        with pytest.raises(ValueError, match=message):
+            build(content, tmp_path / "slides.html", skin)
 
 
 def test_skin_fonts_are_embedded_like_katex_fonts(tmp_path: Path) -> None:

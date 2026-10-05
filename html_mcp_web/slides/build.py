@@ -89,6 +89,33 @@ CONTENTS_FIT_SCRIPT = """<script>
 })();
 </script>"""
 
+# The layer of a figure's lifted HTML is drawn in the svg's own units, as its
+# foreignObject was: it takes the scale and offset the default viewBox fit gives the
+# svg inside its box. Both are measured in layout pixels, so a transform scaling the
+# whole page, the deck's or the viewer's, applies to the layer once, like the svg. The
+# box is measured again when its size changes, which a page that was not drawn gets.
+SVG_HTML_SCRIPT = """<script>
+(() => {
+  const place = (layer) => {
+    const holder = layer.parentElement;
+    const svg = holder.firstElementChild;
+    if (holder.offsetWidth === 0) return;
+    const [width, height] = layer.dataset.viewbox.split(" ").map(Number);
+    const outer = holder.getBoundingClientRect();
+    const zoom = outer.width / holder.offsetWidth;
+    const box = svg.getBoundingClientRect();
+    const w = box.width / zoom, h = box.height / zoom;
+    const k = Math.min(w / width, h / height);
+    const x = (box.left - outer.left) / zoom + (w - width * k) / 2;
+    const y = (box.top - outer.top) / zoom + (h - height * k) / 2;
+    layer.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
+  };
+  const layers = Array.from(document.querySelectorAll(".svg-html-layer"));
+  const sized = new ResizeObserver((entries) => entries.forEach((entry) => place(entry.target.lastElementChild)));
+  layers.forEach((layer) => { place(layer); sized.observe(layer.parentElement); });
+})();
+</script>"""
+
 # Widths the embedded images are downscaled to; a slot only needs what its box shows.
 SLOT_WIDTHS = {
     "cover_band_left": 500,
@@ -194,6 +221,75 @@ def check_svg_math(body_html: str) -> None:
             visit(child, in_svg or child.tag == "svg")
 
     visit(body.root, False)
+
+
+def lift_svg_html(body_html: str) -> str:
+    # A figure's HTML, such as a formula, is written in a <foreignObject> of its svg. On a
+    # scaled page Safari drew that HTML away from its place while the rest of the page
+    # stood right, so the builder lifts it into a layer over the svg, which the deck's
+    # script places and scales to the viewBox. An unfilled rect marked data-html-slot
+    # keeps its place in the drawing, so the drawing's extent stays what it was, and the
+    # layout check takes it for no box a label sits on.
+    if "<foreignobject" not in body_html.lower():
+        return body_html
+    body = ContentParser()
+    body.feed(body_html)
+    body.close()
+
+    def number(element: Element, name: str, default: str | None = None) -> float:
+        value = element.attributes.get(name, default)
+        if value is None or not re.fullmatch(r"-?\d*\.?\d+", value.strip()):
+            raise ValueError(f'a <foreignObject> needs a number for {name}, not "{value}"')
+        return float(value)
+
+    def lift(svg: Element) -> Element:
+        if any(isinstance(inner, Element) and inner.tag == "foreignobject"
+               for child in svg.children if isinstance(child, Element) for inner in _descendants(child)):
+            raise ValueError("a <foreignObject> sits directly in its <svg>, not inside a group")
+        if svg.attributes.get("preserveaspectratio", "xMidYMid meet").strip() not in ("xMidYMid", "xMidYMid meet"):
+            raise ValueError("an <svg> holding a <foreignObject> keeps the default preserveAspectRatio")
+        view = svg.attributes.get("viewbox", "").replace(",", " ").split()
+        if len(view) != 4:
+            raise ValueError("an <svg> holding a <foreignObject> needs a viewBox")
+        left, top, width, height = (float(value) for value in view)
+        boxes = []
+        for index, child in enumerate(svg.children):
+            if not isinstance(child, Element) or child.tag != "foreignobject":
+                continue
+            x, y = number(child, "x", "0"), number(child, "y", "0")
+            w, h = number(child, "width"), number(child, "height")
+            svg.children[index] = Element("rect", {"x": f"{x:g}", "y": f"{y:g}", "width": f"{w:g}",
+                                                   "height": f"{h:g}", "fill": "none", "data-html-slot": ""})
+            boxes.append(Element("div", {"class": "svg-html-box", "style":
+                                         f"left: {x - left:g}px; top: {y - top:g}px; width: {w:g}px; height: {h:g}px"},
+                                 child.children))
+        layer = Element("div", {"class": "svg-html-layer", "data-viewbox": f"{width:g} {height:g}",
+                                "style": f"width: {width:g}px; height: {height:g}px"}, boxes)
+        return Element("div", {"class": "svg-html"}, [svg, layer])
+
+    def visit(element: Element, in_paragraph: bool) -> None:
+        for index, child in enumerate(element.children):
+            if not isinstance(child, Element):
+                continue
+            if child.tag == "svg":
+                if any(isinstance(inner, Element) and inner.tag == "foreignobject" for inner in _descendants(child)):
+                    if in_paragraph:
+                        raise ValueError("a figure holding a <foreignObject> stands outside a <p>")
+                    element.children[index] = lift(child)
+                continue
+            visit(child, in_paragraph or child.tag == "p")
+
+    visit(body.root, False)
+    return body.root.inner_html()
+
+
+def _descendants(element: Element) -> list[Element]:
+    found = []
+    for child in element.children:
+        if isinstance(child, Element):
+            found.append(child)
+            found.extend(_descendants(child))
+    return found
 
 
 def math_bundle() -> tuple[str, str]:
@@ -413,6 +509,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
         # Opening and closing summaries bound the body; only the content between them
         # shares the remaining height. The closing summary uses the skin's lead styling.
         content_html, cited = cite_references(section.body_html, content.references, numbers)
+        content_html = lift_svg_html(content_html)
         # Comments before the lead, such as the skeleton's note on it, do not hide it.
         lead = re.match(r'\s*(?:<!--.*?-->\s*)*<p class="lead">.*?</p>', content_html, re.S)
         opening = lead.group(0).strip() if lead is not None else ""
@@ -477,7 +574,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
 
 {body_html}
 
-  </main>{math[1]}{wrap}{CONTENTS_FIT_SCRIPT if "data-contents-fit" in body_html else ""}
+  </main>{math[1]}{wrap}{CONTENTS_FIT_SCRIPT if "data-contents-fit" in body_html else ""}{SVG_HTML_SCRIPT if "svg-html-layer" in body_html else ""}
 {FIT_SCRIPT}
 </body>
 </html>

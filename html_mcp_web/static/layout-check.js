@@ -647,8 +647,10 @@ export function createLayoutChecks(dependencies) {
         // same svg that holds the point the label is anchored at (its left edge, its
         // middle or its right edge, by text-anchor); a label on no box is on none. Only
         // the sides are compared: a label that runs off the box's top or bottom is caught
-        // as an overlap, or is a caption above the box.
-        const boxes = Array.from(svg.element.querySelectorAll("rect"))
+        // as an overlap, or is a caption above the box. The slot the builder leaves where
+        // a foreignObject's HTML was lifted out is no box: a label beside a formula sat
+        // in the slot's corner and was reported past it.
+        const boxes = Array.from(svg.element.querySelectorAll("rect:not([data-html-slot])"))
           .filter((rect) => rect.closest("defs, symbol, clipPath, mask, pattern, marker") === null)
           .map((rect) => inViewport(rect))
           .filter((box) => box !== null);

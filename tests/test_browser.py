@@ -1151,6 +1151,67 @@ return Array.from(document.querySelectorAll("section.page.contents")).map((page)
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_html_lifted_from_a_figure_stays_on_its_place_in_the_drawing(tmp_path: Path) -> None:
+    """Safari drew the HTML in a figure's foreignObject away from its place on a scaled
+    page. The builder lifts it into a layer over the svg, and the deck's script maps the
+    layer to the viewBox: a box sits where its foreignObject would, in a figure drawn at
+    half its viewBox and on a page the window scales down."""
+    from html_mcp_web.slides import build
+
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<!doctype html>\n<meta charset="utf-8">\n<title>Lifted</title>\n'
+        '<body data-author="A" data-meta="B">\n'
+        '<section data-title="Figure"><svg viewBox="0 0 600 200" width="300" height="100">'
+        '<rect x="0" y="0" width="600" height="200" fill="#eee"/>'
+        '<foreignObject x="100" y="50" width="200" height="40"><div>box</div></foreignObject>'
+        '</svg></section>\n'
+        "</body>\n", encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, Path(__file__).resolve().parents[1] / "templates" / "neutral-slides")
+
+    profile = tempfile.mkdtemp(prefix="html_mcp_lifted_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(html.as_uri())
+        wait_until(lambda: browser.execute_script("return !!document.querySelector('.svg-html-box')"))
+        measure = """
+const page = document.querySelectorAll("section.page")[1];
+if (arguments[0] !== 1) { page.style.transform = `scale(${arguments[0]})`; page.style.transformOrigin = "0 0"; }
+const svg = document.querySelector(".svg-html > svg").getBoundingClientRect();
+const box = document.querySelector(".svg-html-box").getBoundingClientRect();
+const s = svg.width / 600;
+return [box.left - (svg.left + 100 * s), box.top - (svg.top + 50 * s), box.width - 200 * s, box.height - 40 * s, s];
+"""
+        for scale in (1, 0.8):
+            *offsets, drawn = browser.execute_script(measure, script_args=[scale])
+            assert abs(drawn - 0.5 * scale) < 0.001, drawn
+            assert all(abs(value) < 0.5 for value in offsets), (scale, offsets)
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_takeaway_keeps_lead_typography_and_body_geometry_across_skins(tmp_path: Path) -> None:
     """A final takeaway uses the lead's face while the body keeps its opening and spread.
 
