@@ -634,7 +634,7 @@ def test_guide_names_the_file_to_edit_and_what_to_read(tmp_path: Path) -> None:
         assert set(guided) == {"edit_file", "read"}
         assert answer(mcp.call_tool("guide", {})) == guided
         assert guided["edit_file"] == str(tmp_path / "slides.html")
-        assert [Path(path).name for path in guided["read"]] == ["README.md", "COMPONENTS.md"]
+        assert [Path(path).name for path in guided["read"]] == ["README.md", "PRODUCTION.md", "COMPONENTS.md"]
         assert all(Path(path).is_file() for path in guided["read"])
         assert "reader-facing unit" not in json.dumps(guided, ensure_ascii=False)
         with pytest.raises(Exception, match="unknown artifact"):

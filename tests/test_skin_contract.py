@@ -1,6 +1,6 @@
 """A skin restyles the engine's components; it never introduces one.
 
-Content is written against the vocabulary in templates/README.md, so a class that only
+Content is written against the vocabulary in templates/COMPONENTS.md, so a class that only
 one skin styles renders bare under every other skin. This checks the rule against the
 shipped skin, and against the reader's own skins when they are installed. The vocabulary
 is read from both sheets a deck is built from: components.css says what a component is,
@@ -93,7 +93,7 @@ def test_installed_skins_introduce_no_component(skin: Path) -> None:
     offenders = unknown_components(skin)
     assert offenders == {}, (
         f"{skin} styles classes the skeleton does not define: {offenders}. "
-        "Add the component to slides/skeleton.css and templates/README.md, then let the "
+        "Add the component to slides/skeleton.css and templates/COMPONENTS.md, then let the "
         "skin restyle it."
     )
 

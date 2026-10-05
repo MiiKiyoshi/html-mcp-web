@@ -183,7 +183,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             raise RuntimeError(f"unknown artifact: {artifact}; available artifacts: {', '.join(artifacts)}")
         entry = artifacts[artifact]
         docs = Path(__file__).resolve().parent.parent / "templates"
-        read = [str(docs / "README.md"), str(docs / "COMPONENTS.md")]
+        read = [str(docs / "README.md"), str(docs / "PRODUCTION.md"), str(docs / "COMPONENTS.md")]
         if "template_dir" in entry and entry["template_dir"] is not None:
             notes = Path(entry["template_dir"]) / "README.md"
             if notes.is_file():

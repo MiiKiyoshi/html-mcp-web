@@ -3,7 +3,8 @@
 Content conventions for presentation material. Each package lives at
 `guidelines/<name>/GUIDELINE.md`. Related references, fixtures, and scripts stay in the
 same package when they exist. Page geometry belongs to template documentation. Shared
-components and production procedures belong to `templates/COMPONENTS.md`.
+components belong to `templates/COMPONENTS.md` and production rules to
+`templates/PRODUCTION.md`.
 
 Public packages belong in this directory. User-owned packages belong under
 `~/.config/html-mcp-web/guidelines/<name>/` and remain outside the repository.
