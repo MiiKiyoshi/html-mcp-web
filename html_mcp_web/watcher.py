@@ -5,7 +5,6 @@ import errno
 import fnmatch
 import logging
 import os
-from concurrent.futures import Future
 from pathlib import Path
 from typing import Any, Callable, Coroutine
 
@@ -35,8 +34,12 @@ class HtmlFileHandler(FileSystemEventHandler):
         self.loop = loop
         self.debounce_seconds = debounce_seconds
         self.on_new_directory = on_new_directory
-        self.pending_task: Future[Any] | None = None
-        self.pending_path: str | None = None
+        # Paths changed since the last pass, in the order they first changed, the timer that
+        # starts the next pass once they settle, and the pass running now. All three are
+        # kept on the loop's thread.
+        self.pending: dict[str, None] = {}
+        self.timer: asyncio.TimerHandle | None = None
+        self.running: asyncio.Task[None] | None = None
 
     def ignores(self, name: str) -> bool:
         """Whether a top-level entry of this name is one the config leaves out."""
@@ -69,26 +72,44 @@ class HtmlFileHandler(FileSystemEventHandler):
         return value.decode("utf-8", errors="replace") if isinstance(value, bytes) else value
 
     def _schedule(self, path: str) -> None:
-        self.pending_path = path
-        if self.pending_task is not None and not self.pending_task.done():
-            self.pending_task.cancel()
+        # Events arrive on the observer's thread, and the loop's thread takes them.
+        self.loop.call_soon_threadsafe(self._note, path)
 
-        async def delayed() -> None:
-            await asyncio.sleep(self.debounce_seconds)
-            if self.pending_path is None:
-                raise RuntimeError("pending path disappeared")
-            await self.callback(self.pending_path)
+    def _note(self, path: str) -> None:
+        # Every changed path is kept until a pass takes it. One remembered path let the
+        # build's own output, written while a late write to the content was waiting, take
+        # the content's place, and the content's last write was never built. A new change
+        # restarts only the wait, never a pass already running: cancelled mid-build, the
+        # pass lost the reload and check it was about to start.
+        self.pending[path] = None
+        if self.timer is not None:
+            self.timer.cancel()
+        self.timer = self.loop.call_later(self.debounce_seconds, self._flush)
 
-        self.pending_task = asyncio.run_coroutine_threadsafe(delayed(), self.loop)
-        self.pending_task.add_done_callback(self._report_callback_result)
+    def _flush(self) -> None:
+        self.timer = None
+        if self.running is not None and not self.running.done():
+            return  # the running pass takes these when it ends
+        paths = list(self.pending)
+        self.pending.clear()
+        self.running = self.loop.create_task(self._run(paths))
 
-    @staticmethod
-    def _report_callback_result(result: Future[Any]) -> None:
-        if result.cancelled():
-            return
-        error = result.exception()
-        if error is not None:
-            logger.error("File update callback failed: %s", error)
+    async def _run(self, paths: list[str]) -> None:
+        for path in paths:
+            try:
+                await self.callback(path)
+            except Exception as error:
+                logger.error("File update callback failed: %s", error)
+        self.running = None
+        if self.pending and self.timer is None:
+            self._flush()
+
+    def cancel(self) -> None:
+        if self.timer is not None:
+            self.timer.cancel()
+            self.timer = None
+        if self.running is not None:
+            self.running.cancel()
 
     def on_modified(self, event: FileSystemEvent) -> None:
         if not event.is_directory:
@@ -286,8 +307,8 @@ class Watcher:
             self._schedule(entry)
 
     def stop(self) -> None:
-        if self.handler is not None and self.handler.pending_task is not None:
-            self.handler.pending_task.cancel()
+        if self.handler is not None:
+            self.handler.cancel()
         if self.observer is not None:
             self.observer.stop()
             self.observer.join(timeout=5)

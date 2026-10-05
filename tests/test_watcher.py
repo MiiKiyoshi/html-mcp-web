@@ -98,3 +98,43 @@ def test_a_root_that_appears_later_is_watched(tmp_path: Path) -> None:
 
 async def _unused_change(path: str) -> None:
     raise AssertionError("no file was changed in this test")
+
+
+def test_a_write_that_lands_during_its_build_is_built_again(tmp_path: Path) -> None:
+    """A content file written three times within a second was built from the state before
+    the last write and never rebuilt. The last write landed while its build ran, and the
+    build's own output then took its place as the one path the watcher remembered; the
+    build itself was cancelled when the late write arrived. The build now runs to its end,
+    and the late write gets a build of its own."""
+    import threading
+
+    content, output = str(tmp_path / "content.html"), str(tmp_path / "out.html")
+    calls: list[tuple[str, str]] = []
+    loop = asyncio.new_event_loop()
+    threading.Thread(target=loop.run_forever, daemon=True).start()
+
+    async def changed(path: str) -> None:
+        calls.append(("start", Path(path).name))
+        if calls.count(("start", "content.html")) == 1 and path == content:
+            def late() -> None:
+                time.sleep(0.05)
+                handler._schedule(content)
+                time.sleep(0.1)
+                handler._schedule(output)
+            threading.Thread(target=late).start()
+            time.sleep(0.3)  # the build blocks the loop, as the server's does
+        await asyncio.sleep(0)
+        calls.append(("end", Path(path).name))
+
+    handler = HtmlFileHandler(tmp_path, ["*.html"], [], changed, loop, debounce_seconds=0.1)
+    try:
+        handler._schedule(content)
+        deadline = time.monotonic() + 3
+        while calls.count(("end", "out.html")) < 1:
+            assert time.monotonic() < deadline, calls
+            time.sleep(0.05)
+        assert calls == [("start", "content.html"), ("end", "content.html"),
+                         ("start", "content.html"), ("end", "content.html"),
+                         ("start", "out.html"), ("end", "out.html")]
+    finally:
+        loop.call_soon_threadsafe(loop.stop)
