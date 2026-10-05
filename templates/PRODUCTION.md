@@ -44,7 +44,7 @@ Check the rendered page and its layout before requesting independent review.
 
 Use a reader who did not build the deck to find problems visible in the finished explanation.
 
-4.1 Before handing off a new deck or a revision across the deck, complete independent review after `layout()` returns an empty `errors` list and the configured content guideline's Article 7 checks pass. Run one review round by default, with another only at the requester's direction.
+4.1 Before handing off a new deck or a revision across the deck, complete independent review after `layout()` returns an empty `errors` list, the configured content guideline's Article 7 checks pass, and the author completes the request checks in neutral clauses 8.2 and 8.3. Run one review round by default, with another only at the requester's direction.
 
 4.2 Use a reader who did not build the deck, such as a new agent or session. Give that reader only the built deck to view, page images from `image()`, and the instruction in 4.4. Do not provide the guideline, template documentation, planning files, sources, or an account of how the deck was made.
 
