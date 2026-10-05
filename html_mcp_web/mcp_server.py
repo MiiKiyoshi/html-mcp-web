@@ -147,7 +147,7 @@ def _compact(tool):
     @functools.wraps(tool)
     async def answer(*args, **kwargs):
         result = await tool(*args, **kwargs)
-        return result if isinstance(result, (Image, list)) else json.dumps(result, ensure_ascii=False)
+        return result if isinstance(result, (Image, list, str)) else json.dumps(result, ensure_ascii=False)
     return answer
 
 
@@ -342,7 +342,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     @_compact
     async def image(
         artifact: str,
-        page: Annotated[int, Field(ge=1)],
+        page: Annotated[int | None, Field(ge=1, description="Omit with save to write every page, p1.png on, into out as a folder.")] = None,
         target: Annotated[str | None, Field(description="A block ref from layout() (e.g. p8:1.1.0.2): render just that block, for fewer tokens.")] = None,
         dpi: Annotated[int, Field(ge=36, le=300, description="96 reads text. 150 or more shows fine detail at more tokens.")] = 96,
         grayscale: Annotated[bool, Field(description="Set false when colour itself is being checked.")] = True,
@@ -351,19 +351,33 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     ) -> "Image":
         """Render one page, or one block of it, as an image."""
         client = binding.require_client()
-        params = f"?page={page}&dpi={dpi}&gray={'1' if grayscale else '0'}"
+        # A grey picture says nothing of whether the page is grey, so a grey render says so.
+        grey = "Grayscale render. Pass grayscale=false to see colour."
+        colour = f"dpi={dpi}&gray={'1' if grayscale else '0'}"
+        if page is None:
+            # Pages handed to a reader one call each spent an answer per page in the
+            # transcript; one call writes them all from one print.
+            if not save or target is not None:
+                raise ValueError("page is needed unless save writes every page")
+            folder = out if out is not None else f".html-mcp-web/renders/{artifact}"
+            saved = await client.request_json(
+                "GET", f"/artifacts/{artifact}/render/pages?{colour}&save={quote(folder)}", timeout=600.0)
+            written = f"{saved['path']}: p1.png to p{saved['pages']}.png"
+            return [written, grey] if grayscale else written
+        params = f"?page={page}&{colour}"
         if target is not None:
             params += f"&target={quote(target)}"
         if not save:
             data = await client.get_bytes(f"/artifacts/{artifact}/render/page{params}", timeout=120.0)
-            # A grey picture says nothing of whether the page is grey, so a grey render says so.
-            return [Image(data=data, format="png"),
-                    "Grayscale render. Pass grayscale=false to see colour."] if grayscale else Image(data=data, format="png")
+            return [Image(data=data, format="png"), grey] if grayscale else Image(data=data, format="png")
         # The server writes the file, so its watcher does not take the render for an edit.
+        # The answer is the file's place alone: the page, scale and colour are what the
+        # caller asked for.
         name = f"{artifact}-{target.replace(':', '-')}.png" if target is not None else f"{artifact}-p{page}.png"
         relative = out if out is not None else f".html-mcp-web/renders/{name}"
-        return await client.request_json(
+        saved = await client.request_json(
             "GET", f"/artifacts/{artifact}/render/page{params}&save={quote(relative)}", timeout=120.0)
+        return [saved["path"], grey] if grayscale else saved["path"]
 
     @mcp.tool(structured_output=False)
     @_compact

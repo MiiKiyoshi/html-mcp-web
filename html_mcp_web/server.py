@@ -641,19 +641,60 @@ class HtmlReviewServer:
         return web.FileResponse(out, headers={
             "Content-Disposition": f'attachment; filename="{out.name}"', "Cache-Control": "no-store"})
 
+    @staticmethod
+    def _render_options(request: web.Request) -> tuple[int, bool]:
+        try:
+            dpi = int(request.query["dpi"]) if "dpi" in request.query else 96
+        except ValueError as error:
+            raise web.HTTPBadRequest(text="dpi must be an integer") from error
+        if not 36 <= dpi <= 300:
+            raise web.HTTPBadRequest(text="dpi must be in 36..300")
+        gray_value = request.query["gray"] if "gray" in request.query else "1"
+        if gray_value not in {"0", "1"}:
+            raise web.HTTPBadRequest(text="gray must be 0 or 1")
+        return dpi, gray_value == "1"
+
+    def _save_render(self, relative: str, png: bytes) -> Path:
+        # Saved here rather than by the caller, so the server knows the file as its own.
+        out = (self.project_dir / relative).resolve()
+        if not out.is_relative_to(self.project_dir):
+            raise web.HTTPBadRequest(text="save must stay inside the project directory")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(png)
+        state = out.stat()
+        self.saved_renders[out] = (state.st_mtime_ns, state.st_size)
+        return out
+
+    async def _printed(self, runtime: ArtifactRuntime) -> bytes:
+        try:
+            return await self._pdf(runtime)
+        except Exception as error:
+            raise web.HTTPServiceUnavailable(text=f"PDF export failed: {error}") from error
+
+    async def render_pages(self, request: web.Request) -> web.Response:
+        """Every page as a png in one folder, from one print: a reviewer handed a deck's
+        pages took one call per page, each answer spent in the transcript."""
+        runtime = self.runtime(request)
+        dpi, gray = self._render_options(request)
+        if "save" not in request.query:
+            raise web.HTTPBadRequest(text="save names the folder the pages go into")
+        folder = request.query["save"]
+        pdf = await self._printed(runtime)
+        import fitz
+        with fitz.open(stream=pdf, filetype="pdf") as doc:
+            colorspace = fitz.csGRAY if gray else fitz.csRGB
+            for number, page in enumerate(doc, 1):
+                self._save_render(f"{folder}/p{number}.png", page.get_pixmap(dpi=dpi, colorspace=colorspace).tobytes("png"))
+            pages = doc.page_count
+        return web.json_response({"path": str((self.project_dir / folder).resolve()), "pages": pages})
+
     async def render_page(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         try:
-            page = int(request.query["page"]) if "page" in request.query else 1
-            dpi = int(request.query["dpi"]) if "dpi" in request.query else 96
-            gray_value = request.query["gray"] if "gray" in request.query else "1"
-        except ValueError as error:
-            raise web.HTTPBadRequest(text="page and dpi must be integers") from error
-        if not 36 <= dpi <= 300:
-            raise web.HTTPBadRequest(text="dpi must be in 36..300")
-        if gray_value not in {"0", "1"}:
-            raise web.HTTPBadRequest(text="gray must be 0 or 1")
-        gray = gray_value == "1"
+            page = int(request.query["page"])
+        except (KeyError, ValueError) as error:
+            raise web.HTTPBadRequest(text="page must be an integer") from error
+        dpi, gray = self._render_options(request)
         # A one-line fix in one block does not need the whole page back: a target ref crops
         # the render to that block, at a fraction of the tokens the full page costs.
         target_ref = request.query.get("target")
@@ -672,10 +713,7 @@ class HtmlReviewServer:
             if space_page is None or target_ref not in space_page["nodes"]:
                 raise web.HTTPNotFound(text=f"unknown target {target_ref!r} on page {page}")
             target_box = (space_page["nodes"][target_ref]["bbox"], space_page["bbox"])
-        try:
-            pdf = await self._pdf(runtime)
-        except Exception as error:
-            raise web.HTTPServiceUnavailable(text=f"PDF export failed: {error}") from error
+        pdf = await self._printed(runtime)
         import fitz
         with fitz.open(stream=pdf, filetype="pdf") as doc:
             if not 1 <= page <= doc.page_count:
@@ -698,15 +736,7 @@ class HtmlReviewServer:
             png = doc[page - 1].get_pixmap(dpi=dpi, colorspace=colorspace, clip=clip).tobytes("png")
         if "save" not in request.query:
             return web.Response(body=png, content_type="image/png")
-        # Saved here rather than by the caller, so the server knows the file as its own.
-        out = (self.project_dir / request.query["save"]).resolve()
-        if not out.is_relative_to(self.project_dir):
-            raise web.HTTPBadRequest(text="save must stay inside the project directory")
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_bytes(png)
-        state = out.stat()
-        self.saved_renders[out] = (state.st_mtime_ns, state.st_size)
-        return web.json_response({"path": str(out), "bytes": len(png), "page": page, "dpi": dpi, "grayscale": gray})
+        return web.json_response({"path": str(self._save_render(request.query["save"], png))})
 
     async def project_file(self, request: web.Request) -> web.StreamResponse:
         relative = request.match_info["path"]
@@ -1547,6 +1577,7 @@ class HtmlReviewServer:
         app.router.add_post(f"{base}/export/pptx", self.export_pptx)
         app.router.add_get(f"{base}/download/pptx", self.download_pptx)
         app.router.add_get(f"{base}/render/page", self.render_page)
+        app.router.add_get(f"{base}/render/pages", self.render_pages)
         app.router.add_post(f"{base}/layout", self.update_layout)
         app.router.add_get(f"{base}/space", self.measure_space)
         app.router.add_get(f"{base}/layout", self.layout_state)

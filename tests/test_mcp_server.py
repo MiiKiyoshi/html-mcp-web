@@ -191,7 +191,8 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         assert "required" not in schemas["guide"]
         assert schemas["read_comments"]["required"] == ["artifact"]
         assert schemas["write_comments"]["required"] == ["artifact", "action"]
-        assert schemas["image"]["required"] == ["artifact", "page"]
+        # Without a page, save writes every page.
+        assert schemas["image"]["required"] == ["artifact"]
         assert schemas["image"]["properties"]["dpi"]["minimum"] == 36
         assert schemas["image"]["properties"]["dpi"]["maximum"] == 300
         assert set(schemas["image"]["properties"]) >= {"save", "out", "target"}
@@ -533,18 +534,28 @@ def test_image_save_writes_a_png_and_returns_its_path(tmp_path: Path) -> None:
         mcp = create_server(binding)
         content = asyncio.run(mcp.call_tool(
             "image", {"artifact": "slides", "page": 1, "save": True}))
-        saved = json.loads(content[0].text)
-        target = Path(saved["path"])
+        # The answer is the file's place, not the page, scale and colour the call named.
+        target = Path(content[0].text)
         assert target == tmp_path / ".html-mcp-web" / "renders" / "slides-p1.png"
         # A grey picture does not say whether the page is grey: the answer says it.
-        assert saved["grayscale"] is True
+        assert [part.text for part in content[1:]] == ["Grayscale render. Pass grayscale=false to see colour."]
+        coloured_file = asyncio.run(mcp.call_tool(
+            "image", {"artifact": "slides", "page": 1, "save": True, "grayscale": False, "out": "p1.png"}))
+        assert [part.text for part in coloured_file] == [str(tmp_path / "p1.png")]
+        # Without a page, save writes every page from one print and names the folder once.
+        every = asyncio.run(mcp.call_tool(
+            "image", {"artifact": "slides", "save": True, "grayscale": False, "out": "pages"}))
+        written = sorted(path.name for path in (tmp_path / "pages").iterdir())
+        assert every[0].text == f"{tmp_path / 'pages'}: p1.png to p{len(written)}.png" and len(every) == 1
+        assert written == [f"p{number}.png" for number in sorted(range(1, len(written) + 1), key=lambda n: f"p{n}.png")]
+        with pytest.raises(Exception, match="page is needed unless save"):
+            asyncio.run(mcp.call_tool("image", {"artifact": "slides"}))
         shown = asyncio.run(mcp.call_tool("image", {"artifact": "slides", "page": 1}))
         assert [part.type for part in shown] == ["image", "text"]
         assert shown[1].text == "Grayscale render. Pass grayscale=false to see colour."
         coloured = asyncio.run(mcp.call_tool("image", {"artifact": "slides", "page": 1, "grayscale": False}))
         assert [part.type for part in coloured] == ["image"]
         assert target.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
-        assert saved["bytes"] == target.stat().st_size
         with pytest.raises(Exception, match="inside the project"):
             asyncio.run(mcp.call_tool(
                 "image", {"artifact": "slides", "page": 1, "save": True, "out": "../escape.png"}))
