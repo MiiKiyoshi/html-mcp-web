@@ -261,9 +261,10 @@ const emit = (el) => {
   if (tag === 'svg' || tag === 'canvas' || tag === 'video' || (hasKatex && leafBlock)) {
     // A self-contained inline <svg> (styles on its own tags, no external CSS) travels as
     // real vector so it stays sharp; the screenshot still rides along as the fallback for
-    // viewers older than PowerPoint 2016. KaTeX is HTML, not one svg, so it stays raster.
+    // viewers older than PowerPoint 2016. KaTeX is HTML, not one svg, so it stays raster,
+    // and so does an svg holding HTML in a foreignObject, which PowerPoint does not draw.
     const item = {kind: 'shot', rect, i: mark(el)};
-    if (tag === 'svg') item.svg = new XMLSerializer().serializeToString(el);
+    if (tag === 'svg' && !el.querySelector('foreignObject')) item.svg = new XMLSerializer().serializeToString(el);
     items.push(item); return;
   }
   if (tag === 'table') {

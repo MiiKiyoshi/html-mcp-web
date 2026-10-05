@@ -146,6 +146,26 @@ def test_math_deck_carries_katex_offline(tmp_path: Path) -> None:
     assert built.index("renderMathInElement") > built.index("</main>")
 
 
+def test_a_formula_in_a_figure_goes_in_a_foreign_object(tmp_path: Path) -> None:
+    """The renderer puts HTML in place of a formula and an svg <text> draws none, so a
+    formula there vanished. It stops the build, naming the formula; one in a
+    <foreignObject> builds, and a lone dollar in a label is no formula."""
+    from html_mcp_web.slides.build import build
+
+    content = tmp_path / "content.html"
+    deck = ('<title>Deck</title><body data-author="R" data-meta="Lab"><section data-title="Figure">'
+            '<svg viewBox="0 0 300 100"><text x="4" y="20">{label}</text>'
+            '<foreignObject x="4" y="40" width="200" height="40"><div>$C_{{tot}}$</div></foreignObject>'
+            '</svg></section></body>')
+    content.write_text(deck.format(label="cost in $ per unit"), encoding="utf-8")
+    build(content, tmp_path / "slides.html", REPO / "templates" / "neutral-slides")
+    built = (tmp_path / "slides.html").read_text(encoding="utf-8")
+    assert "<div>$C_{tot}$</div></foreignobject>" in built and "renderMathInElement" in built
+    content.write_text(deck.format(label=r"total $C = \sum C_i$"), encoding="utf-8")
+    with pytest.raises(ValueError, match=r'the formula "\$C = \\sum C_i\$" in an svg <text> is not drawn'):
+        build(content, tmp_path / "slides.html", REPO / "templates" / "neutral-slides")
+
+
 def test_skin_fonts_are_embedded_like_katex_fonts(tmp_path: Path) -> None:
     from html_mcp_web.slides import build
 

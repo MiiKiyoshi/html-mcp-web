@@ -130,6 +130,13 @@ in the file, so the deck stays self-contained and prints the same as it shows; a
 with no math carries none of that. A literal dollar sign is written `\$`, since two
 plain dollars on one line would otherwise read as a formula.
 
+A formula inside an inline `<svg>` goes in a `<foreignObject>` placed and sized where it
+belongs, holding HTML such as `<div style="font-size: 18px">$…$</div>`. It renders like
+one in the body, on screen and in print, with no margin around a display formula. An svg
+`<text>` cannot draw the rendered formula, so a formula written there stops the build.
+In the pptx export a figure holding a `<foreignObject>` goes in as a picture rather than
+as a vector.
+
 A long label inside an inline `<svg>` is written as one `<text>` holding the whole
 sentence, with `data-wrap="<width>"`, the width in `viewBox` units it may take. The deck
 breaks it into lines when it opens, measured with the skin's own font, so the content

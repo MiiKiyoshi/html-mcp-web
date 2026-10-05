@@ -343,6 +343,9 @@ pre code { padding: 0; border-radius: 0; background: none; font-family: inherit;
    in. The selector carries a class more than KaTeX's own, whose stylesheet is written
    after this file and would otherwise win. */
 .pages .katex-display > .katex { font-size: 1em; }
+/* A formula in a figure sits in a <foreignObject> placed where it goes. Its display margin
+   moved it down by 1em in Chromium and Firefox and not in WebKit, so it has none. */
+.pages foreignObject .katex-display { margin: 0; }
 
 .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; position: relative; margin: 34px 0 28px; counter-reset: step; }
 .flow::before { content: ""; position: absolute; left: 22px; right: 22px; top: 14px; height: 1px; background: var(--line); }

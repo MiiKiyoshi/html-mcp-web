@@ -315,6 +315,10 @@ def test_inline_svg_is_embedded_as_vector_math_stays_raster(tmp_path: Path) -> N
   <svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="10" width="180" height="80" fill="none" stroke="#333"/></svg>
 </section>
 <section data-title="Formula"><p>Only math here: $x^2 + y^2$</p></section>
+<section data-title="Figure formula">
+  <svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="10" width="180" height="80" fill="none" stroke="#333"/>
+  <foreignObject x="20" y="30" width="160" height="40"><div>$x^2$</div></foreignObject></svg>
+</section>
 </body>
 ''', encoding="utf-8")
     html = tmp_path / "slides.html"
@@ -323,7 +327,10 @@ def test_inline_svg_is_embedded_as_vector_math_stays_raster(tmp_path: Path) -> N
     result = export_pptx(html.as_uri(), out, tmp_path, None)
     diagram = next(p for p in result["pages"] if p["title"] == "Diagram")
     formula = next(p for p in result["pages"] if p["title"] == "Formula")
-    assert diagram["vector_svgs"] == 1 and formula["vector_svgs"] == 0
+    # A figure holding a formula in a foreignObject goes in as a picture: PowerPoint's
+    # svg drawing leaves the formula out.
+    figure = next(p for p in result["pages"] if p["title"] == "Figure formula")
+    assert diagram["vector_svgs"] == 1 and formula["vector_svgs"] == 0 and figure["vector_svgs"] == 0
     with zipfile.ZipFile(out) as archive:
         svg_parts = [n for n in archive.namelist() if n.endswith(".svg")]
         assert len(svg_parts) == 1

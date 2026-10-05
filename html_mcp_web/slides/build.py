@@ -169,6 +169,33 @@ def has_math(html_text: str) -> bool:
     return MATH_MARKERS.search(html_text) is not None
 
 
+MATH_SPANS = re.compile(r"(?<!\\)\$\$.+?(?<!\\)\$\$|(?<!\\)\$[^$]+?(?<!\\)\$|\\\(.+?\\\)|\\\[.+?\\\]", re.S)
+
+
+def check_svg_math(body_html: str) -> None:
+    # The renderer puts HTML in place of a formula, and an svg <text> draws no HTML, so a
+    # formula written there vanished without a trace. Inside the svg a <foreignObject>
+    # holds HTML, and a formula in it renders like one in the body.
+    if "<svg" not in body_html or not has_math(body_html):
+        return
+    body = ContentParser()
+    body.feed(body_html)
+    body.close()
+
+    def visit(element: Element, in_svg: bool) -> None:
+        for child in element.children:
+            if not isinstance(child, Element) or child.tag == "foreignobject":
+                continue
+            if in_svg and child.tag == "text":
+                found = MATH_SPANS.search(child.text())
+                if found is not None:
+                    raise ValueError(f'the formula "{found.group(0)}" in an svg <text> is not drawn; '
+                                     "put it in a <foreignObject> inside the svg")
+            visit(child, in_svg or child.tag == "svg")
+
+    visit(body.root, False)
+
+
 def math_bundle() -> tuple[str, str]:
     """KaTeX for the head and the foot, everything inlined so the file opens offline.
 
@@ -325,6 +352,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
     for page_number, section in enumerate(content.sections, 2):
         if "<cite" in section.script_html or (section.layout != "body" and "<cite" in section.body_html):
             raise ValueError(misplaced)
+        check_svg_math(section.body_html)
         script = script_block(section.script_html)
         in_appendix = appendix_at is not None and page_number - 2 >= appendix_at
         counted = (f"A{page_number - 2 - appendix_at + 1} / A{appendix_count}" if in_appendix
