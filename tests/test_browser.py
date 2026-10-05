@@ -1167,7 +1167,8 @@ def test_html_lifted_from_a_figure_stays_on_its_place_in_the_drawing(tmp_path: P
     """Safari drew the HTML in a figure's foreignObject away from its place on a scaled
     page. The builder lifts it into a layer over the svg, and the deck's script maps the
     layer to the viewBox: a box sits where its foreignObject would, in a figure drawn at
-    half its viewBox and on a page the window scales down."""
+    half its viewBox and on a page the window scales down. The layer lets the pointer
+    through to the drawing's labels, which a reader selects to comment on."""
     from html_mcp_web.slides import build
 
     content = tmp_path / "content.html"
@@ -1176,6 +1177,7 @@ def test_html_lifted_from_a_figure_stays_on_its_place_in_the_drawing(tmp_path: P
         '<body data-author="A" data-meta="B">\n'
         '<section data-title="Figure"><svg viewBox="0 0 600 200" width="300" height="100">'
         '<rect x="0" y="0" width="600" height="200" fill="#eee"/>'
+        '<text id="label" x="400" y="150" font-size="30">label</text>'
         '<foreignObject x="100" y="50" width="200" height="40"><div>box</div></foreignObject>'
         '</svg></section>\n'
         "</body>\n", encoding="utf-8")
@@ -1208,6 +1210,13 @@ return [box.left - (svg.left + 100 * s), box.top - (svg.top + 50 * s), box.width
             *offsets, drawn = browser.execute_script(measure, script_args=[scale])
             assert abs(drawn - 0.5 * scale) < 0.001, drawn
             assert all(abs(value) < 0.5 for value in offsets), (scale, offsets)
+        reached = browser.execute_script('''
+document.getElementById("label").scrollIntoView({block: "center"});
+const at = (el) => { const r = el.getBoundingClientRect();
+  const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return hit && (hit.id || hit.textContent); };
+return [at(document.getElementById("label")), at(document.querySelector(".svg-html-box > div"))];
+''')
+        assert reached == ["label", "box"], reached
     finally:
         if browser is not None:
             try:

@@ -346,11 +346,14 @@ pre code { padding: 0; border-radius: 0; background: none; font-family: inherit;
 /* HTML a figure carries in a <foreignObject>, such as a formula, is lifted by the builder
    into a layer over the svg, in the svg's units, which the deck's script places. Each box
    keeps its foreignObject's place and size. A display formula there has no margin: it
-   moved down by 1em in Chromium and Firefox and not in WebKit. */
+   moved down by 1em in Chromium and Firefox and not in WebKit. The layer covers the
+   whole drawing, so it lets the pointer through to the svg and only its boxes take it:
+   over the labels it caught every press, and a reader could select none of them to
+   comment on. */
 .svg-html { position: relative; }
 .svg-html > svg { display: block; }
-.svg-html-layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
-.svg-html-box { position: absolute; }
+.svg-html-layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
+.svg-html-box { position: absolute; pointer-events: auto; }
 .svg-html-box .katex-display { margin: 0; }
 
 .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; position: relative; margin: 34px 0 28px; counter-reset: step; }
