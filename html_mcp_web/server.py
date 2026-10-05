@@ -239,6 +239,8 @@ class ArtifactRuntime:
     # check included, goes on describing a file nobody has read since.
     seen_content: tuple[int, int] | None = None
     seen_main: tuple[int, int] | None = None
+    # The content as the last build read it.
+    built_from: tuple[int, int] | None = None
     space_pages: list[dict[str, Any]] = field(default_factory=list)
 
     def digest(self) -> str | None:
@@ -311,8 +313,15 @@ class ArtifactRuntime:
         return (state.st_mtime_ns, state.st_size)
 
     def note_files(self) -> None:
-        self.seen_content = self.stamp(self.content_file)
+        # The content is noted as the last build read it, not as it is now. Noted after a
+        # build, a write that landed while the build ran read as taken, and the watcher's
+        # report of it was dropped, so the slides stayed a write behind.
+        self.seen_content = self.built_from if self.built_from is not None else self.stamp(self.content_file)
         self.seen_main = self.stamp(self.main_file)
+
+    def rebuild(self) -> None:
+        self.built_from = self.stamp(self.content_file)
+        self.build()
 
     def moved_on(self) -> bool:
         """Whether either file has changed since this revision was made."""
@@ -397,7 +406,7 @@ class HtmlReviewServer:
             )
             if runtime.content_file is not None and runtime.content_file.is_file():
                 if not runtime.main_file.is_file() or runtime.content_file.stat().st_mtime > runtime.main_file.stat().st_mtime:
-                    runtime.build()
+                    runtime.rebuild()
             # A missing main is reported on the artifact (state carries the error), not
             # raised: raising here took the whole server down over one artifact while the
             # reviewer was renaming its file, and blocked every healthy one with it.
@@ -500,7 +509,7 @@ class HtmlReviewServer:
                 continue
             if runtime.content_file is not None and changed == runtime.content_file:
                 previous_mtime = runtime.main_file.stat().st_mtime_ns if runtime.main_file.is_file() else None
-                runtime.build()
+                runtime.rebuild()
                 current_mtime = runtime.main_file.stat().st_mtime_ns if runtime.main_file.is_file() else None
                 if runtime.build_error is None and current_mtime != previous_mtime:
                     self.generated_paths.add(runtime.main_file)
@@ -834,7 +843,7 @@ class HtmlReviewServer:
                         runtime.store.refresh_source_anchors(
                             source, source.relative_to(self.project_dir).as_posix())
                 if runtime.content_file is not None and runtime.stamp(runtime.content_file) != runtime.seen_content:
-                    runtime.build()
+                    runtime.rebuild()
                     if runtime.build_error is None:
                         self.generated_paths.add(runtime.main_file)
                 runtime.revision += 1

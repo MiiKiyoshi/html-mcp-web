@@ -1445,3 +1445,35 @@ async def test_check_profiles_and_browsers_do_not_outlive_their_check(client, tm
     review.check_runs.add((process, str(fresh)))
     await review.stop_checks(None)
     assert process.returncode is not None and not fresh.exists() and not review.check_runs
+
+
+async def test_a_write_that_lands_while_its_content_builds_is_built_in_turn(tmp_path: Path) -> None:
+    """Three scripts wrote one content file within seconds. The last write landed while
+    the build of the one before it ran, and the files were noted after the build, last
+    write included, so the watcher's report of that write read as taken and was dropped.
+    The content is noted as the build read it, and the late write builds in its turn."""
+    content, main = tmp_path / "content.html", tmp_path / "slides.html"
+    content.write_text("<p>first</p>", encoding="utf-8")
+    main.write_text("<p>first</p>", encoding="utf-8")
+    config = Config.from_dict({"artifacts": {"slides": {
+        "label": "Slides", "layout": "slides", "main": "slides.html",
+        "template": "neutral-slides", "content": "content.html"}}}, config_path=tmp_path / ".html-mcp-web.yaml")
+    review = HtmlReviewServer(config)
+    runtime = review.artifacts["slides"]
+    builds = []
+
+    def build() -> None:
+        read = content.read_text(encoding="utf-8")
+        builds.append(read)
+        if len(builds) == 1:
+            content.write_text("<p>third, written while the second builds</p>", encoding="utf-8")
+        main.write_text(read, encoding="utf-8")
+        runtime.build_error = None
+
+    runtime.build = build
+    content.write_text("<p>second</p>", encoding="utf-8")
+    await review.on_project_change(str(content))
+    await review.on_project_change(str(main))
+    await review.on_project_change(str(content))
+    assert builds == ["<p>second</p>", "<p>third, written while the second builds</p>"]
+    assert main.read_text(encoding="utf-8") == "<p>third, written while the second builds</p>"
