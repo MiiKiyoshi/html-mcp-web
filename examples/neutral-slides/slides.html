@@ -68,6 +68,9 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
 th { font-weight: 650; letter-spacing: .025em; }
 th, td { text-align: right; }
 th:first-child, td:first-child { text-align: left; }
+/* A row whose first column is spanned from above starts in a later column, and the
+   builder gives that first cell its column number, so it aligns with its column. */
+th:first-child[data-column], td:first-child[data-column] { text-align: right; }
 
 /* Slide engine skeleton: where things sit on a 1280x720 page. A skin sets the variables
    below and supplies chrome images through the slots the builder emits; it does not
@@ -119,6 +122,7 @@ th:first-child, td:first-child { text-align: left; }
   height: var(--body-height);
   margin-top: 10px;
   padding: var(--body-padding);
+  padding-bottom: var(--bottom-left-height, 0px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -130,8 +134,32 @@ th:first-child, td:first-child { text-align: left; }
   width: 100%;
   max-width: none;
   margin-top: var(--lead-gap);
+  margin-bottom: 0;
   text-align: center;
 }
+/* A page's references sit at the bottom right of the body, below the takeaway, one per
+   line with their left edges aligned. The block is as wide as its longest line and set
+   against the body's right edge: lines aligned to the right each began at a different
+   place. A skin whose bottom-left chrome rises into the body sets --bottom-left-width,
+   the chrome's right edge from the page's left side, and --bottom-left-height, how far
+   it rises above the body's bottom. The body keeps that height free under its content,
+   and the block drops into it beside the chrome. */
+.body > .refs {
+  flex: none;
+  align-self: flex-end;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  min-height: var(--bottom-left-height, 0px);
+  margin: 6px 0 calc(-1 * var(--bottom-left-height, 0px));
+  padding-left: var(--bottom-left-width, 0px);
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: left;
+}
+.cite { white-space: nowrap; }
 /* A picture keeps its own proportions. The body is a column flex box, and its default
    stretch handed an image with no stated width the whole column: max-height then cut only
    the height, so a 4:3 figure was drawn 1196x300, at 4:1. Centred because that is where a
@@ -219,6 +247,24 @@ th:first-child, td:first-child { text-align: left; }
   font-size: 25px;
   line-height: 42px;
 }
+/* Space under the last item holds nothing, so it does not count against the page. The
+   selector outranks a skin's .contents li. */
+.contents ol > li:last-child { margin-bottom: 0; }
+/* data-scale on a contents section marks the area scaled, sets --contents-scale, and
+   wraps the list in div.list. The list scales from its top left corner, numbers and
+   sub-items included, so it starts where the skin places it. A transform leaves the
+   list's height in the flow unscaled, so the wrapper takes no height and the guard
+   measures the list as drawn. The list itself keeps its height, which its columns need. */
+.contents .wide.scaled > .list { height: 0; }
+.contents .wide.scaled > .list > ol { transform: scale(var(--contents-scale)); transform-origin: 0 0; }
+/* A list in columns marks the area and the page columns: the count data-columns names,
+   or two for a list with sub-items under two or more outer items that overflows one
+   column, which the deck's script tells. Items fill the left column first, no item
+   breaks across columns, and the skin's picture behind the list fades so the right
+   column reads over it. */
+.contents .wide.columns ol { columns: var(--contents-columns); column-gap: 48px; }
+.contents .wide.columns ol > li { break-inside: avoid; }
+.contents.columns .full-art { opacity: 0.3; }
 .contents li::before {
   counter-increment: item;
   content: counter(item, decimal-leading-zero);
@@ -234,6 +280,50 @@ th:first-child, td:first-child { text-align: left; }
   font-size: 17px;
   font-weight: 650;
   text-align: center;
+}
+/* An item ending in a ul of sub-items, which the builder marks has-sub, is a grid, and
+   so is every item of a list in columns. The skin's number keeps its own box in the
+   first column, or its absolute place, and the item's text (span.entry) and the sub-list
+   share the second column, so in every skin the sub-items start under the text and a
+   wrapped item wraps as one paragraph. The selectors outrank a skin's .contents li. */
+.contents ol > li.has-sub, .contents .wide.columns ol > li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  height: auto;
+}
+.contents li > .entry { grid-column: 2; grid-row: 1; }
+.contents li.has-sub > ul { grid-column: 2; grid-row: 2; margin: 0.1em 0 0; padding: 0; list-style: none; }
+/* Sub-items are one-line labels, so they take a label's line spacing. */
+.contents li li {
+  display: block;
+  height: auto;
+  margin: 0;
+  padding: 0 0 0 0.9em;
+  font-size: 0.65em;
+  font-weight: 400;
+  line-height: 1.25;
+}
+/* A sub-item takes a short solid bar in the text colour, not a number. It hangs in the
+   item's left padding, and middle alignment centres it on the font's lowercase letters.
+   It is about as thick as the stems of the item's regular-weight letters, since a thicker
+   bar outweighs the text it marks. A one-pixel line looked like a faint typed dash and
+   thinned below a pixel in a list scaled by data-scale, so the bar never draws thinner
+   than 2px.
+   The bar is a box five times its thickness squeezed by scaleY. A box this thin, given
+   its thickness as its height, was rounded to a whole pixel at its own position on the
+   line, so bars on neighbouring items came out 2px and 3px thick on screen and in print.
+   The squeezed box is rounded once in its own space, the same on every line. */
+.contents li li::before {
+  all: unset;
+  content: "";
+  display: inline-block;
+  vertical-align: middle;
+  width: 0.5em;
+  height: max(0.5em, calc(10px / var(--contents-scale, 1)));
+  margin: 0 0.3em 0 -0.8em;
+  background: currentColor;
+  transform: scaleY(0.2);
 }
 .contents .venue, .divider .venue { margin-right: 10px; color: var(--accent); font-size: 17px; }
 .contents .by, .divider .by { margin-left: 10px; color: #9fb1ae; font-size: 17px; }
@@ -327,6 +417,18 @@ pre code { padding: 0; border-radius: 0; background: none; font-family: inherit;
    in. The selector carries a class more than KaTeX's own, whose stylesheet is written
    after this file and would otherwise win. */
 .pages .katex-display > .katex { font-size: 1em; }
+/* HTML a figure carries in a <foreignObject>, such as a formula, is lifted by the builder
+   into a layer over the svg, in the svg's units, which the deck's script places. Each box
+   keeps its foreignObject's place and size. A display formula there has no margin: it
+   moved down by 1em in Chromium and Firefox and not in WebKit. The layer covers the
+   whole drawing, so it lets the pointer through to the svg and only its boxes take it:
+   over the labels it caught every press, and a reader could select none of them to
+   comment on. */
+.svg-html { position: relative; }
+.svg-html > svg { display: block; }
+.svg-html-layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
+.svg-html-box { position: absolute; pointer-events: auto; }
+.svg-html-box .katex-display { margin: 0; }
 
 .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; position: relative; margin: 34px 0 28px; counter-reset: step; }
 .flow::before { content: ""; position: absolute; left: 22px; right: 22px; top: 14px; height: 1px; background: var(--line); }
@@ -427,7 +529,7 @@ pre code { padding: 0; border-radius: 0; background: none; font-family: inherit;
       <div class="script-text"><p>This week I changed how the nightly tests are split across our eight runners. The suite now finishes 27 minutes earlier on the same machines.</p></div>
     </div>
     <section class="page">
-      <header class="tbar"><h2>Balanced shards finish the suite 27 minutes sooner</h2></header>
+      <header class="tbar" data-layout-bar><h2>Balanced shards finish the suite 27 minutes sooner</h2></header>
       <div class="body" data-layout-guard>
 <p class="lead">Each runner now gets about the same total test time, taken from last week's runs.</p>
         <div class="rest">
@@ -498,7 +600,7 @@ pre code { padding: 0; border-radius: 0; background: none; font-family: inherit;
       <div class="script-text"><p>Before, runner one got the whole integration folder and took 74 minutes while runner eight was idle after 18. Now every runner ends between 45 and 47 minutes, so the suite is done when the slowest one is, 27 minutes sooner.</p></div>
     </div>
     <section class="page">
-      <header class="tbar"><h2>Two cases still use the old split</h2></header>
+      <header class="tbar" data-layout-bar><h2>Two cases still use the old split</h2></header>
       <div class="body" data-layout-guard>
 <p class="lead">Both come from tests that have no clean duration yet.</p>
         <div class="rest">

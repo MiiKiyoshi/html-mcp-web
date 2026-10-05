@@ -739,7 +739,6 @@ const handlePresentationPointerDown = presentation.handlePointerDown;
 const handlePresentationPointerUp = presentation.handlePointerUp;
 const handlePresentationWheel = presentation.handleWheel;
 const movePresentationPage = presentation.movePage;
-const setPresentationPage = presentation.setPage;
 const syncFullscreenMode = presentation.syncFullscreenMode;
 const toggleFullscreen = presentation.toggleFullscreen;
 const updatePresentationControls = presentation.updateControls;

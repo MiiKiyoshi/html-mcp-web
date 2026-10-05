@@ -1616,7 +1616,3 @@ class HtmlReviewServer:
         self.closing = True
         self.review_called.set()
 
-
-def run_server(config: Config, host: str = "127.0.0.1") -> None:
-    server = HtmlReviewServer(config)
-    web.run_app(server.create_app(), host=host, port=config.port, print=None)

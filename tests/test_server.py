@@ -990,7 +990,6 @@ async def test_render_page_crops_to_a_target_block(client, monkeypatch) -> None:
     from PIL import Image
 
     test_client, review = client
-    revision = review.artifacts["slides"].revision
     posted = await test_client.post("/artifacts/slides/layout", json=server_check(review))
     assert posted.status == 200
 

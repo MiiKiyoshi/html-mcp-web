@@ -1504,7 +1504,6 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
 
         # The bar along the top of the comments drags the split, so either side can be given
         # the screen without the other going away.
-        grip = browser.find_element("css selector", "#sidebar-grip")
         box = browser.execute_script(
             'const r = document.querySelector("#sidebar-grip").getBoundingClientRect();'
             'return {x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2)};')
