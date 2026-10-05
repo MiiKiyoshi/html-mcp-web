@@ -942,6 +942,7 @@ export function createLayoutChecks(dependencies) {
             || Math.hypot(point.x - placed[spot - 1].x, point.y - placed[spot - 1].y) > 0.5);
         };
         const normals = { left: { x: -1, y: 0 }, right: { x: 1, y: 0 }, top: { x: 0, y: -1 }, bottom: { x: 0, y: 1 } };
+        const opposite = { left: "right", right: "left", top: "bottom", bottom: "top" };
         const beyond = (point, box, side) => (side === "left" ? point.x < box.left - 1
           : side === "right" ? point.x > box.right + 1 : side === "top" ? point.y < box.top - 1 : point.y > box.bottom + 1);
         const past = (point, box, side) => (side === "left" ? (box.left - point.x) / placed.scaleX
@@ -986,6 +987,17 @@ export function createLayoutChecks(dependencies) {
             const stubLength = units(stub[1].x - stub[0].x, stub[1].y - stub[0].y);
             if (stubLength > stubMost) continue;
             const { box } = attached.get(join.key);
+            // A step between two boxes whose joined sides face each other, its jog in the gap
+            // between them, crosses that gap in reading order and is left alone.
+            const across = connector.joins[leaving ? 1 : 0];
+            if (across !== null && across.side === opposite[join.side] && corners.length === 4) {
+              const normal = normals[join.side];
+              const jog = normal.x !== 0 ? next[0].x : next[0].y;
+              const from = box[join.side];
+              const to = attached.get(across.key).box[across.side];
+              const sign = normal.x + normal.y;
+              if ((to - from) * sign > 0 && (jog - from) * sign > 0 && (to - jog) * sign > 0) continue;
+            }
             const allowed = leaving ? ["right", "bottom", "top", "left"] : ["left", "top", "bottom", "right"];
             const heading = unit(next[0], next[1]);
             const far = leaving ? next[1] : next[0];

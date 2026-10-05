@@ -140,7 +140,7 @@ The check reports clipped body content and title text outside the title bar or o
 
 For inline SVG, it reports shapes beyond the `viewBox`, empty space occupying a quarter or more of a side, overlapping labels, and labels beyond the sides of the rectangle they sit on. For the last case, it names the side and excess.
 
-Connector warnings cover an arrowhead or the line just before it overlapping a label or crossing another connector. Endpoint joins and lines along one another are excluded. A separate warning names the box and existing connection when a return arrow running left or up enters an occupied side while another side is unused. Another warning reports a short detour around a box and names a permitted side with a straight route clear of connectors, labels, and boxes.
+Connector warnings cover an arrowhead or the line just before it overlapping a label or crossing another connector. Endpoint joins and lines along one another are excluded. A separate warning names the box and existing connection when a return arrow running left or up enters an occupied side while another side is unused. Another warning reports a short detour around a box and names a permitted side with a straight route clear of connectors, labels, and boxes. A step that joins facing sides of two boxes and turns in the gap between them is not a detour.
 
 For wrapped labels, exceeding `data-max-lines` reports `needs N lines, box allows M`. A fitted label past the `data-fit-stretch` threshold reports a message such as `is loose in 196x92 at 12px`. If no size in `data-fit-range` fits, the message is such as `does not fit 196x92 at 10px`.
 

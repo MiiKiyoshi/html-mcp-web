@@ -165,7 +165,7 @@ x</pre>
          the box's bottom side, which it could have left by directly. Below, a branch splits
          two units above the second of two stacked boxes and enters it from the left, which
          is normal. -->
-    <svg id="detours" viewBox="0 0 460 200" width="460" height="200">
+    <svg id="detours" viewBox="0 0 620 200" width="620" height="200">
       <defs><marker id="tip" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
         <path d="M0,0 L10,5 L0,10 z"/></marker></defs>
       <rect x="10" y="10" width="100" height="40" fill="#fff" stroke="#333"/>
@@ -177,6 +177,11 @@ x</pre>
            18-unit stub, where entering the bottom side straight up is simpler. -->
       <rect x="300" y="100" width="100" height="40" fill="#fff" stroke="#333"/>
       <path d="M250,190 L280,190 L280,120 L298,120" fill="none" stroke="#333" stroke-width="1.5" marker-end="url(#tip)"/>
+      <!-- A step from one box's right side to the left side of a box above and to its right,
+           turning in the gap between them, which is normal. -->
+      <rect x="420" y="120" width="50" height="40" fill="#fff" stroke="#333"/>
+      <rect x="500" y="40" width="100" height="40" fill="#fff" stroke="#333"/>
+      <path d="M470,140 L485,140 L485,60 L498,60" fill="none" stroke="#333" stroke-width="1.5" marker-end="url(#tip)"/>
     </svg>
     <p id="ordinary" style="font-size: 20px; width: 900px">This second paragraph wraps onto
       two lines as well, and its final line carries a perfectly ordinary amount of text.</p>
@@ -800,7 +805,8 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         heads = [error for error in errors if "svg#arrows" in error and "arrowhead of" in error]
         assert len(heads) == 1 and 'runs over the label "note"' in heads[0]
         # A stub and a turn past another side of the same box is reported with the side to
-        # use. A branch that splits just above stacked boxes is not.
+        # use. A branch that splits just above stacked boxes is not, nor is a step between
+        # facing sides of two boxes that turns in the gap between them.
         detours = [error for error in errors if "svg#detours" in error and "connector (" in error]
         assert len(detours) == 2
         assert any("connector (110,30)→(300,80) leaves the box at (10,10) by its right side, turns after "
