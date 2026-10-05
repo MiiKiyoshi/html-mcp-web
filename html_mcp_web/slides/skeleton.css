@@ -183,10 +183,11 @@
    measures the list as drawn. The list itself keeps its height, which its columns need. */
 .contents .wide.scaled > .list { height: 0; }
 .contents .wide.scaled > .list > ol { transform: scale(var(--contents-scale)); transform-origin: 0 0; }
-/* The builder sets a list with sub-items under two or more outer items in two columns,
-   or in the count data-columns names, and marks the area and the page columns. Items
-   fill the left column first, no item breaks across columns, and the skin's picture
-   behind the list fades so the right column reads over it. */
+/* A list in columns marks the area and the page columns: the count data-columns names,
+   or two for a list with sub-items under two or more outer items that overflows one
+   column, which the deck's script tells. Items fill the left column first, no item
+   breaks across columns, and the skin's picture behind the list fades so the right
+   column reads over it. */
 .contents .wide.columns ol { columns: var(--contents-columns); column-gap: 48px; }
 .contents .wide.columns ol > li { break-inside: avoid; }
 .contents.columns .full-art { opacity: 0.3; }

@@ -33,12 +33,13 @@ overflow anywhere above the footer bar, just as it reports body overflow.
   smaller text before the name and `span.by` after it. For sub-items, end the `<li>`
   with one `<ul>` after its own text. The sub-items do not affect numbering and appear
   as unnumbered lines aligned under the item's text, each in smaller type with a short
-  solid bar in the text colour before it. When at least two outer items have sub-items,
-  the list uses two columns by default. Items fill the left column from top to bottom,
-  then the right, without splitting an outer item across columns. Set `data-columns` on
-  the section to a whole number from 1 to 9 to choose the column count. For example,
-  `data-columns="1"` keeps one column, and `data-columns="2"` gives two columns even
-  without sub-items. In columns, long items wrap and the layout check reports a wasted
+  solid bar in the text colour before it. A list with sub-items and at least two outer
+  items stays in one column while it fits there and takes two columns when one column
+  overflows, which the deck measures in the skin's type. Items fill the left column from
+  top to bottom, then the right, without splitting an outer item across columns. Set
+  `data-columns` on the section to a whole number from 1 to 9 to choose the column count.
+  For example, `data-columns="1"` keeps one column, and `data-columns="2"` gives two
+  columns even without sub-items. In columns, long items wrap and the layout check reports a wasted
   last line. With columns, any skin picture behind the list fades to keep the text
   readable. To fit or fill the page, try columns at full size before scaling. When the
   list looks too large or does not fit, set `data-scale` on the section to a positive

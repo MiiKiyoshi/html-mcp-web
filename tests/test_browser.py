@@ -1089,6 +1089,68 @@ return {tall: [box(tall).top, box(tall).bottom], column: [box(stack).top, box(st
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_contents_with_sub_items_take_two_columns_only_when_one_overflows(tmp_path: Path) -> None:
+    """Three sections with a few sub-items each were set in two columns as two and one,
+    the third beside the first and the lower half of the page empty. A list with sub-items
+    now stays in one column while it fits there and takes two when it does not."""
+    from html_mcp_web.slides import build
+
+    subs = lambda count: "<ul>" + "".join(f"<li>Part {n}</li>" for n in range(count)) + "</ul>"
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<!doctype html>\n<meta charset="utf-8">\n<title>Contents</title>\n'
+        '<body data-author="A" data-meta="B">\n'
+        f'<section data-layout="contents" data-title="Short"><ol><li>One{subs(3)}</li>'
+        f'<li>Two{subs(1)}</li><li>Three{subs(3)}</li></ol></section>\n'
+        '<section data-layout="contents" data-title="Long"><ol>'
+        + "".join(f"<li>Item {n}{subs(6)}</li>" for n in range(6)) + '</ol></section>\n'
+        "</body>\n", encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, Path(__file__).resolve().parents[1] / "templates" / "neutral-slides")
+    assert html.read_text(encoding="utf-8").count("data-contents-fit") == 3  # two areas and the script
+
+    profile = tempfile.mkdtemp(prefix="html_mcp_contents_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(html.as_uri())
+        wait_until(lambda: browser.execute_script("return document.fonts.status === 'loaded'"))
+        pages = browser.execute_script("""
+return Array.from(document.querySelectorAll("section.page.contents")).map((page) => {
+  const area = page.querySelector(".wide");
+  return {columns: area.classList.contains("columns") && page.classList.contains("columns"),
+          overflow: area.scrollHeight - area.clientHeight,
+          lefts: Array.from(new Set(Array.from(area.querySelectorAll("ol > li:not(li li)"))
+            .map((li) => Math.round(li.getBoundingClientRect().left))))};
+});
+""")
+        short, long = pages
+        assert not short["columns"] and short["overflow"] <= 1 and len(short["lefts"]) == 1, short
+        assert long["columns"] and long["overflow"] <= 1 and len(long["lefts"]) == 2, long
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_takeaway_keeps_lead_typography_and_body_geometry_across_skins(tmp_path: Path) -> None:
     """A final takeaway uses the lead's face while the body keeps its opening and spread.
 

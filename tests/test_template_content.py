@@ -294,9 +294,9 @@ def test_contents_item_with_a_sub_list_wraps_its_own_text() -> None:
     assert ('<li class="has-sub"><span class="entry">Speed\n    </span>'
             '<ul><li>Direct Wire Model</li><li>Overall</li></ul></li>') in built
     assert '<li class="has-sub"><span class="entry"><span class="venue">Venue</span>Name</span><ul>' in built
-    # Sub-items under more than one outer item put the list in two columns, and there the
-    # text of an item without sub-items becomes one entry too.
-    assert columns == 2
+    # Sub-items under more than one outer item leave the column count to the page, which
+    # may set two, so the text of an item without sub-items becomes one entry too.
+    assert columns is None
     assert '<li><span class="entry">Summary</span></li>' in built
     with pytest.raises(ValueError, match="one ul of sub-items"):
         contents_list("<ol><li>Speed<ul><li>Part</li></ul>after</li></ol>", None)
@@ -304,12 +304,12 @@ def test_contents_item_with_a_sub_list_wraps_its_own_text() -> None:
         contents_list("<ol><li>Speed<ol><li>Part</li></ol></li></ol>", None)
 
 
-def test_contents_columns_follow_sub_items_unless_data_columns_names_a_count() -> None:
+def test_contents_columns_are_left_to_the_page_unless_data_columns_names_a_count() -> None:
     from html_mcp_web.slides.build import contents_list
 
     nested = "<ol><li>One<ul><li>a</li></ul></li><li>Two</li></ol>"
     plain = "<ol><li>One</li><li>Two</li></ol>"
-    assert contents_list(nested, None)[1] == 2
+    assert contents_list(nested, None)[1] is None
     assert contents_list(nested, "1") == ('<ol><li class="has-sub"><span class="entry">One</span>'
                                           '<ul><li>a</li></ul></li><li>Two</li></ol>', 1)
     # One outer item has nothing to split, and a plain list stays whole unless asked.

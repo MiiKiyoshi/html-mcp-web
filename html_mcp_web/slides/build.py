@@ -64,6 +64,31 @@ FIT_SCRIPT = """<script>
 })();
 </script>"""
 
+# A contents list with sub-items takes two columns only when one column overflows its
+# area, which only the page can tell, in the skin's own type. Two columns for a list
+# that fit in one set three items as two and one, the third beside the first and the
+# lower half of the page empty. The area is measured again when fonts arrive and when a
+# page that was not drawn gets a size; its own size does not change with its columns.
+CONTENTS_FIT_SCRIPT = """<script>
+(() => {
+  const fit = (area) => {
+    if (area.clientHeight === 0) return;
+    const page = area.closest("section");
+    area.classList.remove("columns");
+    page.classList.remove("columns");
+    if (area.scrollHeight <= area.clientHeight + 1) return;
+    area.classList.add("columns");
+    page.classList.add("columns");
+  };
+  const areas = Array.from(document.querySelectorAll("[data-contents-fit]"));
+  const sized = new ResizeObserver((entries) => entries.forEach((entry) => fit(entry.target)));
+  areas.forEach((area) => { fit(area); sized.observe(area); });
+  const all = () => areas.forEach(fit);
+  document.fonts.ready.then(all);
+  document.fonts.addEventListener("loadingdone", all);
+})();
+</script>"""
+
 # Widths the embedded images are downscaled to; a slot only needs what its box shows.
 SLOT_WIDTHS = {
     "cover_band_left": 500,
@@ -189,13 +214,13 @@ def script_block(script_html: str) -> str:
     return f'\n    <div class="script-block">\n      <div class="script-text">{script_html}</div>\n    </div>'
 
 
-def contents_list(body_html: str, count: str | None) -> tuple[str, int]:
+def contents_list(body_html: str, count: str | None) -> tuple[str, int | None]:
     # A contents item may end in a ul of unnumbered sub-items. Its own text goes into
     # span.entry and the item is marked has-sub, so skeleton.css can set the sub-list
-    # under that text beside whatever number the skin draws. Sub-items make a list long
-    # and narrow, leaving the right of the page empty, so a list with sub-items under two
-    # or more outer items takes two columns. count, from data-columns, overrides that.
-    # Returns the list and its column count.
+    # under that text beside whatever number the skin draws. Sub-items make a list long,
+    # and one with two or more outer items takes two columns when one column overflows,
+    # which the page decides. count, from data-columns, names the count instead. Returns
+    # the list and its column count, None when the page decides.
     body = ContentParser()
     body.feed(body_html)
     body.close()
@@ -215,12 +240,12 @@ def contents_list(body_html: str, count: str | None) -> tuple[str, int]:
         item.attributes["class"] = " ".join(["has-sub", *classes])
         item.children = [Element("span", {"class": "entry"}, item.children[:at]), item.children[at]]
         nested.append(item)
-    columns = 2 if nested and len(items) > 1 else 1
+    columns = None if nested and len(items) > 1 else 1
     if count is not None:
         if not re.fullmatch(r"[1-9]", count.strip()):
             raise ValueError(f'a contents data-columns is a whole number from 1 to 9, not "{count.strip()}"')
         columns = int(count)
-    if columns > 1:
+    if columns is None or columns > 1:
         # In a column the skin's one-line item would wrap piece by piece, so the text of
         # every item becomes one span.entry beside its number.
         for item in items:
@@ -322,12 +347,16 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
                     classes.append("scaled")
                     style.append(f"--contents-scale: {scale}")
                     listing = f'<div class="list">{listing}</div>'
-                if columns > 1:
+                fit = ""
+                if columns is None:
+                    style.append("--contents-columns: 2")
+                    fit = " data-contents-fit"
+                elif columns > 1:
                     classes.append("columns")
                     style.append(f"--contents-columns: {columns}")
                     kind = "contents columns"
                 styled = f' style="{"; ".join(style)}"' if style else ""
-                inner = f'''      <div class="{" ".join(classes)}" data-layout-guard{styled}>
+                inner = f'''      <div class="{" ".join(classes)}" data-layout-guard{fit}{styled}>
         {heading}
 {listing}
       </div>'''
@@ -420,7 +449,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
 
 {body_html}
 
-  </main>{math[1]}{wrap}
+  </main>{math[1]}{wrap}{CONTENTS_FIT_SCRIPT if "data-contents-fit" in body_html else ""}
 {FIT_SCRIPT}
 </body>
 </html>
