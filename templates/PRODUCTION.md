@@ -20,7 +20,7 @@ Fit content to its intended box while preserving its meaning and proportions.
 
 2.2 Use the same units statement form on every slide that shows measurements. See `p.units` in [the table reference](COMPONENTS.md#tables-and-units).
 
-2.3 Prefer inline SVG over a picture of a drawing when the other components do not carry the figure. Settle the figure's box first from the column width and the height left on the page. Give its `viewBox` those proportions and the size at which the figure is drawn, rather than a smaller box scaled up. Draw inside it. Lay out each panel for its own width and height while preserving grouping and reading order.
+2.3 Prefer inline SVG over a picture of a drawing when the other components do not carry the figure. Settle the figure's box first from the column width and the height left on the page. Give its `viewBox` those proportions and the size at which the figure is drawn, rather than a smaller box scaled up. Draw inside it. Lay out each panel for its own width and height while preserving grouping and reading order. When a page has one figure, size it for the available content area and readable detail rather than placing it in an unnecessarily small box.
 
 2.4 Give raster figures a `max-height`. Preserve the source width to height ratio of images, including `<img>`, images inside SVG, and CSS backgrounds. At the intended display or export size, check the rendered image itself, excluding padding and letterboxing, for correct proportions and readable text and marks needed by the page. A clean layout report does not establish these qualities.
 
@@ -29,6 +29,8 @@ Fit content to its intended box while preserving its meaning and proportions.
 2.6 Use a plotting tool that supplies the required axes, scales, and annotations for a standard plot. Do not rebuild these by hand.
 
 2.7 For diagrams of boxes and arrows, prefer horizontal and vertical connectors unless another route clarifies the relationship. Join connectors entering the same element near their sources. Split connectors leaving the same element near their targets. Keep branches short and the common segment long. Follow neutral clause 5.4 for direction, source and target relationships, entry and exit sides, and permitted merges. Remove a bend or detour when another permitted entry or exit side avoids it without changing reading order or intended connections, obscuring junctions, or adding crossings or label overlaps.
+
+2.8 Set mathematical symbols and formulas as math markup using the forms in the component reference.
 
 ## Article 3. Check an edit
 
