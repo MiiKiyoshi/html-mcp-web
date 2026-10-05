@@ -86,6 +86,10 @@ def problem_html() -> str:
     <p style="font-size: 20px; width: 600px"><span class="katex"><span class="katex-mathml"
       style="position:absolute;clip:rect(1px,1px,1px,1px);width:1px;height:1px;overflow:hidden"
       >\\overline{x}</span><span class="katex-html">x&#8254;</span></span> A deliberately long first line for the layout checker.<br>x</p>
+    <!-- A code block's lines are its content as written, so a short last line there is
+         no tail to fix. -->
+    <pre style="font-size: 20px; width: 600px; white-space: pre-wrap; margin: 0">A verbatim line copied from a log file, kept as written.
+x</pre>
     <div><div style="height: 50px">first sibling</div><div style="height: 50px; margin-top: -20px">second sibling</div></div>
     <!-- Borderline cases: both verdicts flip when measured geometry is read at the
          pane's zoom instead of in page pixels. -->
@@ -775,6 +779,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         # drill-down first and no second round to learn the amount.
         assert re.search(r"on a \d+px tail", tail_error)
         assert re.search(r"\[p1:\d+(\.\d+)*\]$", tail_error)
+        assert not any("A verbatim line" in error for error in errors)
         cut_error = next(error for error in errors if "svg#cut>" in error)
         assert re.search(r"\[p1:\d+(\.\d+)*\]$", cut_error)
         assert any("overlaps its sibling" in error for error in errors)

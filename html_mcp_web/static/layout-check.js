@@ -358,9 +358,11 @@ export function createLayoutChecks(dependencies) {
       // is a slide's fault, and a report's overflow and overlaps are still faults.
       // Scope: any block-level element that directly contains text because a tag
       // whitelist missed styled divs. Container elements hold only child elements,
-      // so they filter out here.
+      // so they filter out here. A code block is left out: its lines are the source,
+      // prompt or log as written, and no rewording can fill a tail there.
       const tails = state.artifact.layout === "report" ? [] : page.querySelectorAll("[data-layout-guard] *");
       for (const block of tails) {
+        if (block.closest("pre") !== null) continue;
         const style = doc.defaultView.getComputedStyle(block);
         if (!/^(block|list-item|table-cell)$/.test(style.display)) continue;
         const hasDirectText = Array.from(block.childNodes).some(
