@@ -804,10 +804,19 @@ export function createLayoutChecks(dependencies) {
         // A return arrow, one that runs back left or up against the reading order, that
         // enters a box on a side where another connection already sits while another
         // side of that box has none, crowds the busy side. Arrows entering one side
-        // together in the reading order, a fan-in, are normal and not reported.
+        // together in the reading order, a fan-in, are normal and not reported. Nor is the
+        // return's own partner: two boxes joined both ways between the same two sides run
+        // on two parallel lanes, the usual drawing of a loop, which a free side would only
+        // reach by a detour around a box. A return that leaves its box by another side
+        // than the one its partner meets still crowds the busy side.
         const backward = (connector) => {
           const [from, to] = connector.ends;
           return (to.x < from.x - 3 && to.y <= from.y + 3) || (to.y < from.y - 3 && to.x <= from.x + 3);
+        };
+        const partners = (connector, entry) => {
+          const start = connector.joins[0];
+          return start !== null && entry.connector.joins.some(
+            (join) => join !== null && join.key === start.key && join.side === start.side);
         };
         let crowded = 0;
         for (const connector of connectors) {
@@ -815,7 +824,7 @@ export function createLayoutChecks(dependencies) {
           if (!backward(connector)) continue;
           const { key, side } = connector.joins[1];
           const { box, sides } = attached.get(key);
-          const others = sides[side].filter((entry) => entry.connector !== connector);
+          const others = sides[side].filter((entry) => entry.connector !== connector && !partners(connector, entry));
           const clear = Object.entries(sides).filter(([, entries]) => entries.length === 0).map(([name]) => name);
           if (others.length === 0 || clear.length === 0 || crowded >= 3) continue;
           crowded += 1;

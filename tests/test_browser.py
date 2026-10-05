@@ -147,6 +147,16 @@ def problem_html() -> str:
       <text x="345" y="44" font-size="12">note</text>
       <path d="M300,40 L378,40" fill="none" stroke="#333" stroke-width="2" marker-end="url(#head)"/>
     </svg>
+    <!-- Two boxes side by side joined both ways on parallel lanes, the forward one above
+         and the return below, between the same two sides: a loop's usual drawing. -->
+    <svg id="lanes" viewBox="0 0 400 100" width="400" height="100">
+      <defs><marker id="lane-head" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+      <rect x="20" y="20" width="120" height="60" fill="#fff" stroke="#333"/>
+      <rect x="260" y="20" width="120" height="60" fill="#fff" stroke="#333"/>
+      <path d="M140,40 L258,40" fill="none" stroke="#333" stroke-width="2" marker-end="url(#lane-head)"/>
+      <path d="M260,60 L142,60" fill="none" stroke="#333" stroke-width="2" marker-end="url(#lane-head)"/>
+    </svg>
     <!-- An output leaves its box by the right side in a 15-unit stub and turns down past
          the box's bottom side, which it could have left by directly. Below, a branch splits
          two units above the second of two stacked boxes and enters it from the left, which
@@ -780,6 +790,8 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert len(returns) == 1
         assert "(220,70)→(112,55) enters the box at (10,10) on its right side beside (110,40)→(168,40)" in returns[0]
         assert "left and top and bottom sides are clear" in returns[0]
+        # Its partner on a parallel lane between the same two sides is no crowding.
+        assert not any("svg#lanes" in error for error in errors)
         heads = [error for error in errors if "svg#arrows" in error and "arrowhead of" in error]
         assert len(heads) == 1 and 'runs over the label "note"' in heads[0]
         # A stub and a turn past another side of the same box is reported with the side to
