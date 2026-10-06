@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import hashlib
 import html
@@ -103,6 +104,11 @@ def floorplan_semicolons(path: Path) -> str | None:
 
 
 FIT_ERROR = re.compile(r"^page (\d+) .*?(?:overflows its content area|wastes its last line|exceeds the)")
+# Base64 data of 1 KB or more, such as a skin's fonts and the images it repeats on every page.
+# The review page loads it from an address of its own, so the browser keeps one copy across
+# revisions instead of decoding it again inside every reloaded document.
+SHAREABLE_DATA = re.compile(r"data:([\w.+/-]+);base64,([A-Za-z0-9+/=]{1024,})")
+SCRIPT_ELEMENT = re.compile(r"<script\b.*?</script>", re.IGNORECASE | re.DOTALL)
 # Room worth naming: tall enough to take a line of text and wide enough to hold one.
 ROOM_CLEARANCE = 8.0
 ROOM_MIN_WIDTH = 80.0
@@ -242,6 +248,8 @@ class ArtifactRuntime:
     # The content as the last build read it.
     built_from: tuple[int, int] | None = None
     space_pages: list[dict[str, Any]] = field(default_factory=list)
+    # The data the review page loads by address, from the document last served to it.
+    shared_assets: dict[str, tuple[str, bytes]] = field(default_factory=dict)
 
     def digest(self) -> str | None:
         # None means the file is gone. is_file() alone cannot promise the read: the file
@@ -601,8 +609,42 @@ class HtmlReviewServer:
             body = self._artifact_html(runtime, for_print)
         except FileNotFoundError as error:
             raise web.HTTPNotFound(text=f"HTML artifact not found: {runtime.main_file}") from error
+        # The review page asks for shared data. The pptx export reads image data from the
+        # document it photographs, so it and the printer get the document as written.
+        if request.query.get("shared") == "1":
+            body = self._share_data(runtime, body)
         return web.Response(text=body, content_type="text/html",
                             charset="utf-8", headers={"Cache-Control": "no-store"})
+
+    @staticmethod
+    def _share_data(runtime: ArtifactRuntime, body: str) -> str:
+        assets: dict[str, tuple[str, bytes]] = {}
+
+        def address(match: re.Match[str]) -> str:
+            name = hashlib.sha1(match.group(2).encode("ascii")).hexdigest()
+            assets.setdefault(name, (match.group(1), base64.b64decode(match.group(2))))
+            return f"/artifacts/{runtime.artifact_id}/asset/{name}"
+
+        # Script text is left as written: a script may read its data as a data URI.
+        pieces: list[str] = []
+        start = 0
+        for script in SCRIPT_ELEMENT.finditer(body):
+            pieces.append(SHAREABLE_DATA.sub(address, body[start:script.start()]))
+            pieces.append(script.group(0))
+            start = script.end()
+        pieces.append(SHAREABLE_DATA.sub(address, body[start:]))
+        runtime.shared_assets = assets
+        return "".join(pieces)
+
+    async def shared_asset(self, request: web.Request) -> web.Response:
+        runtime = self.runtime(request)
+        asset = runtime.shared_assets.get(request.match_info["name"])
+        if asset is None:
+            raise web.HTTPNotFound(text="no such data in the document last served to the review page")
+        content_type, data = asset
+        # Named by its content, so a cached copy never goes stale.
+        return web.Response(body=data, content_type=content_type,
+                            headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
     async def _pdf(self, runtime: ArtifactRuntime) -> bytes:
         url = f"http://127.0.0.1:{self.config.port}/artifacts/{runtime.artifact_id}/artifact?print=1"
@@ -1586,6 +1628,7 @@ class HtmlReviewServer:
         app.router.add_get("/state", self.get_state)
         base = "/artifacts/{artifact_id}"
         app.router.add_get(f"{base}/artifact", self.artifact)
+        app.router.add_get(f"{base}/asset/{{name}}", self.shared_asset)
         app.router.add_get(f"{base}/download/pdf", self.download_pdf)
         app.router.add_post(f"{base}/export/pptx", self.export_pptx)
         app.router.add_get(f"{base}/download/pptx", self.download_pptx)

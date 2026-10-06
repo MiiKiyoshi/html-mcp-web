@@ -105,6 +105,39 @@ async def test_artifact_injects_project_base(client) -> None:
     assert '@page { size: 13.333in 7.5in; margin: 0; }' in text
 
 
+async def test_review_page_loads_large_embedded_data_by_address(client) -> None:
+    import base64
+
+    test_client, review = client
+    font = base64.b64encode(bytes(range(256)) * 8).decode("ascii")
+    image = base64.b64encode(b"\x89PNG" + bytes(2000)).decode("ascii")
+    icon = base64.b64encode(b"\x89PNG small").decode("ascii")
+    (review.project_dir / "artifact.html").write_text(
+        "<!doctype html><html><head><style>@font-face { font-family: Deck; "
+        f"src: url(data:font/woff2;base64,{font}); }}</style></head><body>"
+        f'<img src="data:image/png;base64,{image}"><img src="data:image/png;base64,{image}">'
+        f'<img src="data:image/png;base64,{icon}">'
+        f'<script>const kept = "data:image/png;base64,{image}";</script></body></html>',
+        encoding="utf-8")
+
+    # The pptx export and the printer read the document as written.
+    written = await (await test_client.get("/artifacts/slides/artifact")).text()
+    assert written.count(f"data:image/png;base64,{image}") == 3
+
+    shared = await (await test_client.get("/artifacts/slides/artifact?v=1&shared=1")).text()
+    addresses = re.findall(r"/artifacts/slides/asset/[0-9a-f]{40}", shared)
+    # The repeated image is one address, the font another. A small icon and script text stay.
+    assert len(addresses) == 3 and len(set(addresses)) == 2
+    assert f"data:image/png;base64,{icon}" in shared
+    assert f'const kept = "data:image/png;base64,{image}";' in shared
+    image_address = re.search(r'<img src="(/artifacts/slides/asset/[0-9a-f]{40})"', shared).group(1)
+    response = await test_client.get(image_address)
+    assert response.status == 200 and response.content_type == "image/png"
+    assert await response.read() == base64.b64decode(image)
+    assert "immutable" in response.headers["Cache-Control"]
+    assert (await test_client.get("/artifacts/slides/asset/" + "0" * 40)).status == 404
+
+
 async def test_viewer_shell_includes_pages_and_comments_tabs(client) -> None:
     test_client, _ = client
     response = await test_client.get("/")

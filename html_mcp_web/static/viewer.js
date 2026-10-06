@@ -562,7 +562,7 @@ function loadThumbs() {
     return;
   }
   frame.dataset.loaded = wanted;
-  showInFrame(frame, `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}`);
+  showInFrame(frame, `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}&shared=1`);
 }
 
 function thumbPages() {
@@ -1642,7 +1642,7 @@ function loadArtifact(preserveView) {
   state.loadedRevision = state.revision;
   iframe.dataset.revision = String(state.revision);
   delete iframe.dataset.settled;
-  showInFrame(iframe, `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}`);
+  showInFrame(iframe, `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}&shared=1`);
 }
 
 // Each revision replaces the frame's history entry rather than adding one: setting src added
