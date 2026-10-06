@@ -621,8 +621,6 @@ class HtmlReviewServer:
     async def _export_pptx(self, runtime: ArtifactRuntime, out: Path) -> dict[str, Any]:
         if runtime.config.layout != "slides":
             raise web.HTTPBadRequest(text="pptx export applies to slides artifacts")
-        if not out.is_relative_to(self.project_dir):
-            raise web.HTTPBadRequest(text="out must stay inside the project directory")
         # Not the print URL: that one strips the speaker scripts, and each becomes its
         # slide's notes. They are hidden with CSS for the shots instead, which is enough
         # here because the export photographs each page element rather than printing.
@@ -641,14 +639,20 @@ class HtmlReviewServer:
         runtime = self.runtime(request)
         data = await request.json()
         out = (self.project_dir / data["out"]).resolve() if "out" in data else self.default_pptx_path(runtime)
+        if not out.is_relative_to(self.project_dir):
+            raise web.HTTPBadRequest(text="out must stay inside the project directory")
         return web.json_response(await self._export_pptx(runtime, out))
 
-    async def download_pptx(self, request: web.Request) -> web.StreamResponse:
+    async def download_pptx(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
-        out = self.default_pptx_path(runtime)
-        await self._export_pptx(runtime, out)
-        return web.FileResponse(out, headers={
-            "Content-Disposition": f'attachment; filename="{out.name}"', "Cache-Control": "no-store"})
+        # Built in a folder removed once it is read, so a download leaves no copy in the project.
+        with tempfile.TemporaryDirectory(prefix="html_mcp_pptx_") as folder:
+            out = Path(folder) / f"{runtime.artifact_id}.pptx"
+            await self._export_pptx(runtime, out)
+            body = out.read_bytes()
+        return web.Response(
+            body=body, content_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            headers={"Content-Disposition": f'attachment; filename="{out.name}"', "Cache-Control": "no-store"})
 
     @staticmethod
     def _render_options(request: web.Request) -> tuple[int, bool]:

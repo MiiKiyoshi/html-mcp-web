@@ -189,6 +189,7 @@ def test_export_embeds_the_skin_face(tmp_path: Path) -> None:
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_export_route_writes_inside_the_project(tmp_path: Path) -> None:
+    import io
     import json
     import socket
     import urllib.error
@@ -232,11 +233,13 @@ def test_export_route_writes_inside_the_project(tmp_path: Path) -> None:
         with pytest.raises(urllib.error.HTTPError) as error:
             post({"out": "../outside.pptx"})
         assert error.value.code == 400
-        # The topbar button fetches this: the file is built at export/<artifact>.pptx and served.
+        # The topbar button fetches this: the deck is built and sent, and no copy stays in the project.
+        before = sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*"))
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/download/pptx", timeout=120) as response:
             assert response.headers["Content-Disposition"] == 'attachment; filename="slides.pptx"'
             body = response.read()
-        assert body[:2] == b"PK" and (tmp_path / "export" / "slides.pptx").read_bytes() == body
+        assert len(pptx.Presentation(io.BytesIO(body)).slides) == 3
+        assert sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*")) == before
     finally:
         shared.stop()
 
