@@ -786,6 +786,8 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
         assert "write_stdin" not in told["how"]
         # An expiry is restarted only while the review still needs events.
         assert "restart the same Monitor only if that work still needs events" in told["how"]
+        # The user opens the page themselves, so the agent is handed the address to give.
+        assert f"http://localhost:{binding._shared.port}," in told["how"]
         for name in ("codex-mcp-client", "other-client"):
             context.session.client_params.clientInfo.name = name
             selected = answer(mcp.call_tool("listen", {}))

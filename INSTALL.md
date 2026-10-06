@@ -44,6 +44,19 @@ Remove a registration the user agreed to replace (`claude mcp remove --scope use
 
 ## 5. Tell the user
 
-The server loads when an agent session starts, so this session cannot use it yet. Start
-the agent again in the artifact's folder, then say "do html init" once per folder and
-"do html listen" to open the review page.
+Tell the user in their language what is included and how to start. Keep it to the following
+information:
+
+- `neutral-slides`: plain 16:9 slides without organization marks. The default template for slides.
+- `neutral-report`: an A4 report with a cover and one page per section. The default template for reports.
+- `neutral`: writing rules the agent follows for slides. Selected by default for slides. Reports
+  use no guideline by default.
+
+They can add their own templates and guidelines, which will also appear among the choices at
+setup.
+
+Ask them to restart the agent in the folder where they want to work, then say "do html init"
+once per folder. At setup, they just choose from the available templates and guidelines. They
+can accept the slide defaults or name a change, such as a report. After setup, say "do html
+listen" to start reviewing. The agent gives them the review page address and gets ready to
+handle their comments when they press **Call agent**. They open that address in their browser.

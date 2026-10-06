@@ -33,9 +33,11 @@ Once per folder, start the agent in the folder that holds (or will hold) your ar
 do html init
 ```
 
-The agent proposes slides (16:9) with the neutral-slides template and the neutral writing
-guideline, a file, and a free port, and writes `.html-mcp-web.yaml` once you agree. Ask for
-the defaults to take them as they are, or name what to change, such as a report (A4).
+Choose slides (16:9) or a report (A4). Slides default to `neutral-slides`, a plain template
+without organization marks, and `neutral`, writing rules the agent follows for slides. Reports
+default to `neutral-report`, with a cover and one page per section, and no guideline. The agent
+shows the choices and the document file it will create or reuse. Accept the defaults or name
+what to change.
 
 ## Listen
 
@@ -45,8 +47,9 @@ To review, say:
 do html listen
 ```
 
-Open `http://localhost:<port>` with the port you chose at init. Say it again after the
-agent restarts.
+The agent gives you the review page address, such as `http://localhost:8765`, and gets ready
+to handle your comments when you press **Call agent**. Open that address in your browser. Say
+`do html listen` again after the agent restarts.
 
 ## Reviewing
 
@@ -72,8 +75,8 @@ print every page.
 
 ![The review page on a tablet and a phone, zoomed into a slide: the commented phrase above, its thread below.](docs/mobile.png)
 
-Forward the port you chose at init over SSH, from Termux on Android or iSH on iOS, then open
-`http://localhost:<port>` in the phone's browser.
+Use the port number in the review page address the agent gives you. Forward that port over SSH
+from Termux on Android or iSH on iOS, then open the same address in the phone's browser.
 
 ```
 ssh -L <port>:localhost:<port> <server>

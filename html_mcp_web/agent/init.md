@@ -33,42 +33,43 @@ separately.
 - Port: the first free one from 8765 (`ss -ltn`, or `lsof -iTCP -sTCP:LISTEN -P -n` on macOS), also skipping the port in a
   `.tex-mcp-web.yaml` in this folder, since both tools default to 8765.
 - List templates and guidelines from the same installation and user directories that the
-  running MCP uses, which `setup_info()` reports. Show each source directory's absolute path
-  and its entries separately, including empty or missing directories. For duplicate names,
-  identify the effective user override. Mark entries whose required build.py or GUIDELINE.md
-  is missing rather than silently falling back to the built-in copy.
+  running MCP uses, as reported by `setup_info()`. Inspect each directory's absolute path and
+  entries, including empty or missing directories, without showing this inventory to the user.
+  For duplicate names, identify the effective user override. Mark entries whose required
+  build.py or GUIDELINE.md is missing rather than silently falling back to the installed copy.
 
 ## 2. Confirm
 
-Show one summary, in the user's language, like:
+Show one short choice list in the user's language, using the available choices found in
+section 1. Explain each choice in one line and mark the defaults. For the included choices, use
+this form:
 
-    config    : <startup directory>/.html-mcp-web.yaml
-    layout    : slides  (slides = 16:9 / report = A4)
-    main      : talk2/html/slides.html  (built from content, created if missing)
-    content   : talk2/html/content.html
-    template  : not selected  (recommended: neutral-slides)
-                built-in  <absolute dir>: neutral-report, neutral-slides
-                user      <absolute dir>: house
-    guideline : not selected  (recommended: neutral)
-                built-in  <absolute dir>: neutral
-                user      <absolute dir>: team-meeting
-    port      : 8766  (8765 is in use)
-    watch     : *.html *.css *.js *.svg *.png *.jpg *.jpeg *.gif *.webp -> 3 files here
+    Layout    : slides, 16:9 (default), or report, A4
+    Template  : neutral-slides, plain slides without organization marks (slide default)
+                neutral-report, a cover and one page per section (report default)
+    Guideline : neutral, writing rules the agent follows for slides (slide default)
+                none, no writing guideline (report default)
+    File      : slides.html (to be created)
 
-The defaults are slides with the neutral-slides template and the neutral guideline. For a
-report they are the neutral-report template and no guideline, since neutral is written for
-slides. With a template, main is the built file and content (default `content.html`) is the
-file the user edits.
+Adapt the selected choices and filename to the user's request and existing files. Show whether
+the document file will be created or reused. Include available user templates and guidelines
+beside the included choices, without grouping them by directory. If a user copy replaces an
+included choice of the same name, say only "uses your version" beside it.
 
-Show the template and guideline choices grouped by source directory, including each
-directory's absolute path and which copy is used for duplicate names. Mark documented defaults
-as recommendations. Ask only for choices the user has not already made, including no guideline
-as an option. Apply an explicit choice or request for defaults without asking again. Do not
-treat silence as agreement. A path choice the user has already approved is not asked again.
+Tell the user they can accept the defaults or name what to change. Ask only about choices they
+have not already authorized. Apply explicit choices or a request for defaults without asking
+again. Do not treat silence as agreement.
+
+Keep configuration paths, source directories, content and build details, ports, and watch
+patterns out of the summary. Show a file location only when needed to distinguish the user's
+choices. Handle an occupied port by selecting a free one as in section 1, without asking the
+user.
 
 If a documented default is missing or unusable, check the installation, lookup paths, and
-overrides before presenting the list as complete or writing the configuration. Report any
-unresolved problem rather than claiming that the remaining entries are the only choices.
+overrides before presenting the list as complete or writing the configuration. If a problem
+remains, explain which choice is unavailable and what decision is needed, without showing
+internal details unless that decision requires them. Do not present the remaining entries as
+the complete set of choices.
 
 ## 3. Write
 

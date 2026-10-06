@@ -502,7 +502,9 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 + " Start another copy only after the previous process has ended. "
                 "On [review], call read_comments(new=True) for the reported artifact and handle the review. "
                 "[gone] means the review server is unreachable; the script keeps retrying. "
-                "[back] means it is reachable again."
+                "[back] means it is reachable again. "
+                f"Once listening is active, give the user the full review page address, http://localhost:{port}, "
+                "and ask them to open it in their browser."
             ),
         }
 
