@@ -42,19 +42,20 @@ Check the rendered page and its layout before requesting independent review.
 
 ## Article 4. Complete independent review
 
-Use a reader who did not build the deck to find problems visible in the finished explanation.
+Use a reader who did not build the deck to find problems in the finished pages and spoken explanation.
 
 4.1 Before handing off a new deck or a revision across the deck, complete independent review after `layout()` returns an empty `errors` list, the configured content guideline's Article 7 checks pass, and the author completes the request checks in neutral clauses 8.2 and 8.3. Run one review round by default, with another only at the requester's direction.
 
-4.2 Use a reader who did not build the deck, such as a new agent or session. Give that reader only the built deck to view, page images from `image()`, and the instruction in 4.4. Do not provide the guideline, template documentation, planning files, sources, or an account of how the deck was made.
+4.2 Use a reader who did not build the deck, such as a new agent or session. First give that reader only the built deck to view, page images from `image()`, and the instruction in 4.4. After the reader records findings for all rendered pages, provide the scripts as text labelled by page for a second pass. Do not provide the guideline, template documentation, planning files, sources, other hidden notes, or an account of how the deck was made.
 
 4.3 Record one row per finding in a table with columns `Page`, `Finding as stated`, `Kind`, `Decision`, and `Action or reason`. Use `wording`, `logic`, `inconsistency`, or `layout` for kind and `adopt`, `reject`, or `hold` for decision. Hold changes that alter meaning or structure for the requester's decision. Fix adopted findings, rerun your content and layout checks on affected pages, and include the table in the handoff report.
 
 4.4 Copy this instruction to the reviewer:
 
 ```text
-Review every supplied page as a reader, using only the rendered deck. Do not inspect markup or hidden notes, consult other material, or edit the deck.
+First review every supplied page as a reader, using only the rendered deck. Record your findings for all pages before requesting or reading the scripts. Do not inspect markup or other hidden notes, consult other material, or edit the deck.
 Read for wording that interrupts understanding, including undefined terms, implementation names that replace needed explanations, phrases without an actor or action, and several terms used for one meaning. Read titles, leads, and takeaways in order for jumps, repetition, and conclusions without premises. On each page, check whether visible evidence supports the takeaway, how any difference used to justify it leads to the conclusion, whether comparisons identify both sides, and whether each visible citation clearly identifies the claim or evidence it refers to.
 Always check for titles or takeaways that contradict figures, evaluative words such as sufficient, limited, or negligible without support on the page, later pages that repeat earlier ones, and contents or overviews that disagree with the body. Check for conflicting values of the same quantity under the same conditions, totals that do not add up, unexplained changes in units or periods, and values with no source or derivation that are not labeled illustrative or assumed.
-Seek at least three specific findings and order them by what to fix first. For each, give the page number, quote the relevant visible text, and explain the problem. For conflicts across pages, identify and quote both pages. Report only findings supported by what is visible. If fewer than three are supported, report those and state that fewer were found.
+Then review the supplied scripts in spoken order alongside their pages. Check that each reference identifies what is being discussed, terms have clear and consistent meanings, and sentences follow the visible explanation without jumps or contradictions. Check that measurements and calculated values shown on the page are interpreted rather than read aloud. Ratios, multiples, and values that define the rule itself may be spoken when they carry the explanation. Flag unclear or unsupported interpretations as well. Keep the findings from the first pass even if the script explains what the page left unclear.
+Seek at least three specific findings across both passes and order them by what to fix first. For each, give the page number, identify whether it concerns the page or script, quote the relevant text, and explain the problem. For conflicts across pages or between a page and its script, identify and quote both. Report only findings supported by the rendered pages or supplied scripts. If fewer than three are supported, report those and state that fewer were found.
 ```
