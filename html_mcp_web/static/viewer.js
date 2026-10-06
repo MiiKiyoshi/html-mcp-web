@@ -562,7 +562,7 @@ function loadThumbs() {
     return;
   }
   frame.dataset.loaded = wanted;
-  frame.src = `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}`;
+  showInFrame(frame, `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}`);
 }
 
 function thumbPages() {
@@ -1642,7 +1642,13 @@ function loadArtifact(preserveView) {
   state.loadedRevision = state.revision;
   iframe.dataset.revision = String(state.revision);
   delete iframe.dataset.settled;
-  iframe.src = `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}`;
+  showInFrame(iframe, `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}`);
+}
+
+// Each revision replaces the frame's history entry rather than adding one: setting src added
+// an entry to the review page's history for every edit the agent made.
+function showInFrame(frame, url) {
+  frame.contentWindow.location.replace(url);
 }
 
 // A reload for newer viewer code starts the deck again from its first page. The page learns
