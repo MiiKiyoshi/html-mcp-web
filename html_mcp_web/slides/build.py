@@ -520,8 +520,9 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
                     body_html = body_html.replace(match.group(0), "")
                 number = section.attributes.get("data-no", "").strip()
                 number_html = f'<span class="no">{number}</span>' if number else ""
+                cap_class = "cap numbered" if number else "cap"
                 inner = f'''      <div class="wide" data-layout-guard>
-        <div class="cap">{number_html}
+        <div class="{cap_class}">{number_html}
 {body_html.strip()}
         </div>{shot}
       </div>'''

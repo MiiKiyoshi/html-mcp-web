@@ -260,10 +260,12 @@
   display: inline-block;
   max-width: 620px;
   margin-top: 210px;
-  padding: 26px 34px 26px 96px;
+  padding: 26px 34px;
   border-left: 5px solid var(--accent);
   background: rgba(255, 255, 255, .06);
 }
+/* Only a numbered capsule keeps room on the left for its number. */
+.divider .cap.numbered { padding-left: 96px; }
 .divider .cap .no {
   position: absolute;
   left: 30px;

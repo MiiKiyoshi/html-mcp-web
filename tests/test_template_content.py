@@ -78,6 +78,32 @@ def test_page_kinds_carry_their_own_attributes(tmp_path: Path) -> None:
     assert content.sections[2].layout == "body"
 
 
+def test_only_a_numbered_divider_marks_its_capsule(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+
+    content_file = tmp_path / "content.html"
+    content_file.write_text('''<!doctype html>
+<title>Deck</title>
+<body data-author="Researcher" data-meta="Lab">
+  <section data-layout="divider" data-no="01"><p class="label">Numbered</p></section>
+  <section data-layout="divider"><p class="label">Plain</p></section>
+</body>
+''', encoding="utf-8")
+    template = Path(__file__).resolve().parent.parent / "templates" / "neutral-slides"
+    output = tmp_path / "slides.html"
+    subprocess.run(
+        [sys.executable, str(template / "build.py"), str(content_file), str(output)],
+        check=True, capture_output=True, env=BUILD_ENV,
+    )
+
+    built = output.read_text(encoding="utf-8")
+    # The skin reserves room for the number only on a numbered capsule, so a plain one
+    # centres its label between equal sides.
+    assert '<div class="cap numbered"><span class="no">01</span>' in built
+    assert '<div class="cap">\n<p class="label">Plain</p>' in built
+
+
 def test_a_titled_page_still_requires_its_title(tmp_path: Path) -> None:
     content_file = tmp_path / "content.html"
     content_file.write_text(
