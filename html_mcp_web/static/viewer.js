@@ -598,6 +598,7 @@ function installThumbs() {
     const page = event.target.closest?.("body > main.pages > section.page");
     if (page) jumpToPage(thumbPages().indexOf(page) + 1);
   });
+  doc.addEventListener("keydown", handleThumbKey);
   // A new document starts unmoved. Not passive, so the browser waits for the hand-over
   // before it scrolls the column on a wheel or a touch.
   thumbShift = 0;
@@ -610,6 +611,28 @@ function installThumbs() {
     window.htmlMcpTrace?.(`thumb-scroll y=${Math.round(doc.defaultView.scrollY)}`);
   }, { passive: true });
   markCurrentThumb();
+}
+
+// With the column focused, the arrow and page keys step the deck a page at a time, and Home
+// and End go to its ends. A run of presses counts from where the last one went: the deck's
+// own page is read from its scroll a frame later, and a quick second press read it unchanged.
+let thumbKey = null;
+
+function handleThumbKey(event) {
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
+  const steps = { ArrowUp: -1, ArrowLeft: -1, PageUp: -1, ArrowDown: 1, ArrowRight: 1, PageDown: 1 };
+  const count = artifactPages().length;
+  if (count === 0) return;
+  let page;
+  if (event.key === "Home") page = 1;
+  else if (event.key === "End") page = count;
+  else if (event.key in steps) {
+    const recent = thumbKey !== null && performance.now() - thumbKey.time < 500;
+    page = Math.min(Math.max((recent ? thumbKey.page : state.currentPage || 1) + steps[event.key], 1), count);
+  } else return;
+  event.preventDefault();
+  thumbKey = { page, time: performance.now() };
+  artifactPages()[page - 1].scrollIntoView({ behavior: "instant", block: "start" });
 }
 
 function shiftThumbs(shift) {

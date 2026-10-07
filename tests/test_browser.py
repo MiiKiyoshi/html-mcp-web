@@ -1758,6 +1758,29 @@ def test_slide_previews_open_from_the_first_button_and_lead_to_a_page(tmp_path: 
         '''))
         assert placed["twoAbove"] >= -1 and placed["marked"] > 0, placed
 
+        # With the column focused, the arrow keys step the deck: two quick presses go two
+        # pages on, not one, an up arrow comes back one, and Home goes to the first page.
+        at_page = '''
+          const index = arguments[0];
+          const win = document.querySelector("#artifact-frame").contentWindow;
+          const page = win.document.querySelectorAll("main.pages > section.page")[index];
+          const thumbs = document.querySelector("#thumbs-frame").contentDocument;
+          return Math.abs(page.getBoundingClientRect().top) < 30
+            && thumbs.querySelectorAll("main.pages > section.page")[index].classList.contains("html-mcp-thumb-current");
+        '''
+        press = '''
+          const thumbs = document.querySelector("#thumbs-frame").contentDocument;
+          for (const key of arguments[0]) {
+            thumbs.dispatchEvent(new thumbs.defaultView.KeyboardEvent("keydown", {key, bubbles: true, cancelable: true}));
+          }
+        '''
+        browser.execute_script(press, script_args=[["ArrowDown", "ArrowDown"]])
+        wait_until(lambda: browser.execute_script(at_page, script_args=[7]))
+        browser.execute_script(press, script_args=[["ArrowUp"]])
+        wait_until(lambda: browser.execute_script(at_page, script_args=[6]))
+        browser.execute_script(press, script_args=[["Home"]])
+        wait_until(lambda: browser.execute_script(at_page, script_args=[0]))
+
         browser.find_element("css selector", "#thumbs-btn").click()
         folded = browser.execute_script(geometry)
         assert not folded["open"] and not folded["shown"] and abs(folded["frameLeft"]) <= 1, folded
