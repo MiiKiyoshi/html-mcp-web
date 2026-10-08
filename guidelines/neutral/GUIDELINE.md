@@ -30,7 +30,7 @@ Match evidence to the kind of claim being made.
 
 2.3 Establish a cause with evidence that distinguishes it from plausible alternatives, and name the source. Otherwise state the observation and label the explanation as proposed.
 
-2.4 Give every content page a check the reader can perform. Show a source or calculation for reported measurements, counts, and computed values. Verify chosen settings against the configuration or decision record, and support claimed benefits separately. Trace mechanism steps to sources or rules and background facts to named sources. Remove unsupported claims or mark them unresolved.
+2.4 Give every content page a check the reader can perform. For a reported result, identify the tested cases and conditions. If only a subset of the introduced evaluation set was tested or shown, state why and keep the conclusion within the supported scope. Show a source or calculation for reported measurements, counts, and computed values. Verify chosen settings against the configuration or decision record, and support claimed benefits separately. Trace mechanism steps to sources or rules and background facts to named sources. Remove unsupported claims or mark them unresolved.
 
 2.5 Identify quantities as measured, source-reported, assumed, chosen, or computed, with their sources, decision records, or derivations. Generate results and derived numbers from primary data and compare reported values with that output. Show inputs, rules, and assumptions needed to recompute values. Apply the rule to the whole object, including the hard case. For counts, identify items and how groups form the total.
 
@@ -102,7 +102,7 @@ Use digits for counts and separate numeric assignments visually. Reserve mathema
 
 4.6 For sectioned decks, use the section name alone when sufficient. Otherwise, append a short noun phrase naming the page's object, process, or comparison, separated by an em dash. Name the subject at the level explained, not its conclusion, incidental source, or an action used merely to obtain it. A defined interface, format, or dataset can itself be the subject. Within the topic, use a group or stage name followed by a colon only for an established grouping or sequence the reader needs. Make the title, visual, and takeaway address the same point.
 
-4.7 By default, give content pages one lead and one takeaway. The lead is a short noun phrase raising one problem the page answers, without joined clauses, a restated title, a question, or a list of figure contents. Keep the explanation and answer out of the lead. The takeaway states the single conclusion supported by the visible content. Orientation pages are exempt.
+4.7 By default, give content pages one lead and one takeaway. The lead is a short noun phrase raising one problem the page answers, without joined clauses, a restated title, a question, or a list of figure contents. Keep the explanation and answer out of the lead. The takeaway states the single conclusion supported by the visible content. For measurement results, state what they show about the claim or mechanism tested, within the scope of the evidence. Include a value only when it carries that conclusion. Orientation pages are exempt.
 
 4.8 Separate distinct statements in prose, captions, cells, scripts, and planning records. Use an explicit conjunction when their relationship matters.
 
