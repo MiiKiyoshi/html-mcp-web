@@ -4,13 +4,13 @@
 
 These rules govern how authors build and check paged HTML documents. Read this document in full. Consult [COMPONENTS.md](COMPONENTS.md) by component for markup and layout reports. The configured content guideline governs what the document says and shows. References to neutral clauses below link to the [neutral content guideline](../guidelines/neutral/GUIDELINE.md).
 
-## Article 1. Prepare the document
+## Article 1. Prepare and draft the document
 
-Keep the source and planning records ready for the next edit.
+Build the explanation before fixing its layout or filling the page with text.
 
 1.1 Keep the template's page geometry. Without a template, preserve the `main.pages` and `section.page` structure described in [README.md](README.md#without-a-template).
 
-1.2 Keep `<artifact>.FLOORPLAN.md` beside the edit file and outside the deck. Follow neutral clause 3.2 for planning and updates. Include a term ledger naming the page and element that defines each unfamiliar term. Apply neutral clause 4.3 and fix missing or late definitions before handoff.
+1.2 Follow neutral clause 3.4 when creating a page: establish its question and answer, construct the visual relationship, add the words still needed, then write the title, takeaway, and script. Keep `<artifact>.FLOORPLAN.md` beside the edit file and outside the deck, recording decisions as they are made under neutral clause 3.2. When introducing an unfamiliar term, place its definition before use under neutral clause 4.3 and record that page and element in the term ledger.
 
 ## Article 2. Build figures and tables
 
@@ -20,7 +20,7 @@ Fit content to its intended box while preserving its meaning and proportions.
 
 2.2 Use the same units statement form on every slide that shows measurements. See `p.units` in [the table reference](COMPONENTS.md#tables-and-units).
 
-2.3 Prefer inline SVG over a picture of a drawing when the other components do not carry the figure. Settle the figure's box first from the column width and the height left on the page. Give its `viewBox` those proportions and the size at which the figure is drawn, rather than a smaller box scaled up. Draw inside it. Lay out each panel for its own width and height while preserving grouping and reading order. When a page has one figure, size it for the available content area and readable detail rather than placing it in an unnecessarily small box.
+2.3 For the visual chosen under neutral clause 3.4, prefer inline SVG over a picture of a drawing when other components do not carry it. Size the figure's box from the column width and the height available on the page. Give its `viewBox` those proportions and the size at which the figure is drawn, rather than a smaller box scaled up. Draw inside it. Lay out each panel for its own width and height while preserving grouping and reading order. When a page has one figure, size it for the available content area and readable detail rather than placing it in an unnecessarily small box.
 
 2.4 Give raster figures a `max-height`. Preserve the source width to height ratio of images, including `<img>`, images inside SVG, and CSS backgrounds. At the intended display or export size, check the rendered image itself, excluding padding and letterboxing, for correct proportions and readable text and marks needed by the page. A clean layout report does not establish these qualities.
 
