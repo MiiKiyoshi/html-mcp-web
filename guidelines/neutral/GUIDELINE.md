@@ -16,7 +16,7 @@ Include what moves the reader from their existing knowledge to the understanding
 
 1.2 Do not substitute an easier, documented, or measurable question for the one requested.
 
-1.3 Remove each element in thought, considering the reader's knowledge and what words, drawings, and conventions already convey. Keep it only if removal loses information, a condition, a distinction, or guidance needed to understand, assess evidence, or act. Apply this test at every scale, from a label or repeated count to a whole page. Judge necessity separately from clarity or fit.
+1.3 Before adding an element, identify what information, condition, distinction, or guidance the reader needs there that their knowledge and the existing words, drawings, and conventions do not already provide. If omitting it would lose none of these, do not add it. Apply this test at every scale, from a label or repeated count to a whole page. Judge necessity separately from clarity or fit.
 
 1.4 Cut self-evaluation, inflated claims, and process narration. Keep drafting, revision, and submission history in planning records unless it passes 1.3.
 
@@ -86,7 +86,7 @@ Recap connects prior context to the result now needed. Summary of Progress cover
 
 Judge language by what the reader understands, not the author's intention.
 
-4.1 Use vocabulary with clear, established meanings that is actually in common use for the audience and field in the deck's language, including established loanwords. Avoid rarely used words even when their dictionary meanings are valid. Do not replace established terms with paraphrases or coinages merely to sound plainer. If no established term fits, describe the concept's relevant objects, properties, and relationships. Preserve the source's meaning. Do not substitute unexplained identifiers, working labels, literal translations, or type signatures for an explanation. Retain command, option, and data structure names when needed to identify the subject. Explain unfamiliar terms, including ordinary words used technically, under 4.3.
+4.1 Before wording an action or object, start from how the audience and field name it in the deck's language, including established loanwords. Choose expressions with clear meanings and actual common use, including in titles, labels, and takeaways. Do not form them by literally translating an internal code name or a word from another language. Avoid rarely used words even when their dictionary meanings are valid. Do not replace established terms with paraphrases or coinages merely to sound plainer. If no established term fits, describe the concept's relevant objects, properties, and relationships. Preserve the source's meaning. Do not substitute unexplained identifiers, working labels, or type signatures for an explanation. Retain command, option, and data structure names when needed to identify the subject. Explain unfamiliar terms, including ordinary words used technically, under 4.3.
 
 4.2 Identify actors, objects, and their relationships. When describing an action or change, first state what acts or changes and what happens to the affected object. Before shortening that explanation into a title, label, definition, or summary, check that the wording and drawing still identify the action and its participants. Use a general verb or placeholder only when its specific action or referent is already clear there. Name steps by their object and operation at the level explained, not a hidden substep. Describe special cases through conditions and effects. State when a claim holds instead of narrating the author's act of assuming it. Do not invent a domain explanation for an implementation condition without evidence of their correspondence.
 
@@ -134,7 +134,7 @@ Put operations on their operands. Label relations the visual convention does not
 
 5.5 Use pictograms to identify object kinds and roles in conceptual explanations unless standard symbols or the drawing already do so. Check their meanings.
 
-In every diagram, enclose separately labeled parts and stages in separate panels with their labels and explanations inside. Spacing or divider lines do not replace panels. Only parts compared on shared axes may share a panel. Add an outer figure panel only for a needed grouping or distinction. Extend or rearrange drawings for additions instead of squeezing them into gaps.
+In every diagram, enclose separately labeled parts and stages in separate panels with their labels and explanations inside. Spacing or divider lines do not replace panels. Only parts compared on shared axes may share a panel. Add an outer figure panel only for a needed grouping or distinction. Neighboring panels need not contain equal amounts of text. Do not add content merely to match panel shapes or fill unused space. Extend or rearrange drawings for additions instead of squeezing them into gaps.
 
 5.6 Explain mechanisms with the smallest set of instances the reader can check by hand. For general rules, default to generic examples with short placeholder names and simple values. Use real names or measured values when identity or magnitude matters to the claim. Show purpose and operation, including input and response for model claims, and the conditions and scope beyond the instance. When connecting concepts to code, formats, or records, retain source excerpts and show their correspondence.
 
