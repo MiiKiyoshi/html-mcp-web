@@ -138,7 +138,7 @@ TeX delimiters are `$…$` for inline math and `$$…$$` for display math. `\(�
 
 The check reports clipped body content and title text outside the title bar or overlapping an image in it. On contents and divider pages, it reports overflow anywhere above the footer bar. For contents lists, it uses the scaled list size and reports a wasted last line in columns. It also reports overflowing lines in `pre`.
 
-For inline SVG, it reports shapes beyond the `viewBox`, empty space occupying a quarter or more of a side, overlapping labels, and labels beyond the sides of the rectangle they sit on. For the last case, it names the side and excess.
+For inline SVG, it reports shapes beyond the `viewBox`, borders of rectangles, circles, ellipses, and polygons cut at the `viewBox` edge, empty space occupying a quarter or more of a side, overlapping labels, and labels beyond the sides of the rectangle they sit on. For the last case, it names the side and excess.
 
 Connector warnings cover an arrowhead or the line just before it overlapping a label or crossing another connector. Endpoint joins and lines along one another are excluded. A separate warning names the box and existing connection when a return arrow running left or up enters an occupied side while another side is unused. Another warning reports a short detour around a box and names a permitted side with a straight route clear of connectors, labels, and boxes. A step that joins facing sides of two boxes and turns in the gap between them is not a detour.
 

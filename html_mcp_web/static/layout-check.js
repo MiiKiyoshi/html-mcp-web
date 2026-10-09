@@ -531,8 +531,8 @@ export function createLayoutChecks(dependencies) {
       // An SVG viewport hides whatever falls outside its viewBox, and no box-model
       // measurement sees it: the element reports the same scroll and client size
       // either way. getBBox holds the drawing's geometry, which is what the viewBox has
-      // to cover; a stroke or an arrow head bleeds a sliver past it that no reader sees,
-      // and that paint stays out of the comparison.
+      // to cover. An arrow head bleeds a sliver past it that no reader sees, and that paint
+      // stays out of the comparison. A shape's border is checked below on its own.
       for (const svg of Array.from(page.querySelectorAll("svg")).map((element) => {
         const view = element.viewBox?.baseVal;
         if (!view || view.width === 0 || view.height === 0) return null;
@@ -568,6 +568,45 @@ export function createLayoutChecks(dependencies) {
         if (sides.length > 0) {
           addError(
             `page ${index + 1} ${describeElement(svg.element)} draws outside its viewBox and is cut off (${sides.join(", ")})`,
+            svg.element);
+        }
+        // Half of a shape's border lies outside its geometry, which getBBox leaves out, so a
+        // box drawn against the viewBox edge passed the check above while the outer half of
+        // its border was cut: readers saw that side drawn thinner. A closed shape whose
+        // border loses more than half of its outer half at an edge is reported, measured in
+        // the svg's own units. Sides already reported above are not repeated.
+        const toView = svg.element.getScreenCTM()?.inverse();
+        const clipped = [];
+        for (const shape of svg.element.querySelectorAll("rect:not([data-html-slot]), circle, ellipse, polygon")) {
+          if (toView === undefined || shape.closest("defs, symbol, clipPath, mask, pattern, marker") !== null) continue;
+          const paint = doc.defaultView.getComputedStyle(shape);
+          const width = parseFloat(paint.strokeWidth);
+          if (paint.stroke === "none" || paint.visibility === "hidden" || !(width > 0)) continue;
+          const bbox = safeBBox(shape);
+          const own = shape.getScreenCTM();
+          if (bbox === null || own === null || (bbox.width === 0 && bbox.height === 0)) continue;
+          const matrix = toView.multiply(own);
+          const corners = [[bbox.x, bbox.y], [bbox.x + bbox.width, bbox.y],
+                           [bbox.x, bbox.y + bbox.height], [bbox.x + bbox.width, bbox.y + bbox.height]]
+            .map(([x, y]) => [matrix.a * x + matrix.c * y + matrix.e, matrix.b * x + matrix.d * y + matrix.f]);
+          const half = (width / 2) * Math.sqrt(Math.abs(matrix.a * matrix.d - matrix.b * matrix.c));
+          const lost = {
+            left: view.x - (Math.min(...corners.map(([x]) => x)) - half),
+            top: view.y - (Math.min(...corners.map(([, y]) => y)) - half),
+            right: Math.max(...corners.map(([x]) => x)) + half - (view.x + view.width),
+            bottom: Math.max(...corners.map(([, y]) => y)) + half - (view.y + view.height),
+          };
+          const edges = Object.entries(lost)
+            .filter(([side, amount]) => amount > half / 2 && !sides.some((entry) => entry.startsWith(`${side} `)))
+            .map(([side]) => side);
+          const corner = `${Math.round(Math.min(...corners.map(([x]) => x)))},${Math.round(Math.min(...corners.map(([, y]) => y)))}`;
+          if (edges.length > 0) clipped.push(`${describeElement(shape)} at (${corner}) cut at the ${edges.join(" and ")}`);
+        }
+        if (clipped.length > 0) {
+          addError(
+            `page ${index + 1} ${describeElement(svg.element)} cuts off the border of ${clipped.length} shape`
+            + `${clipped.length > 1 ? "s" : ""} at its viewBox edge (${clipped.slice(0, 3).join(", ")}`
+            + `${clipped.length > 3 ? ", and more" : ""}). Keep each border inside the viewBox by half its stroke width`,
             svg.element);
         }
         // The opposite mistake: page space the drawing does not use. It comes from two

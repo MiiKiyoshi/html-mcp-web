@@ -95,6 +95,12 @@ x</pre>
          pane's zoom instead of in page pixels. -->
     <!-- The shape runs past the viewBox bottom, which no box-model measurement sees. -->
     <svg id="cut" viewBox="0 -14 400 60" width="400" height="60"><rect x="10" y="0" width="380" height="56"/></svg>
+    <!-- A box drawn against the left edge loses the outer half of its border there. The
+         one beside it keeps half its stroke width inside the edge, which is enough. -->
+    <svg id="edge-border" viewBox="0 0 400 60" width="400" height="60">
+      <rect x="0" y="10" width="150" height="40" fill="none" stroke="#333" stroke-width="2"/>
+      <rect x="200" y="10" width="199" height="40" fill="none" stroke="#333" stroke-width="2"/>
+    </svg>
     <!-- Declares a box twice the width of what it draws, so half the strip is held idle. -->
     <svg id="idle" viewBox="0 0 800 80" width="800" height="80"><rect x="10" y="10" width="380" height="60"/></svg>
     <!-- The drawing fills its viewBox, but the element box is a different shape, so the
@@ -125,12 +131,13 @@ x</pre>
       <text x="14" y="155" font-size="14">a label on no box is left alone even if long</text>
     </svg>
     <!-- A marker parked outside the viewBox is painted where the line references it, and
-         a stroke on the boundary bleeds by half its width. Neither is a cut drawing. -->
+         a box whose border sits half a stroke inside the edge keeps all of it. Neither is a
+         cut drawing. -->
     <svg id="quiet" viewBox="0 0 400 60" width="400" height="60">
       <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
         <path d="M0,0 L8,4 L0,8 z"/></marker></defs>
       <line x1="20" y1="30" x2="380" y2="30" stroke="#333" stroke-width="3" marker-end="url(#arrow)"/>
-      <rect x="0" y="0" width="120" height="60" fill="none" stroke="#333" stroke-width="2"/>
+      <rect x="1" y="1" width="120" height="58" fill="none" stroke="#333" stroke-width="2"/>
     </svg>
     <!-- A return arrow enters the first box on its right side, where the box's output
          leaves, while its other sides are free. Two forward inputs enter the box below on
@@ -793,6 +800,11 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert not any("p#dipped" in error or "A line that ends" in error for error in errors)
         assert any("svg#cut> draws outside its viewBox and is cut off (bottom by 10)" in error
                    for error in errors)
+        # The border against the left edge is cut, the one half a stroke inside is not, and the
+        # geometry fits, so this is the only report for that svg.
+        edge = [error for error in errors if "svg#edge-border>" in error]
+        assert len(edge) == 1 and "cuts off the border of 1 shape at its viewBox edge" in edge[0], edge
+        assert "<rect> at (0,10) cut at the left)" in edge[0] and "right" not in edge[0], edge
         assert not any("svg#quiet" in error for error in errors)
         # A return arrow that crowds a busy side while another side is free is reported with
         # its box and the connection beside it. A fan-in of forward inputs is not.
