@@ -71,7 +71,7 @@ Build one element at a time in reading order, using only prerequisites already e
 
 3.6 Establish each claim once in the explanation. Necessary local context under 3.5 does not require proving it again. Elsewhere, add a consequence or interpretation. An overview's expansion must answer a further question, not repeat the topic. Combine subjects only through a real connection. Resolve or report conflicts with earlier pages.
 
-3.7 Before introducing a concept, identify the concrete problem that makes it needed. Trace a mechanism or calculation through its primary source from inputs, operations, and conditions to outputs and their use in the next step, through to the required result. Check simplifications against that trace. Mark unresolved steps as unverified in the plan and dependent drafts.
+3.7 Before introducing a concept, identify the concrete problem that makes it needed and, for a method, connect what it changes to its intended effect on that problem. Trace a mechanism or calculation through its primary source from inputs, operations, and conditions to outputs and their use in the next step, through to the required result. Check simplifications against that trace. Mark unresolved steps as unverified in the plan and dependent drafts.
 
 For an unfamiliar mechanism, show what happens to named objects, what changes, what stays fixed, and what follows before attaching the technical name and definition. Explain its referent and defining rule at the page's level, then build the formal explanation on those relationships. In writing and review, accept introductory simplifications that preserve the relationships and agree with the formal explanation and 2.6.
 
