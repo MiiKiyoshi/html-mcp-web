@@ -10,7 +10,7 @@ Build the explanation before fixing its layout or filling the page with text.
 
 1.1 Keep the template's page geometry. Without a template, preserve the `main.pages` and `section.page` structure described in [README.md](README.md#without-a-template).
 
-1.2 Follow neutral clause 3.4 when creating a page: establish its question and answer, construct the visual relationship, add the words still needed, then write the title, takeaway, and script. Keep `<artifact>.FLOORPLAN.md` beside the edit file and outside the deck, recording decisions as they are made under neutral clause 3.2. When introducing an unfamiliar term, place its definition before use under neutral clause 4.3 and record that page and element in the term ledger.
+1.2 Plan or reconstruct the explanation and its page grouping under neutral clauses 3.1, 3.2, and 3.10 before drafting pages under 3.4. Keep `<artifact>.FLOORPLAN.md` beside the edit file and outside the deck, recording decisions as they are made under neutral clause 3.2. When introducing an unfamiliar term, place its definition before use under neutral clause 4.3 and record that page and element in the term ledger.
 
 ## Article 2. Build figures and tables
 

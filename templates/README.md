@@ -1,6 +1,6 @@
 # Authoring a paged HTML document
 
-Edit the `edit_file` that `guide()` names. Read this entry once when creating a document and reuse the existing structure for later edits.
+Edit the `edit_file` that `guide()` names. Read this entry once when creating a document and reuse the existing markup conventions for later edits.
 
 ## Reading the documents
 
