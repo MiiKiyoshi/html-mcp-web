@@ -1,4 +1,4 @@
-import { measureArtifactSpace, groupLines, elementRef } from "./space-measure.js";
+import { measureArtifactSpace, groupLines, sameLine, elementRef } from "./space-measure.js";
 
 // Set only in the browser the server opens for its own layout check.
 const checkToken = new URLSearchParams(location.search).get("check");
@@ -29,6 +29,25 @@ export function createLayoutChecks(dependencies) {
     const copy = element.cloneNode(true);
     for (const hidden of copy.querySelectorAll(".katex-mathml")) hidden.remove();
     return copy.textContent.trim().replace(/\s+/g, " ");
+  }
+
+  // The words a line of a block shows: the characters whose boxes sit on it. KaTeX's
+  // hidden MathML copy is on no line the reader sees.
+  function lineText(block, line) {
+    const doc = block.ownerDocument;
+    const walker = doc.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    const range = doc.createRange();
+    let text = "";
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      if (node.parentElement.closest(".katex-mathml") !== null) continue;
+      for (let offset = 0; offset < node.length; offset += 1) {
+        range.setStart(node, offset);
+        range.setEnd(node, offset + 1);
+        const box = range.getBoundingClientRect();
+        if (box.height > 0 && sameLine(line, box)) text += node.data[offset];
+      }
+    }
+    return text.trim().replace(/\s+/g, " ");
   }
 
   // Where the viewBox lands inside the element box, and at what scale. An element box of a
@@ -388,8 +407,10 @@ export function createLayoutChecks(dependencies) {
           const label = readableText(block).slice(0, 24);
           // The tail's own width is the amount to trim (or the room to fill): fitting it
           // took a fix-rebuild-inspect round before, just to learn how far off it was.
+          // Its words are the ones to bring back up. The label shows only how the block
+          // starts, and finding where it ended took opening the page.
           addError(`page ${index + 1} ${block.tagName.toLowerCase()} "${label}…" wastes its last line `
-            + `on a ${Math.round(last)}px tail`, block);
+            + `on a ${Math.round(last)}px tail "${lineText(block, lines[lines.length - 1])}"`, block);
         }
       }
       // Text placed with baseline-shift, alignment-baseline, or a tspan's dominant-baseline

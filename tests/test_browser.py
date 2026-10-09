@@ -790,6 +790,8 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         # The error itself says which block and by how much, so the fix needs no
         # drill-down first and no second round to learn the amount.
         assert re.search(r"on a \d+px tail", tail_error)
+        # The words on that line are in it too, the ones the fix has to bring back up.
+        assert 'tail "x"' in tail_error
         assert re.search(r"\[p1:\d+(\.\d+)*\]$", tail_error)
         assert not any("A verbatim line" in error for error in errors)
         cut_error = next(error for error in errors if "svg#cut>" in error)
