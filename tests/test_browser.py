@@ -4780,6 +4780,28 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path) ->
         refreshed = wait_until(lambda: browser.execute_script(
             f'const win = {frame_window}; return win && win.scrollY > 0 ? win.scrollY : null;'))
         assert abs(refreshed - read_at) <= 2
+
+        # A tab sent to the background keeps the place too when it comes back reloaded
+        # with nothing saved on the way out, as a tab the browser discarded to free memory
+        # does: the discarded page runs no pagehide.
+        viewer = browser.current_window_handle
+        other = browser.open(type="tab", focus=True)["handle"]
+        browser.switch_to_window(other, focus=True)
+        browser.switch_to_window(viewer, focus=False)
+        wait_until(lambda: browser.execute_script('return document.visibilityState === "hidden"'))
+        # In the page's own scope: from the default sandbox the change does not reach it.
+        browser.execute_script('Storage.prototype.setItem = () => {};'
+                               'document.body.dataset.sameLoad = "yes";', sandbox=None)
+        browser.refresh()
+        browser.switch_to_window(other, focus=True)
+        browser.close()
+        browser.switch_to_window(viewer, focus=True)
+        wait_until(lambda: browser.execute_script(
+            'return document.body.dataset.sameLoad !== "yes"'
+            ' && document.querySelector("#artifact-status")?.textContent === "ready"'))
+        returned = wait_until(lambda: browser.execute_script(
+            f'const win = {frame_window}; return win && win.scrollY > 0 ? win.scrollY : null;'))
+        assert abs(returned - read_at) <= 2
     finally:
         os.utime(moved, (kept.st_atime, kept.st_mtime))
         if browser is not None:
@@ -4903,6 +4925,15 @@ def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
                   others.every((frame) => frame.hasAttribute("inert")),
                   frames.every((frame) => getComputedStyle(frame).willChange === "transform")];
         """) == [2, 1, 1, True, True, True, True]
+
+        # A deck rebuilt while the reader is on the other tab opens where it was left: an
+        # edit made in the meantime loaded it from the top.
+        switch_to(1, "Second deck.")
+        built = get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["first"]["revision"]
+        (tmp_path / "first.html").write_text(slides_html("First deck, edited."), encoding="utf-8")
+        wait_until(lambda: get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["first"]["revision"] != built)
+        rebuilt = switch_to(0, "First deck, edited.")
+        assert abs(rebuilt["y"] - left["y"]) <= 2, (left, rebuilt)
     finally:
         if browser is not None:
             try:

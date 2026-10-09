@@ -24,7 +24,8 @@ const state = {
   activeForm: null,
   editingEntry: null,
   unattached: new Set(),
-  pendingView: null,
+  // The scroll each artifact's next document opens at, by id, kept until it is put back.
+  pendingViews: {},
   // One frame per artifact, by id, kept with its document: a tab shows its own frame
   // and hides the others. Loading the next artifact into the one frame there was
   // fetched and parsed the whole deck again, fonts and all, ran the layout check over
@@ -169,7 +170,9 @@ async function selectArtifact(artifactId) {
   await refreshComments();
   if (state.view !== "preview") await loadSource(true);
   if (state.loadedRevision === state.revision) showLoadedArtifact(frame);
-  else loadArtifact(false);
+  // A deck rebuilt while the reader was on another tab opens where they left it, as an
+  // edit does while it is shown: loading it from the top sent them back to page 1.
+  else loadArtifact(true);
 }
 
 function updateArtifactLinks() {
@@ -1631,10 +1634,13 @@ function attachArtifactEvents(frame) {
   // The zoom the document is shown at is the artifact's own, and the reset control
   // follows it; a scroll put back means the same only at the zoom it was taken at.
   applyArtifactZoom();
-  if (state.pendingView !== null) {
-    const view = state.pendingView;
-    state.pendingView = null;
-    win.requestAnimationFrame(() => win.scrollTo(view.x, view.y));
+  const artifactId = state.artifactId;
+  const view = state.pendingViews[artifactId];
+  if (view !== undefined) {
+    win.requestAnimationFrame(() => {
+      win.scrollTo(view.x, view.y);
+      if (state.pendingViews[artifactId] === view) delete state.pendingViews[artifactId];
+    });
   } else {
     const place = recalledReadingPlace();
     if (place !== null) win.requestAnimationFrame(() => keepReadingPlace(place));
@@ -1659,8 +1665,11 @@ function loadArtifact(preserveView) {
   showFrame(iframe);
   if (thumbsOpen()) loadThumbs();
   if (state.loadedRevision === state.revision) return;
-  if (preserveView && iframe.contentWindow !== null) {
-    state.pendingView = { x: iframe.contentWindow.scrollX, y: iframe.contentWindow.scrollY };
+  // A view not yet put back is kept. A hidden tab runs no animation frames, and a second
+  // edit made while the reader was in another tab read the top of the document loaded for
+  // the first, which sent them back to page 1.
+  if (preserveView && state.pendingViews[state.artifactId] === undefined && iframe.contentWindow !== null) {
+    state.pendingViews[state.artifactId] = { x: iframe.contentWindow.scrollX, y: iframe.contentWindow.scrollY };
   }
   hideSelectionButton();
   state.loadedRevision = state.revision;
@@ -1679,13 +1688,18 @@ function showInFrame(frame, url) {
 // so the browser has no scroll of its own to put back. Readers were sent back to page 1 by
 // their own refresh and by the reload for newer viewer code. The page at the top of the
 // window and the point on it go through any reload in this tab's session storage. In the
-// full-screen slide show the page being shown is kept, from its top.
+// full-screen slide show the page being shown is kept, from its top. They are saved when
+// the tab is hidden as well as when it is left: a browser that discards a background tab
+// to free memory loads it again on return, and the discarded page ran no pagehide.
+// A frame still waiting to be put back shows the top of its document, so the place saved
+// before stands.
 const READING_PLACE = "htmlMcpReadingPlace";
 
 function rememberReadingPlace() {
   try {
     if (state.artifactId === null || frameDocument() === null) return;
     const held = state.slideShow ? state.currentPage || 1 : state.leftSlideShowAt;
+    if (held === null && state.pendingViews[state.artifactId] !== undefined) return;
     const shown = held === null ? undefined : artifactPages()[held - 1];
     const place = held === null ? readingPlace() : (shown === undefined ? null : { page: shown, y: 0 });
     if (place === null) return;
@@ -1949,6 +1963,9 @@ function attachSplitResize() {
 function attachControls() {
   attachSplitResize();
   window.addEventListener("pagehide", rememberReadingPlace);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") rememberReadingPlace();
+  });
   window.addEventListener("beforeunload", (event) => {
     if (!state.sourceDirty) return;
     event.preventDefault();
