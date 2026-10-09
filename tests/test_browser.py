@@ -1124,6 +1124,74 @@ return {tall: [box(tall).top, box(tall).bottom], column: [box(stack).top, box(st
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_korean_deck_breaks_lines_only_between_words(tmp_path: Path) -> None:
+    """A Korean list item wrapped inside a word and left one syllable on its last line;
+    a deck declared Korean breaks its body text only at the spaces between words."""
+    from html_mcp_web.slides import build
+
+    skin = tmp_path / "skin"
+    shutil.copytree(Path(__file__).resolve().parents[1] / "templates" / "neutral-slides", skin)
+    (skin / "skin.json").write_text('{"lang": "ko"}', encoding="utf-8")
+    sentence = "그래프의 시작점과 끝점을 나타내는 상수와 노드를 이어 주는 조건부 간선의 목록을 차례대로 적은 문장"
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<!doctype html>\n<meta charset="utf-8">\n<title>Korean</title>\n'
+        '<body data-author="A" data-meta="B">\n'
+        f'<section data-title="Korean"><ul style="width: 300px"><li id="ko">{sentence}</li></ul></section>\n'
+        "</body>\n", encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, skin)
+
+    profile = tempfile.mkdtemp(prefix="html_mcp_korean_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(html.as_uri())
+        wait_until(lambda: browser.execute_script("return !!document.querySelector('#ko')"))
+        # Where each line starts, read from the position of every character.
+        starts = browser.execute_script("""
+const node = document.querySelector('#ko').firstChild;
+const range = document.createRange();
+let top = null;
+const starts = [];
+for (let index = 0; index < node.length; index++) {
+  range.setStart(node, index);
+  range.setEnd(node, index + 1);
+  const rect = range.getClientRects()[0];
+  if (!rect) continue;
+  if (top !== null && rect.top > top + 4) starts.push(index);
+  top = rect.top;
+}
+return starts;
+""")
+        assert len(starts) >= 2, starts
+        # Every line after the first begins a word: the character before it is a space.
+        assert all(sentence[index - 1] == " " or sentence[index] == " " for index in starts), (
+            [sentence[index - 3:index + 3] for index in starts])
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_contents_with_sub_items_take_two_columns_only_when_one_overflows(tmp_path: Path) -> None:
     """Three sections with a few sub-items each were set in two columns as two and one,
     the third beside the first and the lower half of the page empty. A list with sub-items
