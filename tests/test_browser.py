@@ -4770,6 +4770,16 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path) ->
         restored = wait_until(lambda: browser.execute_script(
             f'const win = {frame_window}; return win && win.scrollY > 0 ? win.scrollY : null;'))
         assert abs(restored - read_at) <= 2
+
+        # The reader's own refresh keeps the place too.
+        browser.execute_script('document.body.dataset.sameLoad = "yes";')
+        browser.refresh()
+        wait_until(lambda: browser.execute_script(
+            'return document.body.dataset.sameLoad !== "yes"'
+            ' && document.querySelector("#artifact-status")?.textContent === "ready"'))
+        refreshed = wait_until(lambda: browser.execute_script(
+            f'const win = {frame_window}; return win && win.scrollY > 0 ? win.scrollY : null;'))
+        assert abs(refreshed - read_at) <= 2
     finally:
         os.utime(moved, (kept.st_atime, kept.st_mtime))
         if browser is not None:

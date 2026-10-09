@@ -43,6 +43,7 @@ const state = {
   pageFrame: null,
   currentPage: null,
   slideShow: false,
+  leftSlideShowAt: null,
   presentationPointer: null,
   presentationWheelEvents: [],
   presentationLastWheelStep: 0,
@@ -1674,16 +1675,19 @@ function showInFrame(frame, url) {
   frame.contentWindow.location.replace(url);
 }
 
-// A reload for newer viewer code starts the deck again from its first page. The page learns
-// of the new code from the next state it gets, which is the agent's next edit, so the
-// reader was sent back to page 1 by an edit made after an update. The page at the top of
-// the window and the point on it go through the reload in this tab's session storage.
+// A reload starts the deck again from its first page: the deck's frame is filled by script,
+// so the browser has no scroll of its own to put back. Readers were sent back to page 1 by
+// their own refresh and by the reload for newer viewer code. The page at the top of the
+// window and the point on it go through any reload in this tab's session storage. In the
+// full-screen slide show the page being shown is kept, from its top.
 const READING_PLACE = "htmlMcpReadingPlace";
 
 function rememberReadingPlace() {
   try {
-    if (state.slideShow || state.artifactId === null || frameDocument() === null) return;
-    const place = readingPlace();
+    if (state.artifactId === null || frameDocument() === null) return;
+    const held = state.slideShow ? state.currentPage || 1 : state.leftSlideShowAt;
+    const shown = held === null ? undefined : artifactPages()[held - 1];
+    const place = held === null ? readingPlace() : (shown === undefined ? null : { page: shown, y: 0 });
     if (place === null) return;
     sessionStorage.setItem(READING_PLACE, JSON.stringify(
       { artifact: state.artifactId, page: artifactPages().indexOf(place.page), y: place.y }));
@@ -1944,6 +1948,7 @@ function attachSplitResize() {
 
 function attachControls() {
   attachSplitResize();
+  window.addEventListener("pagehide", rememberReadingPlace);
   window.addEventListener("beforeunload", (event) => {
     if (!state.sourceDirty) return;
     event.preventDefault();

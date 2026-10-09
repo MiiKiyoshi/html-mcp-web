@@ -71,7 +71,14 @@ export function createPresentation(state, dependencies) {
     updatePageScale();
     const number = state.currentPage;
     if (number !== null) {
-      frameWindow().requestAnimationFrame(() => artifactPages()[number - 1]?.scrollIntoView({ block: "start" }));
+      // Until the deck is scrolled back to it, the page just shown is held for a reload:
+      // WebKit leaves full screen before the page is hidden, and read from the scroll the
+      // place was the first page.
+      state.leftSlideShowAt = number;
+      frameWindow().requestAnimationFrame(() => {
+        artifactPages()[number - 1]?.scrollIntoView({ block: "start" });
+        state.leftSlideShowAt = null;
+      });
     }
   }
 
