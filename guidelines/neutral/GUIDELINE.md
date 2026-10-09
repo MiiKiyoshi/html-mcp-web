@@ -16,7 +16,7 @@ Include what moves the reader from their existing knowledge to the understanding
 
 1.2 Do not substitute an easier, documented, or measurable question for the one requested.
 
-1.3 Before adding an element, identify what information, condition, distinction, or guidance the reader needs there that their knowledge and the existing words, drawings, and conventions do not already provide. If omitting it would lose none of these, do not add it. Apply this test at every scale, from a label or repeated count to a whole page. Judge necessity separately from clarity or fit.
+1.3 Before adding an element, or retaining one whose supporting context has changed, identify what information, condition, distinction, or guidance the reader needs there that their knowledge and the existing words, drawings, and conventions do not already provide. If omitting it would lose none of these, do not add or retain it. Apply this test at every scale, from a label or repeated count to a whole page. Judge necessity separately from clarity or fit.
 
 1.4 Cut self-evaluation, inflated claims, and process narration. Keep drafting, revision, and submission history in planning records unless it passes 1.3.
 
