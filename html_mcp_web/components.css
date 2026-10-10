@@ -18,6 +18,12 @@
      measure the same letters. A skin that names another face embeds it too. */
   --mono: "Deck Mono", ui-monospace, monospace;
   --code-bg: #ecefef;
+  /* Highlight roles 1 to 5 for mark: light tints, so the text keeps its own colour. */
+  --hl-1: #d3e4f6;
+  --hl-2: #fbdcc3;
+  --hl-3: #d4ecd2;
+  --hl-4: #e6daf3;
+  --hl-5: #e4e7e8;
 
   /* Safari measures a line of text one way when it can take its simplified path and
      another when it cannot, and the two drift apart along the line: a paragraph carrying
@@ -59,6 +65,17 @@ ul.notes { color: var(--muted); line-height: 1.55; }
 .pos { color: var(--good); font-weight: 650; }
 .neg { color: var(--bad); font-weight: 650; }
 code { background: var(--code-bg); font-family: var(--mono); font-size: .92em; }
+
+/* A highlight colours the box the letters already take and adds nothing around them, so
+   the letters of a monospaced line keep their columns and a check of the text covers its
+   highlight too. Inside a figure's foreignObject the browser fits it to the letters, which
+   rectangles drawn under svg text from a guessed letter width never were. */
+mark { color: inherit; background: var(--hl-1); border-radius: .15em; }
+mark[data-hl="2"] { background: var(--hl-2); }
+mark[data-hl="3"] { background: var(--hl-3); }
+mark[data-hl="4"] { background: var(--hl-4); }
+mark[data-hl="5"] { background: var(--hl-5); }
+.hl-legend { display: flex; flex-wrap: wrap; gap: .3em 1em; }
 
 .two { display: grid; }
 .metric strong { display: block; }

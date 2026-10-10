@@ -1326,6 +1326,115 @@ return [at(document.getElementById("label")), at(document.querySelector(".svg-ht
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_highlight_fits_its_letters_in_text_and_in_a_figure(tmp_path: Path) -> None:
+    """Spans of a file's lines were coloured in a figure by rectangles drawn under svg text,
+    each sized from a letter count and a guessed letter width, and the guess missed the face
+    the reader saw. A mark coloured by its role is drawn by the browser on the letters
+    themselves, in text and in a figure's lifted HTML alike, from tokens a skin may restate.
+    The lifted lines answer to the label rules: past the sides of the box they sit on, or
+    over a label, they are reported, and lines that fit are not."""
+    from html_mcp_web.slides import build
+
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<!doctype html>\n<meta charset="utf-8">\n<title>Highlights</title>\n'
+        '<body data-author="A" data-meta="B">\n'
+        '<section data-title="Highlights">'
+        '<p id="prose">A <mark data-hl="2">value</mark> and a <mark>name</mark> in text.</p>'
+        '<p class="hl-legend"><mark data-hl="1">name</mark> <mark data-hl="2">value</mark></p>'
+        '<svg viewBox="0 0 900 300" width="900" height="300">'
+        '<rect x="10" y="10" width="420" height="120" fill="none" stroke="#999"/>'
+        '<foreignObject x="20" y="40" width="400" height="40"><pre id="fits" style="margin: 0">'
+        '<mark data-hl="3">key</mark> item <mark data-hl="4">0.5</mark></pre></foreignObject>'
+        '<rect x="450" y="10" width="200" height="120" fill="none" stroke="#999"/>'
+        '<foreignObject x="460" y="40" width="430" height="40"><div style="white-space: nowrap; font-size: 20px">'
+        '<mark data-hl="5">a long line running well past its box</mark></div></foreignObject>'
+        '<text x="40" y="230" font-size="20">covered</text>'
+        '<foreignObject x="30" y="205" width="300" height="40"><div style="font-size: 20px">'
+        '<mark data-hl="1">words over the label</mark></div></foreignObject>'
+        '</svg></section>\n'
+        "</body>\n", encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, Path(__file__).resolve().parents[1] / "templates" / "neutral-slides")
+
+    profile = tempfile.mkdtemp(prefix="html_mcp_highlight_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(html.as_uri())
+        wait_until(lambda: browser.execute_script("return !!document.querySelector('.svg-html-box #fits')"))
+        seen = browser.execute_script("""
+const root = getComputedStyle(document.documentElement);
+const token = (n) => { const probe = document.createElement("i");
+  probe.style.color = root.getPropertyValue(`--hl-${n}`); document.body.appendChild(probe);
+  const value = getComputedStyle(probe).color; probe.remove(); return value; };
+const paint = (mark) => getComputedStyle(mark).backgroundColor;
+const prose = document.getElementById("prose");
+const [valued, bare] = prose.querySelectorAll("mark");
+const lifted = document.querySelector("#fits mark");
+const range = document.createRange();
+range.selectNodeContents(lifted.firstChild);
+const letters = range.getBoundingClientRect();
+const box = lifted.getBoundingClientRect();
+return {
+  valued: paint(valued) === token(2), bare: paint(bare) === token(1),
+  ink: getComputedStyle(valued).color === getComputedStyle(prose).color,
+  lifted: paint(lifted) === token(3),
+  fit: [box.left - letters.left, box.right - letters.right],
+  legend: Array.from(document.querySelectorAll(".hl-legend mark")).map(paint).join() === [token(1), token(2)].join(),
+};
+""")
+        assert seen["valued"] and seen["bare"] and seen["ink"] and seen["lifted"] and seen["legend"], seen
+        assert all(abs(edge) < 0.5 for edge in seen["fit"]), seen
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    try:
+        shared.ensure()
+
+        def checked():
+            artifact = get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]
+            done = artifact["layout_check"]["checked_revision"] == artifact["revision"]
+            return artifact["layout_check"]["errors"] if done else None
+
+        errors = wait_until(checked, timeout=90)
+        lifted = [error for error in errors if " HTML " in error]
+        assert any('"a long line running well past' in error and "runs past its box (right by" in error
+                   for error in lifted), errors
+        assert any('"words over the label" prints over label "covered"' in error for error in lifted), errors
+        assert not any("key item" in error for error in lifted), errors
+    finally:
+        shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_takeaway_keeps_lead_typography_and_body_geometry_across_skins(tmp_path: Path) -> None:
     """A final takeaway uses the lead's face while the body keeps its opening and spread.
 
@@ -3973,7 +4082,7 @@ def test_a_long_svg_label_wraps_to_its_width(tmp_path: Path) -> None:
         '<body data-author="A" data-meta="B">\n'
         '<section data-title="Wrap">'
         '<svg id="wrapped" viewBox="0 0 1000 400" width="1000" height="400">'
-        '<rect x="0" y="0" width="220" height="200" fill="none" stroke="#333"/>'
+        '<rect x="1" y="1" width="219" height="199" fill="none" stroke="#333"/>'
         f'<text id="left" x="12" y="30" font-size="13.5" data-wrap="196">{sentence}</text>'
         f'<text id="justify" x="262" y="30" font-size="13.5" data-wrap="196" data-align="justify">{sentence}</text>'
         f'<text id="center" x="610" y="30" font-size="13.5" data-wrap="196" data-align="center">{sentence}</text>'

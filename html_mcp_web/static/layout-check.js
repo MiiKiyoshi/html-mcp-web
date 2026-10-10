@@ -684,17 +684,19 @@ export function createLayoutChecks(dependencies) {
           .filter((text) => text.closest("defs, symbol, clipPath, mask, pattern, marker") === null)
           .map((text) => ({ text, box: inViewport(text) }))
           .filter((label) => label.box !== null);
+        const printedOver = (a, b) => {
+          const across = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+          const down = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+          return across > 0 && down > 0
+            && across >= Math.min(a.right - a.left, b.right - b.left) * 0.25
+            && down >= Math.min(a.bottom - a.top, b.bottom - b.top) * 0.5;
+        };
         const collisions = [];
         for (let first = 0; first < labels.length; first++) {
           for (let second = first + 1; second < labels.length; second++) {
-            const a = labels[first].box;
-            const b = labels[second].box;
-            const across = Math.min(a.right, b.right) - Math.max(a.left, b.left);
-            const down = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
-            if (across <= 0 || down <= 0) continue;
-            if (across < Math.min(a.right - a.left, b.right - b.left) * 0.25) continue;
-            if (down < Math.min(a.bottom - a.top, b.bottom - b.top) * 0.5) continue;
-            collisions.push([labels[first].text, labels[second].text]);
+            if (printedOver(labels[first].box, labels[second].box)) {
+              collisions.push([labels[first].text, labels[second].text]);
+            }
           }
         }
         for (const [first, second] of collisions.slice(0, 3)) {
@@ -737,6 +739,74 @@ export function createLayoutChecks(dependencies) {
           addError(
             `page ${index + 1} ${describeElement(svg.element)} label "${labelWords(label.text)}" runs past its box (${past.join(", ")})`,
             svg.element);
+        }
+        // The HTML of a foreignObject, such as a formula or highlighted lines of a file, is
+        // lifted into a layer over the drawing, and the checks above never saw it: the
+        // layer is no part of the svg. Its lines answer to the same two rules as a label.
+        // A line printed over a label hides it, and a line written on a box stays inside
+        // the box's sides, the smallest box holding the line's middle. The foreignObject's
+        // own box is no limit: nothing clips the lifted text, and a formula a few units
+        // past it shows no fault. Lines are read in the svg's viewport space, where the
+        // labels and boxes are, through the slot the builder left: its CTM takes the
+        // drawing to that space and its screen CTM to the screen. Read in the viewBox's
+        // units instead, a line was compared with labels at another scale and was
+        // reported over a label a hundred units away.
+        const slot = svg.element.querySelector(":scope > rect[data-html-slot]");
+        const fromScreen = slot === null ? undefined : slot.getCTM()?.multiply(slot.getScreenCTM().inverse());
+        const liftedBoxes = svg.element.parentElement?.classList.contains("svg-html")
+          ? Array.from(svg.element.parentElement.querySelectorAll(".svg-html-box")) : [];
+        const viewRect = (rect) => {
+          const corners = [[rect.left, rect.top], [rect.right, rect.bottom]]
+            .map(([x, y]) => [fromScreen.a * x + fromScreen.c * y + fromScreen.e,
+                              fromScreen.b * x + fromScreen.d * y + fromScreen.f]);
+          return {
+            left: Math.min(...corners.map(([x]) => x)), right: Math.max(...corners.map(([x]) => x)),
+            top: Math.min(...corners.map(([, y]) => y)), bottom: Math.max(...corners.map(([, y]) => y)),
+          };
+        };
+        let liftedFaults = 0;
+        for (const lifted of liftedBoxes) {
+          if (fromScreen === undefined || liftedFaults >= 3) break;
+          // The layer is scaled to the viewBox, and its letters with it.
+          const scale = lifted.offsetWidth > 0 ? lifted.getBoundingClientRect().width / lifted.offsetWidth : 1;
+          const fontSize = (parseFloat(doc.defaultView.getComputedStyle(lifted).fontSize) || 16) * scale;
+          // Only the letters: a pre or div holding them is a box as wide as the slot, and
+          // read as a line it would cover every label beside the text.
+          const range = doc.createRange();
+          const letters = [];
+          const walker = doc.createTreeWalker(lifted, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+            if (node.nodeValue.trim() === "" || node.parentElement.closest(".katex-mathml") !== null) continue;
+            range.selectNodeContents(node);
+            letters.push(...range.getClientRects());
+          }
+          const lines = groupLines(letters, fontSize).map(viewRect);
+          const words = readableText(lifted).slice(0, 30);
+          const hidden = labels.find((label) => lines.some((line) => printedOver(line, label.box)));
+          if (hidden !== undefined) {
+            liftedFaults += 1;
+            addError(
+              `page ${index + 1} ${describeElement(svg.element)} HTML "${words}" prints over label "${labelWords(hidden.text)}"`,
+              svg.element);
+          }
+          for (const line of lines) {
+            const x = (line.left + line.right) / 2;
+            const y = (line.top + line.bottom) / 2;
+            const holder = boxes
+              .filter((candidate) => candidate.left <= x && x <= candidate.right
+                && candidate.top <= y && y <= candidate.bottom)
+              .sort((a, b) => (a.right - a.left) * (a.bottom - a.top) - (b.right - b.left) * (b.bottom - b.top))[0];
+            if (holder === undefined) continue;
+            const past = [["left", holder.left - line.left], ["right", line.right - holder.right]]
+              .filter(([, amount]) => amount > 1)
+              .map(([side, amount]) => `${side} by ${Math.round(amount)}`);
+            if (past.length === 0) continue;
+            liftedFaults += 1;
+            addError(
+              `page ${index + 1} ${describeElement(svg.element)} HTML "${words}" runs past its box (${past.join(", ")})`,
+              svg.element);
+            break;
+          }
         }
         // A box drawn inside another stays inside it: a step box ended 2 units below the
         // box it sat in once that box was shortened. A rect is held by the smallest rect

@@ -93,6 +93,20 @@ Missing or duplicate reference IDs and undefined citation keys stop the build. C
 
 `code` carries identifiers. `pre` carries a code or file excerpt over several lines. It draws one box and preserves line breaks. A `code` inside it drops the inline chip. Long lines overflow rather than wrap.
 
+## Highlights
+
+`<mark data-hl="N">` colours a span by its role, with `N` from 1 to 5. It works in prose, table cells, `code`, `pre`, and the HTML of an SVG `<foreignObject>`. The browser fits the colour to the letters, so a figure needs no rectangles sized to its text. A `<mark>` without `data-hl` takes role 1. The roles are light tints, and the text keeps its own colour. A skin restates `--hl-1` to `--hl-5` to match its palette.
+
+Fields in the lines of a file shown in a figure are marked in a `pre` inside a `<foreignObject>`:
+
+```html
+<foreignObject x="20" y="40" width="400" height="60">
+  <pre style="margin: 0"><mark data-hl="1">key</mark> item <mark data-hl="2">0.5</mark></pre>
+</foreignObject>
+```
+
+`p.hl-legend` names the roles with the same marks, each holding its role's name, as in `<p class="hl-legend"><mark data-hl="1">key</mark> <mark data-hl="2">value</mark></p>`. It also works inside a `<foreignObject>`.
+
 ## SVG figures
 
 Inline `<svg>` carries a figure with exact labels that remain sharp in print. The element takes the width it is given and stops at its `max-height`. The drawing keeps its `viewBox` proportions inside that box. A differently shaped `viewBox` leaves unused bands at the sides or at the top and bottom. Production clause 2.3 governs the box and drawing size.
@@ -141,6 +155,8 @@ The check reports clipped body content and title text outside the title bar or o
 For inline SVG, it reports shapes beyond the `viewBox`, borders of rectangles, circles, ellipses, and polygons cut at the `viewBox` edge, empty space occupying a quarter or more of a side, overlapping labels, and labels beyond the sides of the rectangle they sit on. For the last case, it names the side and excess.
 
 Connector warnings cover an arrowhead or the line just before it overlapping a label or crossing another connector. Endpoint joins and lines along one another are excluded. A separate warning names the box and existing connection when a return arrow running left or up enters an occupied side while another side is unused. Another warning reports a short detour around a box and names a permitted side with a straight route clear of connectors, labels, and boxes. A step that joins facing sides of two boxes and turns in the gap between them is not a detour.
+
+For the HTML of a `<foreignObject>`, it reports a line printed over a label and a line past the sides of the rectangle it sits on, as for labels. The `<foreignObject>`'s own box is not a limit.
 
 For wrapped labels, exceeding `data-max-lines` reports `needs N lines, box allows M`. A fitted label past the `data-fit-stretch` threshold reports a message such as `is loose in 196x92 at 12px`. If no size in `data-fit-range` fits, the message is such as `does not fit 196x92 at 10px`.
 
