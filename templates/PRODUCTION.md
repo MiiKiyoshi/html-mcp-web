@@ -32,6 +32,8 @@ Fit content to its intended box while preserving its meaning and proportions.
 
 2.8 Set mathematical symbols and formulas as math markup using the forms in the component reference.
 
+2.9 Show source attribution on a page only through `<ol class="references">` entries and their `<cite>` markers, as described in [References and citations](COMPONENTS.md#references-and-citations).
+
 ## Article 3. Check an edit
 
 Check the rendered page and its layout before requesting independent review.
