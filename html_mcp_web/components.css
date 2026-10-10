@@ -18,12 +18,13 @@
      measure the same letters. A skin that names another face embeds it too. */
   --mono: "Deck Mono", ui-monospace, monospace;
   --code-bg: #ecefef;
-  /* Highlight roles 1 to 5 for mark: light tints, so the text keeps its own colour. */
+  /* Highlight roles 1 to 5 for mark: light tints, so the text keeps its own colour, and
+     each a hue of its own, none the grey of --code-bg that a pre is drawn on. */
   --hl-1: #d3e4f6;
   --hl-2: #fbdcc3;
   --hl-3: #d4ecd2;
   --hl-4: #e6daf3;
-  --hl-5: #e4e7e8;
+  --hl-5: #f6ebb0;
 
   /* Safari measures a line of text one way when it can take its simplified path and
      another when it cannot, and the two drift apart along the line: a paragraph carrying
