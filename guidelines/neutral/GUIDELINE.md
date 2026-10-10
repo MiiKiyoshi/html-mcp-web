@@ -58,14 +58,14 @@ Update affected entries before changing content or page grouping. Treat author c
 
 3.3 Show each process or comparison step's actor, inputs, outputs, and how its output determines the next step. State conditions and actions for branches, repeats, stops, and rejected inputs. Keep inputs, transformations, and outputs together, and changed and fixed variables together. State what a reduction keeps and discards.
 
-3.4 After establishing the explanation under 3.1 and its page grouping under 3.10, draft each content page in this order:
+3.4 After establishing the explanation under 3.1 and its page grouping under 3.10, draft each content page in this order.
 
-1. Start with what the reader already knows from the audience context and preceding pages. State the next question and the one answer the page must establish. Select its supporting evidence under Article 2 before choosing page elements.
-2. Construct the relationship that establishes the answer as a diagram, equation, table, or plot under Article 5. Give it the objects, operations, conditions, and evidence needed at this point, choosing terms under 4.1 as each object or action is named. For a relationship that gains nothing from a diagram, use the alternatives in 5.1.
-3. Add words only for meanings, distinctions, conditions, or guidance the visual and established context do not convey. Place needed definitions before their use, and reuse established ones under 3.5. State goals or constraints when needed to explain a choice or omission.
-4. Name the subject in the title under 4.6. If using a lead, name the problem under 4.7. Write the takeaway from what the visible explanation establishes. After rendering the page, write the script under Article 6.
+Build one element at a time in reading order under 1.3, using only prerequisites already established. Resolve a missing prerequisite or relationship before adding dependent content. Let this order, rather than source order or available panel space, determine what comes next.
 
-Build one element at a time in reading order, using only prerequisites already established. Resolve a missing prerequisite or relationship before adding dependent content. Let this order, rather than source order or available panel space, determine what comes next.
+1. Start with what the reader already knows from the audience context and preceding pages. State the question needed next under 3.1 and the one answer the page must establish, applying 3.7 to a method's need and intended effect. Select its supporting evidence under Article 2 before choosing page elements.
+2. Choose terms under 4.1 and reuse established names under 4.4 and 4.5 as each object or action is named. Place needed definitions before their use under 4.3, reusing established ones under 3.5. Construct the relationship that establishes the answer as a diagram, equation, table, or plot under Article 5. Give it the objects, operations, conditions, and evidence needed at this point. For a relationship that gains nothing from a diagram, use the alternatives in 5.1.
+3. Add words only for meanings, distinctions, conditions, or guidance the visual and established context do not convey. State goals or constraints when needed to explain a choice or omission.
+4. Name the subject in the title under 4.6. If using a lead, name the problem under 4.7. Write the takeaway from what the visible explanation establishes, preserving needed participants and conditions under 4.2 and established names under 4.5. After rendering the page, write the script under Article 6.
 
 3.5 Explain an object or relationship where it first raises a question, or just before. Show outputs where produced and their uses where consumed. Refer to objects, not earlier page titles or locations. Repeat prerequisites only as needed to avoid looking elsewhere or recalling hidden detail. Move a page that needs a later value. In visible content and scripts, refer forward only to locate the answer to a deliberately open question, not to preview later titles or contents.
 
@@ -85,7 +85,7 @@ Cover → Recap → Summary of Progress → Methods → Experimental Setup → R
 
 Recap connects prior context to the result now needed. Summary of Progress covers only work since that context. Next Plan is exactly one final page with evidence-derived actions or a statement that none is needed.
 
-3.10 Derive page boundaries and count from the explanation required under 3.1. First remove content that fails 1.3 and repeated claims under 3.6, preserving necessary local context under 3.5. Arrange the remaining questions and answers with their prerequisites and evidence. Group connected steps by causal chain, comparison, mechanism, or decision. Divide the explanation into pages, each with one distinct question, evidence to check its answer, and a diagram, equation, table, or plot, all at a readable size. Put independent questions on separate pages. Record this sequence and page grouping before proposing a count. Existing pages and proposed counts are provisional unless explicitly fixed by the requester under 8.2.
+3.10 Existing pages and proposed counts are provisional unless explicitly fixed by the requester under 8.2. Derive page boundaries and count from the explanation required under 3.1. First remove content that fails 1.3 and repeated claims under 3.6, preserving necessary local context under 3.5. Arrange the remaining questions and answers with their prerequisites and evidence. Group connected steps by causal chain, comparison, mechanism, or decision. Divide the explanation into pages, each with one distinct question, evidence to check its answer, and a diagram, equation, table, or plot, all at a readable size. Put independent questions on separate pages. Record this sequence and page grouping before proposing a count.
 
 Before adjusting layout, check definitions, evidence, and relationships. Change obstructive page divisions, order, figures, panels, or tables before continuing. If the explanation still cannot fit, split it into successive complete answers. Do not preserve structure or page count by inventing terms, obscuring relationships, shrinking content, or omitting needed explanation. Apply 8.3 to changes beyond scope or approved structural constraints.
 
@@ -135,7 +135,7 @@ Make needed relationships visible without implying unsupported ones.
 | Independent peers | Cards or bullets |
 | Status | Evidence-to-action chain |
 
-Put operations on their operands. Label relations the visual convention does not explain. Try another form or arrangement before rejecting an approach for its presentation. Reuse established explanations where they fit the goal and constraints.
+Put operations on their operands. Label relations the visual convention does not explain. Try another form or arrangement before rejecting an approach for its presentation.
 
 5.3 Default to left-to-right and top-to-bottom order, or clearly sequenced columns. Complete independent columns in reading order and align matching items across compared columns. Use placement, grouping, and connections to show prerequisites before explanations and results without backtracking. Put outputs after the steps producing them even if reversing that order would shorten a connector.
 
