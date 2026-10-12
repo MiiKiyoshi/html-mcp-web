@@ -4963,22 +4963,32 @@ def test_an_edit_replaces_the_deck_with_no_blank_and_no_jump(tmp_path: Path) -> 
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        # The preview column is open too, and the drawn place of its first preview is held.
+        browser.execute_script('document.querySelector("#thumbs-btn").click();')
+        previews_at = wait_until(lambda: browser.execute_script(
+            'const page = document.querySelector("#thumbs-frame").contentDocument?.querySelector("section.page");'
+            'return page ? page.getBoundingClientRect().top + 0.001 : null;'))
         frame_window = 'document.querySelector("#artifact-frame")?.contentWindow'
         browser.execute_script(f'{frame_window}.scrollTo(0, 400);')
         read_at = wait_until(lambda: browser.execute_script(
             f'const win = {frame_window}; return win && win.scrollY > 300 ? win.scrollY : null;'))
-        # Every animation frame of the review page records the frame on top of the pane.
+        # Every animation frame of the review page records, for the deck and for the column,
+        # the frame on top: whether it shows a loaded deck, and where.
         browser.execute_script("""
           window.drawn = [];
           window.sampling = true;
+          const z = (frame) => Number(getComputedStyle(frame).zIndex) || 0;
+          const onTop = (frames) => frames.slice()
+            .sort((a, b) => z(b) - z(a) || frames.indexOf(b) - frames.indexOf(a))[0];
+          const shows = (doc) => doc !== null && doc.URL !== "about:blank" && doc.readyState === "complete"
+            && doc.querySelector("section.page") !== null;
           const tick = () => {
-            const frames = Array.from(document.querySelectorAll(".artifact-frame"));
-            const z = (frame) => Number(getComputedStyle(frame).zIndex) || 0;
-            const top = frames.slice().sort((a, b) => z(b) - z(a) || frames.indexOf(b) - frames.indexOf(a))[0];
-            const doc = top.contentDocument;
-            window.drawn.push({loaded: doc !== null && doc.URL !== "about:blank" && doc.readyState === "complete"
-                                 && doc.querySelector("section.page") !== null,
-                               y: top.contentWindow.scrollY});
+            const deck = onTop(Array.from(document.querySelectorAll(".artifact-frame")));
+            const column = onTop(Array.from(document.querySelectorAll("#thumbs-pane iframe")));
+            window.drawn.push({loaded: shows(deck.contentDocument), y: deck.contentWindow.scrollY,
+                               previews: shows(column.contentDocument),
+                               previewY: shows(column.contentDocument)
+                                 ? column.contentDocument.querySelector("section.page").getBoundingClientRect().top : null});
             if (window.sampling) requestAnimationFrame(tick);
           };
           requestAnimationFrame(tick);
@@ -4994,6 +5004,9 @@ def test_an_edit_replaces_the_deck_with_no_blank_and_no_jump(tmp_path: Path) -> 
         assert len(drawn) > 5, drawn
         assert all(sample["loaded"] and abs(sample["y"] - read_at) <= 2 for sample in drawn), [
             sample for sample in drawn if not sample["loaded"] or abs(sample["y"] - read_at) > 2]
+        assert all(sample["previews"] and abs(sample["previewY"] - previews_at) <= 2 for sample in drawn), [
+            sample for sample in drawn if not sample["previews"] or abs(sample["previewY"] - previews_at) > 2]
+        assert browser.execute_script('return document.querySelectorAll("#thumbs-pane iframe").length') == 1
     finally:
         if browser is not None:
             try:

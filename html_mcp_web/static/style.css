@@ -181,7 +181,10 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 #thumbs-btn svg { display: block; }
 #thumbs-btn.active { background: var(--accent-soft); border-color: var(--accent); }
 #thumbs-pane { display: none; position: absolute; top: 0; bottom: 0; left: 0; width: 200px; border-right: 1px solid var(--line); background: #efede6; z-index: 2; }
-#thumbs-frame { display: block; width: 100%; height: 100%; border: 0; background: #efede6; }
+#thumbs-pane iframe { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; background: #efede6; }
+#thumbs-frame { z-index: 1; }
+#thumbs-pane iframe:not(#thumbs-frame) { z-index: 0; pointer-events: none; }
+#thumbs-pane iframe.covering { z-index: 2; }
 #artifact-pane.thumbs-open #thumbs-pane { display: block; }
 #artifact-pane.thumbs-open .artifact-frame { left: 200px; width: calc(100% - 200px); }
 #artifact-pane:fullscreen #thumbs-pane, #artifact-pane.slide-show #thumbs-pane { display: none; }

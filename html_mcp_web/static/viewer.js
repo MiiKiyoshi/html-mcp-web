@@ -568,7 +568,52 @@ function loadThumbs() {
     return;
   }
   frame.dataset.loaded = wanted;
-  showInFrame(frame, `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}&shared=1`);
+  const url = `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}&shared=1`;
+  const shown = frame.contentDocument?.URL;
+  if (shown === undefined || shown === "about:blank") {
+    showInFrame(frame, url);
+    return;
+  }
+  // As with the deck, a column already showing previews keeps them in view while the next
+  // revision loads under it: loaded in place, the column went blank on every edit.
+  if (thumbsBehind === null) {
+    thumbsBehind = document.createElement("iframe");
+    thumbsBehind.title = frame.title;
+    thumbsBehind.tabIndex = -1;
+    thumbsBehind.toggleAttribute("inert", true);
+    frame.after(thumbsBehind);
+    const next = thumbsBehind;
+    next.addEventListener("load", () => {
+      if (next.contentDocument !== null && next.contentDocument.URL !== "about:blank") revealThumbs(next);
+    });
+  }
+  showInFrame(thumbsBehind, url);
+}
+
+let thumbsBehind = null;
+
+// The loaded previews take the column at the scroll the old ones had, set up as any load is,
+// and the old frame covers them until two frames have been drawn.
+async function revealThumbs(next) {
+  thumbsBehind = null;
+  const old = $("#thumbs-frame");
+  const at = old.contentWindow.scrollY + thumbShift;
+  old.removeAttribute("id");
+  old.toggleAttribute("inert", true);
+  old.classList.add("covering");
+  next.id = "thumbs-frame";
+  next.dataset.loaded = old.dataset.loaded;
+  next.toggleAttribute("inert", false);
+  // Scaled first: the old column's place, as drawn, means the same previews only at the
+  // scale they are drawn at. The column then stays where the reader left it, as drawn, so
+  // an edit does not pull a column the reader scrolled back to the current page.
+  installThumbs();
+  shiftThumbs(0);
+  next.contentWindow.scrollTo(0, at);
+  const win = next.contentWindow;
+  await next.contentDocument.fonts.ready;
+  await new Promise((done) => win.requestAnimationFrame(() => win.requestAnimationFrame(done)));
+  old.remove();
 }
 
 function thumbPages() {
