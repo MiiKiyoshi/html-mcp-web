@@ -26,7 +26,7 @@ Fit content to its intended box while preserving its meaning and proportions.
 
 2.5 When a drafting tool accepts images, supply requested visual reference images as inputs. A description does not replace the images. Follow neutral clauses 3.1 and 5.10 for using references.
 
-2.6 Use a plotting tool that supplies the required axes, scales, and annotations for a standard plot. Do not rebuild these by hand. For plot interpretations under neutral clause 5.8, use HTML lists outside SVG or images.
+2.6 Use a plotting tool that supplies the required axes, scales, and annotations for a standard plot. Do not rebuild these by hand. For interpretations under neutral clause 5.8, use HTML lists outside SVG, images, or tables.
 
 2.7 For diagrams of boxes and arrows, prefer horizontal and vertical connectors unless another route clarifies the relationship. Join connectors entering the same element near their sources. Split connectors leaving the same element near their targets. Keep branches short and the common segment long. Follow neutral clause 5.4 for direction, source and target relationships, entry and exit sides, and permitted merges. Remove a bend or detour when another permitted entry or exit side avoids it without changing reading order or intended connections, obscuring junctions, or adding crossings or label overlaps.
 
