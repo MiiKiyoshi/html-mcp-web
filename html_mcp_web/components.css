@@ -83,6 +83,10 @@ mark[data-hl="5"] { background: var(--hl-5); }
 .metric span { color: var(--ink-soft); line-height: 1.4; }
 
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+/* A compact table keeps its own size and sits in the middle of its row: stretched to the
+   body's width, its columns stood far apart and the eye crossed empty space from a label to
+   its value. The table inside still fills this wrapper, which takes the table's width. */
+.table-fit { width: fit-content; margin-inline: auto; }
 th { font-weight: 650; letter-spacing: .025em; }
 th, td { text-align: right; }
 th:first-child, td:first-child { text-align: left; }

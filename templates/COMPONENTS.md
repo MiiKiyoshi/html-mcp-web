@@ -49,7 +49,9 @@ A list with subitems and at least two outer items stays in one column while it f
 
 ## Body arrangement
 
-Blocks spread down the body. A first `p.lead` stays with the title. An optional final `p.takeaway` stays near the bottom, above any references. Neither participates in the spread. Only the content between them shares the remaining height.
+By default, blocks are distributed vertically in the body. A first `p.lead` stays with the title. An optional final `p.takeaway` stays near the bottom, above any references. Neither participates in the spread. Only the content between them shares the remaining height.
+
+For related compact content under neutral clause 5.5, keep it together in one wrapper so this arrangement handles it as one block.
 
 ### Lead, takeaway, and notes
 
@@ -72,6 +74,8 @@ Missing or duplicate reference IDs and undefined citation keys stop the build. C
 `p.units` sits directly above a measurement table and states units once, as in `ΔTNS: ns · power: %`, instead of repeating them in footnotes. Production clause 2.2 governs consistency across slides.
 
 `table` gives standard spacing. `table.dense` serves rows that outgrow that spacing. `table.tight` serves a wide numeric table whose cells must not wrap. The first column aligns left and the others right. Each cell aligns by the column it occupies under `rowspan` and `colspan`.
+
+`table` fills its container's width. Wrap a compact table in `div.table-fit` to size the group to its contents and center it horizontally under neutral clause 5.5. This keeps the existing type and cell padding, as in `<div class="card table-fit"><table class="dense tight">…</table></div>`.
 
 `pos` and `neg` mark an improvement and a regression. `sep` draws a column boundary. `nw` keeps a short label or status cell on one line.
 

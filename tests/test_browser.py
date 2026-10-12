@@ -1326,6 +1326,73 @@ return [at(document.getElementById("label")), at(document.querySelector(".svg-ht
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_compact_table_keeps_its_size_in_the_middle_of_the_page(tmp_path: Path) -> None:
+    """A table fills its container, so a small table on its own page stretched to the body's
+    width and its columns stood far apart. Wrapped in div.table-fit it keeps the width its
+    contents need, with its type and cell padding unchanged, and sits in the middle of the
+    page in both directions. A table without the class keeps the full width."""
+    from html_mcp_web.slides import build
+
+    rows = "".join(f"<tr><td>L{n}</td><td>{n}.5</td><td>{n}.25</td></tr>" for n in range(1, 8))
+    table = f"<table class='dense tight'><tr><th>Name</th><th>A</th><th>B</th></tr>{rows}</table>"
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<!doctype html>\n<meta charset="utf-8">\n<title>Fit</title>\n<body data-author="A" data-meta="B">\n'
+        f'<section data-title="Plain"><div class="card" id="plain">{table}</div></section>\n'
+        f'<section data-title="Fit"><div class="card table-fit" id="fit">{table}</div></section>\n'
+        "</body>\n", encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, Path(__file__).resolve().parents[1] / "templates" / "neutral-slides")
+
+    profile = tempfile.mkdtemp(prefix="html_mcp_table_fit_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(html.as_uri())
+        wait_until(lambda: browser.execute_script("return !!document.getElementById('fit')"))
+        seen = browser.execute_script("""
+          const measure = (id) => {
+            const card = document.getElementById(id);
+            const cell = card.querySelector("td");
+            const body = card.parentElement.getBoundingClientRect();
+            const box = card.getBoundingClientRect();
+            return {width: box.width, table: card.querySelector("table").getBoundingClientRect().width,
+                    body: body.width, left: box.left - body.left, right: body.right - box.right,
+                    top: box.top - body.top, bottom: body.bottom - box.bottom,
+                    type: getComputedStyle(cell).fontSize + " " + getComputedStyle(cell).padding};
+          };
+          return {plain: measure("plain"), fit: measure("fit")};
+        """)
+        plain, fit = seen["plain"], seen["fit"]
+        assert abs(plain["width"] - plain["body"]) < 1, seen
+        assert fit["width"] < fit["body"] / 2 and fit["table"] <= fit["width"], seen
+        assert abs(fit["left"] - fit["right"]) < 1, seen
+        assert abs(fit["top"] - fit["bottom"]) < 2, seen
+        assert fit["type"] == plain["type"], seen
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_highlight_fits_its_letters_in_text_and_in_a_figure(tmp_path: Path) -> None:
     """Spans of a file's lines were coloured in a figure by rectangles drawn under svg text,
     each sized from a letter count and a guessed letter width, and the guess missed the face

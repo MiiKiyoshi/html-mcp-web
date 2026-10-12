@@ -145,7 +145,9 @@ Put operations on their operands. Label relations the visual convention does not
 
 5.5 Choose pictograms with established meanings for object kinds and roles in conceptual explanations unless standard symbols or the drawing already convey them.
 
-In every diagram, enclose separately labeled parts and stages in separate panels with their labels and explanations inside. Spacing or divider lines do not replace panels. Only parts compared on shared axes may share a panel. Add an outer figure panel only for a needed grouping or distinction. Neighboring panels need not contain equal amounts of text. Do not add content merely to match panel shapes or fill unused space. Extend or rearrange drawings for additions instead of squeezing them into gaps.
+In every diagram, enclose separately labeled parts and stages in separate panels with their labels and explanations inside. Spacing or divider lines do not replace panels. Only parts compared on shared axes may share a panel. Add an outer figure panel only for a needed grouping or distinction. Neighboring panels need not contain equal amounts of text. Extend or rearrange drawings for additions instead of squeezing them into gaps.
+
+Size page content for readability and the relationships it must show. Do not add content or increase its width, height, spacing, font size, or padding merely to match panel shapes or fill unused space. Center compact content groups horizontally and vertically in their available area by default, preserving reading order and comparison alignment, and leave the remaining space empty.
 
 5.6 Explain mechanisms with the smallest set of instances the reader can check by hand. For general rules, default to generic examples with short placeholder names and simple values. Use real names or measured values when identity or magnitude matters to the claim. Show purpose and operation, including input and response for model claims, and the conditions and scope beyond the instance. When connecting concepts to code, formats, or records, retain source excerpts limited to the content needed for the answer and show their correspondence.
 

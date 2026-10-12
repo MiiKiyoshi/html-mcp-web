@@ -20,7 +20,7 @@ Fit content to its intended box while preserving its meaning and proportions.
 
 2.2 Use the same units statement form on every slide that shows measurements. See `p.units` in [the table reference](COMPONENTS.md#tables-and-units).
 
-2.3 For the visual chosen under neutral clause 3.4, prefer inline SVG over a picture of a drawing when other components do not carry it. Size the figure's box from the column width and the height available on the page. Give its `viewBox` those proportions and the size at which the figure is drawn, rather than a smaller box scaled up. Draw inside it. Lay out each panel for its own width and height while preserving grouping and reading order. When a page has one figure, size it for the available content area and readable detail rather than placing it in an unnecessarily small box.
+2.3 For the visual chosen under neutral clause 3.4, prefer inline SVG over a picture of a drawing when other components do not carry it. Size the figure's box for readable detail and the relationships it must show, within the column width and height available on the page. Give its `viewBox` the box's proportions and the size at which the figure is drawn, rather than a smaller box scaled up. Draw inside it. Lay out each panel for its own width and height while preserving grouping and reading order.
 
 2.4 Give raster figures a `max-height`. Preserve the source width to height ratio of images, including `<img>`, images inside SVG, and CSS backgrounds. At the intended display or export size, check the rendered image itself, excluding padding and letterboxing, for correct proportions and readable text and marks needed by the page. A clean layout report does not establish these qualities.
 
