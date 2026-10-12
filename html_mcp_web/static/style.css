@@ -172,6 +172,8 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .artifact-frame { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; background: #faf8f2; will-change: transform; }
 .artifact-frame.active { z-index: 1; }
 .artifact-frame:not(.active) { z-index: 0; pointer-events: none; }
+/* The frame a new revision replaces, kept over it until the new one is drawn at the reader's place. */
+.artifact-frame.covering { z-index: 2; }
 #artifact-pane:fullscreen { width: 100vw; height: 100vh; background: #111; }
 /* Slide previews: the deck drawn small in a column at the pane's left, scrolled on its own,
    with the deck itself moved over to make room. */

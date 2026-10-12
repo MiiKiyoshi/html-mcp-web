@@ -4931,6 +4931,86 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path) ->
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_an_edit_replaces_the_deck_with_no_blank_and_no_jump(tmp_path: Path) -> None:
+    """Each edit loaded the new revision into the frame on screen, so the deck went blank
+    while the document loaded and then showed its first page until the scroll was put back.
+    The revision now loads in a frame under the one on screen, which stays in view until the
+    new document is set up at the reader's place. Every frame drawn during the edit shows a
+    loaded deck at the reader's place, and afterwards one frame holds the new revision."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_seamless_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        frame_window = 'document.querySelector("#artifact-frame")?.contentWindow'
+        browser.execute_script(f'{frame_window}.scrollTo(0, 400);')
+        read_at = wait_until(lambda: browser.execute_script(
+            f'const win = {frame_window}; return win && win.scrollY > 300 ? win.scrollY : null;'))
+        # Every animation frame of the review page records the frame on top of the pane.
+        browser.execute_script("""
+          window.drawn = [];
+          window.sampling = true;
+          const tick = () => {
+            const frames = Array.from(document.querySelectorAll(".artifact-frame"));
+            const z = (frame) => Number(getComputedStyle(frame).zIndex) || 0;
+            const top = frames.slice().sort((a, b) => z(b) - z(a) || frames.indexOf(b) - frames.indexOf(a))[0];
+            const doc = top.contentDocument;
+            window.drawn.push({loaded: doc !== null && doc.URL !== "about:blank" && doc.readyState === "complete"
+                                 && doc.querySelector("section.page") !== null,
+                               y: top.contentWindow.scrollY});
+            if (window.sampling) requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        """, sandbox=None)
+        built = get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]["revision"]
+        slides.write_text(slides_html("Edited sentence."), encoding="utf-8")
+        wait_until(lambda: browser.execute_script(
+            'const frame = document.querySelector("#artifact-frame");'
+            'return document.querySelectorAll(".artifact-frame").length === 1'
+            ' && frame.contentDocument.querySelector("#target")?.textContent === "Edited sentence.";'))
+        assert get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]["revision"] != built
+        drawn = browser.execute_script("window.sampling = false; return window.drawn;", sandbox=None)
+        assert len(drawn) > 5, drawn
+        assert all(sample["loaded"] and abs(sample["y"] - read_at) <= 2 for sample in drawn), [
+            sample for sample in drawn if not sample["loaded"] or abs(sample["y"] - read_at) > 2]
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
     """The artifact tabs sat over one frame, and a switch loaded the next document into
     it: the whole deck fetched and parsed again, fonts and all, the layout check run

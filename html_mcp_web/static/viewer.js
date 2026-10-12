@@ -26,6 +26,8 @@ const state = {
   unattached: new Set(),
   // The scroll each artifact's next document opens at, by id, kept until it is put back.
   pendingViews: {},
+  // The frame each artifact's next revision is loading in, by id, under the one on screen.
+  framesBehind: {},
   // One frame per artifact, by id, kept with its document: a tab shows its own frame
   // and hides the others. Loading the next artifact into the one frame there was
   // fetched and parsed the whole deck again, fonts and all, ran the layout check over
@@ -1673,9 +1675,56 @@ function loadArtifact(preserveView) {
   }
   hideSelectionButton();
   state.loadedRevision = state.revision;
-  iframe.dataset.revision = String(state.revision);
-  delete iframe.dataset.settled;
-  showInFrame(iframe, `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}&shared=1`);
+  const shown = iframe.contentDocument?.URL;
+  const target = shown === undefined || shown === "about:blank" ? iframe : frameBehind(iframe);
+  target.dataset.revision = String(state.revision);
+  delete target.dataset.settled;
+  showInFrame(target, `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}&shared=1`);
+}
+
+// A revision of a deck already on screen loads into a frame of its own under it, and the
+// frame on screen stays in view until the new document is set up at the reader's place.
+// Loaded into the frame on screen, the deck went blank while the document loaded and then
+// showed its first page until the scroll was put back, on every edit the agent made.
+function frameBehind(shown) {
+  const artifactId = shown.dataset.artifact;
+  if (state.framesBehind[artifactId] !== undefined) return state.framesBehind[artifactId];
+  const next = document.createElement("iframe");
+  next.className = "artifact-frame";
+  next.title = shown.title;
+  next.tabIndex = -1;
+  next.toggleAttribute("inert", true);
+  next.dataset.artifact = artifactId;
+  shown.after(next);
+  const loaded = () => next.contentDocument !== null && next.contentDocument.URL !== "about:blank";
+  // The swap runs first, so the setup that follows finds this frame on screen.
+  next.addEventListener("load", () => { if (loaded()) revealBehind(next); });
+  next.addEventListener("load", () => { if (loaded()) attachArtifactEvents(next); });
+  state.framesBehind[artifactId] = next;
+  return next;
+}
+
+// The new frame takes the place of the one on screen at once, so the page is set up on it,
+// while the old one covers it until the deck's fonts are in and two frames have been drawn
+// at the reader's place. A frame for a tab the reader has left replaces the old one unseen.
+async function revealBehind(next) {
+  const artifactId = next.dataset.artifact;
+  delete state.framesBehind[artifactId];
+  const old = state.frames[artifactId];
+  state.frames[artifactId] = next;
+  if (state.artifactId !== artifactId) {
+    old.remove();
+    return;
+  }
+  old.classList.remove("active");
+  old.removeAttribute("id");
+  old.toggleAttribute("inert", true);
+  old.classList.add("covering");
+  showFrame(next);
+  const win = next.contentWindow;
+  await next.contentDocument.fonts.ready;
+  await new Promise((done) => win.requestAnimationFrame(() => win.requestAnimationFrame(done)));
+  old.remove();
 }
 
 // Each revision replaces the frame's history entry rather than adding one: setting src added
