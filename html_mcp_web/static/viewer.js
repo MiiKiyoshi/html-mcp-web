@@ -2,6 +2,7 @@ import { createPresentation } from "./presentation.js";
 import { createLayoutChecks } from "./layout-check.js";
 import { createAnchors } from "./anchors.js";
 import { createComments } from "./comments.js";
+import { createSearch } from "./search.js";
 import { displayPath } from "./path-display.mjs";
 
 const $ = (selector) => document.querySelector(selector);
@@ -133,6 +134,7 @@ function showLoadedArtifact(frame) {
   renderPages();
   updateLayoutUi();
   scheduleLayoutCheck();
+  search.refresh();
   scrollToRepaint(frameWindow());
 }
 
@@ -673,6 +675,7 @@ function installThumbs() {
     if (page) jumpToPage(thumbPages().indexOf(page) + 1);
   });
   doc.addEventListener("keydown", handleThumbKey);
+  doc.addEventListener("keydown", search.handleKeydown, true);
   // A new document starts unmoved. Not passive, so the browser waits for the hand-over
   // before it scrolls the column on a wheel or a touch.
   thumbShift = 0;
@@ -855,6 +858,15 @@ scheduleLayoutCheck = layoutChecks.scheduleLayoutCheck;
 const updateLayoutUi = layoutChecks.updateLayoutUi;
 
 const anchors = createAnchors({ frameDocument, state });
+const search = createSearch(state, {
+  $,
+  artifactPages,
+  frameDocument,
+  frameWindow,
+  movePresentationPage,
+  pageFrameFor,
+  selectionRects,
+});
 const captureTextAnchor = anchors.captureTextAnchor;
 const resolveAnchor = anchors.resolveAnchor;
 const lastKnownPlace = anchors.lastKnownPlace;
@@ -1658,6 +1670,7 @@ function attachArtifactEvents(frame) {
     }, 250);
   });
   doc.addEventListener("keydown", handlePresentationKeydown, true);
+  doc.addEventListener("keydown", search.handleKeydown, true);
   doc.addEventListener("click", handlePresentationClick, true);
   doc.addEventListener("pointerdown", handlePresentationPointerDown, true);
   doc.addEventListener("pointerup", handlePresentationPointerUp, true);
@@ -1716,6 +1729,7 @@ function attachArtifactEvents(frame) {
     if (place !== null) win.requestAnimationFrame(() => keepReadingPlace(place));
   }
   renderHighlights();
+  search.refresh();
   updateLayoutUi();
   if (document.fullscreenElement === $("#artifact-pane") && state.artifact.layout === "slides") activateSlideShow();
   scheduleLayoutCheck();
@@ -2363,10 +2377,12 @@ function attachControls() {
     localStorage.setItem("htmlMcpSidebarCollapsed", collapsed ? "1" : "0");
   });
   $("#thumbs-btn").addEventListener("click", () => setThumbsOpen(!thumbsOpen()));
+  search.attachControls();
   $("#thumbs-frame").addEventListener("load", installThumbs);
   $("#scripts-btn").addEventListener("click", () => {
     localStorage.setItem("htmlMcpScriptsHidden", scriptsHidden() ? "0" : "1");
     applyScriptVisibility();
+    search.refresh();
   });
   document.addEventListener("keydown", (event) => {
     handlePresentationKeydown(event);

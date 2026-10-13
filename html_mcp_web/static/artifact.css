@@ -198,5 +198,5 @@ html[data-html-mcp-fullscreen] .html-mcp-highlight-layer {
     break-after: auto;
   }
 
-  .html-mcp-highlight-layer { display: none !important; }
+  .html-mcp-highlight-layer, .html-mcp-search-layer { display: none !important; }
 }

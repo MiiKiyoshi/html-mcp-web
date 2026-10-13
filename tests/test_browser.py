@@ -5243,6 +5243,129 @@ def test_an_edit_changes_only_its_page_and_sets_it_up(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_find_marks_the_words_in_the_deck_and_steps_through_them(tmp_path: Path) -> None:
+    """Find in the artifact opens with Ctrl+F while the deck has the focus, marks every match
+    over its letters without touching the document's text, counts from the place being read,
+    steps to matches on other pages and back around, follows an edit, and clears on Escape."""
+    from html_mcp_web.slides import build
+
+    def content(extra: str = "") -> str:
+        pages = "\n".join(
+            f'<section data-title="Page {n}"><p>Page {n} holds the word needle once.</p>'
+            f'<ul><li>needle{" " + extra if n == 2 else ""}</li><li>thread</li></ul></section>'
+            for n in range(1, 5))
+        return ('<!doctype html>\n<meta charset="utf-8">\n<title>Find</title>\n'
+                f'<body data-author="A" data-meta="B">\n{pages}\n</body>\n')
+
+    skin = Path(__file__).resolve().parents[1] / "templates" / "neutral-slides"
+    source = tmp_path / "content.html"
+    slides = tmp_path / "slides.html"
+    source.write_text(content(), encoding="utf-8")
+    build(source, slides, skin)
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_find_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    state = '''
+      const frame = document.querySelector("#artifact-frame");
+      const doc = frame.contentDocument;
+      const current = doc.querySelector(".html-mcp-search-mark.current");
+      const pages = Array.from(doc.querySelectorAll("body > main.pages > section.page"));
+      const box = current?.getBoundingClientRect();
+      return {open: !document.querySelector("#search-bar").classList.contains("hidden"),
+              count: document.querySelector("#search-count").textContent,
+              marks: doc.querySelectorAll(".html-mcp-search-mark").length,
+              page: current ? pages.indexOf(current.closest("section.page")) : null,
+              inView: box ? box.top >= 0 && box.bottom <= frame.contentWindow.innerHeight : null,
+              y: frame.contentWindow.scrollY,
+              text: doc.querySelector("main.pages").textContent.includes("needle")};
+    '''
+    press = '''
+      const [target, key, shift] = arguments;
+      const node = target === "deck" ? document.querySelector("#artifact-frame").contentDocument.body
+                                     : document.querySelector("#search-input");
+      const View = node.ownerDocument.defaultView;
+      node.dispatchEvent(new View.KeyboardEvent("keydown", {key, ctrlKey: key === "f", shiftKey: shift,
+                                                            bubbles: true, cancelable: true}));
+    '''
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'const doc = document.querySelector("#artifact-frame")?.contentDocument;'
+            'return doc?.readyState === "complete" && !!doc.querySelector("section.page");'))
+        text_before = browser.execute_script(
+            'return document.querySelector("#artifact-frame").contentDocument.querySelector("main.pages").innerHTML;')
+        # Ctrl+F in the deck opens the bar with the field focused.
+        browser.execute_script(press, script_args=["deck", "f", False], sandbox=None)
+        assert browser.execute_script('return document.activeElement?.id;') == "search-input"
+        browser.execute_script('''
+          const input = document.querySelector("#search-input");
+          input.value = "NEEDLE";
+          input.dispatchEvent(new Event("input", {bubbles: true}));
+        ''', sandbox=None)
+        # Two matches a page, on four pages: case is ignored, and the count starts at the
+        # first match from the top of the window, on the first body page.
+        first = wait_until(lambda: (lambda got: got if got["count"] == "1/8" else None)(
+            browser.execute_script(state)))
+        assert first["marks"] == 8 and first["page"] == 1 and first["inView"], first
+        # The marks are drawn over the text: the document's own words are unchanged.
+        assert browser.execute_script(
+            'return document.querySelector("#artifact-frame").contentDocument.querySelector("main.pages")'
+            '.innerHTML.replace(/<div class="html-mcp-search-layer".*?<\\/div><\\/div>/gs, "");') \
+            .count("needle") == text_before.count("needle")
+        # Enter steps on to the next pages, and the deck scrolls to keep the match in view.
+        for _ in range(4):
+            browser.execute_script(press, script_args=["input", "Enter", False], sandbox=None)
+        stepped = browser.execute_script(state)
+        assert stepped["count"] == "5/8" and stepped["page"] == 3 and stepped["inView"], stepped
+        assert stepped["y"] > first["y"], (first, stepped)
+        # Shift+Enter from the first match goes around to the last.
+        for _ in range(5):
+            browser.execute_script(press, script_args=["input", "Enter", True], sandbox=None)
+        around = browser.execute_script(state)
+        assert around["count"] == "8/8" and around["page"] == 4 and around["inView"], around
+        # An edit while the bar is open is searched again.
+        source.write_text(content("needle again"), encoding="utf-8")
+        build(source, slides, skin)
+        wait_until(lambda: browser.execute_script(state)["count"].endswith("/9"))
+        assert browser.execute_script(state)["marks"] == 9
+        # Escape closes the bar and clears the marks.
+        browser.execute_script(press, script_args=["input", "Escape", False], sandbox=None)
+        closed = browser.execute_script(state)
+        assert not closed["open"] and closed["marks"] == 0, closed
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
     """The artifact tabs sat over one frame, and a switch loaded the next document into
     it: the whole deck fetched and parsed again, fonts and all, the layout check run

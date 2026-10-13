@@ -51,12 +51,27 @@
             <button class="view-tab" type="button" data-view="source">Source</button>
             <button class="view-tab" type="button" data-view="split">Split</button>
           </nav>
+          <button id="search-btn" type="button" title="Find in the artifact (⌘F or Ctrl+F)"
+                  aria-label="Find in the artifact" aria-controls="search-bar" aria-expanded="false">
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+              <circle cx="6.7" cy="6.7" r="4.7" fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M10.2 10.2l4.3 4.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </button>
         </div>
         <section id="artifact-pane">
           <aside id="thumbs-pane" aria-label="Slide previews">
             <iframe id="thumbs-frame" title="Slide previews" tabindex="-1"></iframe>
           </aside>
           <iframe id="artifact-frame" class="artifact-frame active" title="Agent-generated HTML artifact" tabindex="-1"></iframe>
+          <div id="search-bar" class="search-bar hidden" role="search">
+            <input id="search-input" type="text" placeholder="Find in artifact" aria-label="Find in artifact"
+                   autocomplete="off" spellcheck="false">
+            <span id="search-count" class="search-count" aria-live="polite"></span>
+            <button id="search-prev-btn" type="button" aria-label="Previous match" title="Previous match (Shift+Enter)" disabled>↑</button>
+            <button id="search-next-btn" type="button" aria-label="Next match" title="Next match (Enter)" disabled>↓</button>
+            <button id="search-close-btn" type="button" aria-label="Close find" title="Close (Esc)">×</button>
+          </div>
           <button id="selection-comment-btn" class="selection-comment hidden" type="button">Comment</button>
           <div id="presentation-controls" class="presentation-controls" aria-label="Slide show controls">
             <button id="presentation-prev-btn" type="button" aria-label="Previous slide">←</button>
