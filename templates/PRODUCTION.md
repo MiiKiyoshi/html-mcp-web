@@ -18,7 +18,7 @@ Fit content to its intended box while preserving its meaning and proportions.
 
 2.1 For a contents page, try columns at full size before scaling to fit or fill the page.
 
-2.2 Use the same units statement form on every slide that shows measurements. See `p.units` in [the table reference](COMPONENTS.md#tables-and-units).
+2.2 Use the same units statement form on every slide that shows measurements. Put a table's units and any needed key to cell notation in `p.units` directly above the table, aligned to its right edge. See [the table reference](COMPONENTS.md#tables-and-units).
 
 2.3 For the visual chosen under neutral clause 3.4, prefer inline SVG over a picture of a drawing when other components do not carry it. Size the figure's box for readable detail and the relationships it must show, within the column width and height available on the page. Give its `viewBox` the box's proportions and the size at which the figure is drawn, rather than a smaller box scaled up. Draw inside it. Lay out each panel for its own width and height while preserving grouping and reading order.
 

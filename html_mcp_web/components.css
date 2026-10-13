@@ -87,6 +87,10 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
    body's width, its columns stood far apart and the eye crossed empty space from a label to
    its value. The table inside still fills this wrapper, which takes the table's width. */
 .table-fit { width: fit-content; margin-inline: auto; }
+/* The table's units and notation key ride inside its wrapper, so they end at the table's
+   right edge. A key longer than the table wraps to its width: counted in the wrapper's
+   width, it widened the wrapper and the table filled it, stretched four times over. */
+.table-fit > .units { contain: inline-size; }
 th { font-weight: 650; letter-spacing: .025em; }
 th, td { text-align: right; }
 th:first-child, td:first-child { text-align: left; }

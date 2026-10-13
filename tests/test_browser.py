@@ -1330,16 +1330,21 @@ def test_a_compact_table_keeps_its_size_in_the_middle_of_the_page(tmp_path: Path
     """A table fills its container, so a small table on its own page stretched to the body's
     width and its columns stood far apart. Wrapped in div.table-fit it keeps the width its
     contents need, with its type and cell padding unchanged, and sits in the middle of the
-    page in both directions. A table without the class keeps the full width."""
+    page in both directions. A table without the class keeps the full width. Its units and
+    notation key ride inside the wrapper and end at the table's right edge, and a key longer
+    than the table wraps there: counted in the wrapper's width, it stretched the table."""
     from html_mcp_web.slides import build
 
     rows = "".join(f"<tr><td>L{n}</td><td>{n}.5</td><td>{n}.25</td></tr>" for n in range(1, 8))
     table = f"<table class='dense tight'><tr><th>Name</th><th>A</th><th>B</th></tr>{rows}</table>"
+    key = ("<p class='units'>Time: ms · (%): relative difference from reference · "
+           "<b>bold</b>: closest to reference in each row of the comparison</p>")
     content = tmp_path / "content.html"
     content.write_text(
         '<!doctype html>\n<meta charset="utf-8">\n<title>Fit</title>\n<body data-author="A" data-meta="B">\n'
         f'<section data-title="Plain"><div class="card" id="plain">{table}</div></section>\n'
         f'<section data-title="Fit"><div class="card table-fit" id="fit">{table}</div></section>\n'
+        f'<section data-title="Keyed"><div class="table-fit" id="keyed">{key}<div class="card">{table}</div></div></section>\n'
         "</body>\n", encoding="utf-8")
     html = tmp_path / "slides.html"
     build(content, html, Path(__file__).resolve().parents[1] / "templates" / "neutral-slides")
@@ -1377,6 +1382,15 @@ def test_a_compact_table_keeps_its_size_in_the_middle_of_the_page(tmp_path: Path
         assert abs(fit["left"] - fit["right"]) < 1, seen
         assert abs(fit["top"] - fit["bottom"]) < 2, seen
         assert fit["type"] == plain["type"], seen
+        keyed = browser.execute_script("""
+          const holder = document.getElementById("keyed");
+          const key = document.createRange();
+          key.selectNodeContents(holder.querySelector(".units"));
+          const table = holder.querySelector("table").getBoundingClientRect();
+          return {table: table.width, tableRight: table.right, keyRight: key.getBoundingClientRect().right};
+        """)
+        assert abs(keyed["table"] - fit["table"]) < 1, (keyed, fit)
+        assert abs(keyed["keyRight"] - keyed["tableRight"]) < 1, keyed
     finally:
         if browser is not None:
             try:

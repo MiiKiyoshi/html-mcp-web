@@ -71,11 +71,11 @@ Missing or duplicate reference IDs and undefined citation keys stop the build. C
 
 ## Tables and units
 
-`p.units` sits directly above a measurement table and states units once, as in `ΔTNS: ns · power: %`, instead of repeating them in footnotes. Production clause 2.2 governs consistency across slides.
+`p.units` carries a table's units and notation key, as in `<p class="units">Time: ms · (%): relative difference from reference · <b>bold</b>: closest to reference</p>`. Production clause 2.2 governs placement and consistency across slides.
 
 `table` gives standard spacing. `table.dense` serves rows that outgrow that spacing. `table.tight` serves a wide numeric table whose cells must not wrap. The first column aligns left and the others right. Each cell aligns by the column it occupies under `rowspan` and `colspan`.
 
-`table` fills its container's width. Wrap a compact table in `div.table-fit` to size the group to its contents and center it horizontally under neutral clause 5.5. This keeps the existing type and cell padding, as in `<div class="card table-fit"><table class="dense tight">…</table></div>`.
+`table` fills its container's width. Wrap a compact table in `div.table-fit` to size the group to its contents and center it horizontally under neutral clause 5.5. This keeps the existing type and cell padding, as in `<div class="card table-fit"><table class="dense tight">…</table></div>`. Put the table's `p.units` inside the same wrapper, before the table, so it ends at the table's right edge. A key longer than the table wraps to the table's width instead of widening it.
 
 `pos` and `neg` mark an improvement and a regression. `sep` draws a column boundary. `nw` keeps a short label or status cell on one line.
 
