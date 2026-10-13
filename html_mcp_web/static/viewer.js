@@ -1834,9 +1834,14 @@ function updateFrame(frame, url, canPatch, patch, whole) {
   frame.htmlMcpWanted = url;
   frame.htmlMcpUpdate = (frame.htmlMcpUpdate ?? Promise.resolve()).then(async () => {
     if (frame.htmlMcpWanted !== url) return;
+    const doc = frame.contentDocument;
+    // A document served without its digest, by a server on earlier code, cannot be read back.
+    if (doc?.documentElement.dataset.htmlMcpServed === undefined) {
+      whole();
+      return;
+    }
     let patched = false;
     try {
-      const doc = frame.contentDocument;
       const [shown, next] = await Promise.all([shownSource(doc, url), sourceAt(url)]);
       if (frame.htmlMcpWanted !== url) return;
       patched = canPatch() && frame.contentDocument === doc && patch(doc, shown, next);
@@ -1881,7 +1886,6 @@ function sourceAt(url) {
 
 function shownSource(doc, url) {
   const served = doc.documentElement.dataset.htmlMcpServed;
-  if (served === undefined) return null;
   return sources.get(served) ?? sourceAt(`${url.split("?")[0]}?served=${served}&shared=1`);
 }
 
