@@ -71,7 +71,7 @@ Missing or duplicate reference IDs and undefined citation keys stop the build. C
 
 ## Tables and units
 
-`p.units` carries a table's units and notation key, as in `<p class="units">Time: ms · (%): relative difference from reference · <b>bold</b>: closest to reference</p>`. Production clause 2.2 governs placement and consistency across slides.
+`p.units` carries units, brief metric definitions, and notation keys for tables and plots, as in `<p class="units">Time: ms · (%): relative difference from reference · <b>bold</b>: closest to reference</p>`. Production clause 2.2 governs placement and consistency across slides.
 
 `table` gives standard spacing. `table.dense` serves rows that outgrow that spacing. `table.tight` serves a wide numeric table whose cells must not wrap. The first column aligns left and the others right. Each cell aligns by the column it occupies under `rowspan` and `colspan`.
 
