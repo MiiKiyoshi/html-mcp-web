@@ -117,7 +117,7 @@ Inline `<svg>` carries a figure with exact labels that remain sharp in print. Th
 
 ### Formulas in SVG
 
-A formula inside inline SVG uses a `<foreignObject>` placed and sized where it belongs, holding HTML such as `<div style="font-size: 18px">$…$</div>`. The `<foreignObject>` belongs directly in `<svg>`, not in a `<g>`. The SVG needs a `viewBox` and the default `preserveAspectRatio`.
+A formula inside inline SVG uses a `<foreignObject>` placed and sized where it belongs, holding HTML such as `<div style="font-size: 18px">$…$</div>`. The `<foreignObject>` belongs directly in `<svg>`, not in a `<g>`. The SVG needs a `viewBox` and the default `preserveAspectRatio`. A `<foreignObject>` can hold an equation followed by its HTML definition list within the same panel or column.
 
 The builder draws the HTML over the figure at that place and scale. It renders like a body formula on screen and in print, with no margin around a display formula. A formula in SVG `<text>` stops the build. In PowerPoint export, the figure remains a vector and the formula becomes a picture over it.
 
@@ -149,6 +149,19 @@ One `<text>` holds the complete label. `data-wrap="<width>"` gives its available
 ## Math
 
 TeX delimiters are `$…$` for inline math and `$$…$$` for display math. `\(…\)` and `\[…\]` also work. The builder renders math with KaTeX and embeds the renderer and fonts in the file. The deck is self contained and prints as it displays. A deck without math carries none of these resources. A literal dollar sign is `\$`. Two plain dollar signs on one line otherwise read as a formula.
+
+An equation with definitions under production clause 2.8 can use:
+
+```html
+<div>
+<p>$$A = \pi r^2$$</p>
+<ul>
+<li>$r$: circle radius · $A$: circle area</li>
+</ul>
+</div>
+```
+
+The wrapper keeps the equation and list together under [Body arrangement](#body-arrangement). Short definitions may share an item, with the middle dot outside the math delimiters.
 
 ## Layout check reports
 
