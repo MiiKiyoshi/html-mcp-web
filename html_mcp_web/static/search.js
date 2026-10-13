@@ -186,13 +186,17 @@ export function createSearch(state, dependencies) {
   }
 
   // A new query starts from the place being read: the first match at or below the top of
-  // the window, rather than the deck's first page.
+  // the window, or in the slide show the first on the slide shown or after it, rather than
+  // the deck's first page.
   function run() {
     typing = null;
     clearMarks();
     const doc = frameDocument();
     matches = doc === null || doc.body === null ? [] : draw(findAll(doc, input().value));
-    const ahead = matches.findIndex((match) => match.top >= 0);
+    const pages = artifactPages();
+    const ahead = matches.findIndex((match) => (state.slideShow
+      ? pages.indexOf(match.page) + 1 >= (state.currentPage || 1)
+      : match.top >= 0));
     select(ahead === -1 ? 0 : ahead, true);
   }
 
