@@ -92,6 +92,7 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
           const toolbarBox = toolbar.getBoundingClientRect();
           const tabsBox = tabs.getBoundingClientRect();
           const fitBox = fit.getBoundingClientRect();
+          const searchBox = document.querySelector("#search-btn").getBoundingClientRect();
           return {
             inTopbar: topbar.contains(tabs),
             inWorkspace: document.querySelector("#workspace").contains(tabs),
@@ -99,8 +100,9 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
               document.querySelector("#artifact-pane").getBoundingClientRect().top + 1,
             fitInToolbar: toolbar.contains(fit),
             fitBeforeTabs: fitBox.right < tabsBox.left,
-            tabsAtRight: Math.abs(
-              toolbarBox.right - tabsBox.right - parseFloat(getComputedStyle(toolbar).paddingRight)
+            searchAfterTabs: searchBox.left > tabsBox.right,
+            searchAtRight: Math.abs(
+              toolbarBox.right - searchBox.right - parseFloat(getComputedStyle(toolbar).paddingRight)
             ) < 1,
             toolbarHeight: toolbarBox.height,
             topbarHeight: topbar.getBoundingClientRect().height,
@@ -108,14 +110,15 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         ''')
         assert {key: placement[key] for key in (
             "inTopbar", "inWorkspace", "toolbarAboveArtifact", "fitInToolbar",
-            "fitBeforeTabs", "tabsAtRight",
+            "fitBeforeTabs", "searchAfterTabs", "searchAtRight",
         )} == {
             "inTopbar": False,
             "inWorkspace": True,
             "toolbarAboveArtifact": True,
             "fitInToolbar": True,
             "fitBeforeTabs": True,
-            "tabsAtRight": True,
+            "searchAfterTabs": True,
+            "searchAtRight": True,
         }
         assert abs(placement["toolbarHeight"] - placement["topbarHeight"]) < 0.5, placement
 
