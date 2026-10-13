@@ -5105,6 +5105,144 @@ def test_an_edit_replaces_the_deck_with_no_blank_and_no_jump(tmp_path: Path) -> 
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_an_edit_changes_only_its_page_and_sets_it_up(tmp_path: Path) -> None:
+    """Each edit loaded the whole deck again, in the deck and in the column, and parsing and
+    setting up every page held the review page, scrolling included, for seconds. The pages
+    an edit changed are now put in place of the old ones in the documents on screen, and set
+    up by the deck's own scripts: the formula is drawn and the label broken into lines on the
+    new page, the reader stays where they were, and a comment on another page keeps its
+    highlight. A change outside the pages loads the document whole."""
+    from html_mcp_web.slides import build
+
+    def content(text: str, title: str = "Deck") -> str:
+        return (
+            f'<!doctype html>\n<meta charset="utf-8">\n<title>{title}</title>\n'
+            '<body data-author="A" data-meta="B">\n'
+            '<section data-title="First"><p>First page.</p></section>\n'
+            f'<section data-title="Second"><p id="target">{text}</p><p>Area $x^2$ grows.</p>'
+            '<svg width="300" height="120" viewBox="0 0 300 120"><text id="label" x="4" y="20" font-size="14"'
+            ' data-wrap="120">a sentence long enough to take several lines</text></svg></section>\n'
+            '<section data-title="Third"><p id="noted">Third page words.</p></section>\n'
+            "</body>\n")
+
+    skin = Path(__file__).resolve().parents[1] / "templates" / "neutral-slides"
+    source = tmp_path / "content.html"
+    slides = tmp_path / "slides.html"
+    source.write_text(content("Before"), encoding="utf-8")
+    build(source, slides, skin)
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_pages_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        base = f"http://127.0.0.1:{port}"
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(base)
+        wait_until(lambda: browser.execute_script(
+            'const doc = document.querySelector("#artifact-frame")?.contentDocument;'
+            'return doc?.readyState === "complete" && !!doc.querySelector("#target");'))
+        browser.execute_script('document.querySelector("#thumbs-btn").click();')
+        wait_until(lambda: browser.execute_script(
+            'const doc = document.querySelector("#thumbs-frame").contentDocument;'
+            'return doc?.readyState === "complete" && !!doc.querySelector("#target");'))
+        # A comment on the third page's words.
+        anchor = browser.execute_script('''
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const node = doc.querySelector("#noted").firstChild;
+          const path = [];
+          for (let current = node; current !== doc.body; current = current.parentNode) {
+            path.push(Array.prototype.indexOf.call(current.parentNode.childNodes, current));
+          }
+          path.reverse();
+          return {path, text: node.nodeValue};
+        ''')
+        post_json(f"{base}/artifacts/slides/comments", {
+            "anchor": {
+                "kind": "text", "quote": anchor["text"], "prefix": "", "suffix": "",
+                "start": {"path": anchor["path"], "offset": 0},
+                "end": {"path": anchor["path"], "offset": len(anchor["text"])},
+                "artifact_digest": get_json(f"{base}/state")["artifacts"]["slides"]["artifact_digest"],
+            },
+            "text": "On the third page",
+        })
+        frame = 'document.querySelector("#artifact-frame")'
+        wait_until(lambda: browser.execute_script(
+            f'return {frame}.contentDocument.querySelectorAll(".html-mcp-highlight").length > 0;'))
+        # The reader is on the third page, below the one the edit changes.
+        browser.execute_script(f'{frame}.contentDocument.querySelector("#noted").closest("section")'
+                               '.scrollIntoView({block: "start"});')
+        read_at = wait_until(lambda: browser.execute_script(
+            f'const win = {frame}.contentWindow; return win.scrollY > 300 ? win.scrollY : null;'))
+        browser.execute_script(f'''
+          const doc = {frame}.contentDocument;
+          window.keptDeck = doc;
+          window.keptColumn = document.querySelector("#thumbs-frame").contentDocument;
+          window.oldSecond = doc.querySelector("#target").closest("section");
+          window.oldThird = doc.querySelector("#noted").closest("section");
+        ''', sandbox=None)
+
+        source.write_text(content("After"), encoding="utf-8")
+        build(source, slides, skin)
+        wait_until(lambda: browser.execute_script(
+            f'return {frame}.contentDocument.querySelector("#target").textContent === "After"'
+            ' && document.querySelector("#thumbs-frame").contentDocument.querySelector("#target").textContent === "After";'))
+        kept = browser.execute_script(f'''
+          const doc = {frame}.contentDocument;
+          const second = doc.querySelector("#target").closest("section");
+          return {{deck: doc === window.keptDeck,
+                  column: document.querySelector("#thumbs-frame").contentDocument === window.keptColumn,
+                  secondNew: !window.oldSecond.isConnected && second !== window.oldSecond,
+                  thirdKept: window.oldThird.isConnected,
+                  math: second.querySelectorAll(".katex").length,
+                  lines: second.querySelectorAll("#label tspan").length,
+                  frames: document.querySelectorAll(".artifact-frame, #thumbs-pane iframe").length}};
+        ''', sandbox=None)
+        assert kept == {"deck": True, "column": True, "secondNew": True, "thirdKept": True,
+                        "math": kept["math"], "lines": kept["lines"], "frames": 2}, kept
+        assert kept["math"] > 0 and kept["lines"] > 1, kept
+        assert abs(browser.execute_script(f'return {frame}.contentWindow.scrollY;') - read_at) <= 2
+        wait_until(lambda: browser.execute_script(
+            f'return {frame}.contentDocument.querySelectorAll(".html-mcp-highlight").length > 0;'))
+
+        # A new title is outside the pages: the document is loaded whole.
+        source.write_text(content("Again", title="Renamed"), encoding="utf-8")
+        build(source, slides, skin)
+        wait_until(lambda: browser.execute_script(
+            f'return {frame}.contentDocument.querySelector("#target")?.textContent === "Again"'
+            f' && {frame}.contentDocument !== window.keptDeck'
+            ' && document.querySelectorAll(".artifact-frame").length === 1;', sandbox=None))
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
     """The artifact tabs sat over one frame, and a switch loaded the next document into
     it: the whole deck fetched and parsed again, fonts and all, the layout check run

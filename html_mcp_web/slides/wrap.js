@@ -203,8 +203,8 @@
     }
   };
 
-  const wrapAll = () => {
-    for (const text of document.querySelectorAll("svg text[data-wrap], svg text[data-fit]")) {
+  const wrapIn = (root) => {
+    for (const text of root.querySelectorAll("svg text[data-wrap], svg text[data-fit]")) {
       try {
         wrap(text);
       } catch (error) {
@@ -212,19 +212,27 @@
       }
     }
   };
-  wrapAll();
+  const wrapAll = () => wrapIn(document);
   // A label is broken with the widths of the face it is drawn in, so it is broken again
   // whenever a face arrives. A reviewer saw a label broken with a narrower face's widths
   // while the deck's face was drawn, its first line past the drawing's edge: fonts.ready
   // alone had not broken it again. Each face a label uses is also asked for by name, so
   // its arrival does not wait on the browser deciding to fetch it.
-  const faces = new Map();
-  for (const text of document.querySelectorAll("svg text[data-wrap], svg text[data-fit]")) {
-    const style = getComputedStyle(text);
-    const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    if (!faces.has(font)) faces.set(font, sentence(text));
-  }
-  Promise.allSettled(Array.from(faces, ([font, sample]) => document.fonts.load(font, sample))).then(wrapAll);
+  const askFaces = (root) => {
+    const faces = new Map();
+    for (const text of root.querySelectorAll("svg text[data-wrap], svg text[data-fit]")) {
+      const style = getComputedStyle(text);
+      const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      if (!faces.has(font)) faces.set(font, sentence(text));
+    }
+    Promise.allSettled(Array.from(faces, ([font, sample]) => document.fonts.load(font, sample))).then(() => wrapIn(root));
+  };
+  const setup = (root) => {
+    wrapIn(root);
+    askFaces(root);
+  };
+  setup(document);
   document.fonts.ready.then(wrapAll);
   document.fonts.addEventListener("loadingdone", wrapAll);
+  (window.htmlMcpPageSetup ??= []).push(setup);
 })();

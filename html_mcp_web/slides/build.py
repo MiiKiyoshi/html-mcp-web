@@ -32,6 +32,7 @@ import argparse
 import base64
 import io
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -53,7 +54,13 @@ TEX_LINEBREAK = HERE / "vendor" / "tex-linebreak"
 # skeleton scales it by --deck-fit; only the number needs measuring, and only when the
 # deck stands on its own: the review viewer marks the document and fits it itself, and
 # the pptx export lays the page out at its full size, so both leave the factor at 1.
+#
+# Every script of the deck also leaves in htmlMcpPageSetup what it does to one page. The
+# review viewer puts an edited page in place of the old one rather than loading the deck
+# again, and sets the new page up with these. The list being there tells the viewer that
+# the deck's scripts all do so.
 FIT_SCRIPT = """<script>
+window.htmlMcpPageSetup ??= [];
 (() => {
   const root = document.documentElement;
   if (root.hasAttribute("data-html-mcp-layout")) return;
@@ -80,12 +87,14 @@ CONTENTS_FIT_SCRIPT = """<script>
     area.classList.add("columns");
     page.classList.add("columns");
   };
-  const areas = Array.from(document.querySelectorAll("[data-contents-fit]"));
+  const areas = (root) => root.querySelectorAll("[data-contents-fit]");
   const sized = new ResizeObserver((entries) => entries.forEach((entry) => fit(entry.target)));
-  areas.forEach((area) => { fit(area); sized.observe(area); });
-  const all = () => areas.forEach(fit);
+  const setup = (root) => areas(root).forEach((area) => { fit(area); sized.observe(area); });
+  setup(document);
+  const all = () => areas(document).forEach(fit);
   document.fonts.ready.then(all);
   document.fonts.addEventListener("loadingdone", all);
+  (window.htmlMcpPageSetup ??= []).push(setup);
 })();
 </script>"""
 
@@ -110,9 +119,10 @@ SVG_HTML_SCRIPT = """<script>
     const y = (box.top - outer.top) / zoom + (h - height * k) / 2;
     layer.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
   };
-  const layers = Array.from(document.querySelectorAll(".svg-html-layer"));
   const sized = new ResizeObserver((entries) => entries.forEach((entry) => place(entry.target.lastElementChild)));
-  layers.forEach((layer) => { place(layer); sized.observe(layer.parentElement); });
+  const setup = (root) => root.querySelectorAll(".svg-html-layer").forEach((layer) => { place(layer); sized.observe(layer.parentElement); });
+  setup(document);
+  (window.htmlMcpPageSetup ??= []).push(setup);
 })();
 </script>"""
 
@@ -130,13 +140,29 @@ SLOT_WIDTHS = {
 
 
 def data_uri(path: Path, width: int) -> str:
+    """A skin image at the slot's width. Scaling and encoding the skin's images was the
+    larger part of every build, so each result is kept per source file (path, size, mtime)
+    and width under the user's cache directory."""
+    import hashlib
+
+    stat = path.stat()
+    key = hashlib.sha256(f"{path.resolve()}|{stat.st_size}|{stat.st_mtime_ns}|{width}".encode("utf-8")).hexdigest()
+    cache = Path.home() / ".cache" / "html-mcp-web" / "skin-images" / f"{key}.txt"
+    if cache.is_file():
+        return cache.read_text(encoding="ascii")
     from PIL import Image
 
     image = Image.open(path).convert("RGBA")
     image.thumbnail((width, width))
     buffer = io.BytesIO()
     image.save(buffer, "PNG", optimize=True)
-    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
+    uri = "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
+    # Two builds can run at once, so the entry is written whole and then put in place.
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    staging = cache.with_name(f"{cache.name}.{os.getpid()}")
+    staging.write_text(uri, encoding="ascii")
+    staging.replace(cache)
+    return uri
 
 
 def inline_woff2(css: str, fonts_dir: Path) -> str:
@@ -322,10 +348,11 @@ def math_bundle() -> tuple[str, str]:
     foot = (
         "\n  <script>" + (KATEX / "katex.min.js").read_text(encoding="utf-8") + "</script>"
         "\n  <script>" + (KATEX / "auto-render.min.js").read_text(encoding="utf-8") + "</script>"
-        "\n  <script>renderMathInElement(document.body, {delimiters: ["
+        "\n  <script>(() => {\n  const options = {delimiters: ["
         "{left: '$$', right: '$$', display: true}, {left: '\\\\[', right: '\\\\]', display: true}, "
         "{left: '$', right: '$', display: false}, {left: '\\\\(', right: '\\\\)', display: false}], "
-        "throwOnError: false});</script>"
+        "throwOnError: false};\n  renderMathInElement(document.body, options);\n"
+        "  (window.htmlMcpPageSetup ??= []).push((root) => renderMathInElement(root, options));\n})();</script>"
     )
     return head, foot
 

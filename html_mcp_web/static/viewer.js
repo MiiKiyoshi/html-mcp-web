@@ -567,16 +567,33 @@ function loadThumbs() {
     markCurrentThumb();
     return;
   }
+  const sameArtifact = frame.dataset.loaded?.startsWith(`${state.artifactId}@`) ?? false;
   frame.dataset.loaded = wanted;
-  const url = `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}&shared=1`;
+  const url = artifactUrl();
   const shown = frame.contentDocument?.URL;
   if (shown === undefined || shown === "about:blank") {
     showInFrame(frame, url);
     return;
   }
-  // As with the deck, a column already showing previews keeps them in view while the next
-  // revision loads under it: loaded in place, the column went blank on every edit. And as
-  // with the deck, a frame still loading keeps the latest address for when its load ends.
+  // The previews of the artifact they show change as the deck does, see updateFrame.
+  const canPatch = () => thumbsBehind === null && frame.id === "thumbs-frame"
+    && frame.contentDocument?.readyState === "complete";
+  if (sameArtifact && canPatch()) {
+    updateFrame(frame, url, canPatch, (doc, previous, next) => {
+      if (changePages(doc, previous, next) === null) return false;
+      markCurrentThumb();
+      return true;
+    }, () => loadThumbsBehind(url));
+    return;
+  }
+  loadThumbsBehind(url);
+}
+
+// As with the deck, a column already showing previews keeps them in view while the next
+// revision loads whole under it: loaded in place, the column went blank on every edit. And
+// as with the deck, a frame still loading keeps the latest address for when its load ends.
+function loadThumbsBehind(url) {
+  const frame = $("#thumbs-frame");
   if (thumbsBehind === null) {
     thumbsBehind = document.createElement("iframe");
     thumbsBehind.title = frame.title;
@@ -1713,28 +1730,189 @@ function attachArtifactEvents(frame) {
   }
 }
 
+function artifactUrl() {
+  return `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}&shared=1`;
+}
+
 function loadArtifact(preserveView) {
   const iframe = frameFor(state.artifactId);
   showFrame(iframe);
   if (thumbsOpen()) loadThumbs();
   if (state.loadedRevision === state.revision) return;
-  // A view not yet put back is kept. A hidden tab runs no animation frames, and a second
-  // edit made while the reader was in another tab read the top of the document loaded for
-  // the first, which sent them back to page 1.
+  hideSelectionButton();
+  state.loadedRevision = state.revision;
+  const shown = iframe.contentDocument?.URL;
+  if (shown !== undefined && shown !== "about:blank") {
+    updateDeck(iframe, preserveView);
+    return;
+  }
+  keepView(iframe, preserveView);
+  iframe.dataset.revision = String(state.revision);
+  delete iframe.dataset.settled;
+  showInFrame(iframe, artifactUrl());
+}
+
+// A view not yet put back is kept. A hidden tab runs no animation frames, and a second
+// edit made while the reader was in another tab read the top of the document loaded for
+// the first, which sent them back to page 1.
+function keepView(iframe, preserveView) {
   if (preserveView && state.pendingViews[state.artifactId] === undefined && iframe.contentWindow !== null) {
     state.pendingViews[state.artifactId] = { x: iframe.contentWindow.scrollX, y: iframe.contentWindow.scrollY };
   }
-  hideSelectionButton();
-  state.loadedRevision = state.revision;
-  const url = `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}&shared=1`;
-  const shown = iframe.contentDocument?.URL;
-  if (shown !== undefined && shown !== "about:blank") {
-    loadBehind(iframe, url);
+}
+
+// A deck on screen takes a revision by changing the pages that differ, see updateFrame, at
+// the reader's place, and is set up as a deck shown again is.
+function updateDeck(frame, preserveView) {
+  const artifactId = frame.dataset.artifact;
+  const revision = state.revision;
+  const whole = () => {
+    // The reader has gone to another artifact meanwhile: the frame forgets what it shows,
+    // and is brought up to date when they come back.
+    if (state.artifactId !== artifactId) {
+      delete frame.dataset.revision;
+      return;
+    }
+    keepView(frame, preserveView);
+    loadBehind(frame, artifactUrl());
+  };
+  // Only a document this page set up takes pages: Firefox puts back the address a frame last
+  // showed when the review page is reloaded, and a document loaded that way was never set up,
+  // so its pages changed and the reader's place was never put back.
+  const canPatch = () => state.framesBehind[artifactId] === undefined && frame.contentDocument?.readyState === "complete"
+    && frame.contentDocument.documentElement.dataset.htmlMcpRevision !== undefined;
+  if (!canPatch()) {
+    whole();
     return;
   }
-  iframe.dataset.revision = String(state.revision);
-  delete iframe.dataset.settled;
-  showInFrame(iframe, url);
+  updateFrame(frame, artifactUrl(), canPatch, (doc, shown, next) => {
+    const active = frame.id === "artifact-frame";
+    const place = active && !state.slideShow ? readingPlace() : null;
+    const change = changePages(doc, shown, next);
+    if (change === null) return false;
+    frame.dataset.revision = String(revision);
+    delete frame.dataset.settled;
+    doc.documentElement.dataset.htmlMcpRevision = String(revision);
+    // A frame of an artifact the reader has left is set up when they come back to it.
+    if (!active) return true;
+    if (state.slideShow) {
+      const pages = artifactPages();
+      state.currentPage = Math.min(state.currentPage || 1, pages.length);
+      for (const [index, page] of pages.entries()) {
+        page.classList.toggle("html-mcp-current-page", index + 1 === state.currentPage);
+      }
+      updatePresentationControls();
+    }
+    updatePageScale();
+    // The page the reader was on, or the page that took its place.
+    const page = place === null ? undefined
+      : place.page.isConnected ? place.page : change.added[change.removed.indexOf(place.page)];
+    if (page?.matches("body > main.pages > section.page")) keepReadingPlace({ page, y: place.y });
+    showLoadedArtifact(frame);
+    doc.fonts.ready.then(scheduleLayoutCheck);
+    for (const node of change.added) {
+      for (const img of node.querySelectorAll("img")) {
+        if (!img.complete) {
+          img.addEventListener("load", scheduleLayoutCheck, { once: true });
+          img.addEventListener("error", scheduleLayoutCheck, { once: true });
+        }
+      }
+    }
+    return true;
+  }, whole);
+}
+
+// An edit changes a page or a few. The pages of the new revision that differ from those of
+// the document a frame shows are put in their place, and the rest of the document is left
+// as it is. Loading the whole deck again parsed and drew every page and ran the deck's
+// scripts over all of them, on the thread the review page runs on: the page, scrolling
+// included, was held for seconds on every edit, and twice with the previews open. A change
+// outside the pages (the head, the deck's scripts), or a document whose scripts do not say
+// how they set up one page, loads the whole document as before. One update runs at a time
+// in a frame, and one with a later revision waiting behind it is passed over.
+function updateFrame(frame, url, canPatch, patch, whole) {
+  frame.htmlMcpWanted = url;
+  frame.htmlMcpUpdate = (frame.htmlMcpUpdate ?? Promise.resolve()).then(async () => {
+    if (frame.htmlMcpWanted !== url) return;
+    let patched = false;
+    try {
+      const doc = frame.contentDocument;
+      const [shown, next] = await Promise.all([shownSource(doc, url), sourceAt(url)]);
+      if (frame.htmlMcpWanted !== url) return;
+      patched = canPatch() && frame.contentDocument === doc && patch(doc, shown, next);
+    } catch (error) {
+      console.error(error);
+    }
+    if (!patched) whole();
+  });
+}
+
+// The documents served to this page, read for comparing, by the digest the server gives
+// each: the pages, each with the speaker script block after it, and the rest of the document.
+const sources = new Map();
+
+async function readSource(url) {
+  const response = await fetch(url);
+  if (!response.ok) return null;
+  const doc = new DOMParser().parseFromString(await response.text(), "text/html");
+  const holder = doc.querySelector("body > main.pages");
+  const served = doc.documentElement.dataset.htmlMcpServed;
+  if (holder === null || served === undefined) return null;
+  doc.documentElement.removeAttribute("data-html-mcp-served");
+  const units = Array.from(holder.children);
+  for (const unit of units) unit.remove();
+  const source = { served, outside: doc.documentElement.outerHTML, html: units.map((unit) => unit.outerHTML) };
+  sources.set(served, source);
+  // What the deck and the column show, and the revisions coming.
+  while (sources.size > 4) sources.delete(sources.keys().next().value);
+  return source;
+}
+
+// Each revision is read once, though the deck and the column both ask for it.
+const sourceRequests = new Map();
+
+function sourceAt(url) {
+  if (!sourceRequests.has(url)) {
+    sourceRequests.set(url, readSource(url));
+    while (sourceRequests.size > 2) sourceRequests.delete(sourceRequests.keys().next().value);
+  }
+  return sourceRequests.get(url);
+}
+
+function shownSource(doc, url) {
+  const served = doc.documentElement.dataset.htmlMcpServed;
+  if (served === undefined) return null;
+  return sources.get(served) ?? sourceAt(`${url.split("?")[0]}?served=${served}&shared=1`);
+}
+
+// Puts the pages of `next` that differ from those of `shown` into `doc`, the document made
+// from `shown`, and sets each up with the document's own scripts. Null, with the document
+// untouched, when it has to be loaded whole.
+function changePages(doc, shown, next) {
+  if (shown === null || next === null || shown.outside !== next.outside) return null;
+  const holder = doc.querySelector("body > main.pages");
+  const live = holder === null ? [] : Array.from(holder.children);
+  const setups = doc.defaultView.htmlMcpPageSetup;
+  if (live.length !== shown.html.length || (doc.scripts.length > 0 && !Array.isArray(setups))) return null;
+  let start = 0;
+  while (start < shown.html.length && start < next.html.length && shown.html[start] === next.html[start]) start += 1;
+  let end = 0;
+  while (end < shown.html.length - start && end < next.html.length - start
+         && shown.html[shown.html.length - 1 - end] === next.html[next.html.length - 1 - end]) end += 1;
+  const template = doc.createElement("template");
+  template.innerHTML = next.html.slice(start, next.html.length - end).join("\n");
+  // A script put in by script does not run: the page needs the document loaded whole.
+  if (template.content.querySelector("script") !== null) return null;
+  const removed = live.slice(start, live.length - end);
+  const added = Array.from(template.content.children);
+  const before = removed[0] ?? live[live.length - end] ?? null;
+  for (const node of added) holder.insertBefore(node, before);
+  for (const node of removed) node.remove();
+  doc.documentElement.dataset.htmlMcpServed = next.served;
+  for (const node of added) {
+    for (const setup of setups ?? []) setup(node);
+  }
+  return { removed, added };
 }
 
 // A revision of a deck already on screen loads into a frame of its own under it, and the

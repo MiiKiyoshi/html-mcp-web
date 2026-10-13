@@ -248,8 +248,13 @@ class ArtifactRuntime:
     # The content as the last build read it.
     built_from: tuple[int, int] | None = None
     space_pages: list[dict[str, Any]] = field(default_factory=list)
-    # The data the review page loads by address, from the document last served to it.
-    shared_assets: dict[str, tuple[str, bytes]] = field(default_factory=dict)
+    # The documents last served to review pages, oldest first, by digest: each with the data
+    # it loads by address. A review page puts the edited pages of a revision into the
+    # document it shows, and reads that document again to compare it with the revision:
+    # the pages it keeps go on loading data named in the earlier document.
+    served: dict[str, tuple[str, dict[str, tuple[str, bytes]]]] = field(default_factory=dict)
+    # The main file's stamp and the artifact stylesheet's version the newest one was made from.
+    served_from: tuple[tuple[int, int] | None, int] | None = None
 
     def digest(self) -> str | None:
         # None means the file is gone. is_file() alone cannot promise the read: the file
@@ -584,11 +589,9 @@ class HtmlReviewServer:
             # of the page before it, so the print copy carries no script blocks at all.
             source = strip_script_blocks(source)
         page_size = PRINT_PAGE_SIZES[runtime.config.layout]
-        css = self.static_dir / "artifact.css"
-        css_version = int(css.stat().st_mtime) if css.is_file() else 0
         head_content = (
             '<base href="/project/">'
-            f'<link rel="stylesheet" href="/static/artifact.css?v={css_version}">'
+            f'<link rel="stylesheet" href="/static/artifact.css?v={self._artifact_css_version()}">'
             f'<style id="html-mcp-page-style">@page {{ size: {page_size}; margin: 0; }}</style>'
         )
         source = re.sub(
@@ -602,22 +605,55 @@ class HtmlReviewServer:
             return re.sub(r"(<head\b[^>]*>)", rf"\1{head_content}", source, count=1, flags=re.IGNORECASE)
         return f"{head_content}{source}"
 
+    def _artifact_css_version(self) -> int:
+        css = self.static_dir / "artifact.css"
+        return int(css.stat().st_mtime) if css.is_file() else 0
+
     async def artifact(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         for_print = request.query.get("print") == "1"
         try:
-            body = self._artifact_html(runtime, for_print)
+            # The review page asks for shared data. The pptx export reads image data from the
+            # document it photographs, so it and the printer get the document as written.
+            if request.query.get("shared") == "1":
+                body = self._shared_artifact(runtime, request.query.get("served"))
+            else:
+                body = self._artifact_html(runtime, for_print)
         except FileNotFoundError as error:
             raise web.HTTPNotFound(text=f"HTML artifact not found: {runtime.main_file}") from error
-        # The review page asks for shared data. The pptx export reads image data from the
-        # document it photographs, so it and the printer get the document as written.
-        if request.query.get("shared") == "1":
-            body = self._share_data(runtime, body)
         return web.Response(text=body, content_type="text/html",
                             charset="utf-8", headers={"Cache-Control": "no-store"})
 
+    # How many served documents an artifact keeps: the deck and the column of a review page
+    # each show one, and a burst of edits serves a few more before they catch up.
+    SERVED_KEPT = 4
+
+    def _shared_artifact(self, runtime: ArtifactRuntime, served: str | None) -> str:
+        """The document for a review page, with its large data loaded by address.
+
+        It is made once for each version of the main file: the deck and the column each ask
+        for it, and making it reads and rewrites the whole file. It carries its digest, by
+        which the page asks for it again.
+        """
+        if served is not None:
+            if served not in runtime.served:
+                raise web.HTTPNotFound(text="that document is no longer kept")
+            return runtime.served[served][0]
+        made_from = (runtime.stamp(runtime.main_file), self._artifact_css_version())
+        if made_from == runtime.served_from:
+            return next(reversed(runtime.served.values()))[0]
+        body, assets = self._share_data(runtime, self._artifact_html(runtime))
+        digest = hashlib.sha1(body.encode("utf-8")).hexdigest()
+        body = re.sub(r"<html\b", f'<html data-html-mcp-served="{digest}"', body, count=1, flags=re.IGNORECASE)
+        runtime.served.pop(digest, None)
+        runtime.served[digest] = (body, assets)
+        while len(runtime.served) > self.SERVED_KEPT:
+            del runtime.served[next(iter(runtime.served))]
+        runtime.served_from = made_from
+        return body
+
     @staticmethod
-    def _share_data(runtime: ArtifactRuntime, body: str) -> str:
+    def _share_data(runtime: ArtifactRuntime, body: str) -> tuple[str, dict[str, tuple[str, bytes]]]:
         assets: dict[str, tuple[str, bytes]] = {}
 
         def address(match: re.Match[str]) -> str:
@@ -633,14 +669,14 @@ class HtmlReviewServer:
             pieces.append(script.group(0))
             start = script.end()
         pieces.append(SHAREABLE_DATA.sub(address, body[start:]))
-        runtime.shared_assets = assets
-        return "".join(pieces)
+        return "".join(pieces), assets
 
     async def shared_asset(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
-        asset = runtime.shared_assets.get(request.match_info["name"])
+        name = request.match_info["name"]
+        asset = next((assets[name] for _, assets in reversed(runtime.served.values()) if name in assets), None)
         if asset is None:
-            raise web.HTTPNotFound(text="no such data in the document last served to the review page")
+            raise web.HTTPNotFound(text="no such data in the documents last served to review pages")
         content_type, data = asset
         # Named by its content, so a cached copy never goes stale.
         return web.Response(body=data, content_type=content_type,
