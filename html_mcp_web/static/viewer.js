@@ -575,19 +575,21 @@ function loadThumbs() {
     return;
   }
   // As with the deck, a column already showing previews keeps them in view while the next
-  // revision loads under it: loaded in place, the column went blank on every edit.
+  // revision loads under it: loaded in place, the column went blank on every edit. And as
+  // with the deck, a frame still loading keeps the latest address for when its load ends.
   if (thumbsBehind === null) {
     thumbsBehind = document.createElement("iframe");
     thumbsBehind.title = frame.title;
     thumbsBehind.tabIndex = -1;
     thumbsBehind.toggleAttribute("inert", true);
+    thumbsBehind.src = url;
     frame.after(thumbsBehind);
     const next = thumbsBehind;
     next.addEventListener("load", () => {
       if (next.contentDocument !== null && next.contentDocument.URL !== "about:blank") revealThumbs(next);
     });
   }
-  showInFrame(thumbsBehind, url);
+  thumbsBehind.dataset.wanted = new URL(url, location.href).href;
 }
 
 let thumbsBehind = null;
@@ -595,6 +597,10 @@ let thumbsBehind = null;
 // The loaded previews take the column at the scroll the old ones had, set up as any load is,
 // and the old frame covers them until two frames have been drawn.
 async function revealThumbs(next) {
+  if (next.contentDocument.URL !== next.dataset.wanted) {
+    showInFrame(next, next.dataset.wanted);
+    return;
+  }
   thumbsBehind = null;
   const old = $("#thumbs-frame");
   const at = old.contentWindow.scrollY + thumbShift;
@@ -1720,45 +1726,64 @@ function loadArtifact(preserveView) {
   }
   hideSelectionButton();
   state.loadedRevision = state.revision;
+  const url = `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}&shared=1`;
   const shown = iframe.contentDocument?.URL;
-  const target = shown === undefined || shown === "about:blank" ? iframe : frameBehind(iframe);
-  target.dataset.revision = String(state.revision);
-  delete target.dataset.settled;
-  showInFrame(target, `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}&shared=1`);
+  if (shown !== undefined && shown !== "about:blank") {
+    loadBehind(iframe, url);
+    return;
+  }
+  iframe.dataset.revision = String(state.revision);
+  delete iframe.dataset.settled;
+  showInFrame(iframe, url);
 }
 
 // A revision of a deck already on screen loads into a frame of its own under it, and the
 // frame on screen stays in view until the new document is set up at the reader's place.
 // Loaded into the frame on screen, the deck went blank while the document loaded and then
 // showed its first page until the scroll was put back, on every edit the agent made.
-function frameBehind(shown) {
+// The new frame is given its address as it is made, and a frame still loading is not sent
+// elsewhere: WebKit dropped a second address given to a new frame before its first had
+// loaded, and the deck stayed on the earlier revision under the later one's number while
+// agents' edits came in bursts. The latest address waits on the frame for its load to end.
+function loadBehind(shown, url) {
   const artifactId = shown.dataset.artifact;
-  if (state.framesBehind[artifactId] !== undefined) return state.framesBehind[artifactId];
-  const next = document.createElement("iframe");
-  next.className = "artifact-frame";
-  next.title = shown.title;
-  next.tabIndex = -1;
-  next.toggleAttribute("inert", true);
-  next.dataset.artifact = artifactId;
-  shown.after(next);
-  const loaded = () => next.contentDocument !== null && next.contentDocument.URL !== "about:blank";
-  // The swap runs first, so the setup that follows finds this frame on screen.
-  next.addEventListener("load", () => { if (loaded()) revealBehind(next); });
-  next.addEventListener("load", () => { if (loaded()) attachArtifactEvents(next); });
-  state.framesBehind[artifactId] = next;
-  return next;
+  let next = state.framesBehind[artifactId];
+  if (next === undefined) {
+    next = document.createElement("iframe");
+    next.className = "artifact-frame";
+    next.title = shown.title;
+    next.tabIndex = -1;
+    next.toggleAttribute("inert", true);
+    next.dataset.artifact = artifactId;
+    next.src = url;
+    shown.after(next);
+    const frame = next;
+    // The swap runs first, so the setup that follows finds this frame on screen.
+    frame.addEventListener("load", () => { if (frame.contentDocument?.URL !== "about:blank") revealBehind(frame); });
+    frame.addEventListener("load", () => { if (frame.id === "artifact-frame") attachArtifactEvents(frame); });
+    state.framesBehind[artifactId] = next;
+  }
+  next.dataset.revision = String(state.revision);
+  next.dataset.wanted = new URL(url, location.href).href;
+  delete next.dataset.settled;
 }
 
 // The new frame takes the place of the one on screen at once, so the page is set up on it,
 // while the old one covers it until the deck's fonts are in and two frames have been drawn
-// at the reader's place. A frame for a tab the reader has left replaces the old one unseen.
+// at the reader's place. A frame for a tab the reader has left replaces the old one unseen,
+// and is set up when the reader comes back.
 async function revealBehind(next) {
+  if (next.contentDocument.URL !== next.dataset.wanted) {
+    showInFrame(next, next.dataset.wanted);
+    return;
+  }
   const artifactId = next.dataset.artifact;
   delete state.framesBehind[artifactId];
   const old = state.frames[artifactId];
   state.frames[artifactId] = next;
   if (state.artifactId !== artifactId) {
     old.remove();
+    delete next.dataset.revision;
     return;
   }
   old.classList.remove("active");
