@@ -4,7 +4,7 @@ Edit the `edit_file` that `guide()` names. Read this entry once when creating a 
 
 ## Reading the documents
 
-Read [PRODUCTION.md](PRODUCTION.md) in full for production rules and checks. Read the configured content guideline and the template's own README listed by `guide()`. Content guidelines govern what the document says and shows. [The guideline directory](../guidelines/README.md) describes the packages.
+Read [PRODUCTION.md](PRODUCTION.md) in full for production rules and checks. Read the configured content guidelines and the template's own README listed by `guide()` in full. Content guidelines govern what the document says and shows. [The guideline directory](../guidelines/README.md) describes the packages.
 
 Consult [COMPONENTS.md](COMPONENTS.md) only by the section needed for the current component or layout report. Read [SKINS.md](SKINS.md) when developing a skin.
 
