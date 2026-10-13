@@ -25,7 +25,8 @@ const state = {
   activeForm: null,
   editingEntry: null,
   unattached: new Set(),
-  // The scroll each artifact's next document opens at, by id, kept until it is put back.
+  // The place each artifact's next document opens at, by id, kept until it is put back: the
+  // page at the top of the window, by its index, and how far into it.
   pendingViews: {},
   // The frame each artifact's next revision is loading in, by id, under the one on screen.
   framesBehind: {},
@@ -639,6 +640,9 @@ async function revealThumbs(next) {
   await next.contentDocument.fonts.ready;
   await new Promise((done) => win.requestAnimationFrame(() => win.requestAnimationFrame(done)));
   old.remove();
+  // As with the deck: Safari left the column empty until the reader clicked in it, which
+  // scrolls it, and then drew the previews at once.
+  scrollToRepaint(win);
 }
 
 function thumbPages() {
@@ -670,9 +674,15 @@ function installThumbs() {
       outline: calc(3px / var(--html-mcp-page-scale)) solid #e0955a !important;
     }`;
   doc.head.appendChild(style);
+  // A click marks its preview at once and shows that page. Scrolled there smoothly, the deck
+  // passed every page between, and the mark followed the deck down the column through each.
   doc.addEventListener("click", (event) => {
     const page = event.target.closest?.("body > main.pages > section.page");
-    if (page) jumpToPage(thumbPages().indexOf(page) + 1);
+    if (!page) return;
+    const number = thumbPages().indexOf(page) + 1;
+    state.currentPage = number;
+    markCurrentThumb();
+    artifactPages()[number - 1]?.scrollIntoView({ behavior: "instant", block: "start" });
   });
   doc.addEventListener("keydown", handleThumbKey);
   doc.addEventListener("keydown", search.handleKeydown, true);
@@ -1720,9 +1730,18 @@ function attachArtifactEvents(frame) {
   const artifactId = state.artifactId;
   const view = state.pendingViews[artifactId];
   if (view !== undefined) {
-    win.requestAnimationFrame(() => {
-      win.scrollTo(view.x, view.y);
-      if (state.pendingViews[artifactId] === view) delete state.pendingViews[artifactId];
+    // Put back as a page and a point on it, not as a scroll offset, and again once the fonts
+    // are in: the new document is set first in a fallback face, its script blocks at other
+    // heights, and the offset the reader left at fell two pages further on by then.
+    const putBack = () => {
+      const page = artifactPages()[view.page];
+      if (frameDocument() === doc && page !== undefined) keepReadingPlace({ page, y: view.y });
+    };
+    win.requestAnimationFrame(putBack);
+    doc.fonts.ready.then(() => {
+      if (state.pendingViews[artifactId] !== view) return;
+      putBack();
+      delete state.pendingViews[artifactId];
     });
   } else {
     const place = recalledReadingPlace();
@@ -1768,11 +1787,12 @@ function loadArtifact(preserveView) {
 
 // A view not yet put back is kept. A hidden tab runs no animation frames, and a second
 // edit made while the reader was in another tab read the top of the document loaded for
-// the first, which sent them back to page 1.
+// the first, which sent them back to page 1. The slide show keeps its own page.
 function keepView(iframe, preserveView) {
-  if (preserveView && state.pendingViews[state.artifactId] === undefined && iframe.contentWindow !== null) {
-    state.pendingViews[state.artifactId] = { x: iframe.contentWindow.scrollX, y: iframe.contentWindow.scrollY };
-  }
+  if (!preserveView || state.slideShow || state.pendingViews[state.artifactId] !== undefined) return;
+  if (iframe.id !== "artifact-frame" || iframe.contentDocument?.body == null) return;
+  const place = readingPlace();
+  if (place !== null) state.pendingViews[state.artifactId] = { page: artifactPages().indexOf(place.page), y: place.y };
 }
 
 // A deck on screen takes a revision by changing the pages that differ, see updateFrame, at
@@ -1991,6 +2011,10 @@ async function revealBehind(next) {
   await next.contentDocument.fonts.ready;
   await new Promise((done) => win.requestAnimationFrame(() => win.requestAnimationFrame(done)));
   old.remove();
+  // Safari draws a frame come back from underneath as it last drew it, or not at all, until
+  // it is scrolled: the deck showed the new document's first page, drawn while it loaded at
+  // the top, over the reader's place it had been scrolled to beneath the old one.
+  if (next.id === "artifact-frame") scrollToRepaint(win);
 }
 
 // Each revision replaces the frame's history entry rather than adding one: setting src added
@@ -2006,15 +2030,20 @@ function showInFrame(frame, url) {
 // full-screen slide show the page being shown is kept, from its top. They are saved when
 // the tab is hidden as well as when it is left: a browser that discards a background tab
 // to free memory loads it again on return, and the discarded page ran no pagehide.
-// A frame still waiting to be put back shows the top of its document, so the place saved
-// before stands.
+// While an edit's view waits to be put back, the place saved is that view's: the deck on
+// screen may be the new document still at its top. Skipped instead, a reload for newer viewer
+// code that came while an edit was loading saved nothing, and the deck opened on page 1.
 const READING_PLACE = "htmlMcpReadingPlace";
 
 function rememberReadingPlace() {
   try {
     if (state.artifactId === null || frameDocument() === null) return;
     const held = state.slideShow ? state.currentPage || 1 : state.leftSlideShowAt;
-    if (held === null && state.pendingViews[state.artifactId] !== undefined) return;
+    const pending = state.pendingViews[state.artifactId];
+    if (held === null && pending !== undefined) {
+      sessionStorage.setItem(READING_PLACE, JSON.stringify({ artifact: state.artifactId, page: pending.page, y: pending.y }));
+      return;
+    }
     const shown = held === null ? undefined : artifactPages()[held - 1];
     const place = held === null ? readingPlace() : (shown === undefined ? null : { page: shown, y: 0 });
     if (place === null) return;
