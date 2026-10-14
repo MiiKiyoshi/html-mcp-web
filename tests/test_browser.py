@@ -1064,7 +1064,9 @@ def test_browser_review_contract(tmp_path: Path) -> None:
 def test_a_short_column_spreads_over_the_height_of_the_tall_one(tmp_path: Path) -> None:
     """Beside a 350px figure, a stack of two cards 120px tall sat in a clump at the top of
     its column and left the rest empty; the row's height is now shared, and the column
-    spreads its blocks over it the way the body spreads its own."""
+    spreads its blocks over it the way the body spreads its own. A card or a code block that
+    is a column on its own was stretched to the figure's height too, its rule or background
+    running far below its words: it keeps its own height at the row's middle."""
     from html_mcp_web.slides import build
 
     content = tmp_path / "content.html"
@@ -1075,6 +1077,13 @@ def test_a_short_column_spreads_over_the_height_of_the_tall_one(tmp_path: Path) 
         '<div style="height: 350px; background: #eee"></div>'
         '<div><div class="card" style="height: 40px">first</div>'
         '<div class="card" style="height: 40px">second</div></div>'
+        '</div></section>\n'
+        '<section data-title="Lone"><div class="two" id="lone-card">'
+        '<div style="height: 350px; background: #eee"></div>'
+        '<div class="card"><h3>Card</h3><p>One line.</p></div>'
+        '</div><div class="two" id="lone-code">'
+        '<div style="height: 350px; background: #eee"></div>'
+        '<pre><code>one line</code></pre>'
         '</div></section>\n'
         "</body>\n", encoding="utf-8")
     html = tmp_path / "slides.html"
@@ -1110,6 +1119,13 @@ return {tall: [box(tall).top, box(tall).bottom], column: [box(stack).top, box(st
                 boxes["column"][1] - boxes["second"][1]]
         assert min(gaps) > 60, (gaps, boxes)
         assert max(gaps) - min(gaps) < 2, (gaps, boxes)
+        for row in ("lone-card", "lone-code"):
+            tall, lone = browser.execute_script(f"""
+const [tall, lone] = document.getElementById('{row}').children;
+return [tall, lone].map((el) => {{ const box = el.getBoundingClientRect(); return [box.top, box.bottom]; }});
+""")
+            assert lone[1] - lone[0] < 150, (row, tall, lone)
+            assert abs((lone[0] + lone[1]) / 2 - (tall[0] + tall[1]) / 2) < 2, (row, tall, lone)
     finally:
         if browser is not None:
             try:

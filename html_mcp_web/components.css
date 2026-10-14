@@ -79,6 +79,11 @@ mark[data-hl="5"] { background: var(--hl-5); }
 .hl-legend { display: flex; flex-wrap: wrap; gap: .3em 1em; }
 
 .two { display: grid; }
+/* A boxed block that is a column on its own keeps its own height and sits at the middle of
+   the row: stretched to a taller column beside it, its rule or background ran far below its
+   words, a height added only to match the neighbour. A column wrapped in a div still takes
+   the row's height. */
+.two > .card, .two > .callout, .two > pre { align-self: center; }
 .metric strong { display: block; }
 .metric span { color: var(--ink-soft); line-height: 1.4; }
 

@@ -324,7 +324,8 @@ tfoot td { border-top: 2px solid var(--accent); border-bottom: 0; font-weight: 7
 /* The two columns share the row's height, and a column that wraps its blocks in a div
    spreads them over it the way the body spreads its own (.body > .rest above): beside a
    tall figure, a short stack of cards sat in a clump at the top and left the rest of the
-   column empty. A column that is one block (a figure, a table) keeps its own height. */
+   column empty. A column that is one block keeps its own height: a figure or a table draws
+   no box that a stretch would show, and a card sits at the row's middle (components.css). */
 .two { grid-template-columns: 1.15fr 1fr; gap: 36px; align-items: stretch; }
 .two > div { display: flex; flex-direction: column; justify-content: space-evenly; }
 .card { padding: 4px 0 4px 22px; border-left: 2px solid var(--accent); }

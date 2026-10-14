@@ -83,7 +83,7 @@ Missing or duplicate reference IDs and undefined citation keys stop the build. C
 
 `grid3` contains `metric` cards, optionally marked `win` or `lose`.
 
-`two` contains normal content and `card`. Its two columns share the row's height. A column wrapped in a `div` spreads its blocks over that height. In a 1200px body, `two` splits the width into 622px and 541px.
+`two` contains normal content and `card`. Its two columns share the row's height. A column wrapped in a `div` spreads its blocks over that height. A `card`, `callout`, or `pre` that is a column on its own keeps its own height at the row's vertical middle. In a 1200px body, `two` splits the width into 622px and 541px.
 
 ## Flow and feedback
 
