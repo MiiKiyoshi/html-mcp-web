@@ -138,6 +138,27 @@ export function createLayoutChecks(dependencies) {
       && element.closest("defs, clipPath, mask, marker, pattern") === null;
   }
 
+  // Whether an element draws a box of its own: a border, a background or a shadow.
+  function boxed(element) {
+    const style = frameWindow().getComputedStyle(element);
+    const shown = (color) => color !== "transparent" && !/^rgba\(.*,\s*0\)$/.test(color);
+    return ["Top", "Right", "Bottom", "Left"].some((side) =>
+      parseFloat(style[`border${side}Width`]) > 0 && shown(style[`border${side}Color`]))
+      || shown(style.backgroundColor) || style.backgroundImage !== "none" || style.boxShadow !== "none";
+  }
+
+  // Whether a box meets a boxed neighbour's edge in its row, as the cells of a table drawn
+  // as a grid do. Panels stand apart, by a gap or by a track holding an arrow.
+  function meetsBoxedNeighbour(element) {
+    const box = element.getBoundingClientRect();
+    return Array.from(element.parentElement.children).some((other) => {
+      if (other === element || !inNormalFlow(other) || !boxed(other)) return false;
+      const near = other.getBoundingClientRect();
+      return Math.min(box.bottom, near.bottom) > Math.max(box.top, near.top)
+        && (Math.abs(near.left - box.right) <= 2 || Math.abs(box.left - near.right) <= 2);
+    });
+  }
+
   // How unevenly a 2D linear map stretches: the ratio of its larger to its smaller singular
   // value, 1 for a rotation or an even scale. A rotation is not distortion, and two uneven
   // transforms that undo each other come out even.
@@ -436,6 +457,36 @@ export function createLayoutChecks(dependencies) {
       }
       const marked = neutral ? semicolonsIn(page, true) : [];
       if (marked.length > 0) addError(semicolonNote(`page ${index + 1} text`, marked), marked[0].element);
+      // A grid or flex row stretches its items to the row's height unless told otherwise, so
+      // a boxed panel beside a taller one drew its border or background far past its content,
+      // a height added only to match the neighbour. The panel's own height is read by setting
+      // it to the row's start for a moment: a panel with a height of its own, or one already
+      // aligned, reads the same. A panel holding nothing is a rule or a stripe, and meant to
+      // run the row's height. Also a rule of the neutral guideline.
+      const panels = neutral ? Array.from(page.querySelectorAll("[data-layout-guard] *")).filter((element) => {
+        if (element.closest("svg") !== null || !inNormalFlow(element) || !seen(element) || !boxed(element)) return false;
+        const row = frameWindow().getComputedStyle(element.parentElement);
+        return (/grid$/.test(row.display) || (/flex$/.test(row.display) && row.flexDirection.startsWith("row")))
+          && !meetsBoxedNeighbour(element);
+      }) : [];
+      const stretched = panels.map((panel) => panel.offsetHeight);
+      const styles = panels.map((panel) => panel.getAttribute("style"));
+      for (const panel of panels) panel.style.setProperty("align-self", "start", "important");
+      const own = panels.map((panel) => panel.offsetHeight);
+      panels.forEach((panel, at) => styles[at] === null
+        ? panel.removeAttribute("style") : panel.setAttribute("style", styles[at]));
+      for (const [at, panel] of panels.entries()) {
+        const style = frameWindow().getComputedStyle(panel);
+        const frame = ["paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth"]
+          .reduce((sum, edge) => sum + parseFloat(style[edge]), 0);
+        const content = own[at] - frame;
+        const room = stretched[at] - frame;
+        // Some room is left alone: a panel a third empty beside a taller one reads well.
+        if (content > 0 && content < room / 2 && room - content >= 40) {
+          addError(`page ${index + 1} ${describeElement(panel)} is stretched from its own ${own[at]}px `
+            + `to its row's ${stretched[at]}px. Let it keep its own height, centered in the row`, panel);
+        }
+      }
       // An image drawn in another shape than its source's. Inside its box, object-fit fill
       // stretches the picture to the content box, and every other value keeps its
       // proportions, so letterboxing and a frame of padding or border are not stretching.

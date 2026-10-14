@@ -2438,6 +2438,79 @@ def test_semicolons_and_stretching_are_reported_and_normal_cases_are_not(tmp_pat
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_panel_stretched_far_past_its_content_is_reported_under_the_neutral_guideline(tmp_path: Path) -> None:
+    """Grid and flex rows stretch their items to the row's height by default, so a boxed
+    panel beside a taller one drew its border far past its content and the check passed it.
+    Normal cases that look alike must pass: a panel a third empty, a column with no box,
+    cells of a table drawn as a grid, a panel with a height of its own, a centered row, and
+    a stripe holding nothing."""
+    import urllib.request
+
+    (tmp_path / "slides.html").write_text('''<!doctype html>
+<html><head><meta charset="utf-8"><title>Panels</title>
+<style>.panel { border: 1px solid #888; padding: 10px } .arrow { display: flex; align-items: center; justify-content: center }</style>
+</head><body><main class="pages">
+  <section class="page"><div data-layout-guard>
+    <div style="display: grid; grid-template-columns: 1fr 26px 1.6fr 26px 1fr; align-items: stretch">
+      <div id="a" class="panel"><div style="height: 80px"></div></div><div class="arrow">&rarr;</div>
+      <div class="panel"><div style="height: 300px"></div></div><div class="arrow">&rarr;</div>
+      <div id="c" class="panel"><div style="height: 120px"></div></div>
+    </div>
+    <div style="display: flex; gap: 20px">
+      <div id="flexed" class="panel"><div style="height: 60px"></div></div><div style="height: 200px"></div>
+    </div>
+  </div></section>
+  <section class="page"><div data-layout-guard>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px">
+      <div class="panel"><div style="height: 200px"></div></div><div class="panel"><div style="height: 300px"></div></div>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 36px">
+      <div style="display: flex; flex-direction: column; justify-content: space-evenly"><p>short</p></div><div style="height: 300px"></div>
+    </div>
+  </div></section>
+  <section class="page"><div data-layout-guard>
+    <div style="display: grid; grid-template-columns: 120px 1fr">
+      <div style="background: #eee"><div style="height: 20px"></div></div><div style="background: #f6f6f6"><div style="height: 200px"></div></div>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px">
+      <div class="panel" style="height: 60px"><div style="height: 40px"></div></div><div style="height: 200px"></div>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: center">
+      <div class="panel"><div style="height: 40px"></div></div><div style="height: 200px"></div>
+    </div>
+    <div style="display: flex; gap: 10px"><div style="width: 4px; background: #888"></div><div style="height: 200px"></div></div>
+  </div></section>
+</main></body></html>''', encoding="utf-8")
+    reported = [
+        "page 1 <div#a.panel> is stretched from its own 102px to its row's 322px. "
+        "Let it keep its own height, centered in the row [p1:0.0.0]",
+        "page 1 <div#c.panel> is stretched from its own 142px to its row's 322px. "
+        "Let it keep its own height, centered in the row [p1:0.0.4]",
+        "page 1 <div#flexed.panel> is stretched from its own 82px to its row's 200px. "
+        "Let it keep its own height, centered in the row [p1:0.1.0]",
+    ]
+    # Panel heights are a rule of the neutral guideline, not a defect of the rendering.
+    for guideline, expected in (("neutral", reported), (None, [])):
+        port = available_port()
+        config_path = tmp_path / ".html-mcp-web.yaml"
+        config_path.write_text(yaml.safe_dump({
+            "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+            "watch": ["*.html"],
+            "port": port,
+            **({"guideline": guideline} if guideline else {}),
+        }, sort_keys=False), encoding="utf-8")
+        shared = SharedProjectServer(load_config(config_path))
+        try:
+            shared.ensure()
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
+                errors = json.loads(response.read())["errors"]
+            checked = [error for error in errors if "its own height" in error]
+            assert sorted(checked) == sorted(expected), (guideline, errors)
+        finally:
+            shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_pdf_export_drives_a_browser_of_its_own() -> None:
     """Every export started its browser on marionette's default port and then attached to
     whatever held that port. Two projects printing at once each have a server of their own,
