@@ -5,7 +5,7 @@
     {
       "name": "html-mcp",
       "source": "./plugin",
-      "description": "Keeps an agent from editing a deck until this context has read the files guide() lists"
+      "description": "Keeps an agent from using html-mcp's tools, guide() aside, until this context has read the files guide() lists"
     }
   ]
 }

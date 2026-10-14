@@ -69,9 +69,10 @@ Remove a registration the user agreed to replace (`claude mcp remove --scope use
     claude mcp add --scope user html-mcp -e PATH="$P" -- "$BIN/html-mcp"
     codex mcp add html-mcp --env PATH="$P" -- "$BIN/html-mcp"
 
-For Claude Code, also install the plugin from the checkout. It refuses an edit to a deck file
-until that context has read the files `guide()` lists, again after each compaction. It loads
-from the checkout in place, so an update of the checkout updates it.
+For Claude Code, also install the plugin from the checkout. It refuses html-mcp's tools other
+than `guide()` and `setup_info()` until that context has read the files `guide()` lists, again
+after each compaction. It loads from the checkout in place, so an update of the checkout
+updates it.
 
     claude plugin marketplace add "$DIR"
     claude plugin install html-mcp@html-mcp-web

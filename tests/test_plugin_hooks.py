@@ -49,8 +49,9 @@ def with_context(event: dict, session: str, agent: str | None) -> dict:
     return event
 
 
-def edit(session: str, path: Path, agent: str | None = None, tool: str = "Edit") -> dict:
-    return with_context({"cwd": str(path.parent), "tool_name": tool, "tool_input": {"file_path": str(path)}},
+def call(session: str, project: Path, tool: str = "read_comments", agent: str | None = None) -> dict:
+    """What the PreToolUse hook receives when an html-mcp tool is called."""
+    return with_context({"cwd": str(project), "tool_name": f"mcp__html-mcp__{tool}", "tool_input": {}},
                         session, agent)
 
 
@@ -80,66 +81,67 @@ def reason(answer: dict | None) -> str | None:
     return answer["hookSpecificOutput"]["permissionDecisionReason"]
 
 
-def test_a_deck_edit_waits_for_the_listed_files_and_waits_again_after_a_compaction(tmp_path: Path, run, rules) -> None:
+def test_html_mcp_tools_wait_for_the_listed_files_and_wait_again_after_a_compaction(tmp_path: Path, run, rules) -> None:
     project = deck_project(tmp_path / "deck")
     content = project / "docs" / "content.html"
     production, guideline, components = rules
     # A context starts in the project: it is told what to do.
     started = run("session-start", {"session_id": "s1", "cwd": str(project), "source": "startup"})
     assert "read every file in its read list in full" in started["hookSpecificOutput"]["additionalContext"]
-    # Before guide() the edit is refused, and the reason says to call it.
-    assert "guide() has not succeeded" in reason(run("before-edit", edit("s1", content)))
-    # After guide() the edit waits for the files it lists to read, named in the reason. The
+    # Before guide() the review tools are refused, and the reason says to call it. guide()
+    # itself, and setup_info() for setting a project up, are open.
+    for tool in ("listen", "read_comments", "write_comments", "layout", "image"):
+        assert "guide() has not succeeded" in reason(run("before-tool", call("s1", project, tool)))
+    assert run("before-tool", call("s1", project, "guide")) is None
+    assert run("before-tool", call("s1", project, "setup_info")) is None
+    # After guide() the tools wait for the files it lists to read, named in the reason. The
     # reference to consult by section is not among them.
     run("guide-read", guided("s1", content, rules))
-    waiting = reason(run("before-edit", edit("s1", content, tool="Write")))
+    waiting = reason(run("before-tool", call("s1", project, "write_comments")))
     assert str(production) in waiting and str(guideline) in waiting and str(components) not in waiting
     run("file-read", read("s1", production))
-    waiting = reason(run("before-edit", edit("s1", content)))
+    waiting = reason(run("before-tool", call("s1", project)))
     assert str(production) not in waiting and str(guideline) in waiting
     # A Read of part of a file, or one that came back cut short, does not count.
     run("file-read", read("s1", guideline, start=2, lines=2))
     run("file-read", read("s1", guideline, content="# Guideline\n"))
-    assert str(guideline) in reason(run("before-edit", edit("s1", content)))
+    assert str(guideline) in reason(run("before-tool", call("s1", project)))
     run("file-read", read("s1", guideline))
-    assert run("before-edit", edit("s1", content)) is None
+    for tool in ("listen", "read_comments", "write_comments", "layout", "image"):
+        assert run("before-tool", call("s1", project, tool)) is None
     # A compaction leaves a summary in place of what was read: refused again until guide()
     # answers and its files are read again.
     run("session-start", {"session_id": "s1", "cwd": str(project), "source": "compact"})
-    assert "guide() has not succeeded" in reason(run("before-edit", edit("s1", content)))
+    assert "guide() has not succeeded" in reason(run("before-tool", call("s1", project)))
     run("guide-read", guided("s1", content, rules))
-    assert reason(run("before-edit", edit("s1", content))) is not None
+    assert reason(run("before-tool", call("s1", project))) is not None
     for path in rules[:2]:
         run("file-read", read("s1", path))
-    assert run("before-edit", edit("s1", content)) is None
+    assert run("before-tool", call("s1", project)) is None
 
 
-def test_the_gate_keeps_to_deck_files_of_projects_this_context_has_read(tmp_path: Path, run, rules) -> None:
+def test_each_context_reads_the_rules_for_itself(tmp_path: Path, run, rules) -> None:
     project = deck_project(tmp_path / "deck")
-    other = deck_project(tmp_path / "other")
     loose = tmp_path / "loose"
     loose.mkdir()
     content = project / "docs" / "content.html"
     run("guide-read", guided("s1", content, rules))
     for path in rules[:2]:
         run("file-read", read("s1", path))
-    # Files that are not deck files, and folders outside any project, are left alone.
-    assert run("before-edit", edit("s1", project / "docs" / "notes.md")) is None
-    assert run("before-edit", edit("s1", loose / "page.html")) is None
+    assert run("before-tool", call("s1", project)) is None
+    # A context started outside any project is told nothing.
     assert run("session-start", {"session_id": "s2", "cwd": str(loose), "source": "startup"}) is None
-    # The rules read for one project do not open another.
-    assert reason(run("before-edit", edit("s1", other / "docs" / "content.html"))) is not None
     # Another session, or a subagent of this one, has read nothing yet.
-    assert reason(run("before-edit", edit("s2", content))) is not None
-    assert reason(run("before-edit", edit("s1", content, agent="a1"))) is not None
+    assert reason(run("before-tool", call("s2", project))) is not None
+    assert reason(run("before-tool", call("s1", project, agent="a1"))) is not None
     run("guide-read", guided("s1", content, rules, agent="a1"))
     for path in rules[:2]:
         run("file-read", read("s1", path, agent="a1"))
-    assert run("before-edit", edit("s1", content, agent="a1")) is None
+    assert run("before-tool", call("s1", project, agent="a1")) is None
     # A guide() answer with no file to edit records nothing.
     run("guide-read", {"session_id": "s3", "cwd": str(project), "tool_name": "mcp__html-mcp__guide",
                        "tool_response": [{"type": "text", "text": "not set up for review"}]})
-    assert "guide() has not succeeded" in reason(run("before-edit", edit("s3", content)))
+    assert "guide() has not succeeded" in reason(run("before-tool", call("s3", project)))
 
 
 def test_answers_from_servers_started_on_earlier_code_still_work(tmp_path: Path, run, rules) -> None:
@@ -149,36 +151,15 @@ def test_answers_from_servers_started_on_earlier_code_still_work(tmp_path: Path,
     run("guide-read", guided("s1", content, rules, answer={"edit_file": str(content), "read": [str(path) for path in rules]}))
     for path in rules[:2]:
         run("file-read", read("s1", path))
-    assert run("before-edit", edit("s1", content)) is None
+    assert run("before-tool", call("s1", project)) is None
     # A record left by the earlier plugin, a list of projects, counts as no record.
     records = tmp_path / "cache" / "html-mcp-web" / "guide-read"
     (records / "s5").write_text(json.dumps([str(project)]), encoding="utf-8")
-    assert "guide() has not succeeded" in reason(run("before-edit", edit("s5", content)))
+    assert "guide() has not succeeded" in reason(run("before-tool", call("s5", project)))
     # The documents themselves in the answer: they are already in the context.
     run("guide-read", {"session_id": "s2", "cwd": str(project), "tool_name": "mcp__html-mcp__guide",
                        "tool_response": [{"type": "text", "text": f"Edit file: {content}\n\n===== rules ====="}]})
-    assert run("before-edit", edit("s2", content)) is None
-
-
-def test_a_worktree_of_the_project_counts_as_the_project(tmp_path: Path, run, rules) -> None:
-    """An agent isolated in a linked git worktree edits its copy of the deck, while guide()
-    names the file in the main checkout the server serves. Taken as two projects, the edit
-    stayed refused after the rules had been read."""
-    main = tmp_path / "repo"
-    deck_project(main / "deck")
-    git = ["git", "-c", "user.name=t", "-c", "user.email=t@t"]
-    subprocess.run([*git, "init", "-q", str(main)], check=True)
-    subprocess.run([*git, "-C", str(main), "add", "-A"], check=True)
-    subprocess.run([*git, "-C", str(main), "commit", "-q", "-m", "deck"], check=True)
-    copy = tmp_path / "copy"
-    subprocess.run([*git, "-C", str(main), "worktree", "add", "-q", str(copy)], check=True)
-    in_main, in_copy = main / "deck" / "docs" / "content.html", copy / "deck" / "docs" / "content.html"
-    assert reason(run("before-edit", edit("s1", in_copy))) is not None
-    run("guide-read", guided("s1", in_main, rules))
-    for path in rules[:2]:
-        run("file-read", read("s1", path))
-    assert run("before-edit", edit("s1", in_copy)) is None
-    assert run("before-edit", edit("s1", in_main)) is None
+    assert run("before-tool", call("s2", project)) is None
 
 
 def test_the_plugin_is_listed_and_wired_to_the_gate() -> None:
@@ -194,7 +175,7 @@ def test_the_plugin_is_listed_and_wired_to_the_gate() -> None:
         ("SessionStart", None): ["session-start"],
         ("PostToolUse", "mcp__html-mcp__guide"): ["guide-read"],
         ("PostToolUse", "Read"): ["file-read"],
-        ("PreToolUse", "Edit|Write|MultiEdit|NotebookEdit"): ["before-edit"],
+        ("PreToolUse", "mcp__html-mcp__.*"): ["before-tool"],
     }
     assert all(hook["command"].startswith('python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guide_gate.py" ')
                for entries in hooks.values() for entry in entries for hook in entry["hooks"])

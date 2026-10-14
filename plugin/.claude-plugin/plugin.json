@@ -1,5 +1,5 @@
 {
   "name": "html-mcp",
-  "description": "Keeps an agent from editing a deck until this context has read the files guide() lists, again after each compaction",
+  "description": "Keeps an agent from using html-mcp's tools, guide() aside, until this context has read the files guide() lists, again after each compaction",
   "author": {"name": "MiiKiyoshi"}
 }

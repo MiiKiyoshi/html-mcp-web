@@ -23,9 +23,9 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "matcher": "mcp__html-mcp__.*",
         "hooks": [
-          {"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/guide_gate.py\" before-edit"}
+          {"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/guide_gate.py\" before-tool"}
         ]
       }
     ]
