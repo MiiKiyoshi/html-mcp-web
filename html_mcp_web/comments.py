@@ -432,6 +432,14 @@ class CommentStore:
         else:
             self._assign_entry_ids()
 
+    def _ready(self) -> None:
+        """A store removed while the server runs, as when a reader empties the project folder
+        and sets it up again, starts empty again as a new one does. Left missing, every state
+        the review page or an agent asked for failed until the server was restarted."""
+        if not self.path.exists():
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._write({"version": STORE_VERSION, "comments": []})
+
     def _assign_entry_ids(self) -> None:
         """Give entries written before they carried ids their ids, once, under the lock:
         an id made on every load would name nothing across loads."""
@@ -451,6 +459,7 @@ class CommentStore:
         except ImportError:
             yield
             return
+        self._ready()
         with self.lock_path.open("a") as lock_file:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
             try:
@@ -459,6 +468,7 @@ class CommentStore:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     def _read(self) -> dict[str, Any]:
+        self._ready()
         data = json.loads(self.path.read_text(encoding="utf-8"))
         if int(data["version"]) != STORE_VERSION:
             raise ValueError(f"unsupported comment store version: {data['version']}")

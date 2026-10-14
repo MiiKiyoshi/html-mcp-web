@@ -39,6 +39,19 @@ def test_thread_lifecycle_is_persisted(tmp_path: Path) -> None:
     assert loaded.thread[-1].edits == ["artifact.html"]
 
 
+def test_a_store_removed_while_in_use_starts_empty_again(tmp_path: Path) -> None:
+    """A reader who empties the project folder and sets it up again removes the store under a
+    running server. Every state it was asked for then failed until it was restarted."""
+    import shutil
+
+    store = CommentStore(tmp_path / "project" / ".html-mcp-web" / "comments" / "slides.json")
+    store.add(anchor(), "before the folder was emptied")
+    shutil.rmtree(tmp_path / "project")
+    assert store.list() == []
+    created = store.add(anchor(), "after it was set up again")
+    assert [comment.id for comment in store.list()] == [created.id]
+
+
 def test_comment_ids_are_distinct(tmp_path: Path) -> None:
     store = CommentStore(tmp_path / "comments.json")
     first = store.add(anchor(), "first")
