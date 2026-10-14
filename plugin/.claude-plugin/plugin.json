@@ -1,0 +1,5 @@
+{
+  "name": "html-mcp",
+  "description": "Keeps an agent from editing a deck until guide() has given this context the rules, again after each compaction",
+  "author": {"name": "MiiKiyoshi"}
+}

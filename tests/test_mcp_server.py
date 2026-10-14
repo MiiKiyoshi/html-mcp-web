@@ -79,6 +79,11 @@ def answer(call):
     return json.loads(asyncio.run(call)[0].text)
 
 
+def guide_text(mcp, artifact: str = "slides") -> str:
+    """What guide() hands the agent: one text, the file to edit first."""
+    return asyncio.run(mcp.call_tool("guide", {"artifact": artifact}))[0].text
+
+
 def test_source_comments_are_compact_until_the_agent_reads_detail() -> None:
     comment = {
         "id": "c-12345678",
@@ -136,9 +141,9 @@ async def test_stdio_mcp_starts_without_project_config(tmp_path: Path) -> None:
             project(tmp_path)
             guided = await session.call_tool("guide", {"artifact": "slides"})
             assert guided.isError is False
-            # One text, one line of JSON: no structured copy beside it.
-            assert guided.structuredContent is None and "\n" not in guided.content[0].text
-            assert json.loads(guided.content[0].text)["edit_file"] == str(tmp_path / "slides.html")
+            # One text: no structured copy beside it.
+            assert guided.structuredContent is None
+            assert guided.content[0].text.startswith(f"Edit file: {tmp_path / 'slides.html'}\n")
 
 
 @pytest.mark.asyncio
@@ -205,8 +210,7 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         assert str(INIT_GUIDE) in str(unready.value) and str(CLI) in str(unready.value)
 
         project(tmp_path)
-        guided = answer(mcp.call_tool("guide", {"artifact": "slides"}))
-        assert guided["edit_file"] == str(tmp_path / "slides.html")
+        assert guide_text(mcp).startswith(f"Edit file: {tmp_path / 'slides.html'}\n")
     finally:
         binding.stop()
 
@@ -243,7 +247,7 @@ def test_setup_info_reports_paths_and_choices_without_connecting(tmp_path: Path,
         # A report only: no binding, no server, no file.
         assert binding.bound_config_path() is None
         assert sorted(tmp_path.rglob("*")) == files
-        answer(mcp.call_tool("guide", {"artifact": "slides"}))
+        guide_text(mcp)
         assert answer(mcp.call_tool("setup_info", {}))["bound_config_path"] == config_path
     finally:
         binding.stop()
@@ -260,8 +264,7 @@ def test_binding_retries_after_invalid_config_is_fixed(tmp_path: Path) -> None:
         assert str(config_path) in str(broken.value)
         config_path.unlink()
         project(tmp_path)
-        guided = answer(mcp.call_tool("guide", {"artifact": "slides"}))
-        assert guided["edit_file"] == str(tmp_path / "slides.html")
+        assert guide_text(mcp).startswith(f"Edit file: {tmp_path / 'slides.html'}\n")
     finally:
         binding.stop()
 
@@ -318,8 +321,7 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
             assert response.status == 200
 
         mcp = create_server(binding)
-        guided = answer(mcp.call_tool("guide", {"artifact": "slides"}))
-        assert guided["edit_file"] == str(tmp_path / "slides.html")
+        assert guide_text(mcp).startswith(f"Edit file: {tmp_path / 'slides.html'}\n")
 
         base = f"http://127.0.0.1:{config.port}"
         created = post_json(f"{base}/artifacts/slides/comments", {
@@ -624,19 +626,26 @@ def test_the_lock_names_its_holder(tmp_path: Path) -> None:
         dying.wait(timeout=10)
 
 
-def test_guide_names_the_file_to_edit_and_what_to_read(tmp_path: Path) -> None:
-    """Paths only: a document is read when it is needed, not carried in the answer."""
+def test_guide_names_the_file_to_edit_and_carries_the_rules_in_full(tmp_path: Path) -> None:
+    """Agents given paths to read often wrote without reading them, and a long document read
+    before a context compaction came back as its path alone. The answer carries the documents
+    to follow in full, and the component reference, looked up by section, as a path."""
     project(tmp_path)
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        guided = answer(mcp.call_tool("guide", {"artifact": "slides"}))
-        assert set(guided) == {"edit_file", "read"}
-        assert answer(mcp.call_tool("guide", {})) == guided
-        assert guided["edit_file"] == str(tmp_path / "slides.html")
-        assert [Path(path).name for path in guided["read"]] == ["README.md", "PRODUCTION.md", "COMPONENTS.md"]
-        assert all(Path(path).is_file() for path in guided["read"])
-        assert "reader-facing unit" not in json.dumps(guided, ensure_ascii=False)
+        guided = asyncio.run(mcp.call_tool("guide", {"artifact": "slides"}))[0].text
+        assert asyncio.run(mcp.call_tool("guide", {}))[0].text == guided
+        templates = Path(__file__).resolve().parents[1] / "templates"
+        assert guided.startswith(f"Edit file: {tmp_path / 'slides.html'}\n")
+        assert f"consulted by the section needed: {templates / 'COMPONENTS.md'}" in guided
+        for document in ("README.md", "PRODUCTION.md"):
+            assert f"===== {templates / document} =====\n" in guided
+            assert (templates / document).read_text(encoding="utf-8").strip() in guided
+        assert f"===== {templates / 'COMPONENTS.md'} =====" not in guided
+        # Claude Code keeps a result this long in the conversation only when the tool asks.
+        tools = {tool.name: tool for tool in asyncio.run(mcp.list_tools())}
+        assert tools["guide"].meta == {"anthropic/maxResultSizeChars": 200000}
         with pytest.raises(Exception, match="unknown artifact"):
             asyncio.run(mcp.call_tool("guide", {"artifact": "report"}))
     finally:
@@ -682,13 +691,11 @@ def test_guide_for_a_templated_artifact_names_its_content_file_and_template_note
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        guided = answer(mcp.call_tool("guide", {"artifact": "slides"}))
+        guided = guide_text(mcp)
         # The content file is what a templated artifact is written in; the main file is built.
-        assert guided["edit_file"] == str(tmp_path / "content.html")
-        notes = Path(guided["read"][-1])
-        assert notes.parent.name == "neutral-slides" and notes.name == "README.md"
-        for path in guided["read"]:
-            assert Path(path).read_text(encoding="utf-8") not in json.dumps(guided)
+        assert guided.startswith(f"Edit file: {tmp_path / 'content.html'}\n")
+        notes = Path(__file__).resolve().parents[1] / "templates" / "neutral-slides" / "README.md"
+        assert f"===== {notes} =====\n{notes.read_text(encoding='utf-8').strip()}" in guided
     finally:
         binding.stop()
 
@@ -726,7 +733,7 @@ def test_layout_reports_the_revisions_errors_and_a_pages_detail(tmp_path: Path, 
         binding.stop()
 
 
-def test_guide_lists_the_configured_guideline_by_path(
+def test_guide_carries_the_configured_guideline_after_the_one_it_extends(
     tmp_path: Path, monkeypatch,
 ) -> None:
     user_config = tmp_path / "user-config"
@@ -743,13 +750,13 @@ def test_guide_lists_the_configured_guideline_by_path(
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
-        guided = answer(mcp.call_tool("guide", {"artifact": "slides"}))
+        guided = guide_text(mcp)
         # The guideline it extends comes first, so the general rules are read before
-        # the ones that add to or override them.
+        # the ones that add to or override them, and the answer ends with the guideline.
         neutral = Path(config_module.__file__).resolve().parent.parent / "guidelines" / "neutral" / "GUIDELINE.md"
-        assert guided["read"][-2:] == [str(neutral), str(guideline_path)]
-        assert "Never inline this marker" not in json.dumps(guided)
-        # Paths are the whole of it: no resources beside them to keep in step.
+        assert guided.index(f"===== {neutral} =====") < guided.index(f"===== {guideline_path} =====")
+        assert guided.endswith(f"===== {guideline_path} =====\n{guideline_text.strip()}\n")
+        # The answer is the whole of it: no resources beside it to keep in step.
         assert asyncio.run(mcp.list_resources()) == []
     finally:
         binding.stop()

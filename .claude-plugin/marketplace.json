@@ -1,0 +1,11 @@
+{
+  "name": "html-mcp-web",
+  "owner": {"name": "MiiKiyoshi"},
+  "plugins": [
+    {
+      "name": "html-mcp",
+      "source": "./plugin",
+      "description": "Keeps an agent from editing a deck until guide() has given this context the rules"
+    }
+  ]
+}

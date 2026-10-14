@@ -157,7 +157,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         "html-mcp-web",
         instructions=(
             "Work from read_comments(new=True), and pass ids to reread a whole thread. "
-            "Before writing an artifact, read what guide() lists. Within the user's editing "
+            "Before editing an artifact, call guide() and read its whole answer. Within the user's editing "
             "scope, edit, check the affected pages with layout() and image() (grayscale=false "
             "when colour is in question), and reply with "
             "write_comments. When the wording is the reviewer's to decide, suggest instead of "
@@ -167,10 +167,17 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         ),
     )
 
-    @mcp.tool(structured_output=False)
+    # The documents an agent needs before editing come in the answer itself, not as paths to
+    # read. Agents given the paths often wrote without opening them, and a long document read
+    # earlier comes back after a context compaction as a path alone, while the summary still
+    # says it was read. One call is one reading. The component reference is long and looked up
+    # by the section needed, so it stays a path. Claude Code puts a result over 50,000
+    # characters in a file and shows its path instead, which would make the answer a path again,
+    # so the tool declares a larger limit for its result.
+    @mcp.tool(structured_output=False, meta={"anthropic/maxResultSizeChars": 200000})
     @_compact
-    async def guide(artifact: str | None = None) -> dict[str, Any]:
-        """The file to edit and what to read before writing it. Omit artifact when there is one."""
+    async def guide(artifact: str | None = None) -> str:
+        """The edit file, full production and content rules, and component reference path. Read the whole answer before editing. Omit artifact only when the project has one artifact."""
         client = binding.require_client()
         state = await client.request_json("GET", "/state")
         artifacts = state["artifacts"]
@@ -183,14 +190,19 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             raise RuntimeError(f"unknown artifact: {artifact}; available artifacts: {', '.join(artifacts)}")
         entry = artifacts[artifact]
         docs = Path(__file__).resolve().parent.parent / "templates"
-        read = [str(docs / "README.md"), str(docs / "PRODUCTION.md"), str(docs / "COMPONENTS.md")]
+        read = [docs / "README.md", docs / "PRODUCTION.md"]
         if "template_dir" in entry and entry["template_dir"] is not None:
             notes = Path(entry["template_dir"]) / "README.md"
             if notes.is_file():
-                read.append(str(notes))
+                read.append(notes)
         if state.get("guideline") is not None:
-            read.extend(state["guideline"]["paths"])
-        return {"edit_file": str((Path(state["project_dir"]) / entry["edit_file"]).resolve()), "read": read}
+            read.extend(Path(path) for path in state["guideline"]["paths"])
+        edit_file = (Path(state["project_dir"]) / entry["edit_file"]).resolve()
+        parts = [f"Edit file: {edit_file}",
+                 f"Component reference, consulted by the section needed: {docs / 'COMPONENTS.md'}"]
+        for path in read:
+            parts.append(f"===== {path} =====\n{path.read_text(encoding='utf-8').strip()}")
+        return "\n\n".join(parts) + "\n"
 
     @mcp.tool(structured_output=False)
     @_compact

@@ -15,7 +15,8 @@ install after the user agrees. On a machine that already has it, the same steps 
   Note whether it already holds a checkout. The checkout stays: its templates and guidelines are read from it.
 - Agents: `command -v claude` and `command -v codex`. Register with each one found.
 - Existing registration: `claude mcp get html-mcp`, `codex mcp get html-mcp`. Note a
-  command path that differs from the one below.
+  command path that differs from the one below. `claude plugin list` shows whether the
+  `html-mcp` plugin is already installed, in which case its install below is skipped.
 
 ## 2. Confirm
 
@@ -41,6 +42,13 @@ Remove a registration the user agreed to replace (`claude mcp remove --scope use
     P="$BIN:<firefox directory, if found>:/usr/bin:/bin"
     claude mcp add --scope user html-mcp -e PATH="$P" -- "$BIN/html-mcp"
     codex mcp add html-mcp --env PATH="$P" -- "$BIN/html-mcp"
+
+For Claude Code, also install the plugin from the checkout. It refuses an edit to a deck file
+until `guide()` has given that context the rules, again after each compaction. It loads from
+the checkout in place, so an update of the checkout updates it.
+
+    claude plugin marketplace add "$DIR"
+    claude plugin install html-mcp@html-mcp-web
 
 ## 5. Tell the user
 

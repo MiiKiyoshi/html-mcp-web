@@ -1,10 +1,10 @@
 # Authoring a paged HTML document
 
-Edit the `edit_file` that `guide()` names. Read this entry once when creating a document and reuse the existing markup conventions for later edits.
+Edit the file named on the `Edit file` line of `guide()`'s answer. Reuse the existing markup conventions for later edits.
 
 ## Reading the documents
 
-Read [PRODUCTION.md](PRODUCTION.md) in full for production rules and checks. Read the configured content guidelines and the template's own README listed by `guide()` in full. Content guidelines govern what the document says and shows. [The guideline directory](../guidelines/README.md) describes the packages.
+`guide()` returns this entry and [PRODUCTION.md](PRODUCTION.md) in full, along with the template's own README and content guidelines when configured. Read its whole answer before editing. Call it again when the full answer is no longer available in the current context. Content guidelines govern what the document says and shows. [The guideline directory](../guidelines/README.md) describes the packages.
 
 Consult [COMPONENTS.md](COMPONENTS.md) only by the section needed for the current component or layout report. Read [SKINS.md](SKINS.md) when developing a skin.
 
