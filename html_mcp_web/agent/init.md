@@ -90,8 +90,8 @@ and values. Resolve main and content relative to that config's directory and con
 point to the intended files and that those files exist.
 
 Then call `guide()` for the intended artifact through the current MCP connection and confirm that
-the `Edit file` line of its answer names the intended content file, or main when no template is
-used. A successful init command or CLI config check alone does not establish this.
+`edit_file` in its answer names the intended content file, or main when no template is used. A
+successful init command or CLI config check alone does not establish this.
 
 If this MCP process already connected successfully using a different config, restart the MCP
 server process through the client and repeat the guide check. A tool call that found no config

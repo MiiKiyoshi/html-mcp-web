@@ -1,12 +1,12 @@
 # Authoring a paged HTML document
 
-Edit the file named on the `Edit file` line of `guide()`'s answer. Reuse the existing markup conventions for later edits.
+Edit the file named by `edit_file` in `guide()`'s answer. Reuse the existing markup conventions for later edits.
 
 ## Reading the documents
 
-`guide()` returns this entry and [PRODUCTION.md](PRODUCTION.md) in full, along with the template's own README and content guidelines when configured. Read its whole answer before editing. Call it again when the full answer is no longer available in the current context. Content guidelines govern what the document says and shows. [The guideline directory](../guidelines/README.md) describes the packages.
+`guide()` lists this entry, [PRODUCTION.md](PRODUCTION.md), the template's own README, and the configured content guidelines in `read`. Read every listed file in full before editing. In each new or resumed context, and after a reset or compaction, call `guide()` again and reread those files in full. Content guidelines govern what the document says and shows. [The guideline directory](../guidelines/README.md) describes the packages.
 
-Consult [COMPONENTS.md](COMPONENTS.md) only by the section needed for the current component or layout report. Read [SKINS.md](SKINS.md) when developing a skin.
+Consult references in `consult`, including [COMPONENTS.md](COMPONENTS.md), only by the section needed for the current component or layout report. Read [SKINS.md](SKINS.md) when developing a skin.
 
 A suggestion the reviewer applies is written only into the edit file. Regenerating from a script or an earlier copy loses it unless that source also contains the change. For regeneration, follow [neutral clause 8.4](../guidelines/neutral/GUIDELINE.md#article-8-resolve-the-review-request).
 
