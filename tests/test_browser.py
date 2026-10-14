@@ -2519,7 +2519,7 @@ def test_a_pdf_export_drives_a_browser_of_its_own() -> None:
     import socket
     import threading
 
-    import fitz
+    import pymupdf
 
     from html_mcp_web.pdf_export import print_artifact_pdf
 
@@ -2545,7 +2545,7 @@ def test_a_pdf_export_drives_a_browser_of_its_own() -> None:
         pdf = print_artifact_pdf("data:text/html,<p>the page this export was asked for</p>", "slides")
     finally:
         holder.close()
-    with fitz.open(stream=pdf, filetype="pdf") as doc:
+    with pymupdf.open(stream=pdf, filetype="pdf") as doc:
         assert "the page this export was asked for" in doc[0].get_text()
 
 

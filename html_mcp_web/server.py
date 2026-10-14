@@ -218,6 +218,16 @@ def artifact_text(path: Path) -> str:
     return " ".join(html.unescape(re.sub(r"<[^>]*>", " ", source)).split())
 
 
+def pdf_reader():
+    """PyMuPDF, with its messages sent to stderr. It writes them to stdout by default, and
+    this server runs inside the MCP server's process, whose stdout carries JSON-RPC: a notice
+    printed there, a newer release's warning about the old `fitz` name, broke the client's
+    reading of the stream."""
+    import pymupdf
+    pymupdf.set_messages(stream=sys.stderr)
+    return pymupdf
+
+
 @dataclass
 class ArtifactRuntime:
     artifact_id: str
@@ -771,9 +781,9 @@ class HtmlReviewServer:
             raise web.HTTPBadRequest(text="save names the folder the pages go into")
         folder = request.query["save"]
         pdf = await self._printed(runtime)
-        import fitz
-        with fitz.open(stream=pdf, filetype="pdf") as doc:
-            colorspace = fitz.csGRAY if gray else fitz.csRGB
+        pymupdf = pdf_reader()
+        with pymupdf.open(stream=pdf, filetype="pdf") as doc:
+            colorspace = pymupdf.csGRAY if gray else pymupdf.csRGB
             for number, page in enumerate(doc, 1):
                 self._save_render(f"{folder}/p{number}.png", page.get_pixmap(dpi=dpi, colorspace=colorspace).tobytes("png"))
             pages = doc.page_count
@@ -805,11 +815,11 @@ class HtmlReviewServer:
                 raise web.HTTPNotFound(text=f"unknown target {target_ref!r} on page {page}")
             target_box = (space_page["nodes"][target_ref]["bbox"], space_page["bbox"])
         pdf = await self._printed(runtime)
-        import fitz
-        with fitz.open(stream=pdf, filetype="pdf") as doc:
+        pymupdf = pdf_reader()
+        with pymupdf.open(stream=pdf, filetype="pdf") as doc:
             if not 1 <= page <= doc.page_count:
                 raise web.HTTPBadRequest(text=f"page must be in 1..{doc.page_count}")
-            colorspace = fitz.csGRAY if gray else fitz.csRGB
+            colorspace = pymupdf.csGRAY if gray else pymupdf.csRGB
             clip = None
             if target_box is not None:
                 # The measurement is in page pixels and the PDF in points; the ratio of the
@@ -818,7 +828,7 @@ class HtmlReviewServer:
                 (x, y, w, h), page_bbox = target_box
                 scale = doc[page - 1].rect.width / page_bbox[2]
                 margin = 8.0
-                clip = fitz.Rect(
+                clip = pymupdf.Rect(
                     max(0.0, x - margin) * scale,
                     max(0.0, y - margin) * scale,
                     min(page_bbox[2], x + w + margin) * scale,

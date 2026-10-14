@@ -1019,7 +1019,7 @@ async def test_render_page_crops_to_a_target_block(client, monkeypatch) -> None:
     page's: the target ref crops the render to the block plus a small margin."""
     import io
 
-    import fitz
+    import pymupdf
     from PIL import Image
 
     test_client, review = client
@@ -1027,7 +1027,7 @@ async def test_render_page_crops_to_a_target_block(client, monkeypatch) -> None:
     assert posted.status == 200
 
     # A real one-page PDF at the slide deck's print size, standing in for firefox.
-    with fitz.open() as made:
+    with pymupdf.open() as made:
         made.new_page(width=960, height=540)
         pdf = made.tobytes()
 
@@ -1090,14 +1090,38 @@ async def test_layout_names_semicolons_in_the_floorplan(client, monkeypatch) -> 
     assert "floorplan" not in await (await test_client.get("/artifacts/slides/layout")).json()
 
 
+async def test_a_render_keeps_pdf_library_messages_off_stdout(client, monkeypatch, capfd) -> None:
+    """PyMuPDF writes its messages to stdout by default, and this server runs inside the MCP
+    server's process, whose stdout carries JSON-RPC: a newer release's notice about the old
+    `fitz` name, printed there, broke the client's reading of the stream."""
+    import sys
+
+    import pymupdf
+
+    test_client, review = client
+    with pymupdf.open() as made:
+        made.new_page(width=960, height=540)
+        pdf = made.tobytes()
+
+    async def printed(runtime):
+        return pdf
+
+    monkeypatch.setattr(review, "_pdf", printed)
+    pymupdf.set_messages(stream=sys.stdout)
+    assert (await test_client.get("/artifacts/slides/render/page?page=1&dpi=96")).status == 200
+    pymupdf.message("a library notice")
+    out, err = capfd.readouterr()
+    assert "a library notice" not in out and "a library notice" in err
+
+
 async def test_a_saved_render_is_not_an_edit(client, monkeypatch) -> None:
     """A page rendered for the reader and saved into the project matched the watched
     "*.png", and every artifact's revision moved, which threw away its layout check. The
     server saves the render itself and knows the file as its own."""
-    import fitz
+    import pymupdf
 
     test_client, review = client
-    with fitz.open() as made:
+    with pymupdf.open() as made:
         made.new_page(width=960, height=540)
         pdf = made.tobytes()
 
