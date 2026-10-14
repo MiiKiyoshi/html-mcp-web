@@ -150,6 +150,10 @@ def test_answers_from_servers_started_on_earlier_code_still_work(tmp_path: Path,
     for path in rules[:2]:
         run("file-read", read("s1", path))
     assert run("before-edit", edit("s1", content)) is None
+    # A record left by the earlier plugin, a list of projects, counts as no record.
+    records = tmp_path / "cache" / "html-mcp-web" / "guide-read"
+    (records / "s5").write_text(json.dumps([str(project)]), encoding="utf-8")
+    assert "guide() has not succeeded" in reason(run("before-edit", edit("s5", content)))
     # The documents themselves in the answer: they are already in the context.
     run("guide-read", {"session_id": "s2", "cwd": str(project), "tool_name": "mcp__html-mcp__guide",
                        "tool_response": [{"type": "text", "text": f"Edit file: {content}\n\n===== rules ====="}]})

@@ -76,11 +76,14 @@ def record_of(event: dict) -> Path:
 
 
 def unread(event: dict) -> dict[str, list[str]]:
-    """The files still to read, by project, for this context."""
+    """The files still to read, by project, for this context. A record left by the plugin's
+    earlier form lists projects only, and is read as no record: it failed this hook, and a
+    failing hook lets the edit through."""
     try:
-        return json.loads(record_of(event).read_text(encoding="utf-8"))
+        record = json.loads(record_of(event).read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}
+    return record if isinstance(record, dict) else {}
 
 
 def keep(event: dict, projects: dict[str, list[str]]) -> None:
