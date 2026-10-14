@@ -12,8 +12,11 @@ without its parent's context and has a mark of its own.
   before-edit    PreToolUse on Edit, Write, MultiEdit and NotebookEdit: refuse an edit to a
                  .html file in a project without a mark.
 
-A project is a folder holding .html-mcp-web.yaml, found from the file or folder upward. The
-script needs only the standard library, since it runs outside the server's environment.
+A project is a folder holding .html-mcp-web.yaml, found from the file or folder upward. A
+project in a linked git worktree is the same project as its place in the main checkout: an
+agent isolated in a worktree edits its copy while guide() names the file in the checkout the
+server serves. The script needs only the standard library, since it runs outside the
+server's environment.
 """
 from __future__ import annotations
 
@@ -39,6 +42,23 @@ def project_of(start: Path) -> Path | None:
         if (folder / CONFIG).is_file():
             return folder
     return None
+
+
+def identity(project: Path) -> str:
+    """The project named by its place in the main checkout. A linked worktree's .git is a file
+    naming <main checkout>/.git/worktrees/<name>."""
+    for folder in (project, *project.parents):
+        git = folder / ".git"
+        if git.is_file():
+            found = re.match(r"gitdir:\s*(.+)", git.read_text(encoding="utf-8").strip())
+            if found is not None:
+                gitdir = (folder / found.group(1)).resolve()
+                if gitdir.parent.name == "worktrees" and gitdir.parent.parent.name == ".git":
+                    return str(gitdir.parent.parent.parent / project.relative_to(folder))
+            return str(project)
+        if git.exists():
+            return str(project)
+    return str(project)
 
 
 def mark_of(event: dict) -> Path:
@@ -73,7 +93,7 @@ def guide_read(event: dict) -> None:
         return
     mark = mark_of(event)
     mark.parent.mkdir(parents=True, exist_ok=True)
-    mark.write_text(json.dumps(sorted(marked(event) | {str(project)})), encoding="utf-8")
+    mark.write_text(json.dumps(sorted(marked(event) | {identity(project)})), encoding="utf-8")
 
 
 def before_edit(event: dict) -> None:
@@ -87,7 +107,7 @@ def before_edit(event: dict) -> None:
     if target.suffix.lower() not in DECK_FILES:
         return
     project = project_of(target.parent)
-    if project is None or str(project) in marked(event):
+    if project is None or identity(project) in marked(event):
         return
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse",

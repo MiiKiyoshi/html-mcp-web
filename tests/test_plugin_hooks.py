@@ -100,6 +100,28 @@ def test_the_gate_keeps_to_deck_files_of_projects_this_context_has_read(tmp_path
     assert refused(run("before-edit", edit("s3", project / "docs" / "content.html")))
 
 
+def test_a_worktree_of_the_project_counts_as_the_project(tmp_path: Path, run) -> None:
+    """An agent isolated in a linked git worktree edits its copy of the deck, while guide()
+    names the file in the main checkout the server serves. Taken as two projects, the edit
+    stayed refused after guide() had answered."""
+    main = tmp_path / "repo"
+    deck_project(main / "deck")
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@t"]
+    subprocess.run([*git, "init", "-q", str(main)], check=True)
+    subprocess.run([*git, "-C", str(main), "add", "-A"], check=True)
+    subprocess.run([*git, "-C", str(main), "commit", "-q", "-m", "deck"], check=True)
+    copy = tmp_path / "copy"
+    subprocess.run([*git, "-C", str(main), "worktree", "add", "-q", str(copy)], check=True)
+    in_main, in_copy = main / "deck" / "docs" / "content.html", copy / "deck" / "docs" / "content.html"
+    assert refused(run("before-edit", edit("s1", in_copy)))
+    run("guide-read", guided("s1", in_main))
+    assert run("before-edit", edit("s1", in_copy)) is None
+    assert run("before-edit", edit("s1", in_main)) is None
+    # And the other way round: guide() answered from a server started in the worktree.
+    run("guide-read", guided("s2", in_copy))
+    assert run("before-edit", edit("s2", in_main)) is None
+
+
 def test_the_plugin_is_listed_and_wired_to_the_gate() -> None:
     root = PLUGIN.parent
     market = json.loads((root / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
