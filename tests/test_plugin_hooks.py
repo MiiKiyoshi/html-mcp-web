@@ -144,6 +144,28 @@ def test_each_context_reads_the_rules_for_itself(tmp_path: Path, run, rules) -> 
     assert "guide() has not succeeded" in reason(run("before-tool", call("s3", project)))
 
 
+def test_the_reads_of_one_turn_are_all_recorded(tmp_path: Path, run) -> None:
+    """The Reads of one turn run their hooks at once, and each rewrote the record from what it
+    had read: one read the record while another had emptied it to write and failed, and others
+    wrote back files already taken off, so a file read whole stayed unread."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    project = deck_project(tmp_path / "deck")
+    content = project / "docs" / "content.html"
+    files = []
+    for number in range(5):
+        path = tmp_path / f"rule{number}.md"
+        path.write_text(f"# Rule {number}\n\nText.\n", encoding="utf-8")
+        files.append(path)
+    answer = {"edit_file": str(content), "read": [str(path) for path in files], "consult": []}
+    with ThreadPoolExecutor(len(files)) as pool:
+        for turn in range(10):
+            session = f"turn{turn}"
+            run("guide-read", guided(session, content, files, answer=answer))
+            list(pool.map(lambda path: run("file-read", read(session, path)), files))
+            assert run("before-tool", call(session, project)) is None
+
+
 def test_answers_from_servers_started_on_earlier_code_still_work(tmp_path: Path, run, rules) -> None:
     project = deck_project(tmp_path / "deck")
     content = project / "docs" / "content.html"

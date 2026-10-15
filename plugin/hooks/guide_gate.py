@@ -23,6 +23,8 @@ script needs only the standard library, since it runs outside the server's envir
 """
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import os
 import re
@@ -71,10 +73,26 @@ def unread(event: dict) -> dict[str, list[str]]:
     return record if isinstance(record, dict) else {}
 
 
-def keep(event: dict, projects: dict[str, list[str]]) -> None:
+@contextlib.contextmanager
+def held(event: dict):
+    """This context's record, held against the other hooks of the same context while one
+    rewrites it. The Reads of one turn run their hooks at once: one hook read the record while
+    another had just emptied it to write and failed, and others wrote back files already taken
+    off, so a file read whole stayed unread."""
     record = record_of(event)
     record.parent.mkdir(parents=True, exist_ok=True)
-    record.write_text(json.dumps(projects), encoding="utf-8")
+    with open(record.with_name(record.name + ".lock"), "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+def keep(event: dict, projects: dict[str, list[str]]) -> None:
+    """Written whole and then put in place, so a hook reading without the lock never sees it
+    half written."""
+    record = record_of(event)
+    written = record.with_name(f"{record.name}.{os.getpid()}")
+    written.write_text(json.dumps(projects), encoding="utf-8")
+    os.replace(written, record)
 
 
 def response_text(event: dict) -> str:
@@ -111,9 +129,10 @@ def guide_read(event: dict) -> None:
     project = project_of(Path(edit_file).parent)
     if project is None:
         return
-    projects = unread(event)
-    projects[str(project)] = sorted(os.path.realpath(path) for path in to_read)
-    keep(event, projects)
+    with held(event):
+        projects = unread(event)
+        projects[str(project)] = sorted(os.path.realpath(path) for path in to_read)
+        keep(event, projects)
 
 
 def file_read(event: dict) -> None:
@@ -128,9 +147,10 @@ def file_read(event: dict) -> None:
     if not (returned.get("startLine") == 1 and returned.get("numLines") == returned.get("totalLines")
             and len(returned.get("content") or "") >= len(whole.rstrip("\n"))):
         return
-    projects = unread(event)
-    if any(path in files for files in projects.values()):
-        keep(event, {project: [file for file in files if file != path] for project, files in projects.items()})
+    with held(event):
+        projects = unread(event)
+        if any(path in files for files in projects.values()):
+            keep(event, {project: [file for file in files if file != path] for project, files in projects.items()})
 
 
 def before_tool(event: dict) -> None:
