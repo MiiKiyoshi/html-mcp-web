@@ -65,13 +65,14 @@ def test_export_bakes_chrome_into_background_and_keeps_body_editable(tmp_path: P
     prs = pptx.Presentation(str(out))
     assert (prs.slide_width, prs.slide_height) == (12192000, 6858000)
     # A full-bleed page (cover, contents) is a locked background screenshot the mouse cannot
-    # grab, with its words overlaid as editable text boxes so decorations stay in the picture
-    # while the text stays real.
+    # grab, with its words overlaid as editable text boxes, and on a contents page its rings
+    # and rule as shapes, while its ground and art stay in the picture.
     from pptx.oxml.ns import qn as _qn
     for slide in list(prs.slides)[:2]:
         blip = slide._element.find(_qn("p:cSld")).find(_qn("p:bg"))
         assert blip is not None and blip.find(f".//{_qn('a:blip')}") is not None
-        assert list(shapes_by_kind(slide)) == ["TEXT_BOX"]
+    assert list(shapes_by_kind(prs.slides[0])) == ["TEXT_BOX"]
+    assert set(shapes_by_kind(prs.slides[1])) == {"TEXT_BOX", "AUTO_SHAPE"}
     cover_texts = [s.text_frame.text for s in prs.slides[0].shapes]
     assert "Export Deck" in cover_texts and "Export Author" in cover_texts
     body = prs.slides[2]
@@ -568,16 +569,20 @@ RINGED = """
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 @pytest.mark.parametrize("ringed", [False, True])
-def test_contents_and_divider_numbers_and_labels_are_editable_text(tmp_path: Path, ringed: bool) -> None:
+def test_contents_and_divider_pages_come_over_as_text_and_shapes(tmp_path: Path, ringed: bool) -> None:
     """On contents and divider pages only plain text came back as text: a contents number,
     drawn by the skin with ::before, and a divider number drawn in a ring stayed in the
-    picture, and so did every contents item. Each is now a text box where it was drawn, and the
-    picture under it keeps its ring and loses only its letters. The same holds for a skin that
-    draws the numbers as filled rings laid out by flex, as the neutral skin does not."""
+    picture, with the rings, the sub-item bars and every contents item. Now each piece of text
+    is a text box where it was drawn, each ring, bar, rule and capsule is a shape that can be
+    moved, a ring carries its number in its middle, and the picture under them keeps none of
+    it. The same holds for a skin that draws the numbers as filled rings laid out by flex, as
+    the neutral skin does not."""
     import io
 
     from html_mcp_web.slides import build
     from PIL import Image
+    from pptx.enum.shapes import MSO_SHAPE, MSO_SHAPE_TYPE
+    from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
     from pptx.oxml.ns import qn
 
     skin = NEUTRAL
@@ -590,7 +595,7 @@ def test_contents_and_divider_numbers_and_labels_are_editable_text(tmp_path: Pat
 <meta charset="utf-8">
 <title>Sections</title>
 <body data-author="A" data-meta="B">
-<section data-layout="contents" data-title="Contents"><ol start="2"><li>Alpha</li><li>Beta</li></ol></section>
+<section data-layout="contents" data-title="Contents"><ol start="2"><li>Alpha</li><li>Beta<ul><li>One</li><li>Two</li></ul></li></ol></section>
 <section data-layout="divider" data-no="3"><p class="label">Section name</p></section>
 </body>
 ''', encoding="utf-8")
@@ -599,36 +604,60 @@ def test_contents_and_divider_numbers_and_labels_are_editable_text(tmp_path: Pat
     out = tmp_path / "deck.pptx"
     export_pptx(html.as_uri(), out, tmp_path, None)
     slides = pptx.Presentation(str(out)).slides
+    px = 9525
 
-    def boxes(slide):
-        return {shape.text_frame.text: shape for shape in slide.shapes if shape.has_text_frame}
+    def texts(slide):
+        return {shape.text_frame.text: shape for shape in slide.shapes if shape.has_text_frame and shape.text_frame.text}
 
-    def letters_left(slide, shape) -> int:
-        """Pixels in the middle of the box that stand out from the colour most of it shows. The
-        box's edges are left out: a number's box reaches near the ring drawn around it."""
+    def plain_shapes(slide):
+        return [shape for shape in slide.shapes
+                if shape.shape_type == MSO_SHAPE_TYPE.AUTO_SHAPE and not shape.text_frame.text]
+
+    def marks_left(slide, shape, margin: float) -> int:
+        """Pixels under the shape that stand out from the colour most of it shows, its edges
+        left out by margin. A number's text box reaches near the ring drawn around it."""
         blip = slide._element.find(qn("p:cSld")).find(qn("p:bg")).find(f".//{qn('a:blip')}")
         picture = Image.open(io.BytesIO(slide.part.related_part(blip.get(qn("r:embed"))).blob)).convert("L")
         scale = picture.width / 1280
-        left, top = shape.left / 9525 * scale, shape.top / 9525 * scale
-        width, height = shape.width / 9525 * scale, shape.height / 9525 * scale
-        region = picture.crop((int(left + width * 0.15), int(top + height * 0.15),
-                               int(left + width * 0.85), int(top + height * 0.85)))
+        left, top = shape.left / px * scale, shape.top / px * scale
+        width, height = shape.width / px * scale, shape.height / px * scale
+        region = picture.crop((int(left + width * margin), int(top + height * margin),
+                               int(left + width * (1 - margin)), int(top + height * (1 - margin))))
         values = sorted(region.getdata())
         middle = values[len(values) // 2]
         return sum(1 for value in values if abs(value - middle) > 60)
 
-    contents = boxes(slides[1])
+    contents = texts(slides[1])
     # The counter starts where the list's start attribute says, as the page draws it.
-    assert {"Contents", "02", "Alpha", "03", "Beta"} <= set(contents), list(contents)
+    assert {"Contents", "02", "Alpha", "03", "Beta", "One", "Two"} <= set(contents), list(contents)
     assert "buAutoNum" not in slides[1]._element.xml   # the skin's numbers, not PowerPoint's
     for number, label in (("02", "Alpha"), ("03", "Beta")):
         ring, words = contents[number], contents[label]
-        assert abs((ring.top + ring.height / 2) - (words.top + words.height / 2)) < 4 * 9525
+        # The ring is a circle holding its number in its middle, so the two move together.
+        assert ring.shape_type == MSO_SHAPE_TYPE.AUTO_SHAPE and ring.auto_shape_type == MSO_SHAPE.OVAL
+        assert ring.text_frame.vertical_anchor == MSO_ANCHOR.MIDDLE
+        assert ring.text_frame.paragraphs[0].alignment == PP_ALIGN.CENTER
+        assert abs(ring.width - ring.height) <= px
+        assert abs((ring.top + ring.height / 2) - (words.top + words.height / 2)) < 4 * px
         assert ring.left + ring.width <= words.left
-        assert letters_left(slides[1], ring) == 0 and letters_left(slides[1], words) == 0
-    divider = boxes(slides[2])
+        assert marks_left(slides[1], ring, 0) == 0 and marks_left(slides[1], words, 0.15) == 0
+    # Each sub-item's bar is a shape just left of its words, and so is the rule under the title.
+    shapes = plain_shapes(slides[1])
+    for label in ("One", "Two"):
+        words = contents[label]
+        bar = next(shape for shape in shapes if shape.height < 4 * px
+                   and words.top <= shape.top + shape.height / 2 <= words.top + words.height
+                   and shape.left + shape.width <= words.left + 2 * px)
+        assert marks_left(slides[1], bar, 0) == 0
+    assert any(abs(shape.width - 72 * px) <= px and abs(shape.height - 5 * px) <= px for shape in shapes)
+    divider = texts(slides[2])
     assert {"3", "Section name"} <= set(divider), list(divider)
-    assert letters_left(slides[2], divider["3"]) == 0 and letters_left(slides[2], divider["Section name"]) == 0
+    if ringed:
+        assert divider["3"].auto_shape_type == MSO_SHAPE.OVAL
+        assert divider["3"].text_frame.paragraphs[0].alignment == PP_ALIGN.CENTER
+    # The capsule is a shape of its own, its faint tint kept faint rather than made solid.
+    assert 'a:alpha val="6000"' in slides[2]._element.xml
+    assert marks_left(slides[2], divider["3"], 0.15) == 0 and marks_left(slides[2], divider["Section name"], 0.15) == 0
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")

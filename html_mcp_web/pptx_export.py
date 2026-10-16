@@ -13,9 +13,10 @@ The title bar, footer, and corner logos bake into the slide background so they c
 grabbed; only the content stays editable over them, with the bar's title and the page
 number. A page number "N / M" carries N as PowerPoint's slide-number field, so it follows
 the slide when slides move; M and an appendix label ("A1 / A3") are plain text. A page
-without a body box (cover, contents, divider) bakes the whole page with its letters made
-clear, so boxes, rings and rules stay in the picture, and lays every piece of its text over
-it as an editable box, numbers a skin draws with ::before or ::after included.
+without a body box (cover, contents, divider) lays every piece of its text over the page as an
+editable box, numbers a skin draws with ::before or ::after included, and every ring, bar,
+capsule and rule of its content area as a shape, a ring carrying its number. The rest, the
+page's ground, its art and its footer bar, is baked into the background.
 Every skin is handled the same way; its look comes through the HTML it styles, so no skin
 carries a pptx.
 
@@ -87,21 +88,24 @@ JS_HIDE = ("const page = document.querySelectorAll('section.page')[arguments[0]]
            "for (const i of arguments[1]) { const el = page.querySelector('[data-pptx-index=\"' + i + '\"]');"
            "if (el) el.style.visibility = 'hidden'; }")
 
-# A full-bleed page hides only the letters of the marked text: hiding the element took the
-# ring, capsule or box it is drawn in along with it, so text drawn in one stayed in the
-# picture. Generated text left on an element keeps its own letters.
+# A full-bleed page hides only the letters of the marked text, and only the paint of the
+# shapes laid over it: hiding an element took everything drawn inside it along. Generated
+# text left on an element keeps its own letters.
 JS_HIDE_TEXT = """
 if (document.getElementById('pptx-hide-text') === null) {
   const st = document.createElement('style');
   st.id = 'pptx-hide-text';
   st.textContent = '[data-pptx-hide]{-webkit-text-fill-color:transparent !important;text-shadow:none !important}'
-    + '[data-pptx-hide]::before,[data-pptx-hide]::after{-webkit-text-fill-color:currentcolor !important}';
+    + '[data-pptx-hide]::before,[data-pptx-hide]::after{-webkit-text-fill-color:currentcolor !important}'
+    + '[data-pptx-unpaint]{background:none !important;border-color:transparent !important;box-shadow:none !important}';
   document.head.appendChild(st);
 }
 const page = document.querySelectorAll('section.page')[arguments[0]];
-for (const i of arguments[1]) {
-  const el = page.querySelector('[data-pptx-index="' + i + '"]');
-  if (el) el.setAttribute('data-pptx-hide', '');
+for (const [attribute, marks] of [['data-pptx-hide', arguments[1]], ['data-pptx-unpaint', arguments[2]]]) {
+  for (const i of marks) {
+    const el = page.querySelector('[data-pptx-index="' + i + '"]');
+    if (el) el.setAttribute(attribute, '');
+  }
 }
 """
 
@@ -167,14 +171,22 @@ const spelled = (el, which) => {
   }
   return text;
 };
+const BLOCKISH = /^(block|flex|grid|table|list-item|flow-root)$/;
+const painted = (s) => (s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.backgroundColor !== 'transparent')
+  || (parseFloat(s.borderTopWidth) > 0 && s.borderTopStyle !== 'none')
+  || (parseFloat(s.borderLeftWidth) > 0 && s.borderLeftStyle !== 'none')
+  || (parseFloat(s.borderBottomWidth) > 0 && s.borderBottomStyle !== 'none')
+  || (parseFloat(s.borderRightWidth) > 0 && s.borderRightStyle !== 'none');
+// An empty pseudo-element that paints, a contents sub-item's bar, becomes a span the same way,
+// so it can be a shape of its own.
 if (fullBleed) {
   const found = [];
   for (const el of page.querySelectorAll('*')) {
     if (el.closest('svg') !== null) continue;
     for (const which of ['::before', '::after']) {
       const text = spelled(el, which);
-      if (text === null || text.trim() === '') continue;
       const style = cs(el, which);
+      if (text === null || (text.trim() === '' && !painted(style))) continue;
       found.push({el, which, text, props: Array.from(style, (name) => [name, style.getPropertyValue(name)])});
     }
   }
@@ -194,12 +206,6 @@ if (fullBleed) {
     el.setAttribute(which === '::before' ? 'data-pptx-before' : 'data-pptx-after', '');
   }
 }
-const BLOCKISH = /^(block|flex|grid|table|list-item|flow-root)$/;
-const painted = (s) => (s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.backgroundColor !== 'transparent')
-  || (parseFloat(s.borderTopWidth) > 0 && s.borderTopStyle !== 'none')
-  || (parseFloat(s.borderLeftWidth) > 0 && s.borderLeftStyle !== 'none')
-  || (parseFloat(s.borderBottomWidth) > 0 && s.borderBottomStyle !== 'none')
-  || (parseFloat(s.borderRightWidth) > 0 && s.borderRightStyle !== 'none');
 const items = [];
 let counter = 0;
 for (const stale of page.querySelectorAll('[data-pptx-index]')) stale.removeAttribute('data-pptx-index');
@@ -397,12 +403,32 @@ const emit = (el) => {
     return;
   }
   if (painted(s)) {
-    const side = (name) => [s['border' + name + 'Color'], s['border' + name + 'Style'] === 'none' ? 0 : (parseFloat(s['border' + name + 'Width']) || 0)];
-    items.push({kind: 'panel', rect, bg: s.backgroundColor, radius: parseFloat(s.borderTopLeftRadius) || 0,
-                borders: {top: side('Top'), right: side('Right'), bottom: side('Bottom'), left: side('Left')}, i: mark(el)});
+    // Sizes as drawn: a scaled contents list draws its rings and their lines smaller than the
+    // style says, and a radius given in percent is a share of the box.
+    const scale = el.offsetWidth > 0 ? r.width / el.offsetWidth : 1;
+    const side = (name) => [s['border' + name + 'Color'], s['border' + name + 'Style'] === 'none' ? 0 : (parseFloat(s['border' + name + 'Width']) || 0) * scale];
+    const radius = /%$/.test(s.borderTopLeftRadius)
+      ? parseFloat(s.borderTopLeftRadius) / 100 * Math.min(r.width, r.height)
+      : (parseFloat(s.borderTopLeftRadius) || 0) * scale;
+    // On a full-bleed page a shape inside the content area, a ring, a bar, a capsule or a rule,
+    // comes over as a shape of its own, which the picture under it leaves out, so it can be
+    // moved. The chrome outside that area, the page's ground and the footer bar, stays in the
+    // picture as it does on a body page.
+    const lifted = fullBleed && el.closest('[data-layout-guard]') !== null;
+    const panel = {kind: 'panel', rect, bg: s.backgroundColor, radius, lifted,
+                   borders: {top: side('Top'), right: side('Right'), bottom: side('Bottom'), left: side('Left')}, i: mark(el)};
+    items.push(panel);
     if (!container) {
       inlineImages(el);
       const para = paraOf(el, 0, 0);
+      // A lifted shape holding only text, a number in its ring, carries the text itself, so
+      // the two move together and the text sits where the shape centres it.
+      if (para.runs.length && lifted) {
+        panel.paras = [para];
+        panel.pad = ['Top', 'Right', 'Bottom', 'Left'].map((name) =>
+          ((parseFloat(s['border' + name + 'Width']) || 0) + (parseFloat(s['padding' + name]) || 0)) * scale);
+        return;
+      }
       if (para.runs.length) items.push({kind: 'text', rect: [rect[0] + (parseFloat(s.paddingLeft) || 0), rect[1] + (parseFloat(s.paddingTop) || 0),
         rect[2] - (parseFloat(s.paddingLeft) || 0) - (parseFloat(s.paddingRight) || 0), rect[3] - (parseFloat(s.paddingTop) || 0) - (parseFloat(s.paddingBottom) || 0)],
         paras: [para], list: null, i: mark(el)});
@@ -455,10 +481,11 @@ for (let k = chromeCount; k < items.length; k++) items[k].body = true;
 // number centred in a ring by the ring's own layout came out at the ring's left edge, and
 // PowerPoint's letters, a little wider, broke a label in two. Its alignment is read from
 // where the letters sit in their box. A scaled list is measured as drawn, so its sizes take
-// the scale too. Text of several lines keeps its block and wraps in it.
+// the scale too. Text of several lines keeps its block and wraps in it. A shape carrying its
+// text keeps its own box, and its text takes the scale and the alignment only.
 const place = (item) => {
   const el = page.querySelector('[data-pptx-index="' + item.i + '"]');
-  if (el === null || item.paras.length !== 1) return;
+  if (el === null || !item.paras || item.paras.length !== 1) return;
   const box = el.getBoundingClientRect();
   const scale = el.offsetWidth > 0 ? box.width / el.offsetWidth : 1;
   if (Math.abs(scale - 1) > 0.01) {
@@ -483,10 +510,10 @@ const place = (item) => {
     else if (Math.abs(right - inner[1]) < 2) para.align = 'right';
     else para.align = 'left';
   }
-  item.rect = [left - pr.left, top - pr.top, right - left, bottom - top];
   item.nowrap = true;
+  if (item.kind === 'text') item.rect = [left - pr.left, top - pr.top, right - left, bottom - top];
 };
-if (fullBleed) for (const item of items) if (item.kind === 'text') place(item);
+if (fullBleed) for (const item of items) if (item.kind === 'text' || item.lifted) place(item);
 return {title: title.trim(), hasBody: !!body, items};
 """
 
@@ -820,19 +847,38 @@ def _add_table(slide, item: dict[str, Any], font: str) -> None:
             _fill_paragraph(frame.paragraphs[0], source["para"], font, bold_all=source["header"])
 
 
-def _add_panel(slide, item: dict[str, Any]) -> None:
+def _alpha(color_format, css: str | None) -> None:
+    """A colour's transparency, which RGB alone drops: a capsule tinted at 6% white came out
+    solid white."""
+    from pptx.oxml.ns import qn
+    match = re.match(r"rgba\([^)]*,\s*([\d.]+)\)", css or "")
+    if match is None or float(match[1]) >= 1:
+        return
+    srgb = color_format._xFill.find(qn("a:srgbClr"))
+    srgb.append(srgb.makeelement(qn("a:alpha"), {"val": str(int(round(float(match[1]) * 100000)))}))
+
+
+def _add_panel(slide, item: dict[str, Any], font: str) -> None:
     from pptx.enum.shapes import MSO_SHAPE
+    from pptx.enum.text import MSO_ANCHOR
     from pptx.util import Pt
     x, y, w, h = item["rect"]
     borders = item["borders"]
-    sides = {name: (_rgb(color), width) for name, (color, width) in borders.items()}
+    sides = {name: (_rgb(color), width, color) for name, (color, width) in borders.items()}
     drawn = {name: value for name, value in sides.items() if value[0] is not None and value[1] > 0}
     uniform = len(drawn) == 4 and len({value for value in drawn.values()}) == 1
     background = _rgb(item["bg"])
-    if background is not None or uniform:
-        kind = MSO_SHAPE.ROUNDED_RECTANGLE if item["radius"] > 0 else MSO_SHAPE.RECTANGLE
-        shape = slide.shapes.add_shape(kind, _px(x), _px(y), _px(w), _px(h))
-        if item["radius"] > 0:
+    if background is not None or uniform or item.get("paras"):
+        # A box rounded at half its side all round is a circle, and is drawn as one.
+        circle = abs(w - h) <= 1 and item["radius"] * 2 >= min(w, h) - 1
+        kind = (MSO_SHAPE.OVAL if circle else MSO_SHAPE.ROUNDED_RECTANGLE if item["radius"] > 0
+                else MSO_SHAPE.RECTANGLE)
+        # A border lies inside the box, and a line is drawn centred on the shape's edge, so the
+        # shape is drawn half a line inside the box: drawn on the box itself, a ring came out a
+        # line wider than the page's.
+        inset = next(iter(drawn.values()))[1] / 2 if uniform else 0
+        shape = slide.shapes.add_shape(kind, _px(x + inset), _px(y + inset), _px(w - 2 * inset), _px(h - 2 * inset))
+        if item["radius"] > 0 and not circle:
             shape.adjustments[0] = min(0.5, item["radius"] / min(w, h))
         shape.shadow.inherit = False
         if background is None:
@@ -840,17 +886,30 @@ def _add_panel(slide, item: dict[str, Any]) -> None:
         else:
             shape.fill.solid()
             shape.fill.fore_color.rgb = background
+            _alpha(shape.fill.fore_color, item["bg"])
         if uniform:
-            color, width = next(iter(drawn.values()))
+            color, width, css = next(iter(drawn.values()))
             shape.line.color.rgb = color
+            _alpha(shape.line.color, css)
             shape.line.width = Pt(width * PT_PER_PX)
         else:
             shape.line.fill.background()
+        if item.get("paras"):
+            # The text the shape holds, a number in its ring: set in the shape's middle and
+            # within its border and padding, it stays there wherever the shape goes.
+            frame = shape.text_frame
+            frame.word_wrap = not item.get("nowrap")
+            top, right, bottom, left = (max(0.0, pad - inset) for pad in item["pad"])
+            frame.margin_top, frame.margin_right = _px(top), _px(right)
+            frame.margin_bottom, frame.margin_left = _px(bottom), _px(left)
+            frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+            _no_marker(frame.paragraphs[0]._p)
+            _fill_paragraph(frame.paragraphs[0], item["paras"][0], font, space_before=0)
     if uniform:
         return
     # Partial borders (a rule under a header row, an accent bar on the left) are drawn as
     # thin rectangles on the sides that have them.
-    for name, (color, width) in drawn.items():
+    for name, (color, width, css) in drawn.items():
         if name == "top":
             box = (x, y, w, width)
         elif name == "bottom":
@@ -863,6 +922,7 @@ def _add_panel(slide, item: dict[str, Any]) -> None:
         rule.shadow.inherit = False
         rule.fill.solid()
         rule.fill.fore_color.rgb = color
+        _alpha(rule.fill.fore_color, css)
         rule.line.fill.background()
 
 
@@ -1221,16 +1281,24 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
             if not info["hasBody"]:
                 slide = _blank_slide(prs)
                 _add_notes(slide, script)
-                # A full-bleed page's text becomes editable text boxes, and the picture under
-                # them keeps everything else with the letters cleared, so none shows twice.
-                overlaid = [item for item in info["items"] if item["kind"] == "text"]
-                client.execute_script(JS_HIDE_TEXT, script_args=[index, [item["i"] for item in overlaid]])
+                # A full-bleed page's text becomes editable text boxes and the shapes of its
+                # content area become shapes, in the page's order so each lies over what it
+                # lay over. The picture under them keeps everything else, with their letters and
+                # paint cleared, so none shows twice.
+                overlaid = [item for item in info["items"]
+                            if item["kind"] == "text" or (item["kind"] == "panel" and item["lifted"])]
+                client.execute_script(JS_HIDE_TEXT, script_args=[
+                    index, [item["i"] for item in overlaid if "paras" in item],
+                    [item["i"] for item in overlaid if item["kind"] == "panel"]])
                 shot = client.screenshot(element=client.execute_script(
                     "const p = document.querySelectorAll('section.page')[arguments[0]]; p.scrollIntoView(); return p;",
                     script_args=[index]), format="base64")
                 _set_slide_background(slide, base64.b64decode(shot))
                 for item in overlaid:
-                    _add_text(slide, item, font)
+                    if item["kind"] == "text":
+                        _add_text(slide, item, font)
+                    else:
+                        _add_panel(slide, item, font)
                 report.append({"page": index + 1, "title": info["title"], "shapes": len(overlaid),
                                "screenshot": True, "notes": len(script)})
                 continue
@@ -1255,7 +1323,7 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
                 elif item["kind"] == "table":
                     _add_table(slide, item, font)
                 elif item["kind"] == "panel":
-                    _add_panel(slide, item)
+                    _add_panel(slide, item, font)
                 elif item["kind"] == "img":
                     src = item["src"] or ""
                     if src.startswith("data:"):
