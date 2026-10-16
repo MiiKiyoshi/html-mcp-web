@@ -556,6 +556,81 @@ def test_a_speaker_script_becomes_the_slide_notes(tmp_path: Path) -> None:
     assert "What to say first" not in shown
 
 
+RINGED = """
+.contents li { display: flex; align-items: center; padding-left: 0; }
+.contents li::before { position: static; flex: none; display: flex; align-items: center; justify-content: center;
+  width: 56px; height: 56px; margin-right: 20px; border: 2px solid #fff; border-radius: 50%;
+  background: #335; color: #fff; }
+.divider .cap .no { display: flex; align-items: center; justify-content: center; width: 80px; height: 80px;
+  left: -40px; top: 50%; transform: translateY(-50%); border: 3px solid #fff; border-radius: 50%; background: #335; }
+"""
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@pytest.mark.parametrize("ringed", [False, True])
+def test_contents_and_divider_numbers_and_labels_are_editable_text(tmp_path: Path, ringed: bool) -> None:
+    """On contents and divider pages only plain text came back as text: a contents number,
+    drawn by the skin with ::before, and a divider number drawn in a ring stayed in the
+    picture, and so did every contents item. Each is now a text box where it was drawn, and the
+    picture under it keeps its ring and loses only its letters. The same holds for a skin that
+    draws the numbers as filled rings laid out by flex, as the neutral skin does not."""
+    import io
+
+    from html_mcp_web.slides import build
+    from PIL import Image
+    from pptx.oxml.ns import qn
+
+    skin = NEUTRAL
+    if ringed:
+        skin = tmp_path / "ringed"
+        shutil.copytree(NEUTRAL, skin)
+        (skin / "skin.css").write_text((NEUTRAL / "skin.css").read_text(encoding="utf-8") + RINGED, encoding="utf-8")
+    content = tmp_path / "content.html"
+    content.write_text('''<!doctype html>
+<meta charset="utf-8">
+<title>Sections</title>
+<body data-author="A" data-meta="B">
+<section data-layout="contents" data-title="Contents"><ol start="2"><li>Alpha</li><li>Beta</li></ol></section>
+<section data-layout="divider" data-no="3"><p class="label">Section name</p></section>
+</body>
+''', encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, skin)
+    out = tmp_path / "deck.pptx"
+    export_pptx(html.as_uri(), out, tmp_path, None)
+    slides = pptx.Presentation(str(out)).slides
+
+    def boxes(slide):
+        return {shape.text_frame.text: shape for shape in slide.shapes if shape.has_text_frame}
+
+    def letters_left(slide, shape) -> int:
+        """Pixels in the middle of the box that stand out from the colour most of it shows. The
+        box's edges are left out: a number's box reaches near the ring drawn around it."""
+        blip = slide._element.find(qn("p:cSld")).find(qn("p:bg")).find(f".//{qn('a:blip')}")
+        picture = Image.open(io.BytesIO(slide.part.related_part(blip.get(qn("r:embed"))).blob)).convert("L")
+        scale = picture.width / 1280
+        left, top = shape.left / 9525 * scale, shape.top / 9525 * scale
+        width, height = shape.width / 9525 * scale, shape.height / 9525 * scale
+        region = picture.crop((int(left + width * 0.15), int(top + height * 0.15),
+                               int(left + width * 0.85), int(top + height * 0.85)))
+        values = sorted(region.getdata())
+        middle = values[len(values) // 2]
+        return sum(1 for value in values if abs(value - middle) > 60)
+
+    contents = boxes(slides[1])
+    # The counter starts where the list's start attribute says, as the page draws it.
+    assert {"Contents", "02", "Alpha", "03", "Beta"} <= set(contents), list(contents)
+    assert "buAutoNum" not in slides[1]._element.xml   # the skin's numbers, not PowerPoint's
+    for number, label in (("02", "Alpha"), ("03", "Beta")):
+        ring, words = contents[number], contents[label]
+        assert abs((ring.top + ring.height / 2) - (words.top + words.height / 2)) < 4 * 9525
+        assert ring.left + ring.width <= words.left
+        assert letters_left(slides[1], ring) == 0 and letters_left(slides[1], words) == 0
+    divider = boxes(slides[2])
+    assert {"3", "Section name"} <= set(divider), list(divider)
+    assert letters_left(slides[2], divider["3"]) == 0 and letters_left(slides[2], divider["Section name"]) == 0
+
+
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_an_appendix_number_is_editable_text_not_a_field(tmp_path: Path) -> None:
     """A slide-number field counts the slide's place in the whole deck, so it cannot say

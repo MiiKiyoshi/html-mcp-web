@@ -13,8 +13,9 @@ The title bar, footer, and corner logos bake into the slide background so they c
 grabbed; only the content stays editable over them, with the bar's title and the page
 number. A page number "N / M" carries N as PowerPoint's slide-number field, so it follows
 the slide when slides move; M and an appendix label ("A1 / A3") are plain text. A page
-without a body box (cover, contents, divider) bakes the whole page and overlays only its
-plain text.
+without a body box (cover, contents, divider) bakes the whole page with its letters made
+clear, so boxes, rings and rules stay in the picture, and lays every piece of its text over
+it as an editable box, numbers a skin draws with ::before or ::after included.
 Every skin is handled the same way; its look comes through the HTML it styles, so no skin
 carries a pptx.
 
@@ -81,11 +82,28 @@ JS_SCRIPT = ("const page = document.querySelectorAll('section.page')[arguments[0
              "return lines.map((line) => line.trim().replace(/\\s+/g, ' ')).filter(Boolean);")
 
 # Hide the marked elements on one page so the background screenshot leaves their place empty
-# for the editable shapes laid over it. A ::before decoration would go with the element, so
-# the full-bleed pass hides only plain text; a body page hides its own content blocks.
+# for the editable shapes laid over it. A body page hides its own content blocks.
 JS_HIDE = ("const page = document.querySelectorAll('section.page')[arguments[0]];"
            "for (const i of arguments[1]) { const el = page.querySelector('[data-pptx-index=\"' + i + '\"]');"
            "if (el) el.style.visibility = 'hidden'; }")
+
+# A full-bleed page hides only the letters of the marked text: hiding the element took the
+# ring, capsule or box it is drawn in along with it, so text drawn in one stayed in the
+# picture. Generated text left on an element keeps its own letters.
+JS_HIDE_TEXT = """
+if (document.getElementById('pptx-hide-text') === null) {
+  const st = document.createElement('style');
+  st.id = 'pptx-hide-text';
+  st.textContent = '[data-pptx-hide]{-webkit-text-fill-color:transparent !important;text-shadow:none !important}'
+    + '[data-pptx-hide]::before,[data-pptx-hide]::after{-webkit-text-fill-color:currentcolor !important}';
+  document.head.appendChild(st);
+}
+const page = document.querySelectorAll('section.page')[arguments[0]];
+for (const i of arguments[1]) {
+  const el = page.querySelector('[data-pptx-index="' + i + '"]');
+  if (el) el.setAttribute('data-pptx-hide', '');
+}
+"""
 
 # Walk a page's DOM into a flat list of shapes. Containers descend; a container that
 # paints something becomes a panel first so its content sits on it.
@@ -93,8 +111,89 @@ JS_EXTRACT = r"""
 const idx = arguments[0];
 const page = document.querySelectorAll('section.page')[idx];
 const pr = page.getBoundingClientRect();
-const cs = (el) => getComputedStyle(el);
+const cs = (el, pseudo) => getComputedStyle(el, pseudo || null);
 const rel = (r) => [r.left - pr.left, r.top - pr.top, r.width, r.height];
+// A page without a body box (cover, contents, divider) is baked whole with every piece of its
+// text laid over it, so its text is taken piece by piece where it is drawn.
+const fullBleed = page.querySelector('.body') === null;
+
+// Text a skin draws with ::before or ::after, a contents number in its ring, is in no node
+// the page holds, so it stayed in the picture. On a full-bleed page each piece becomes a real
+// span carrying the pseudo-element's computed style, in the same place in the tree, and the
+// pseudo-element is switched off. The span keeps its counter steps, so the counters run on.
+// Content this cannot spell out, a counter style other than decimal ones or a counter it
+// cannot trace, stays a pseudo-element in the picture.
+const pairs = (value, fallback) => {
+  const out = {};
+  if (!value || value === 'none') return out;
+  for (const m of value.matchAll(/(-?[_a-zA-Z][\w-]*)(?:\s+(-?\d+))?/g)) out[m[1]] = m[2] === undefined ? fallback : Number(m[2]);
+  return out;
+};
+const generated = (el, which) => !['none', 'normal'].includes(cs(el, which).content);
+const steps = (el, which, name) => (which === null || generated(el, which))
+  ? (pairs(cs(el, which).counterIncrement, 1)[name] || 0) : 0;
+// The value a ::before shows: from the nearest reset above, every step taken in tree order up
+// to it, the element's own and its ::before's included. A second reset on the way starts a
+// counter of its own, which this does not follow.
+const counterBefore = (el, name) => {
+  let scope = el;
+  while (scope !== null && !(name in pairs(cs(scope).counterReset, 0))) scope = scope.parentElement;
+  if (scope === null) return null;
+  let value = pairs(cs(scope).counterReset, 0)[name];
+  const walker = document.createTreeWalker(scope, NodeFilter.SHOW_ELEMENT);
+  for (let node = walker.currentNode; node !== null && node !== el; node = walker.nextNode()) {
+    if (node !== scope && name in pairs(cs(node).counterReset, 0)) return null;
+    value += steps(node, null, name) + steps(node, '::before', name);
+    if (!node.contains(el)) value += steps(node, '::after', name);
+  }
+  return value + steps(el, null, name) + steps(el, '::before', name);
+};
+const spelled = (el, which) => {
+  if (!generated(el, which)) return null;
+  let rest = cs(el, which).content.trim();
+  let text = '';
+  while (rest !== '') {
+    const quoted = rest.match(/^"((?:[^"\\]|\\.)*)"\s*/);
+    const counted = which === '::before' ? rest.match(/^counter\(\s*([^,\s)]+)\s*(?:,\s*([\w-]+)\s*)?\)\s*/) : null;
+    if (quoted) {
+      text += quoted[1].replace(/\\(.)/g, '$1');
+      rest = rest.slice(quoted[0].length);
+    } else if (counted && ['decimal', 'decimal-leading-zero'].includes(counted[2] || 'decimal')) {
+      const value = counterBefore(el, counted[1]);
+      if (value === null) return null;
+      text += counted[2] === 'decimal-leading-zero' && value >= 0 && value < 10 ? '0' + value : String(value);
+      rest = rest.slice(counted[0].length);
+    } else return null;
+  }
+  return text;
+};
+if (fullBleed) {
+  const found = [];
+  for (const el of page.querySelectorAll('*')) {
+    if (el.closest('svg') !== null) continue;
+    for (const which of ['::before', '::after']) {
+      const text = spelled(el, which);
+      if (text === null || text.trim() === '') continue;
+      const style = cs(el, which);
+      found.push({el, which, text, props: Array.from(style, (name) => [name, style.getPropertyValue(name)])});
+    }
+  }
+  // Every value is read before any pseudo-element is switched off, since one switched off
+  // stops counting.
+  if (found.length && document.getElementById('pptx-pseudo-off') === null) {
+    const st = document.createElement('style');
+    st.id = 'pptx-pseudo-off';
+    st.textContent = '[data-pptx-before]::before{content:none !important}[data-pptx-after]::after{content:none !important}';
+    document.head.appendChild(st);
+  }
+  for (const {el, which, text, props} of found) {
+    const span = document.createElement('span');
+    for (const [name, value] of props) if (name !== 'content') span.style.setProperty(name, value);
+    span.textContent = text;
+    if (which === '::before') el.prepend(span); else el.append(span);
+    el.setAttribute(which === '::before' ? 'data-pptx-before' : 'data-pptx-after', '');
+  }
+}
 const BLOCKISH = /^(block|flex|grid|table|list-item|flow-root)$/;
 const painted = (s) => (s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.backgroundColor !== 'transparent')
   || (parseFloat(s.borderTopWidth) > 0 && s.borderTopStyle !== 'none')
@@ -160,7 +259,8 @@ const runsOf = (node, out, base) => {
       if (s.display === 'none') continue;
       const mono = /mono/i.test(s.fontFamily) || tg === 'code' || base.mono;
       const painted = s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.backgroundColor !== 'transparent';
-      const marker = painted ? badgeRun(n, s, base) : null;
+      // A full-bleed page keeps the disc in its picture, so its digit stays a digit.
+      const marker = painted && !fullBleed ? badgeRun(n, s, base) : null;
       if (marker) { out.push(marker); continue; }
       const chipBg = (painted && tg === 'code') ? s.backgroundColor : base.chip;
       const b = Object.assign({}, base, {
@@ -206,18 +306,14 @@ const listParas = (list, level, out) => {
 // does a figure: an inline <svg> is not a block, so a box holding one read as a leaf and
 // the whole drawing came out as a line of text made of its own labels.
 const FIGURE = /^(svg|canvas|video|img)$/;
+// On a full-bleed page an inline block is a block too: a divider's capsule is one, and the
+// page around it read as a single line made of the capsule's number and its label.
+const INLINE_BLOCK = /^inline-(block|flex|grid|table)$/;
 const hasBlockChild = (el) => Array.from(el.children).some((ch) => {
   const c = cs(ch);
-  return BLOCKISH.test(c.display) || c.position === 'absolute' || c.position === 'fixed'
-    || FIGURE.test(ch.tagName.toLowerCase());
+  return BLOCKISH.test(c.display) || (fullBleed && INLINE_BLOCK.test(c.display))
+    || c.position === 'absolute' || c.position === 'fixed' || FIGURE.test(ch.tagName.toLowerCase());
 });
-// A ::before/::after that draws something (a contents ring number). Text carrying such a
-// decoration cannot be hidden for the background pass without losing it, so it stays baked.
-const pseudoContent = (n) => ['::before', '::after'].some((p) => {
-  const c = cs(n, p).content; return c && c !== 'none' && c !== 'normal' && c !== '""' && c !== "''";
-});
-const hasPseudo = (el) => pseudoContent(el) || Array.from(el.querySelectorAll('*')).some(pseudoContent);
-
 // Images in inline flow (a row of <img> in a div, default display:inline) are not block
 // children, so their container reads as a leaf whose text is taken while the images are
 // dropped. Each such image still needs its own picture frame.
@@ -240,7 +336,12 @@ const emit = (el) => {
   const s = cs(el);
   if (s.display === 'none' || s.visibility === 'hidden') return;
   const r = el.getBoundingClientRect();
-  if (r.width === 0 || r.height === 0) return;
+  if (r.width === 0 || r.height === 0) {
+    // A wrapper that takes no room can still hold what is drawn: a scaled contents list sits
+    // in one, and its items were skipped with it.
+    if (fullBleed) for (const ch of el.children) emit(ch);
+    return;
+  }
   const rect = rel(r);
   const hasKatex = !!el.querySelector('.katex') || el.classList.contains('katex');
   const container = hasBlockChild(el);
@@ -287,10 +388,12 @@ const emit = (el) => {
     items.push({kind: 'table', rect, rows, i: mark(el)});
     return;
   }
-  if (tag === 'ul' || tag === 'ol') {
+  // On a full-bleed page a list is taken item by item where each is drawn: its numbers are
+  // the skin's, which a list box would replace with PowerPoint's own.
+  if ((tag === 'ul' || tag === 'ol') && !fullBleed) {
     const paras = [];
     listParas(el, 0, paras);
-    items.push({kind: 'text', rect, paras, list: tag, padLeft: parseFloat(s.paddingLeft) || 0, pseudo: hasPseudo(el), i: mark(el)});
+    items.push({kind: 'text', rect, paras, list: tag, padLeft: parseFloat(s.paddingLeft) || 0, i: mark(el)});
     return;
   }
   if (painted(s)) {
@@ -302,17 +405,27 @@ const emit = (el) => {
       const para = paraOf(el, 0, 0);
       if (para.runs.length) items.push({kind: 'text', rect: [rect[0] + (parseFloat(s.paddingLeft) || 0), rect[1] + (parseFloat(s.paddingTop) || 0),
         rect[2] - (parseFloat(s.paddingLeft) || 0) - (parseFloat(s.paddingRight) || 0), rect[3] - (parseFloat(s.paddingTop) || 0) - (parseFloat(s.paddingBottom) || 0)],
-        paras: [para], list: null, pseudo: hasPseudo(el), i: mark(el)});
+        paras: [para], list: null, i: mark(el)});
       return;
     }
   }
-  if (container) { for (const ch of el.children) emit(ch); return; }
+  if (container) {
+    // Words written straight into a container, beside its blocks, belong to no child: on a
+    // full-bleed page they go into a span of their own, so they are taken too.
+    if (fullBleed) {
+      for (const node of Array.from(el.childNodes)) {
+        if (node.nodeType !== 3 || node.textContent.trim() === '') continue;
+        const span = document.createElement('span');
+        node.replaceWith(span);
+        span.appendChild(node);
+      }
+    }
+    for (const ch of el.children) emit(ch);
+    return;
+  }
   inlineImages(el);
   const para = paraOf(el, 0, 0);
-  // plain: pure text on this element (no border/background/list, reached without a paint),
-  // so it can be hidden for the background pass and re-added as an editable box with nothing
-  // of its own lost. Painted or listed text (the other pushes) stays baked into the picture.
-  if (para.runs.length) items.push({kind: 'text', rect, paras: [para], list: null, pseudo: hasPseudo(el), plain: true, i: mark(el)});
+  if (para.runs.length) items.push({kind: 'text', rect, paras: [para], list: null, i: mark(el)});
 };
 
 const body = page.querySelector('.body');
@@ -338,6 +451,42 @@ lift(page.querySelector('.pageno'), {pageno: true});
 const chromeCount = items.length;
 if (body) for (const ch of body.children) emit(ch);
 for (let k = chromeCount; k < items.length; k++) items[k].body = true;
+// On a full-bleed page a line of text goes where its letters are drawn and does not wrap: a
+// number centred in a ring by the ring's own layout came out at the ring's left edge, and
+// PowerPoint's letters, a little wider, broke a label in two. Its alignment is read from
+// where the letters sit in their box. A scaled list is measured as drawn, so its sizes take
+// the scale too. Text of several lines keeps its block and wraps in it.
+const place = (item) => {
+  const el = page.querySelector('[data-pptx-index="' + item.i + '"]');
+  if (el === null || item.paras.length !== 1) return;
+  const box = el.getBoundingClientRect();
+  const scale = el.offsetWidth > 0 ? box.width / el.offsetWidth : 1;
+  if (Math.abs(scale - 1) > 0.01) {
+    for (const para of item.paras) {
+      para.size *= scale; para.marginTop *= scale; para.marginBottom *= scale;
+      for (const run of para.runs) run.size *= scale;
+    }
+  }
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const lines = Array.from(range.getClientRects()).filter((r) => r.width > 0 && r.height > 0);
+  if (lines.length === 0) return;
+  const top = Math.min(...lines.map((r) => r.top)), bottom = Math.max(...lines.map((r) => r.bottom));
+  if (bottom - top > 1.5 * Math.max(...lines.map((r) => r.height))) return;
+  const left = Math.min(...lines.map((r) => r.left)), right = Math.max(...lines.map((r) => r.right));
+  const s = cs(el);
+  const inner = [box.left + (parseFloat(s.borderLeftWidth) + parseFloat(s.paddingLeft)) * scale,
+                 box.right - (parseFloat(s.borderRightWidth) + parseFloat(s.paddingRight)) * scale];
+  const para = item.paras[0];
+  if (right - left < inner[1] - inner[0] - 4) {
+    if (Math.abs((left + right) / 2 - (inner[0] + inner[1]) / 2) < 2) para.align = 'center';
+    else if (Math.abs(right - inner[1]) < 2) para.align = 'right';
+    else para.align = 'left';
+  }
+  item.rect = [left - pr.left, top - pr.top, right - left, bottom - top];
+  item.nowrap = true;
+};
+if (fullBleed) for (const item of items) if (item.kind === 'text') place(item);
 return {title: title.trim(), hasBody: !!body, items};
 """
 
@@ -483,7 +632,7 @@ def _add_text(slide, item: dict[str, Any], font: str) -> None:
         x, w = x - w, 3 * w
     box = slide.shapes.add_textbox(_px(x), _px(y), _px(w + 6), _px(h))
     frame = box.text_frame
-    frame.word_wrap = not item.get("pageno")
+    frame.word_wrap = not (item.get("pageno") or item.get("nowrap"))
     frame.margin_left = frame.margin_right = frame.margin_top = frame.margin_bottom = 0
     # Centre the text in its box: a multi-line block fills its box so this is a no-op, while
     # a single line in a line-height-taller box (a bar title) is centred instead of riding
@@ -1072,12 +1221,10 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
             if not info["hasBody"]:
                 slide = _blank_slide(prs)
                 _add_notes(slide, script)
-                # A full-bleed page's plain text becomes editable text boxes; the rest (CSS
-                # decorations, background art, and text carrying a ::before mark) stays in the
-                # picture. Hiding the plain text before the shot keeps it from showing twice.
-                overlaid = [item for item in info["items"]
-                            if item["kind"] == "text" and item.get("plain") and not item.get("pseudo")]
-                client.execute_script(JS_HIDE, script_args=[index, [item["i"] for item in overlaid]])
+                # A full-bleed page's text becomes editable text boxes, and the picture under
+                # them keeps everything else with the letters cleared, so none shows twice.
+                overlaid = [item for item in info["items"] if item["kind"] == "text"]
+                client.execute_script(JS_HIDE_TEXT, script_args=[index, [item["i"] for item in overlaid]])
                 shot = client.screenshot(element=client.execute_script(
                     "const p = document.querySelectorAll('section.page')[arguments[0]]; p.scrollIntoView(); return p;",
                     script_args=[index]), format="base64")
