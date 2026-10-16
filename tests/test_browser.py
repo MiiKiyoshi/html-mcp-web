@@ -2275,7 +2275,8 @@ def test_svg_text_moved_in_a_way_firefox_ignores_is_reported(tmp_path: Path) -> 
             errors = json.loads(response.read())["errors"]
         moved = [error for error in errors if " places " in error]
         assert moved == ["page 1 <svg#shifted> places 2 text runs with baseline-shift, which Firefox ignores, "
-                         "so this check and the PDF draw them unmoved. Move them with dy instead [p1:0.0]"], errors
+                         "so this check and the PDF draw them unmoved. Move them with dy instead, and set a "
+                         "subscript or superscript as KaTeX math in a <foreignObject> [p1:0.0]"], errors
     finally:
         shared.stop()
 

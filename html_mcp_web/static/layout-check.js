@@ -452,7 +452,7 @@ export function createLayoutChecks(dependencies) {
         for (const [name, count] of shifted) {
           addError(`page ${index + 1} ${describeElement(svg)} places ${count} text ${count === 1 ? "run" : "runs"} `
             + `with ${name}, which Firefox ignores, so this check and the PDF draw them unmoved. `
-            + "Move them with dy instead", svg);
+            + "Move them with dy instead, and set a subscript or superscript as KaTeX math in a <foreignObject>", svg);
         }
       }
       const marked = neutral ? semicolonsIn(page, true) : [];
