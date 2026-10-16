@@ -487,6 +487,59 @@ export function createLayoutChecks(dependencies) {
             + `to its row's ${stretched[at]}px. Let it keep its own height, centered in the row`, panel);
         }
       }
+      // A table column whose body cells all say the same words tells the reader nothing row by
+      // row: a condition shared by every row stood eight times down a results table. It belongs
+      // once outside the columns. A column of one number is a measured tie and is left alone,
+      // and so is one member of a compared set whose value varies in the others, a judge who
+      // marked every row ✓ beside judges who did not. Also a rule of the neutral guideline.
+      for (const table of neutral ? page.querySelectorAll("table") : []) {
+        if (table.closest("svg") !== null || !seen(table)) continue;
+        // Each row as the cells that cover its columns, a cell spanning rows or columns
+        // standing in every place it covers.
+        const rows = Array.from(table.rows);
+        const carried = [];
+        const grid = rows.map((row) => {
+          const line = [];
+          let column = 0;
+          const takeCarried = () => {
+            while (carried[column]?.left > 0) {
+              line[column] = carried[column].cell;
+              carried[column].left -= 1;
+              column += 1;
+            }
+          };
+          for (const cell of row.cells) {
+            takeCarried();
+            for (let across = 0; across < cell.colSpan; across += 1) {
+              line[column + across] = cell;
+              if (cell.rowSpan > 1) carried[column + across] = { cell, left: cell.rowSpan - 1 };
+            }
+            column += cell.colSpan;
+          }
+          for (; column < carried.length; column += 1) takeCarried();
+          return line;
+        });
+        const heading = (row) => row.parentElement.tagName === "THEAD"
+          || Array.from(row.cells).every((cell) => cell.tagName === "TH");
+        const body = rows.map((row, at) => ({ row, line: grid[at] }))
+          .filter(({ row }) => row.parentElement.tagName !== "TFOOT" && !heading(row));
+        if (body.length < 3) continue;
+        const firstBody = rows.indexOf(body[0].row);
+        const header = rows.slice(0, firstBody).map((row, at) => ({ row, line: grid[at] })).filter(({ row }) => heading(row)).pop();
+        const columns = Array.from({ length: Math.max(...body.map(({ line }) => line.length)) }, (_, column) =>
+          body.map(({ line }) => line[column]));
+        const texts = columns.map((cells) => cells.map((cell) => (cell === undefined ? null : readableText(cell))));
+        for (const [column, cells] of columns.entries()) {
+          if (cells.some((cell) => cell === undefined)) continue;
+          const value = texts[column][0];
+          if (value === "" || /^[-+−±~≈<>]?\d/.test(value) || texts[column].some((text) => text !== value)) continue;
+          if (texts.some((other, at) => at !== column && other.includes(value) && other.some((text) => text !== value))) continue;
+          const name = header?.line[column] ? readableText(header.line[column]) : "";
+          addError(`page ${index + 1} ${describeElement(table)} column ${name === "" ? column + 1 : `"${name}"`} `
+            + `holds "${value.slice(0, 40)}" in all ${cells.length} rows. State it once in the line above the table `
+            + "and drop the column", cells[0]);
+        }
+      }
       // An image drawn in another shape than its source's. Inside its box, object-fit fill
       // stretches the picture to the content box, and every other value keeps its
       // proportions, so letterboxing and a frame of padding or border are not stretching.

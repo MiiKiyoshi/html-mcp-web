@@ -2528,6 +2528,75 @@ def test_a_panel_stretched_far_past_its_content_is_reported_under_the_neutral_gu
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_table_column_saying_the_same_in_every_row_is_reported_under_the_neutral_guideline(tmp_path: Path) -> None:
+    """A results table carried a condition column that said the same words in every row, and
+    the check passed it. A column covered by one cell spanning every row says the same too.
+    Normal cases that look alike must pass: a column of one number, a footer row, a table of
+    two rows, and one member of a compared set whose mark varies in the others."""
+    import urllib.request
+
+    (tmp_path / "slides.html").write_text('''<!doctype html>
+<html><head><meta charset="utf-8"><title>Tables</title></head><body><main class="pages">
+  <section class="page"><div data-layout-guard>
+    <table id="results">
+      <thead><tr><th>Method</th><th>Condition</th><th>Error</th><th>Runtime</th></tr></thead>
+      <tbody>
+        <tr><td>A</td><td>No correction</td><td>1.2</td><td>1.0</td></tr>
+        <tr><td>B</td><td>No correction</td><td>0.8</td><td>1.0</td></tr>
+        <tr><td>C</td><td>No correction</td><td>0.5</td><td>1.0</td></tr>
+        <tr><td>D</td><td>No correction</td><td>0.3</td><td>1.0</td></tr>
+      </tbody>
+      <tfoot><tr><td>Mean</td><td>All</td><td>0.7</td><td>1.0</td></tr></tfoot>
+    </table>
+  </div></section>
+  <section class="page"><div data-layout-guard>
+    <table id="grouped">
+      <tr><th>Group</th><th>Item</th><th>Value</th></tr>
+      <tr><td rowspan="3">Baseline</td><td>x</td><td>3</td></tr>
+      <tr><td>y</td><td>4</td></tr>
+      <tr><td>z</td><td>5</td></tr>
+    </table>
+    <table id="short">
+      <tr><th>Item</th><th>Condition</th></tr>
+      <tr><td>x</td><td>Same</td></tr>
+      <tr><td>y</td><td>Same</td></tr>
+    </table>
+    <table id="judges">
+      <tr><th>Field</th><th>Judge 1</th><th>Judge 2</th><th>Judge 3</th></tr>
+      <tr><td>first</td><td>&#x2717;</td><td>&#x2717;</td><td>&#x2713;</td></tr>
+      <tr><td>second</td><td>&#x2717;</td><td>&#x2713;</td><td>&#x2713;</td></tr>
+      <tr><td>others</td><td>&#x2713;</td><td>&#x2713;</td><td>&#x2713;</td></tr>
+    </table>
+  </div></section>
+</main></body></html>''', encoding="utf-8")
+    reported = [
+        'page 1 <table#results> column "Condition" holds "No correction" in all 4 rows. State it once in '
+        "the line above the table and drop the column [p1:0.0.1.0.1]",
+        'page 2 <table#grouped> column "Group" holds "Baseline" in all 3 rows. State it once in '
+        "the line above the table and drop the column [p2:0.0.0.1.0]",
+    ]
+    # Repetition down a column is a rule of the neutral guideline, not a defect of the rendering.
+    for guideline, expected in (("neutral", reported), (None, [])):
+        port = available_port()
+        config_path = tmp_path / ".html-mcp-web.yaml"
+        config_path.write_text(yaml.safe_dump({
+            "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+            "watch": ["*.html"],
+            "port": port,
+            **({"guideline": guideline} if guideline else {}),
+        }, sort_keys=False), encoding="utf-8")
+        shared = SharedProjectServer(load_config(config_path))
+        try:
+            shared.ensure()
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
+                errors = json.loads(response.read())["errors"]
+            checked = [error for error in errors if "drop the column" in error]
+            assert sorted(checked) == sorted(expected), (guideline, errors)
+        finally:
+            shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_pdf_export_drives_a_browser_of_its_own() -> None:
     """Every export started its browser on marionette's default port and then attached to
     whatever held that port. Two projects printing at once each have a server of their own,
