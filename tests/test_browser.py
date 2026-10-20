@@ -1066,7 +1066,10 @@ def test_a_short_column_spreads_over_the_height_of_the_tall_one(tmp_path: Path) 
     its column and left the rest empty; the row's height is now shared, and the column
     spreads its blocks over it the way the body spreads its own. A card or a code block that
     is a column on its own was stretched to the figure's height too, its rule or background
-    running far below its words: it keeps its own height at the row's middle."""
+    running far below its words: it keeps its own height at the row's middle. A notes list
+    took no share of the room as one block, so its items stayed packed while the room collected
+    around it: the room goes first between its items, up to one line each, in a column and in
+    the body, and a box with no room leaves them as they were."""
     from html_mcp_web.slides import build
 
     content = tmp_path / "content.html"
@@ -1084,6 +1087,16 @@ def test_a_short_column_spreads_over_the_height_of_the_tall_one(tmp_path: Path) 
         '</div><div class="two" id="lone-code">'
         '<div style="height: 350px; background: #eee"></div>'
         '<pre><code>one line</code></pre>'
+        '</div></section>\n'
+        '<section data-title="Notes"><div class="two">'
+        '<div><h3>Heading</h3><ul class="notes" id="column-notes"><li>one</li><li>two</li><li>three</li></ul></div>'
+        '<div style="height: 400px; background: #eee"></div>'
+        '</div></section>\n'
+        '<section data-title="Reading"><div style="height: 240px; background: #eee"></div>'
+        '<ul class="notes" id="body-notes"><li>first reading</li><li>second reading</li></ul></section>\n'
+        '<section data-title="Full"><div class="two">'
+        '<div><ul class="notes" id="full-notes"><li>one</li><li>two</li></ul><div style="height: 380px"></div></div>'
+        '<div style="height: 400px; background: #eee"></div>'
         '</div></section>\n'
         "</body>\n", encoding="utf-8")
     html = tmp_path / "slides.html"
@@ -1126,6 +1139,17 @@ return [tall, lone].map((el) => {{ const box = el.getBoundingClientRect(); retur
 """)
             assert lone[1] - lone[0] < 150, (row, tall, lone)
             assert abs((lone[0] + lone[1]) / 2 - (tall[0] + tall[1]) / 2) < 2, (row, tall, lone)
+        # Each gap between items is the list's 3px plus at most one line of the list's type.
+        for notes, spread in (("column-notes", True), ("body-notes", True), ("full-notes", False)):
+            gaps, line = browser.execute_script(f"""
+const list = document.getElementById('{notes}');
+const items = Array.from(list.children).map((item) => item.getBoundingClientRect());
+return [items.slice(1).map((item, at) => item.top - items[at].bottom), parseFloat(getComputedStyle(list).lineHeight)];
+""")
+            if spread:
+                assert all(abs(gap - (3 + line)) < 1 for gap in gaps), (notes, gaps, line)
+            else:
+                assert all(abs(gap - 3) < 1 for gap in gaps), (notes, gaps, line)
     finally:
         if browser is not None:
             try:

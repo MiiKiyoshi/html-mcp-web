@@ -49,7 +49,7 @@ A list with subitems and at least two outer items stays in one column while it f
 
 ## Body arrangement
 
-By default, blocks are distributed vertically in the body. A first `p.lead` stays with the title. An optional final `p.takeaway` stays near the bottom, above any references. Neither participates in the spread. Only the content between them shares the remaining height.
+By default, blocks are distributed vertically in the body. A first `p.lead` stays with the title. An optional final `p.takeaway` stays near the bottom, above any references. Neither participates in the spread. Only the content between them shares the remaining height. The items of a `ul.notes` placed directly in the body or in a column of `two` take that height first, up to one line between each pair, and the blocks share the rest.
 
 For related compact content under neutral clause 5.5, keep it together in one wrapper so this arrangement handles it as one block.
 

@@ -98,6 +98,68 @@ CONTENTS_FIT_SCRIPT = """<script>
 })();
 </script>"""
 
+# A box that spreads its blocks over its height (the body's rest, a column of .two) took a
+# notes list as one block: the room collected above and below it, far from the heading it
+# belongs to, while its items stayed packed. The room now goes first between the items of
+# the lists directly in the box, up to one line each, and only what is left is spread
+# around the blocks. Only the page can tell the room, in the skin's own type, so it is
+# measured again when fonts arrive, when the box or one of its other blocks changes size,
+# and when the page has loaded its pictures.
+NOTES_SPREAD_SCRIPT = """<script>
+(() => {
+  const BOXES = ".body > .rest, .two > div";
+  // An item's own gap, as its author set it, which the spread adds to and goes back to.
+  const authored = new WeakMap();
+  const spread = (box) => {
+    const lists = Array.from(box.children).filter((child) => child.matches("ul.notes"));
+    const items = lists.map((list) => Array.from(list.children).filter((child) => child.tagName === "LI"));
+    for (const item of items.flat()) {
+      if (!authored.has(item)) authored.set(item, item.style.marginBottom);
+      item.style.marginBottom = authored.get(item);
+    }
+    const gaps = items.reduce((sum, members) => sum + Math.max(0, members.length - 1), 0);
+    if (gaps === 0 || box.offsetHeight === 0) return;
+    // Heights in the page's own pixels: an svg has no offsetHeight, so each block is measured
+    // as drawn and the scale of the page, the deck's or the viewer's, taken back out.
+    const scale = box.getBoundingClientRect().height / box.offsetHeight;
+    const style = getComputedStyle(box);
+    let used = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+    for (const child of box.children) {
+      const own = getComputedStyle(child);
+      if (own.display === "none" || own.position === "absolute" || own.position === "fixed") continue;
+      used += child.getBoundingClientRect().height / scale + parseFloat(own.marginTop) + parseFloat(own.marginBottom);
+    }
+    const room = box.clientHeight - used;
+    if (room <= 0) return;
+    lists.forEach((list, at) => {
+      const own = getComputedStyle(list);
+      const line = parseFloat(own.lineHeight) || parseFloat(own.fontSize) * 1.2;
+      const extra = Math.min(line, room / gaps);
+      for (const item of items[at].slice(0, -1)) {
+        item.style.marginBottom = `${parseFloat(getComputedStyle(item).marginBottom) + extra}px`;
+      }
+    });
+  };
+  const boxes = (root) => Array.from(root.querySelectorAll(BOXES))
+    .filter((box) => Array.from(box.children).some((child) => child.matches("ul.notes")));
+  // The lists are not watched: their height is what the spread sets.
+  const sized = new ResizeObserver((entries) => {
+    new Set(entries.map((entry) => entry.target.closest(BOXES) ?? entry.target)).forEach(spread);
+  });
+  const setup = (root) => boxes(root).forEach((box) => {
+    spread(box);
+    sized.observe(box);
+    Array.from(box.children).filter((child) => !child.matches("ul.notes")).forEach((child) => sized.observe(child));
+  });
+  setup(document);
+  const all = () => boxes(document).forEach(spread);
+  document.fonts.ready.then(all);
+  document.fonts.addEventListener("loadingdone", all);
+  addEventListener("load", all);
+  (window.htmlMcpPageSetup ??= []).push(setup);
+})();
+</script>"""
+
 # The layer of a figure's lifted HTML is drawn in the svg's own units, as its
 # foreignObject was: it takes the scale and offset the default viewBox fit gives the
 # svg inside its box. Both are measured in layout pixels, so a transform scaling the
@@ -610,6 +672,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
     wrap = "".join(
         "\n  <script>" + path.read_text(encoding="utf-8") + "</script>"
         for path in (TEX_LINEBREAK / "lib.js", TEX_LINEBREAK / "hyphens_en-us.js", WRAP)) if wraps else ""
+    notes = NOTES_SPREAD_SCRIPT if re.search(r'<ul class="[^"]*\bnotes\b', body_html) else ""
     document = f'''<!doctype html>
 <html lang="{skin.label("lang") or "en"}">
 <head>
@@ -629,7 +692,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
 
 {body_html}
 
-  </main>{math[1]}{wrap}{CONTENTS_FIT_SCRIPT if "data-contents-fit" in body_html else ""}{SVG_HTML_SCRIPT if "svg-html-layer" in body_html else ""}
+  </main>{math[1]}{wrap}{CONTENTS_FIT_SCRIPT if "data-contents-fit" in body_html else ""}{SVG_HTML_SCRIPT if "svg-html-layer" in body_html else ""}{notes}
 {FIT_SCRIPT}
 </body>
 </html>
