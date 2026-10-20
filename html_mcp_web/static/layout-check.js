@@ -1496,7 +1496,9 @@ export function createLayoutChecks(dependencies) {
     const layoutCheck = state.artifact.layout_check;
     const checked = layoutCheck.checked_revision === state.revision;
     const errors = checked ? layoutCheck.errors : [];
-    const warnings = checked ? layoutCheck.warnings : [];
+    // A server started before warnings existed sends none. It reads this page code from disk,
+    // so every review page it served stopped at start until the agent reconnected.
+    const warnings = checked ? (layoutCheck.warnings ?? []) : [];
     // An artifact whose main file is missing is not "checking": there is nothing to check,
     // and saying otherwise reads as "wait a moment" forever. Warnings leave it ready.
     status.textContent = state.artifact.error ? "missing"
