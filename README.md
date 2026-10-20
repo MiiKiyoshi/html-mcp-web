@@ -14,6 +14,16 @@ Review an AI agent's HTML slides or report from the rendered page, on a desktop,
 
 ![A sentence highlighted on a rendered report page, and the reviewer's question with the agent's answer beside it.](docs/report.png)
 
+## What keeps the agent on track
+
+- **It reads the rules, and reads them again.** In Claude Code, html-mcp's tools stay locked
+  until the agent has read the template's rules and the writing guideline in full, and they
+  lock again after every compaction. A long session keeps working from the rules, not from a
+  fading memory of them.
+- **It fixes its own layout.** The way a programmer works through compiler errors, the agent
+  checks each page it changes, gets a plain list of layout faults such as text spilling out of
+  its box or a last line left nearly empty, fixes them, and checks again before you look.
+
 ## Install
 
 Paste this into Claude Code or Codex:
