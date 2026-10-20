@@ -131,6 +131,9 @@ export function createLayoutChecks(dependencies) {
   // rotation comes out at 1 within float error.
   const STRETCH_TOLERANCE = 0.01;
 
+  // What to do with a bullet that interprets a table or figure from elsewhere on the page.
+  const INTERPRETATION_ADVICE = "Put the bullet in a list directly below that visual, in the same column (neutral 5.8)";
+
   // Whether a reader sees an element: rendered, neither hidden nor transparent, and not in
   // an SVG container that is never drawn where it is written.
   function seen(element) {
@@ -538,6 +541,42 @@ export function createLayoutChecks(dependencies) {
           addError(`page ${index + 1} ${describeElement(table)} column ${name === "" ? column + 1 : `"${name}"`} `
             + `holds "${value.slice(0, 40)}" in all ${cells.length} rows. State it once in the line above the table `
             + "and drop the column", cells[0]);
+        }
+      }
+      // A bullet that cites values a table or figure shows interprets that visual, and its place
+      // is the list directly below it. Put under an equation in the next column, it was read as
+      // part of the equation's argument while the visual it explained stood apart. Below means
+      // drawn under the visual, across part of its width, with no other visual between. A bullet
+      // cites a visual when it shares two or more numbers with it and one of them reads as a
+      // measured value, with a decimal point or three digits or more. Round numbers alone, the
+      // 10, 50 and 90 a waveform sketch marks on its axis, or a count mentioned in passing,
+      // tie a bullet to no visual. Also a rule of the neutral guideline.
+      const visuals = neutral ? Array.from(page.querySelectorAll("[data-layout-guard] table, [data-layout-guard] svg"))
+        .filter((visual) => visual.parentElement.closest("svg") === null && seen(visual)) : [];
+      if (visuals.length > 0) {
+        const values = (text) => new Set((text.match(/\d[\d,]*(?:\.\d+)?/g) ?? [])
+          .map((value) => value.replace(/,/g, "")).filter((value) => value.replace(/\D/g, "").length >= 2));
+        const shown = visuals.map((visual) => ({ visual, box: visual.getBoundingClientRect(),
+          values: values(visual.tagName === "svg" ? visual.textContent : readableText(visual)) }));
+        const below = (list, { visual, box }) => {
+          const area = list.getBoundingClientRect();
+          return area.top >= box.bottom - 2 && Math.min(area.right, box.right) - Math.max(area.left, box.left) > 0
+            && !shown.some((other) => other.visual !== visual && other.box.top >= box.bottom - 2
+              && other.box.bottom <= area.top + 2
+              && Math.min(area.right, other.box.right) - Math.max(area.left, other.box.left) > 0);
+        };
+        for (const item of page.querySelectorAll("[data-layout-guard] li")) {
+          const list = item.parentElement;
+          if (item.closest("table, svg") !== null || list.parentElement.closest("li") !== null || !seen(item)) continue;
+          const cited = values(readableText(item));
+          const sources = shown.filter(({ values: own }) => {
+            const shared = [...cited].filter((value) => own.has(value));
+            return shared.length >= 2 && shared.some((value) => value.includes(".") || value.length >= 3);
+          });
+          if (sources.length === 0 || sources.some((source) => below(list, source))) continue;
+          const visual = sources[0].visual;
+          addError(`page ${index + 1} li "${readableText(item).slice(0, 30)}…" cites values of `
+            + `${describeElement(visual)} but is not in the list directly below it. ${INTERPRETATION_ADVICE}`, item);
         }
       }
       // An image drawn in another shape than its source's. Inside its box, object-fit fill

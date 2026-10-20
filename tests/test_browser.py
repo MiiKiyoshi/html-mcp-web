@@ -2597,6 +2597,71 @@ def test_a_table_column_saying_the_same_in_every_row_is_reported_under_the_neutr
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_bullet_citing_a_visual_from_another_column_is_reported_under_the_neutral_guideline(tmp_path: Path) -> None:
+    """Bullets that read a table's numbers were placed under an equation in the next column,
+    and the check passed them. Normal cases that look alike must pass: the table's own list
+    directly below it, a bullet sharing one two-digit count with it, a figure's list directly
+    below the figure, a bullet sharing only round axis marks with a sketch, and a bullet
+    comparing two visuals side by side from a list below both."""
+    import urllib.request
+
+    (tmp_path / "slides.html").write_text('''<!doctype html>
+<html><head><meta charset="utf-8"><title>Columns</title>
+<style>.two { display: grid; grid-template-columns: 1fr 1fr; gap: 24px }</style></head><body><main class="pages">
+  <section class="page"><div data-layout-guard>
+    <div class="two">
+      <div>
+        <p>Cost = power + delay</p>
+        <ul id="beside"><li>Small design 27 ps, large design 2,773 ps</li><li>Runs on 16 threads</li></ul>
+      </div>
+      <div>
+        <table id="costs"><tr><th>Design</th><th>TNS</th></tr><tr><td>small</td><td>27</td></tr>
+          <tr><td>large</td><td>2,773</td></tr><tr><td>threads</td><td>16</td></tr></table>
+        <ul id="own"><li>Large design 2,773 ps against 27 ps</li></ul>
+      </div>
+    </div>
+  </div></section>
+  <section class="page"><div data-layout-guard>
+    <svg id="plot" width="300" height="100" viewBox="0 0 300 100"><text x="10" y="50">0.875</text><text x="100" y="50">1.204</text></svg>
+    <ul id="read"><li>Rises from 0.875 to 1.204</li></ul>
+    <div class="two">
+      <svg id="sketch" width="200" height="60" viewBox="0 0 200 60"><text x="5" y="20">10%</text><text x="5" y="40">50%</text><text x="5" y="58">90%</text></svg>
+      <p>Thresholds are set at 10%, 50% and 90%.</p>
+    </div>
+    <ul><li>The 10% and 90% marks bound the slope</li></ul>
+    <div class="two">
+      <table id="left"><tr><td>run a</td><td>3.25</td></tr></table>
+      <table id="right"><tr><td>run b</td><td>4.75</td></tr></table>
+    </div>
+    <ul><li>Run b takes 4.75 s against 3.25 s for run a</li></ul>
+  </div></section>
+</main></body></html>''', encoding="utf-8")
+    reported = [
+        'page 1 li "Small design 27 ps, large desi…" cites values of <table#costs> but is not in the list '
+        "directly below it. Put the bullet in a list directly below that visual, in the same column (neutral 5.8) [p1:0.0.0.1.0]",
+    ]
+    # Where an interpretation goes is a rule of the neutral guideline, not a defect of the rendering.
+    for guideline, expected in (("neutral", reported), (None, [])):
+        port = available_port()
+        config_path = tmp_path / ".html-mcp-web.yaml"
+        config_path.write_text(yaml.safe_dump({
+            "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+            "watch": ["*.html"],
+            "port": port,
+            **({"guideline": guideline} if guideline else {}),
+        }, sort_keys=False), encoding="utf-8")
+        shared = SharedProjectServer(load_config(config_path))
+        try:
+            shared.ensure()
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
+                errors = json.loads(response.read())["errors"]
+            checked = [error for error in errors if "cites values of" in error]
+            assert sorted(checked) == sorted(expected), (guideline, errors)
+        finally:
+            shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_pdf_export_drives_a_browser_of_its_own() -> None:
     """Every export started its browser on marionette's default port and then attached to
     whatever held that port. Two projects printing at once each have a server of their own,
