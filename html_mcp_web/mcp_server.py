@@ -159,7 +159,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "Work from read_comments(new=True), and pass ids to reread a whole thread. "
             "Before editing an artifact, call guide() and read every file in its read list in full. "
             "Treat a question about what any part of a page means as a confusion report on that page, "
-            "not on the quoted words alone. Within the user's editing "
+            "repaired in established terms at the detail its answer needs. Within the user's editing "
             "scope, edit, check the affected pages with layout() and image() (grayscale=false "
             "when colour is in question), and reply with "
             "write_comments. When the wording is the reviewer's to decide, suggest instead of "
