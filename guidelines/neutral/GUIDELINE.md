@@ -32,7 +32,7 @@ Open additional sources only for needed missing, inconsistent, or changing infor
 
 2.5 Generate results and derived numbers from primary data before placing them in figures or tables, and compare reported values with that output. Identify quantities as measured, source-reported, assumed, chosen, or computed, showing their sources, decision records, or derivations. Verify chosen settings against their configuration or decision record. Record inputs, rules, and assumptions needed to recompute values. Apply the rule to the whole object, including the hard case. For counts, identify items and how groups form the total.
 
-Before calculating an example, establish the validity of its inputs and rule and limit the conclusion accordingly. Label illustrative and assumed values and check their calculations separately. An example does not establish a measured result.
+Before calculating an example, establish the validity of its inputs and rule and limit the conclusion accordingly. Label illustrative and assumed values and check their calculations separately. An example does not establish a measured result. When a method or setting changes what runs produce, do not apply it to records of runs made without it, even as an illustration.
 
 2.6 Ground relationships implied by conceptual drawings, including ordering, crossings, and meaningful relative size, in sources or checks under stated conditions. Omit unsupported relationships. Require exact shapes, timing, or proportions only when the question needs them.
 
