@@ -1098,6 +1098,9 @@ def test_a_short_column_spreads_over_the_height_of_the_tall_one(tmp_path: Path) 
         '<div><ul class="notes" id="full-notes"><li>one</li><li>two</li></ul><div style="height: 380px"></div></div>'
         '<div style="height: 400px; background: #eee"></div>'
         '</div></section>\n'
+        '<section data-title="Math notes"><ul class="notes" id="math-notes">'
+        '<li id="math-item">$x_t = y_t - y_{t-1}$<br>$z_t = x_t - x_0$<br>$w_t = z_t + x_t$</li>'
+        '<li id="plain-item">plain words that run on</li></ul></section>\n'
         "</body>\n", encoding="utf-8")
     html = tmp_path / "slides.html"
     build(content, html, Path(__file__).resolve().parents[1] / "templates" / "neutral-slides")
@@ -1150,6 +1153,19 @@ return [items.slice(1).map((item, at) => item.top - items[at].bottom), parseFloa
                 assert all(abs(gap - (3 + line)) < 1 for gap in gaps), (notes, gaps, line)
             else:
                 assert all(abs(gap - 3) < 1 for gap in gaps), (notes, gaps, line)
+        # Inline math is drawn larger than the text, and lines of it in one item touched: an
+        # item holding math leaves the lines of math apart, and a plain item keeps its pitch.
+        wait_until(lambda: browser.execute_script("return !!document.querySelector('#math-item .katex')"))
+        lines = browser.execute_script("""
+const item = document.getElementById('math-item');
+const boxes = Array.from(item.querySelectorAll('.katex')).map((math) => math.getBoundingClientRect());
+const size = (id) => parseFloat(getComputedStyle(document.getElementById(id)).fontSize);
+const pitch = (id) => parseFloat(getComputedStyle(document.getElementById(id)).lineHeight);
+return {gaps: boxes.slice(1).map((box, at) => box.top - boxes[at].bottom),
+        math: pitch('math-item') / size('math-item'), plain: pitch('plain-item') / size('plain-item')};
+""")
+        assert len(lines["gaps"]) == 2 and min(lines["gaps"]) >= 3, lines
+        assert abs(lines["plain"] - 1.55) < 0.01 and lines["math"] > lines["plain"], lines
     finally:
         if browser is not None:
             try:
