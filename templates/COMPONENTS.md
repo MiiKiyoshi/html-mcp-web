@@ -167,7 +167,7 @@ The wrapper keeps the equation and list together under [Body arrangement](#body-
 
 `layout(artifact=...)` checks the current document. `layout(artifact=..., page=...)` selects a page. It waits for the check. An empty `errors` means the current revision has no layout errors. The same call returns blocks and free space. Build failures appear as described in [README.md](README.md#with-a-template).
 
-The check reports clipped body content and title text outside the title bar or overlapping an image in it. On contents and divider pages, it reports overflow anywhere above the footer bar. For contents lists, it uses the scaled list size and reports a wasted last line in columns. It also reports overflowing lines in `pre`.
+The check reports clipped body content and title text outside the title bar or overlapping an image in it. On contents and divider pages, it reports overflow anywhere above the footer bar. For contents lists, it uses the scaled list size. On slide pages, it reports a text block outside `pre` whose last line is no wider than six font sizes or a quarter of its widest other line, quoting that line's words. It also reports overflowing lines in `pre`.
 
 For inline SVG, it reports shapes beyond the `viewBox`, borders of rectangles, circles, ellipses, and polygons cut at the `viewBox` edge, empty space occupying a quarter or more of a side, overlapping labels, and labels beyond the sides of the rectangle they sit on. For the last case, it names the side and excess.
 

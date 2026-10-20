@@ -421,7 +421,13 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 "independent questions, or an explanation too dense to read, across pages. "
                 "Otherwise combine labels, clarify column ownership, or move blocks, and change "
                 "font size or padding only after that. Do not shrink, rewrite, or remove "
-                "content just to clear an error. Then check layout() and image() for the page again.")
+                "content just to clear an error. "
+                # Only with a tail among the errors: words are cheapest to cut, and cut to clear
+                # one, a definition came out that no one could read.
+                + ("Clear a wasted last line with a line break, a column width, or a page split, "
+                   "without shortening or rewording the text. "
+                   if any("wastes its last line" in error for error in result["errors"]) else "")
+                + "Then check layout() and image() for the page again.")
         return result
 
     @mcp.tool(structured_output=False)

@@ -393,7 +393,8 @@ export function createLayoutChecks(dependencies) {
       }
       // A block whose last line holds only a few characters wastes a full line of
       // height, and on a slide that line is what the block above or below it needed:
-      // the fix is a sentence trimmed to fit. On a report page the text is flowing
+      // the fix is a line break, a column width, or a page split. Shortening the words to
+      // fit made a definition no one could read. On a report page the text is flowing
       // prose, every paragraph ends with a partial line, and the only way to fill a
       // tail is to lengthen or shorten a sentence for no reason of its own; on an A4
       // line a quarter of the width is several words, and a document of alternating
@@ -429,8 +430,8 @@ export function createLayoutChecks(dependencies) {
         // last line carries a fraction of what the lines above carry).
         if (last <= Math.max(fontSize * 6, widest * 0.25)) {
           const label = readableText(block).slice(0, 24);
-          // The tail's own width is the amount to trim (or the room to fill): fitting it
-          // took a fix-rebuild-inspect round before, just to learn how far off it was.
+          // The tail's own width is the room to make or fill: fitting it took a
+          // fix-rebuild-inspect round before, just to learn how far off it was.
           // Its words are the ones to bring back up. The label shows only how the block
           // starts, and finding where it ended took opening the page.
           addError(`page ${index + 1} ${block.tagName.toLowerCase()} "${label}…" wastes its last line `

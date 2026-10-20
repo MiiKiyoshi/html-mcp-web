@@ -713,13 +713,20 @@ def test_layout_reports_the_revisions_errors_and_a_pages_detail(tmp_path: Path, 
         post_json(f"http://127.0.0.1:{config.port}/artifacts/slides/layout", server_check(binding._shared, errors=[
             "page 1 exceeds the slides height at p1:0",
             "page 2 exceeds the slides height at p2:0",
+            'page 2 p "Some words…" wastes its last line on a 40px tail "tail"',
         ]))
 
         whole = answer(mcp.call_tool("layout", {"artifact": "slides"}))
         assert whole["revision"] == revision
-        assert len(whole["errors"]) == 2
+        assert len(whole["errors"]) == 3
         # The advice on fixing them comes with errors, not with every session.
         assert "font size or padding only after" in whole["note"]
+        # A wasted last line is cleared without touching the words: shortened to clear one,
+        # a definition came out that no one could read. The advice comes only with a tail.
+        assert "without shortening or rewording the text" in whole["note"]
+        first = answer(mcp.call_tool("layout", {"artifact": "slides", "page": 1}))
+        assert "font size or padding only after" in first["note"]
+        assert "wasted last line" not in first["note"]
         detailed = answer(mcp.call_tool("layout", {"artifact": "slides", "page": 1}))
         assert detailed["errors"] == ["page 1 exceeds the slides height at p1:0"]
         assert detailed["children"][0]["ref"] == "p1:0"

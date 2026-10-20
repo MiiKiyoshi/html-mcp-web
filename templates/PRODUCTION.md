@@ -14,11 +14,11 @@ Build the explanation before fixing its layout or filling the page with text.
 
 ## Article 2. Build figures and tables
 
-Fit content to its intended box while preserving its meaning and proportions.
+Fit content to its intended box under neutral clause 3.10 while preserving its proportions.
 
 2.1 For a contents page, try columns at full size before scaling to fit or fill the page.
 
-2.2 Use the same units statement form on every slide that shows measurements. Put a table's units, any metric shared by all its value columns, any value shared by all its rows under neutral clause 5.9, and any needed key to cell notation once in `p.units` directly above the table, aligned to its right edge. Use the same placement for a plot's keys to marks that do not identify data series and for brief metric definitions needed to read table or plot values under neutral clause 4.3. Keep data series legends with the plot. See [units and notation keys](COMPONENTS.md#tables-and-units).
+2.2 Use the same units statement form on every slide that shows measurements. Put a table's units, any metric shared by all its value columns, any value shared by all its rows under neutral clause 5.9, and any needed key to cell notation once in `p.units` directly above the table, aligned to its right edge. Use the same placement for a plot's keys to marks that do not identify data series and for brief metric definitions needed to read table or plot values under neutral clauses 4.3 and 5.8. Keep data series legends with the plot. See [units and notation keys](COMPONENTS.md#tables-and-units).
 
 2.3 For the visual chosen under neutral clause 3.4, prefer inline SVG over a picture of a drawing when other components do not carry it. Size the figure's box for readable detail and the relationships it must show, within the column width and height available on the page. Give its `viewBox` the box's proportions and the size at which the figure is drawn, rather than a smaller box scaled up. Draw inside it. Lay out each panel for its own width and height while preserving grouping and reading order. Compute crossings, arrow ends, and label positions rather than estimating coordinates by eye.
 
@@ -26,11 +26,11 @@ Fit content to its intended box while preserving its meaning and proportions.
 
 2.5 When a drafting tool accepts images, supply requested visual reference images as inputs. A description does not replace the images. Follow neutral clauses 3.1 and 5.10 for using references.
 
-2.6 Use a plotting tool that supplies the required axes, scales, and annotations for a standard plot. Do not rebuild these by hand. For interpretations under neutral clause 5.8, use HTML lists outside SVG, images, or tables, in the same column as the visual they interpret.
+2.6 Use a plotting tool that supplies the required axes, scales, and annotations for a standard plot. Do not rebuild these by hand. For the bullets below a visual under neutral clause 5.8, use HTML lists outside SVG, images, or tables, in the same column as that visual.
 
 2.7 For diagrams of boxes and arrows, prefer horizontal and vertical connectors unless another route clarifies the relationship. Join connectors entering the same element near their sources. Split connectors leaving the same element near their targets. Keep branches short and the common segment long. Follow neutral clause 5.4 for direction, source and target relationships, entry and exit sides, and permitted merges. Remove a bend or detour when another permitted entry or exit side avoids it without changing reading order or intended connections, obscuring junctions, or adding crossings or label overlaps.
 
-2.8 Set mathematical symbols and formulas as math markup using the forms in the component reference. Present an equation and any needed definitions of its symbols together, with the definitions in a bulleted HTML list directly below it. For an equation inside a panel or column, keep the list inside that panel or column. Begin each definition with the symbol or expression in inline math, followed by a colon and its meaning under neutral clause 4.3.
+2.8 Set mathematical notation under neutral clause 4.5 using the forms in the component reference. Present an equation and any needed definitions of its symbols together, with the definitions in a bulleted HTML list directly below it. For an equation inside a panel or column, keep the list inside that panel or column. Begin each definition with the symbol or expression in inline math, followed by a colon and its meaning under neutral clause 4.3.
 
 2.9 Show source attribution on a page only through `<ol class="references">` entries and their `<cite>` markers, as described in [References and citations](COMPONENTS.md#references-and-citations).
 
