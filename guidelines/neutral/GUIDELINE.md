@@ -48,7 +48,7 @@ Reuse relevant figures from published source papers, including the original figu
 
 3.1 Establish the reader's starting knowledge and required understanding or decision. Work backward to prerequisites, then order questions forward from what the reader knows. Reuse established answers where later questions depend on them. Before collecting content, identify authoritative sources for direction and terminology and inspect requested visual references.
 
-3.2 Keep planning records outside the deck, recording choices as made. Record the reader states from 3.1 and, for each required question, the one answer the reader should retain, its prerequisites, evidence, visual form, and successor. Record unresolved gaps rather than filling a page slot with available content. Record page boundaries and the deck map, including sections and their siblings, after grouping under 3.10.
+3.2 Keep planning records outside the deck, in the deck's language, recording choices as made. Record the reader states from 3.1 and, for each required question, the one answer the reader should retain, its prerequisites, evidence, visual form, and successor. Record unresolved gaps rather than filling a page slot with available content. Record page boundaries and the deck map, including sections and their siblings, after grouping under 3.10.
 
 During 3.4, record only elements needed to establish, assess, or follow each answer, their reading order, and where prerequisites are established. Record primary source locations for mechanism and calculation steps or mark them unverified. Keep first definitions, revision history, and decisions under 8.2 with their authority, scope, and reason.
 
