@@ -696,11 +696,11 @@ export function createLayoutChecks(dependencies) {
               // names each panel's axis.
               const past = sides.has("past") && word.c0 >= c1 - size / 3 && word.c0 - c1 <= 3 * size;
               const before = sides.has("before") && word.c1 <= c0 + size / 3 && c0 - word.c1 <= 3 * size;
-              // The far end: just above a column's top number, starting over the numbers or the
-              // line, where a panel's own title, set further up and further left, does not sit.
-              // Right of a row's last number.
+              // The far end: within half a number's height above a column's top number and over
+              // the column, where a panel's own title, set further up, does not sit. A name there
+              // may start a little left of the numbers. Right of a row's last number.
               const end = axis.name === "vertical"
-                ? word.a1 <= a0 + size / 3 && a0 - word.a1 <= size / 2 && word.c0 >= c0 && word.c0 <= c1 + 2 * size
+                ? word.a1 <= a0 + size / 3 && a0 - word.a1 <= size / 2 && word.c1 >= c0 && word.c0 <= c1 + 2 * size
                 : word.a0 >= a1 - size / 3 && word.a0 - a1 <= 2 * size && word.c1 >= c0 - 2 * size && word.c0 <= c1 + 2 * size;
               // A row's quantity is often stated by the title of the plot above it.
               const over = axis.name === "horizontal" && word.c1 <= c0 && word.a1 >= from && word.a0 <= to;
