@@ -257,20 +257,23 @@ export function createLayoutChecks(dependencies) {
     return null;
   }
 
-  function artifactLayoutErrors() {
+  // Errors are faults the check confirms. Warnings are likely faults it cannot confirm,
+  // because what would clear them can sit outside what it measures.
+  function artifactLayoutFindings() {
     const doc = frameDocument();
     const root = doc.querySelector("body > main.pages");
-    if (root === null) return ['artifact body must contain exactly one <main class="pages"> element'];
+    if (root === null) return { errors: ['artifact body must contain exactly one <main class="pages"> element'], warnings: [] };
     // Only elements in normal flow can push page breaks around. Elements injected by
     // browser extensions are usually out of flow and are excluded from printing, so they
     // are not reported as an authoring mistake.
     const extra = Array.from(doc.body.children).filter((child) => child !== root && inNormalFlow(child));
     const errors = [];
+    const warnings = [];
     let pages = [];
-    // The error carries the block's ref, so the reader of layout() can go straight to
+    // The finding carries the block's ref, so the reader of layout() can go straight to
     // layout(target=<ref>) instead of drilling down page by page to find which of
     // a page's four svgs the message meant.
-    const addError = (message, element) => {
+    const withRef = (message, element) => {
       const page = element ? element.closest("section.page") : null;
       const number = page === null ? 0 : pages.indexOf(page) + 1;
       if (number > 0 && element !== page) {
@@ -278,8 +281,10 @@ export function createLayoutChecks(dependencies) {
           message += ` [${elementRef(page, number, element)}]`;
         } catch (error) { /* an element outside its page keeps the plain message */ }
       }
-      errors.push(message);
+      return message;
     };
+    const addError = (message, element) => errors.push(withRef(message, element));
+    const addWarning = (message, element) => warnings.push(withRef(message, element));
     if (extra.length > 0) {
       addError(`artifact body must contain only <main class="pages">: found ${extra.map(describeElement).join(", ")}`, extra[0]);
     }
@@ -578,6 +583,139 @@ export function createLayoutChecks(dependencies) {
           const visual = sources[0].visual;
           addError(`page ${index + 1} li "${readableText(item).slice(0, 30)}…" cites values of `
             + `${describeElement(visual)} but is not in the list directly below it. ${INTERPRETATION_ADVICE}`, item);
+        }
+      }
+      // A plot axis numbered without a name. A reader reads the axes first, and numbers alone
+      // do not say what is counted or in what unit. An axis is three or more numbers in a row
+      // or a column, in order and evenly spaced, beside a line drawn along them, which keeps a
+      // column of figures in a drawn table out. A filled shape is a panel's background, not a
+      // line. Its name is other text or a foreignObject just past the numbers on the far side
+      // from the line, or just past the axis's far end, above a column or right of a row, where
+      // the name of a value axis often sits, or for a row a plot title above it. A title
+      // outside the drawing, in a caption, is not seen, so this is a warning. Also a rule of the
+      // neutral guideline.
+      for (const svg of neutral ? page.querySelectorAll("[data-layout-guard] svg") : []) {
+        if (svg.parentElement.closest("svg") !== null || !seen(svg)) continue;
+        const numbers = [];
+        const words = [];
+        for (const text of svg.querySelectorAll("text")) {
+          const content = text.textContent.trim();
+          if (content === "" || !seen(text)) continue;
+          const box = text.getBoundingClientRect();
+          const number = content.match(/^([-+−]?(?:\d[\d,]*(?:\.\d+)?|\.\d+))\s*%?$/);
+          if (number === null) words.push(box);
+          else numbers.push({ box, value: parseFloat(number[1].replace(/,/g, "").replace("−", "-")) });
+        }
+        if (numbers.length < 3) continue;
+        for (const object of svg.querySelectorAll("foreignObject")) {
+          if (seen(object)) words.push(object.getBoundingClientRect());
+        }
+        const strokes = Array.from(svg.querySelectorAll("line, polyline, path, rect")).filter((shape) => {
+          if (!seen(shape)) return false;
+          const box = shape.getBoundingClientRect();
+          const fill = frameWindow().getComputedStyle(shape).fill;
+          return shape.matches("line, polyline") || Math.min(box.width, box.height) <= 3
+            || fill === "none" || fill === "transparent" || /^rgba\(.*,\s*0\)$/.test(fill);
+        }).map((shape) => shape.getBoundingClientRect());
+        const sizes = numbers.map(({ box }) => box.height).sort((a, b) => a - b);
+        const size = sizes[Math.floor(sizes.length / 2)];
+        // A box in the axis's own terms: along it from a0 to a1, across it from c0 to c1. A row's
+        // numbers share their middle, a column's their right or their left edge.
+        const rowOf = (box) => ({ a0: box.left, a1: box.right, c0: box.top, c1: box.bottom });
+        const columnOf = (box) => ({ a0: box.top, a1: box.bottom, c0: box.left, c1: box.right });
+        const axes = [
+          { name: "horizontal", of: rowOf, key: (box) => (box.top + box.bottom) / 2 },
+          { name: "vertical", of: columnOf, key: (box) => box.right },
+          { name: "vertical", of: columnOf, key: (box) => box.left },
+        ];
+        const middle = (place) => (place.a0 + place.a1) / 2;
+        const used = new Set();
+        // Panels repeating one axis are reported once, with how many there are.
+        const unnamed = new Map();
+        for (const axis of axes) {
+          const sorted = numbers.filter((number) => !used.has(number))
+            .sort((a, b) => axis.key(a.box) - axis.key(b.box));
+          const groups = [];
+          for (const number of sorted) {
+            const last = groups[groups.length - 1];
+            if (last && axis.key(number.box) - axis.key(last[0].box) <= size / 2) last.push(number);
+            else groups.push([number]);
+          }
+          // Panels side by side put their axes in one row: an axis ends where the spacing
+          // jumps or the numbers turn back.
+          const runs = [];
+          for (const group of groups) {
+            const at = (number) => middle(axis.of(number.box));
+            group.sort((a, b) => at(a) - at(b));
+            let run = [];
+            for (const number of group) {
+              const [before, last] = run.slice(-2);
+              if (last !== undefined) {
+                const step = number.value - last.value;
+                const gap = at(number) - at(last);
+                const turned = before !== undefined && (Math.sign(step) !== Math.sign(last.value - before.value)
+                  || gap > 1.5 * (at(last) - at(before)) || 1.5 * gap < at(last) - at(before));
+                if (step === 0 || gap <= 0 || turned) {
+                  runs.push(run);
+                  run = [];
+                }
+              }
+              run.push(number);
+            }
+            runs.push(run);
+          }
+          for (const run of runs) {
+            if (run.length < 3) continue;
+            // Tick numbers step evenly, by a sum on a linear axis or a factor on a logarithmic
+            // one. Values printed beside marks do not, though they may happen to stand in a line.
+            const values = run.map(({ value }) => value);
+            const steadily = (changes) => changes.every((change) => Math.abs(change - changes[0]) <= 0.01 * Math.abs(changes[0]));
+            const factors = values.every((value) => value > 0) || values.every((value) => value < 0)
+              ? values.slice(1).map((value, at) => value / values[at]) : null;
+            if (!steadily(values.slice(1).map((value, at) => value - values[at]))
+              && !(factors !== null && steadily(factors))) continue;
+            const places = run.map(({ box }) => axis.of(box));
+            const c0 = Math.min(...places.map((place) => place.c0));
+            const c1 = Math.max(...places.map((place) => place.c1));
+            const a0 = Math.min(...places.map((place) => place.a0));
+            const a1 = Math.max(...places.map((place) => place.a1));
+            const from = middle(places[0]);
+            const to = middle(places[places.length - 1]);
+            // The line the numbers mark runs along most of them, its near edge close to them.
+            // The name goes past the numbers on its other side.
+            const sides = new Set();
+            for (const stroke of strokes.map((box) => axis.of(box))) {
+              if (Math.min(stroke.a1, to) - Math.max(stroke.a0, from) < 0.8 * (to - from)) continue;
+              if (stroke.c1 <= c0 + size / 2 && c0 - stroke.c1 <= 2 * size) sides.add("past");
+              else if (stroke.c0 >= c1 - size / 2 && stroke.c0 - c1 <= 2 * size) sides.add("before");
+            }
+            if (sides.size === 0) continue;
+            run.forEach((number) => used.add(number));
+            const named = words.map((box) => axis.of(box)).some((word) => {
+              // Past the numbers anywhere along them, so one title shared by a row of panels
+              // names each panel's axis.
+              const past = sides.has("past") && word.c0 >= c1 - size / 3 && word.c0 - c1 <= 3 * size;
+              const before = sides.has("before") && word.c1 <= c0 + size / 3 && c0 - word.c1 <= 3 * size;
+              // The far end: just above a column's top number, starting over the numbers or the
+              // line, where a panel's own title, set further up and further left, does not sit.
+              // Right of a row's last number.
+              const end = axis.name === "vertical"
+                ? word.a1 <= a0 + size / 3 && a0 - word.a1 <= size / 2 && word.c0 >= c0 && word.c0 <= c1 + 2 * size
+                : word.a0 >= a1 - size / 3 && word.a0 - a1 <= 2 * size && word.c1 >= c0 - 2 * size && word.c0 <= c1 + 2 * size;
+              // A row's quantity is often stated by the title of the plot above it.
+              const over = axis.name === "horizontal" && word.c1 <= c0 && word.a1 >= from && word.a0 <= to;
+              return past || before || end || over;
+            });
+            if (named) continue;
+            const key = `${axis.name} axis ${values.join(", ")}`;
+            unnamed.set(key, (unnamed.get(key) ?? 0) + 1);
+          }
+        }
+        for (const [key, count] of unnamed) {
+          const [kind, numbered] = key.split(" axis ");
+          addWarning(`page ${index + 1} ${describeElement(svg)} numbers `
+            + (count === 1 ? `its ${kind} axis ${numbered} without naming it` : `${count} ${kind} axes ${numbered} without naming them`)
+            + ". Name the axis by its quantity and unit in the drawing (neutral 5.8)", svg);
         }
       }
       // An image drawn in another shape than its source's. Inside its box, object-fit fill
@@ -1350,26 +1488,27 @@ export function createLayoutChecks(dependencies) {
       }
     }
     });
-    return errors;
+    return { errors, warnings };
   }
-  
+
   function updateLayoutUi() {
     const status = $("#artifact-status");
     const layoutCheck = state.artifact.layout_check;
     const checked = layoutCheck.checked_revision === state.revision;
     const errors = checked ? layoutCheck.errors : [];
+    const warnings = checked ? layoutCheck.warnings : [];
     // An artifact whose main file is missing is not "checking": there is nothing to check,
-    // and saying otherwise reads as "wait a moment" forever.
+    // and saying otherwise reads as "wait a moment" forever. Warnings leave it ready.
     status.textContent = state.artifact.error ? "missing"
       : checked ? (errors.length === 0 ? "ready" : "layout error")
       : state.project.layout_checker ? "checking" : "unchecked";
     status.classList.toggle("error", errors.length > 0 || Boolean(state.artifact.error));
-    renderProblems(checked, errors);
+    renderProblems(checked, errors, warnings);
   }
 
   // The Problems tab mirrors what the agent sees in layout(): the artifact error and the
-  // build error, then the layout errors for the current revision.
-  function renderProblems(checked, errors) {
+  // build error, then the layout errors and warnings for the current revision.
+  function renderProblems(checked, errors, warnings) {
     const list = $("#problems-list");
     const count = $("#problems-count");
     if (list === null) return;
@@ -1381,6 +1520,7 @@ export function createLayoutChecks(dependencies) {
     // only that nothing had been checked yet, which reads as "wait a moment" forever.
     if (state.layoutCheckError) problems.push({ kind: "check", text: state.layoutCheckError });
     for (const error of errors) problems.push({ kind: "layout", text: error });
+    for (const warning of warnings) problems.push({ kind: "warning", text: warning });
     if (!checked && !state.artifact.build_error && problems.length === 0) {
       list.appendChild(h("p", { class: "placeholder", text: "Layout not checked yet for the current revision." }));
     } else if (problems.length === 0) {
@@ -1390,7 +1530,7 @@ export function createLayoutChecks(dependencies) {
         const item = h("div", { class: "problem" });
         item.appendChild(h("span", { class: "problem-kind", text: problem.kind }));
         item.appendChild(h("span", { text: problem.text }));
-        if (problem.kind === "layout") {
+        if (problem.kind === "layout" || problem.kind === "warning") {
           item.classList.add("clickable");
           item.addEventListener("click", () => revealProblem(problem.text));
         }
@@ -1447,7 +1587,7 @@ export function createLayoutChecks(dependencies) {
       static: document.querySelector('meta[name="html-mcp-static"]')?.content ?? null,
       check: checkToken,
       settled,
-      errors: artifactLayoutErrors(),
+      ...artifactLayoutFindings(),
       // Space is reported in page pixels, so it is read at the page's own scale too.
       space: unzoomed(() => measureArtifactSpace(frameDocument())),
     });

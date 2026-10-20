@@ -399,12 +399,17 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         min_height: Annotated[float | None, Field(ge=0, description="With page: only free regions at least this tall.")] = None,
     ) -> dict[str, Any]:
         """Layout errors of the current revision: content off the page, clipped drawings,
-        overlapping labels. With page, that page's errors, blocks and free space."""
+        overlapping labels, and warnings of likely faults to confirm. With page, that page's
+        errors, blocks and free space."""
         client = binding.require_client()
         # Long enough for the server's own check, the only one recorded: it starts a headless
         # browser on its own page and answers once that posts.
         result = await client.request_json("GET", f"/artifacts/{artifact}/layout", timeout=75.0)
         if page is not None:
+            if "warnings" in result:
+                result["warnings"] = [warning for warning in result["warnings"] if warning.startswith(f"page {page} ")]
+                if not result["warnings"]:
+                    del result["warnings"]
             if result["errors"] is not None:
                 result["errors"] = [error for error in result["errors"] if error.startswith(f"page {page} ")]
                 query: dict[str, Any] = {"page": page, "clearance": clearance}

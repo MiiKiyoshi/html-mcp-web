@@ -165,13 +165,13 @@ The wrapper keeps the equation and list together under [Body arrangement](#body-
 
 ## Layout check reports
 
-`layout(artifact=...)` checks the current document. `layout(artifact=..., page=...)` selects a page. It waits for the check. An empty `errors` means the current revision has no layout errors. The same call returns blocks and free space. Build failures appear as described in [README.md](README.md#with-a-template).
+`layout(artifact=...)` checks the current document. `layout(artifact=..., page=...)` selects a page. It waits for the check. An empty `errors` means the current revision has no layout errors. Under the neutral guideline, `warnings` lists likely faults the check cannot confirm and is left out when there are none: an SVG plot that numbers an axis without naming it in the drawing, which a title outside the drawing also clears. The same call returns blocks and free space. Build failures appear as described in [README.md](README.md#with-a-template).
 
 The check reports clipped body content and title text outside the title bar or overlapping an image in it. On contents and divider pages, it reports overflow anywhere above the footer bar. For contents lists, it uses the scaled list size. On slide pages, it reports a text block outside `pre` whose last line is no wider than six font sizes or a quarter of its widest other line, quoting that line's words. It also reports overflowing lines in `pre`.
 
 For inline SVG, it reports shapes beyond the `viewBox`, borders of rectangles, circles, ellipses, and polygons cut at the `viewBox` edge, empty space occupying a quarter or more of a side, overlapping labels, and labels beyond the sides of the rectangle they sit on. For the last case, it names the side and excess.
 
-Connector warnings cover an arrowhead or the line just before it overlapping a label or crossing another connector. Endpoint joins and lines along one another are excluded. A separate warning names the box and existing connection when a return arrow running left or up enters an occupied side while another side is unused. Another warning reports a short detour around a box and names a permitted side with a straight route clear of connectors, labels, and boxes. A step that joins facing sides of two boxes and turns in the gap between them is not a detour.
+Connector errors cover an arrowhead or the line just before it overlapping a label or crossing another connector. Endpoint joins and lines along one another are excluded. A separate error names the box and existing connection when a return arrow running left or up enters an occupied side while another side is unused. Another error reports a short detour around a box and names a permitted side with a straight route clear of connectors, labels, and boxes. A step that joins facing sides of two boxes and turns in the gap between them is not a detour.
 
 For the HTML of a `<foreignObject>`, it reports a line printed over a label and a line past the sides of the rectangle it sits on, as for labels. The `<foreignObject>`'s own box is not a limit.
 

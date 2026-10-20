@@ -306,7 +306,7 @@ def server_check(shared: SharedProjectServer, **report) -> dict:
     runtime = review.artifacts["slides"]
     runtime.check_token = "token-of-the-running-check"
     return {"revision": runtime.revision, "static": review.static_tag(), "check": runtime.check_token,
-            "settled": True, "errors": [], "space": space_snapshot(), **report}
+            "settled": True, "errors": [], "warnings": [], "space": space_snapshot(), **report}
 
 
 def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path: Path, monkeypatch) -> None:

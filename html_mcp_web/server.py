@@ -240,6 +240,7 @@ class ArtifactRuntime:
     revision: int = 1
     layout_revision: int | None = None
     layout_errors: list[str] = field(default_factory=list)
+    layout_warnings: list[str] = field(default_factory=list)
     layout_room: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     space_revision: int | None = None
     # The tag of the page code that made the stored result. The page code is the checker,
@@ -305,6 +306,7 @@ class ArtifactRuntime:
             "layout_check": {
                 "checked_revision": self.layout_revision,
                 "errors": list(self.layout_errors),
+                "warnings": list(self.layout_warnings),
                 # Where the page still has room, for the pages the errors name. A fit error
                 # says which block spills, and a reader who only has that trims it; the
                 # room may be in the other column.
@@ -323,6 +325,7 @@ class ArtifactRuntime:
     def reset_layout(self) -> None:
         self.layout_revision = None
         self.layout_errors = []
+        self.layout_warnings = []
         self.layout_room = {}
         self.space_revision = None
         self.space_pages = []
@@ -987,8 +990,10 @@ class HtmlReviewServer:
             if not isinstance(settled, bool):
                 raise ValueError("settled must be true or false")
             errors = data["errors"]
-            if not isinstance(errors, list) or not all(isinstance(value, str) and value for value in errors):
-                raise ValueError("errors must be a list of non-empty strings")
+            warnings = data["warnings"]
+            for name, found in (("errors", errors), ("warnings", warnings)):
+                if not isinstance(found, list) or not all(isinstance(value, str) and value for value in found):
+                    raise ValueError(f"{name} must be a list of non-empty strings")
             space_pages = validated_space_pages(data["space"])
         except (KeyError, TypeError, ValueError) as error:
             raise web.HTTPBadRequest(text=str(error)) from error
@@ -1009,6 +1014,7 @@ class HtmlReviewServer:
             return web.json_response(runtime.state())
         runtime.layout_revision = revision
         runtime.layout_errors = list(errors)
+        runtime.layout_warnings = list(warnings)
         runtime.space_revision = revision
         runtime.layout_static = produced_by
         runtime.space_pages = space_pages
@@ -1088,6 +1094,9 @@ class HtmlReviewServer:
             "revision": runtime.revision,
             "errors": list(runtime.layout_errors) if checked else None,
         }
+        # Only when there are any: most answers have none, and every key is read by a model.
+        if checked and runtime.layout_warnings:
+            data["warnings"] = list(runtime.layout_warnings)
         if not checked:
             # Said at once when nothing can check: waiting would only end in the same answer.
             data["unchecked"] = ("Firefox is not installed, so nothing can check the layout" if no_firefox

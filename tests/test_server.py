@@ -79,7 +79,7 @@ def server_check(review, artifact: str = "slides", **report) -> dict:
     runtime = review.artifacts[artifact]
     runtime.check_token = "token-of-the-running-check"
     return {"revision": runtime.revision, "static": review.static_tag(), "check": runtime.check_token,
-            "settled": True, "errors": [], "space": space_snapshot(), **report}
+            "settled": True, "errors": [], "warnings": [], "space": space_snapshot(), **report}
 
 
 def test_maximal_free_regions_never_returns_zero_area() -> None:
@@ -282,7 +282,7 @@ async def test_state_includes_layout_and_pending_check(client) -> None:
     assert state["config_path"] == str(review.config.config_path)
     assert state["artifacts"]["slides"]["layout"] == "slides"
     assert state["artifacts"]["slides"]["layout_check"] == {
-        "checked_revision": None, "errors": [], "room": {}}
+        "checked_revision": None, "errors": [], "warnings": [], "room": {}}
 
 
 async def test_layout_result_is_accepted_when_the_deck_measures_past_a_megabyte(client) -> None:
