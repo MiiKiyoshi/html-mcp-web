@@ -191,11 +191,11 @@ Let speaking time follow the needed explanation. For a specified duration, check
 
 Then read scripts at a natural pace with their pointing directions and pauses. Check Articles 4 and 6, agreement with indicated content, and prerequisite order. Apply 1.3 to speech, preserving 6.2's opening orientation. Compare rendering with requested references and representative deck pages. Check orientation pages for purpose, scripts, and geometry.
 
-7.3 Fix defects affecting the requested visual comparison in the layout draft and complete remaining repairs in the redraw before acceptance. Report content findings separately from production checks. A successful build, preserved edits, or clean geometry does not establish an understandable explanation.
+7.3 Fix defects affecting the requested visual comparison in the layout draft and complete remaining repairs in the redraw before acceptance. Report content findings separately from production checks. A successful build, preserved edits, clean geometry, or an independent review's pass does not establish an understandable explanation.
 
 ## Article 8. Resolve the review request
 
-8.1 Answer questions without editing unless a change is explicitly requested. Answer reviewer questions in their threads. Preserve wording explicitly specified as exact. Report rule conflicts without silently changing that wording.
+8.1 Answer questions without editing unless a change is explicitly requested. Answer reviewer questions in their threads. A question about what any part of a page means also reports confusion under 8.3, and a thread answer does not repair the page. Preserve wording explicitly specified as exact. Report rule conflicts without silently changing that wording.
 
 8.2 Read the request, discussion, and referenced material before responding. For supplied rewrites, identify the corrected failure and apply the underlying requirement to other affected passages.
 
