@@ -17,13 +17,13 @@ Consult references in `consult`, including [COMPONENTS.md](COMPONENTS.md), only 
 <meta charset="utf-8">
 <title>Document title</title>
 <body data-author="Author" data-meta="Affiliation|Second line">
-<aside class="script"><p>Cover speaker notes.</p></aside>
+<aside class="script"><p>Cover script.</p></aside>
 <section data-title="Page title">
   <!-- Optional lead. Follow the configured guideline for its use and wording. -->
   <p class="lead">Page introduction.</p>
   <!-- Figure, table, or other content. -->
   <p class="takeaway">The answer supported by the content.</p>
-  <aside class="script"><p>Speaker notes for this page.</p></aside>
+  <aside class="script"><p>Script for this page.</p></aside>
 </section>
 </body>
 ```
@@ -34,4 +34,4 @@ Image paths are relative to the project directory containing `.html-mcp-web.yaml
 
 ## Without a template
 
-`init` creates a minimal document at `--main` if the file does not exist. Its body contains only `main.pages`, whose page children are `section.page`. The viewer, layout checker, and exporter use that structure. Each slide is 1280 × 720 CSS pixels. Each report page is A4 (210 × 297 mm).
+`init` creates a minimal document at `--main` if the file does not exist. Its body contains only `main.pages`, whose page children are `section.page`. The viewer, layout checker, and exporter use that structure. `--layout slides` makes each page a 1280 × 720 CSS pixel slide, and `--layout report` an A4 page (210 × 297 mm).

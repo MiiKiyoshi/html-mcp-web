@@ -30,13 +30,13 @@ A cover may include one short sentence recalling an earlier presentation or disc
 
 Check that each reference identifies what is being discussed, terms have clear and consistent meanings, and sentences follow the visible explanation without jumps or contradictions. For each sentence, check whether removing it would lose information or guidance the audience needs. Flag unnecessary sentences, reasons, transitions, readings of visible text, and source recitation. Before requesting an addition, identify what the audience cannot understand without it.
 
-Required source attribution belongs on the page. A spoken source name must help the audience distinguish whose evidence or settings are being discussed. For borrowed settings with a shared source, flag repeated spoken attribution unless it is needed to keep evidence or settings distinct.
+Required source attribution belongs on the page. A spoken source name must help the audience distinguish whose evidence or material is being discussed. For material borrowed from a shared source, flag repeated spoken attribution unless it is needed to keep evidence or material distinct.
 
 Check that the presenter states their own design choices as first person decisions using I or we accurately. Flag actorless passives that hide the decision maker, advance apologies, and wording that diminishes the presenter, including accurate statements of how much was borrowed or added or of the scale or resources behind a choice.
 
 Keep limitations and open items needed to judge the work visible as facts. Their spoken explanation must serve a necessary judgment about a claim or decision. Do not remove necessary qualifications or credit for another person's work.
 
-Check that displayed measurements and calculated values are not read aloud, and that any spoken interpretation is needed, clear, and supported. Ratios and multiples, including those computed from displayed values, and a value that defines the rule itself may be spoken when they carry the explanation.
+Check that displayed measurements and calculated values are not read aloud, and that any spoken interpretation is needed, clear, and supported. Ratios and multiples, including those computed from displayed values, and a value that defines the rule itself may be spoken when they carry the explanation. A value may also be spoken when the requested answer is that single value itself.
 
 ## Report
 

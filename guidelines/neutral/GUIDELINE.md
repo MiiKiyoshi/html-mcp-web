@@ -26,19 +26,19 @@ Work backward to prerequisites, then order questions forward from what the audie
 
 2.2 Before collecting content, identify authoritative sources for direction and terminology, and inspect requested visual references. Take intended design from authoritative design descriptions, construction from implementation sources, and what happened from primary measurements or execution records. Use secondary or additional sources only to fill a needed missing, inconsistent, or changing fact, checking current sources for changing facts. For a claim that one part produces an effect, trace the connection from cause to effect in the implementation or records. Verify that commands, files, paths, and implementations presented as existing do exist.
 
-2.3 Cite the claim's primary source, not a summary or repository merely carrying it, although a repository can be primary evidence for implementation. Include details needed to identify and interpret evidence. Credit borrowed material, mark adaptations, and attribute work to its actor. When a figure in a published source shows what a page needs and its notation and labels agree with the deck's under 4.4 and 4.6, reuse it, citing its location in the source in the reference entry. Otherwise redraw it in the deck's notation and mark it adapted.
+2.3 Cite the claim's primary source, not a summary or repository merely carrying it, although a repository can be primary evidence for implementation. Include details needed to identify and interpret evidence. Credit borrowed material, mark adaptations, and attribute work to its actor. When a figure in a published source shows what a page needs and its notation, labels, and label language agree with the deck's under 4.1, 4.4, and 4.6, reuse it, citing its location in the source in the reference entry. Otherwise redraw it in the deck's notation and mark it adapted.
 
 2.4 Check primary evidence that a reported result exists and is final, and mark pending results or omit the claims that depend on them. Generate results and derived numbers from primary data before placing them in figures or tables, and compare reported values with that output. Identify each quantity as measured, source-reported, assumed, chosen, or computed, showing its source, decision record, or derivation, and verify chosen settings against their configuration or decision record.
 
 Record the inputs, rules, and assumptions needed to recompute values. Compute a value over everything its rule covers, including the cases hardest to handle. For counts, identify the items and how groups form the total.
 
-Before calculating an example, establish the validity of its inputs and rule and limit the conclusion accordingly. Label illustrative and assumed values and check their calculations separately. An example does not establish a measured result. When a method or setting changes the results it governs, do not apply it to results produced without it, even as an illustration.
+Before calculating an example, establish the validity of its inputs and rule and limit the conclusion accordingly. Label illustrative and assumed values and check their calculations separately. An example does not establish a measured result. When a method or setting changes how results are produced, do not apply it to results produced without it, even as an illustration.
 
 2.5 Build the chain of 1.3 before drafting pages. Before introducing a concept, identify the concrete problem that makes it needed, and connect a method's change to its intended effect on that problem.
 
 Trace the mechanism or calculation steps the answer needs through primary sources, from inputs, operations, and conditions through outputs and their later use to the required result. Record each step's primary source location. For each value or claim the answer rests on, record the definitions and premises it follows from, marking which the audience already knows and which the presenter lacks. Check simplifications against that trace, and mark unresolved steps as unverified in the plan and in dependent drafts.
 
-2.6 Derive page boundaries and count from the required explanation. Existing pages and proposed counts do not constrain them unless the requester fixed them. Order the questions and answers with their prerequisites and evidence, and group steps by causal chain, comparison, mechanism, or decision. Each page answers one distinct question with evidence and a readable diagram, equation, table, or plot, and independent questions go on separate pages.
+2.6 Derive page boundaries and count from the required explanation. Existing pages and proposed counts do not constrain them unless the requester fixed them. Order the questions and answers with their prerequisites and evidence, and group steps by causal chain, comparison, mechanism, or decision. Each page answers one distinct question with evidence in a readable form chosen under 5.1 and 5.2, and independent questions go on separate pages.
 
 Record this sequence and grouping before proposing a count, then the deck map, showing page boundaries and each section with the other sections at its level.
 
@@ -157,7 +157,7 @@ Draw each operation at the objects it acts on, not apart from them. Label relati
 
 5.3 Default to left to right and top to bottom, or clearly sequenced columns. Complete independent columns in reading order and align matching items across comparisons. Use placement, grouping, and connections to put prerequisites before explanations and results without backtracking. Put outputs after their producing steps even if reversing that order would shorten a connector.
 
-5.4 Choose connector endpoints, entries, exits, labels, and direction from the represented relationship before routing. For processes read left to right and top to bottom, prefer top or left inputs and bottom or right outputs when sides make no visible difference. Use another side for a visibly simpler route preserving direction, junctions, and reading order. These defaults exclude feedback, return lines, and fixed symbol pins. Merge only when direction and junctions show which sources reach which targets.
+5.4 Choose connector endpoints, entries, exits, labels, and direction from the represented relationship before routing. For processes read left to right and top to bottom, prefer top or left inputs and bottom or right outputs when sides make no visible difference. Use another side for a visibly simpler route preserving direction, junctions, and reading order. These defaults exclude feedback, return lines, and connections to symbols whose connection points are fixed by convention. Merge only when direction and junctions show which sources reach which targets.
 
 5.5 Choose pictograms with established meanings for object kinds and roles in conceptual explanations unless standard symbols or the drawing already convey them.
 
@@ -167,9 +167,9 @@ Size content for readability and required relationships. Do not add content or i
 
 5.6 Explain mechanisms with the smallest set of instances the audience can check by hand, chosen to distinguish the stated rule from a baseline or plausible shortcut through visible steps or results when the answer requires that distinction. For general rules, default to generic examples with short placeholder names and simple values the audience can interpret without project context, giving each value a part in the example. Use real names or measured values when identity or magnitude matters to the claim.
 
-Show purpose, operation, and conditions and scope beyond the instance, including input and response for model claims. When connecting concepts to code, formats, or records, keep source excerpts limited to the answer's needs and show their correspondence.
+Show purpose, operation, and conditions and scope beyond the instance, including an input and its resulting output for a claim about how a system responds. When connecting concepts to code, formats, or records, keep source excerpts limited to the answer's needs and show their correspondence.
 
-5.7 Draw unchanged structure once with changing values unless understanding, comparison, counting, or a later question requires repeated instances. Group work per item or combination with its inputs and results. Connect shared inputs from outside the group, showing who shares them. Distinguish independent work from work per combination without implying unintended order or concurrency.
+5.7 Draw unchanged structure once with changing values unless understanding, comparison, counting, or a later question requires repeated instances. When one procedure repeats per item or per combination of conditions, group each repetition with its inputs and results. Connect shared inputs from outside the group, showing who shares them. Distinguish independent work from work per combination without implying unintended order or concurrency.
 
 Show the direction of any scan, traversal, or variation drawn. Make counted marks distinguishable. Mark abbreviated depictions and give their total. Redraw changed structures with both states and their difference. Show full curves only when shape matters, and calculation-only quantities only when their relationship is the claim.
 
@@ -193,17 +193,17 @@ When a column repeats one value in every row, state the value once outside the c
 
 6.1 Give each page one script, drafted or revised from its current rendering and established context so the presenter can speak from the page. Revise page and script together. Greetings and necessary transitions need not be drawn.
 
-Apply 2.2 to 2.4 and 3.2 to script claims. Keep required attribution on the page, including a requested statement of how the work relates to a source. Name a source aloud only to distinguish whose evidence or settings are meant. When needed, attribute shared borrowed settings once, repeating only to preserve that distinction.
+Apply 2.2 to 2.4 and 3.2 to script claims. Keep required attribution on the page, including a requested statement of how the work relates to a source. Name a source aloud only to distinguish whose evidence or material is meant. When needed, attribute material borrowed from a shared source once, repeating only to preserve that distinction.
 
 6.2 Begin each paragraph about visible content with an unspoken bracketed direction naming a place and order, not a topic. Follow 5.3 from the first explanatory region, adding inspection pauses where needed. Bind speech to the indicated objects and relationships. Repair drawing, paragraph, or order if they cannot be followed together.
 
 6.3 Discuss the subject without reading visible text line by line or announcing what a page, card, or figure shows. Keep established names and exact wording needed for identification or explanation. Apply 1.4 to each sentence, including reasons, implications, and transitions, counting visible content and prior speech as already provided. Speak in complete sentences in the deck's spoken language, without spoken page numbers or note labels.
 
-Do not read out displayed measurements or calculated values. Interpret them for the claim or decision only when needed. Ratios and multiples, including those computed from displayed values, and values that define a rule may be spoken when they carry the explanation.
+Do not read out displayed measurements or calculated values. Interpret them for the claim or decision only when needed. Ratios and multiples, including those computed from displayed values, and values that define a rule may be spoken when they carry the explanation. Speak a value when the requested answer is that single value itself.
 
 6.4 State the presenter's own design choices as first person decisions using I or we accurately, and do not claim others' decisions. Keep necessary limitations and open items visible on the page as facts.
 
-In the script, speak limitations and open items only for a needed judgment, without advance apologies or wording that diminishes the presenter, including accurate statements of how much was borrowed or added or of the scale or resources behind a choice. This limit covers speech only. The page's attribution still distinguishes adopted settings from original work.
+In the script, speak limitations and open items only for a needed judgment, without advance apologies or wording that diminishes the presenter, including accurate statements of how much was borrowed or added or of the scale or resources behind a choice. This limit covers speech only. The page's attribution still distinguishes adopted material from original work.
 
 6.5 A cover script may include one short sentence recalling an earlier presentation or discussion to establish today's starting point, even if the audience already knows it. Otherwise keep the cover script to the opening. A divider script announces only its displayed section, and a contents script only the displayed organization.
 
