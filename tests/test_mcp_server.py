@@ -170,7 +170,7 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
     try:
         mcp = create_server(binding)
         # The setup guide's path is as long as the install location, the rest is bounded.
-        assert len(mcp.instructions) - len(str(INIT_GUIDE)) < 810
+        assert len(mcp.instructions) - len(str(INIT_GUIDE)) < 720
         # Setup lives in the guide: the instructions give its path and nothing else about it.
         assert mcp.instructions.endswith(f"Setup: read {INIT_GUIDE}.")
         for needed in ("read_comments(new=True)", "guide()", "layout()", "image()", "write_comments",
@@ -183,7 +183,7 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
         # the pages show rather than from what the author knows.
         assert "as a confusion report on that page" in mcp.instructions
         assert "judged from the rendered pages alone" in mcp.instructions
-        assert "drawing any relation the reader cannot see" in mcp.instructions
+        assert "repaired in the content guideline's repair order" in mcp.instructions
         # Read only when it applies: the geometric advice rides on a layout answer with errors.
         for gone in ("templates/README.md", "Monitor", "inspect", "resource_uri", "geometric"):
             assert gone not in mcp.instructions, gone
@@ -645,7 +645,7 @@ def test_guide_names_the_file_to_edit_what_to_read_and_what_to_consult(tmp_path:
         templates = Path(__file__).resolve().parents[1] / "templates"
         assert answer_["edit_file"] == str(tmp_path / "slides.html")
         assert answer_["read"] == [str(templates / "README.md"), str(templates / "PRODUCTION.md")]
-        assert answer_["consult"] == [str(templates / "COMPONENTS.md")]
+        assert answer_["consult"] == [str(templates / "COMPONENTS.md"), str(templates / "REVIEWER.md")]
         assert "reader-facing unit" not in json.dumps(answer_, ensure_ascii=False)
         with pytest.raises(Exception, match="unknown artifact"):
             asyncio.run(mcp.call_tool("guide", {"artifact": "report"}))

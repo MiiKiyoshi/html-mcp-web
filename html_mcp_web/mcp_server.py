@@ -159,8 +159,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "Work from read_comments(new=True), and pass ids to reread a whole thread. "
             "Before editing an artifact, call guide() and read every file in its read list in full. "
             "Treat a question about what any part of a page means as a confusion report on that page, "
-            "judged from the rendered pages alone and repaired by drawing any relation the reader cannot "
-            "see before adding missing steps in established terms at the detail its answer needs. "
+            "judged from the rendered pages alone and repaired in the content guideline's repair order. "
             "Within the user's editing "
             "scope, edit, check the affected pages with layout() and image() (grayscale=false "
             "when colour is in question), and reply with "
@@ -199,7 +198,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         if state.get("guideline") is not None:
             read.extend(state["guideline"]["paths"])
         return {"edit_file": str((Path(state["project_dir"]) / entry["edit_file"]).resolve()),
-                "read": read, "consult": [str(docs / "COMPONENTS.md")]}
+                "read": read, "consult": [str(docs / "COMPONENTS.md"), str(docs / "REVIEWER.md")]}
 
     @mcp.tool(structured_output=False)
     @_compact

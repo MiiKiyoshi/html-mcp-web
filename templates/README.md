@@ -1,14 +1,16 @@
 # Authoring a paged HTML document
 
-Edit the file named by `edit_file` in `guide()`'s answer. Reuse the existing markup conventions for later edits.
+Edit the file named by `edit_file` in `guide()`'s answer.
 
 ## Reading the documents
 
-`guide()` lists this entry, [PRODUCTION.md](PRODUCTION.md), the template's own README, and the configured content guidelines in `read`. Read every listed file in full before editing. In each new or resumed context, and after a reset or compaction, call `guide()` again and reread those files in full. Content guidelines govern what the document says and shows. [The guideline directory](../guidelines/README.md) describes the packages.
+Read every file in the `read` list of `guide()`'s answer in full before editing. In each new or resumed context, and after a reset or compaction, call `guide()` again and reread those files in full. Content guidelines govern what the document says and shows.
 
-Consult references in `consult`, including [COMPONENTS.md](COMPONENTS.md), only by the section needed for the current component or layout report. Read [SKINS.md](SKINS.md) when developing a skin.
+Consult references in `consult`, including [COMPONENTS.md](COMPONENTS.md), only by the section needed for the current component or layout report. Read [SKINS.md](SKINS.md) when developing a skin. [REVIEWER.md](REVIEWER.md) is the instruction production Article 4 copies to an independent reviewer.
 
-A suggestion the reviewer applies is written only into the edit file. Regenerating from a script or an earlier copy loses it unless that source also contains the change. For regeneration, follow [neutral clause 8.4](../guidelines/neutral/GUIDELINE.md#article-8-resolve-the-review-request).
+## Regenerating pages
+
+A suggestion applied from the viewer is written only into the edit file. Regenerating from a script or an earlier copy loses it unless that source also contains the change. Before regenerating a page, carry applied review changes into its source and check that they survive regeneration.
 
 ## With a template
 
