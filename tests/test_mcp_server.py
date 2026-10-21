@@ -170,7 +170,7 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
     try:
         mcp = create_server(binding)
         # The setup guide's path is as long as the install location, the rest is bounded.
-        assert len(mcp.instructions) - len(str(INIT_GUIDE)) < 720
+        assert len(mcp.instructions) - len(str(INIT_GUIDE)) < 760
         # Setup lives in the guide: the instructions give its path and nothing else about it.
         assert mcp.instructions.endswith(f"Setup: read {INIT_GUIDE}.")
         for needed in ("read_comments(new=True)", "guide()", "layout()", "image()", "write_comments",

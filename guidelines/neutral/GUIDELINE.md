@@ -24,15 +24,15 @@ The editing scope is the pages and kinds of change the requester has asked for o
 
 Work backward to prerequisites, then order questions forward from what the audience knows, reusing established answers that later questions depend on. Record the starting knowledge and, for each required question, the one answer the audience should retain, its prerequisites, evidence, visual form, and successor. Record a gap that evidence cannot yet fill as unresolved.
 
-2.2 Before collecting content, identify authoritative sources for direction and terminology, and inspect requested visual references. Take intended design from authoritative design descriptions, construction from implementation sources, and what happened from primary measurements or execution records. Use secondary or additional sources only to fill a needed missing, inconsistent, or changing fact, checking current sources for changing facts. For software execution claims, inspect the connecting call path. Verify that commands, files, paths, and implementations presented as existing do exist.
+2.2 Before collecting content, identify authoritative sources for direction and terminology, and inspect requested visual references. Take intended design from authoritative design descriptions, construction from implementation sources, and what happened from primary measurements or execution records. Use secondary or additional sources only to fill a needed missing, inconsistent, or changing fact, checking current sources for changing facts. For a claim that one part produces an effect, trace the connection from cause to effect in the implementation or records. Verify that commands, files, paths, and implementations presented as existing do exist.
 
-2.3 Cite the claim's primary source, not a summary or repository merely carrying it, although a repository can be primary evidence for implementation. Include details needed to identify and interpret evidence. Credit borrowed material, mark adaptations, and attribute work to its actor. When a figure in a published source paper shows what a page needs, reuse it with its original figure number in the reference entry.
+2.3 Cite the claim's primary source, not a summary or repository merely carrying it, although a repository can be primary evidence for implementation. Include details needed to identify and interpret evidence. Credit borrowed material, mark adaptations, and attribute work to its actor. When a figure in a published source shows what a page needs and its notation and labels agree with the deck's under 4.4 and 4.6, reuse it, citing its location in the source in the reference entry. Otherwise redraw it in the deck's notation and mark it adapted.
 
 2.4 Check primary evidence that a reported result exists and is final, and mark pending results or omit the claims that depend on them. Generate results and derived numbers from primary data before placing them in figures or tables, and compare reported values with that output. Identify each quantity as measured, source-reported, assumed, chosen, or computed, showing its source, decision record, or derivation, and verify chosen settings against their configuration or decision record.
 
-Record the inputs, rules, and assumptions needed to recompute values. Compute a value over the whole object its rule covers, including the hardest case. For counts, identify the items and how groups form the total.
+Record the inputs, rules, and assumptions needed to recompute values. Compute a value over everything its rule covers, including the cases hardest to handle. For counts, identify the items and how groups form the total.
 
-Before calculating an example, establish the validity of its inputs and rule and limit the conclusion accordingly. Label illustrative and assumed values and check their calculations separately. An example does not establish a measured result. When a method or setting changes what runs produce, do not apply it to records of runs made without it, even as an illustration.
+Before calculating an example, establish the validity of its inputs and rule and limit the conclusion accordingly. Label illustrative and assumed values and check their calculations separately. An example does not establish a measured result. When a method or setting changes the results it governs, do not apply it to results produced without it, even as an illustration.
 
 2.5 Build the chain of 1.3 before drafting pages. Before introducing a concept, identify the concrete problem that makes it needed, and connect a method's change to its intended effect on that problem.
 
@@ -44,9 +44,9 @@ Record this sequence and grouping before proposing a count, then the deck map, s
 
 If the needed explanation cannot fit at a readable size or, for a live talk, be followed at speaking pace, distribute it across successive complete answers. Do not preserve structure or count by inventing terms, obscuring relationships, shrinking content, or omitting needed explanation. When removing content, remove what fails 1.4 or repeats a claim. Keep the prerequisites, definitions, mechanism or calculation steps, conditions, evidence, local context, and details the audience needs to follow each answer and its reasoning.
 
-2.7 Order sections by prerequisites. Distinguish background from the subject by explanatory role, not source or novelty, and make headings match. Clarify broad required headings with subheadings or introductory text. By default, present method, experimental setup, then results.
+2.7 Order sections by prerequisites. Distinguish background from the subject by explanatory role, not source or novelty, and make headings match. Clarify broad required headings with subheadings or introductory text. For empirical work, present method, setup, then results by default.
 
-Progress updates may use the sequence Cover, Recap, Summary of Progress, Methods, Experimental Setup, Results, optional Discussion, Next Plan. Recap connects prior context to the result now needed. Summary of Progress covers only work since that context. Next Plan is exactly one final page with evidence-derived actions or a statement that none is needed.
+A progress update starts from what its audience last saw, covers only what changed since, and ends with one page of the actions the evidence supports, or a statement that none is needed.
 
 2.8 Keep the planning records in one file outside the deck, in the deck's language, recording choices as they are made. The file holds:
 
@@ -81,7 +81,7 @@ Presenter notes hold only what the presenter lacks and the page need not show, b
 
 3.2 Before writing a claim, distinguish fact, definition, observation, inference, assumption, proposal, decision, and unknown, provisional values from final ones, and external examples and proposed components from existing work. Establish a cause with evidence that distinguishes it from plausible alternatives, and name the source. Otherwise state the observation and label the explanation as proposed.
 
-State tested cases and conditions. If only part of the introduced evaluation set was tested or shown, explain why and limit the conclusion accordingly. Source background facts and support claimed benefits separately from chosen settings. Omit unsupported claims or mark them unresolved. Cut self-evaluation, inflated claims, and process narration.
+State tested cases and conditions. If only part of the cases introduced was tested or shown, explain why and limit the conclusion accordingly. Source background facts and support claimed benefits separately from chosen settings. Omit unsupported claims or mark them unresolved. Cut self-evaluation, inflated claims, and process narration.
 
 Ground relationships implied by conceptual drawings, including ordering, crossings, and meaningful relative size, in sources or checks under stated conditions. Omit unsupported relationships. Require exact shapes, timing, or proportions only when the question needs them.
 
@@ -90,7 +90,7 @@ Ground relationships implied by conceptual drawings, including ordering, crossin
 1. each step's actor, inputs, and outputs, and how its output determines the next step,
 2. the conditions and actions for branches, repeats, stops, and rejected inputs,
 3. inputs, transformations, and outputs kept together, and changed and fixed variables kept together,
-4. for multiple actors, their roles, who selects and executes, what each receives after transformation, change limits, and resulting states,
+4. for multiple actors, each one's role, what it receives, decides, and produces, what it may change, and the resulting states,
 5. for a reduction or other change to objects or states, the affected range and what is retained, extended, replaced, or discarded.
 
 3.4 Explain an object or relationship where it first raises a question, or just before. Show outputs where produced and uses where consumed. Refer to objects, not earlier page titles or locations. Repeat prerequisites as local context only to avoid looking elsewhere or recalling hidden detail, without proving them again. Move a page that needs a later value. In visible content and scripts, refer forward only to locate the answer to a deliberately open question, not to preview titles or contents.
@@ -171,11 +171,11 @@ Show purpose, operation, and conditions and scope beyond the instance, including
 
 5.7 Draw unchanged structure once with changing values unless understanding, comparison, counting, or a later question requires repeated instances. Group work per item or combination with its inputs and results. Connect shared inputs from outside the group, showing who shares them. Distinguish independent work from work per combination without implying unintended order or concurrency.
 
-Show sweep directions. Make counted marks distinguishable. Mark abbreviated depictions and give their total. Redraw changed structures with both states and their difference. Show full curves only when shape matters, and calculation-only quantities only when their relationship is the claim.
+Show the direction of any scan, traversal, or variation drawn. Make counted marks distinguishable. Mark abbreviated depictions and give their total. Redraw changed structures with both states and their difference. Show full curves only when shape matters, and calculation-only quantities only when their relationship is the claim.
 
 5.8 Label multiple figures and their parts, including stages, with (a), (b), (c) in reading order. Give labels, numbers, captions, and notes visible referents, name each plot axis by its quantity and unit, and identify compared cases. Explain visual distinctions through the drawing, a convention, or a legend with actual mark or line samples beside their meanings. Repair unclear relationships and misleading notation in the drawing, not in explanatory or disclaimer notes.
 
-When a table or plot first shows an unfamiliar computed quantity, state briefly what it measures with the visual's units under 4.3. Define it before the visual by an equation in the page's notation, beside any equations for its inputs, with a rate or factor from data or a setting written as a symbol.
+When a table or plot first shows an unfamiliar computed quantity, state briefly what it measures with the visual's units under 4.3. Define it before the visual by an equation in the page's notation, beside any equations for its inputs, writing a constant taken from data or a setting as a defined symbol. For an audience that does not read equations, define it in words naming what is combined and how.
 
 Place a plot's or diagram's interpretation and a table's quantitative interpretation in bullets directly below the respective visual, as separate page text, with a worked calculation that substitutes values into that equation only where the audience needs it. A diagram's interpretation is why its arrangement is needed and what follows from it. What each part is or does stays in its panel under 5.5.
 

@@ -2,11 +2,11 @@
 
 ## First pass: the pages
 
-Review every supplied page as the supplied audience, using the rendered deck, that audience's knowledge, and the requester's decisions supplied with it. If a presenter's knowledge is supplied, also report each page whose question and answer that presenter could not find on the page or whose elements they could not explain.
+Review every supplied page as the supplied audience, using the rendered document, that audience's knowledge, and the requester's decisions supplied with it. If a presenter's knowledge is supplied, also report each page whose question and answer that presenter could not find on the page or whose elements they could not explain.
 
 Use the supplied decisions as constraints, not as explanations of missing content. Do not report an approved choice itself as a defect. If understanding remains blocked within those constraints, report the specific problem without prescribing a conflicting change. Requested focus areas may set priorities but do not limit the checks below.
 
-Record which pages you read and your findings before reading the scripts. If earlier pages are missing, report the prerequisite and repetition checks that cannot be completed. Limit your verdict to the pages and checks actually reviewed. Do not inspect markup or other hidden material or edit the deck.
+Record which pages you read and your findings before reading any scripts. If earlier pages are missing, report the prerequisite and repetition checks that cannot be completed. Limit your verdict to the pages and checks actually reviewed. Do not inspect markup or other hidden material or edit the document.
 
 Identify the question needed at each point to establish the section's purpose, using what preceding pages establish. Judge whether the page answers that question, whether its visible premises and evidence support the conclusion, and, for a live talk, whether the audience can follow that answer at speaking pace while reading and inspecting the necessary content.
 
@@ -16,13 +16,13 @@ Request any other definition, derivation, or initial value only when its absence
 
 Read for wording and relationships that block understanding, including unexplained terms needed for the answer, implementation names that replace explanations, missing actors or actions, and inconsistent names. Read titles, leads, and takeaways in order for jumps, repetition, and conclusions without premises. Check whether figures support the takeaway, whether a comparison identifies both sides and explains how their difference supports the conclusion, and whether overviews agree with the body.
 
-For measurement results, check that the takeaway states what they show about the claim or mechanism tested. If the tested or displayed cases cover only part of the evaluation set introduced in the deck, check that the selection reason and the supported scope of the conclusion are clear. Flag unsupported evaluative claims only when they affect the page's answer.
+For measurement results, check that the takeaway states what they show about the claim or mechanism tested. If the tested or displayed cases cover only part of the cases introduced in the document, check that the selection reason and the supported scope of the conclusion are clear. Flag unsupported evaluative claims only when they affect the page's answer.
 
 Do not verify numerical accuracy, recompute sums or ratios, or audit the sources and derivations of numerical values. Those checks belong to the author.
 
 ## Second pass: the scripts
 
-Then review the supplied scripts in spoken order alongside their pages. Keep the findings from the first pass even if a script explains what its page left unclear.
+If scripts are supplied, review them in spoken order alongside their pages. Keep the findings from the first pass even if a script explains what its page left unclear.
 
 Check that the presenter can speak from the page currently shown and the audience's established context. Flag previews of later titles or content not shown on that page. A forward reference may only locate the answer to a deliberately open question. A divider script should announce only its displayed section, and a contents script should introduce only its displayed organization.
 

@@ -18,7 +18,7 @@ Fit content to its box at a readable size, preserving its proportions. When it d
 
 Use the same placement for a plot's keys to marks that do not identify data series and for brief metric definitions needed to read table or plot values under neutral clauses 4.3 and 5.8. A metric's defining equation goes in the page text before the visual, not in `p.units`. Keep data series legends with the plot. See [units and notation keys](COMPONENTS.md#tables-and-units).
 
-2.3 For a drawing you make, prefer inline SVG over a picture of it when other components do not carry it. A figure reused from a published source paper under neutral clause 2.3 stays an image.
+2.3 For a drawing you make, prefer inline SVG over a picture of it when other components do not carry it. A figure reused unchanged under neutral clause 2.3 stays an image.
 
 Size the figure's box for readable detail and the relationships it must show, within the column width and height available on the page. Give its `viewBox` the box's proportions and the size at which the figure is drawn, rather than a smaller box scaled up. Draw inside it. Lay out each panel for its own width and height while preserving grouping and reading order. Compute crossings, arrow ends, and label positions rather than estimating coordinates by eye.
 
@@ -46,7 +46,7 @@ Size the figure's box for readable detail and the relationships it must show, wi
 
 ## Article 4. Complete independent review
 
-4.1 Before handing off a new deck or a revision across the deck, run one independent review round. First bring all of the following to hold:
+4.1 Before handing off a new document or a revision across the document, run one independent review round. First bring all of the following to hold:
 
 1. `layout()` returns an empty `errors` list,
 2. the checks of neutral Article 7 pass,
@@ -54,16 +54,16 @@ Size the figure's box for readable detail and the relationships it must show, wi
 
 When one cannot be brought to hold, run the round anyway and report what remains under neutral clause 9.1. Run another round only at the requester's direction.
 
-4.2 The independent reviewer is a reader who did not build the deck, such as a new agent or session. First give it:
+4.2 The independent reviewer is a reader who did not build the document, such as a new agent or session. First give it:
 
-1. the full rendered deck in reading order, as page images from `image()` or the built deck viewed in a browser, never its markup,
+1. the full rendered document in reading order, as page images from `image()` or the built document viewed in a browser, never its markup,
 2. the text of [REVIEWER.md](REVIEWER.md), copied verbatim,
 3. the audience's knowledge and, when it differs, the presenter's,
-4. the applicable requester decisions under neutral clause 1.5, each with its scope, leaving out author preferences and explanations of the deck,
+4. the applicable requester decisions under neutral clause 1.5, each with its scope, leaving out author preferences and explanations of the document,
 5. any focus areas the requester named.
 
-After the independent reviewer records findings for all rendered pages, give the scripts as text labelled by page. Do not give the guideline, template documentation, planning files, sources, or other hidden notes.
+After the independent reviewer records findings for all rendered pages, give any scripts as text labelled by page. Do not give the guideline, template documentation, planning files, sources, or other hidden notes.
 
-4.3 Record the independent reviewer's comprehension blockers, then its incidental form observations, in two separate tables, one row per finding, with columns `Page`, `Finding as stated`, `Kind`, `Decision`, and `Action or reason`. Use `wording`, `logic`, `inconsistency`, `unneeded`, or `layout` for kind and `adopt`, `reject`, or `hold` for decision.
+4.3 Record the independent reviewer's comprehension blockers, then its incidental form observations, in two separate tables, one row per finding, with columns `Page`, `Finding as stated`, `Kind`, `Decision`, and `Action or reason`. Use `missing`, `wording`, `logic`, `inconsistency`, `unneeded`, or `layout` for kind and `adopt`, `reject`, or `hold` for decision.
 
 Decide each finding that adds or removes content by neutral clause 1.4 at the audience's knowledge, recording what only the presenter needs as presenter notes under neutral clause 2.8. Repair adopted findings in the order of neutral clause 8.3. Besides findings held under neutral clause 8.2, hold for the requester's decision one whose fix would change a claim's meaning or exceed the editing scope of neutral clause 1.5. Regrouping pages alone is not held. Rerun your content and layout checks on affected pages, and include both tables in the handoff report.
