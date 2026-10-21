@@ -4,13 +4,9 @@ Edit the file named by `edit_file` in `guide()`'s answer.
 
 ## Reading the documents
 
-Read every file in the `read` list of `guide()`'s answer in full before editing. In each new or resumed context, and after a reset or compaction, call `guide()` again and reread those files in full. Content guidelines govern what the document says and shows.
+In each new or resumed context, and after a reset or compaction, call `guide()` and read every file in its `read` list in full before editing.
 
 Consult references in `consult`, including [COMPONENTS.md](COMPONENTS.md), only by the section needed for the current component or layout report. Read [SKINS.md](SKINS.md) when developing a skin. [REVIEWER.md](REVIEWER.md) is the instruction production Article 4 copies to an independent reviewer.
-
-## Regenerating pages
-
-A suggestion applied from the viewer is written only into the edit file. Regenerating from a script or an earlier copy loses it unless that source also contains the change. Before regenerating a page, carry applied review changes into its source and check that they survive regeneration.
 
 ## With a template
 
@@ -39,7 +35,3 @@ Image paths are relative to the project directory containing `.html-mcp-web.yaml
 ## Without a template
 
 `init` creates a minimal document at `--main` if the file does not exist. Its body contains only `main.pages`, whose page children are `section.page`. The viewer, layout checker, and exporter use that structure. Each slide is 1280 × 720 CSS pixels. Each report page is A4 (210 × 297 mm).
-
-## Before handoff
-
-Follow production Article 3 to check an edit and Article 4 for independent review of a new deck or a revision across the deck.

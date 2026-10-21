@@ -8,13 +8,13 @@ Neutral clauses cited below are in the [neutral content guideline](../guidelines
 
 1.2 Keep the planning records of neutral clause 2.8 in `<artifact>.FLOORPLAN.md` beside the edit file.
 
-## Article 2. Build figures and tables
+## Article 2. Build page content
 
-Fit content to its intended box under neutral clause 2.6 while preserving its proportions.
+Fit content to its box at a readable size, preserving its proportions. When it does not fit, distribute it under neutral clause 2.6 rather than shrinking it.
 
 2.1 For a contents page, try columns at full size before scaling the list down to fit the page.
 
-2.2 Use the same units statement form on every slide that shows measurements. Put a table's shared information once in `p.units`, directly above the table and aligned to its right edge: its units, any metric shared by all value columns, any value shared by all rows under neutral clause 5.9, and any needed key to cell notation.
+2.2 Put a table's shared information once in `p.units`, directly above the table and aligned to its right edge: its units, any metric shared by all value columns, any value shared by all rows under neutral clause 5.9, and any needed key to cell notation.
 
 Use the same placement for a plot's keys to marks that do not identify data series and for brief metric definitions needed to read table or plot values under neutral clauses 4.3 and 5.8. A metric's defining equation goes in the page text before the visual, not in `p.units`. Keep data series legends with the plot. See [units and notation keys](COMPONENTS.md#tables-and-units).
 
@@ -24,9 +24,9 @@ Size the figure's box for readable detail and the relationships it must show, wi
 
 2.4 Give raster figures a `max-height`. Preserve the source width to height ratio of images, including `<img>`, images inside SVG, and CSS backgrounds. At the intended display or export size, check the rendered image itself, excluding padding and letterboxing, for correct proportions and readable text and marks needed by the page. A clean layout report does not establish these qualities.
 
-2.5 When a drafting tool accepts images, supply requested visual reference images as inputs. Follow neutral clauses 2.2 and 5.10 for using references.
+2.5 When a tool or agent that drafts a figure accepts images, give it the requested visual reference images. Follow neutral clauses 2.2 and 5.10 for using references.
 
-2.6 Use a plotting tool that supplies the required axes, scales, and annotations for a standard plot. For the bullets below a visual under neutral clause 5.8, use HTML lists outside SVG, images, or tables, in the same column as that visual.
+2.6 Use a plotting tool that supplies the required axes, scales, and annotations for a standard plot. A plot made this way is a drawing you make under 2.3.
 
 2.7 For diagrams of boxes and arrows, prefer horizontal and vertical connectors unless another route clarifies the relationship. Join connectors entering the same element near their sources. Split connectors leaving the same element near their targets. Keep branches short and the common segment long. Follow neutral clause 5.4 for direction, source and target relationships, entry and exit sides, and permitted merges. Remove a bend or detour when another entry or exit side avoids it without changing reading order or intended connections, obscuring junctions, or adding crossings or label overlaps.
 
@@ -34,11 +34,15 @@ Size the figure's box for readable detail and the relationships it must show, wi
 
 2.9 Show source attribution on a page only through `<ol class="references">` entries and their `<cite>` markers, as described in [References and citations](COMPONENTS.md#references-and-citations).
 
+2.10 For the bullets below a visual under neutral clause 5.8, use HTML lists outside SVG, images, or tables, in the same column as that visual.
+
 ## Article 3. Check an edit
 
 3.1 Render affected pages with `image()`, with `grayscale=false` when colour is in question, and perform the content guideline's checks in the scope and order of neutral Article 7.
 
 3.2 Use `layout(artifact=..., page=...)` to check each affected page's errors. Consult [Layout check reports](COMPONENTS.md#layout-check-reports) to interpret the result. Read the returned blocks and free space only when the rendered page leaves a placement or spacing question unresolved.
+
+3.3 A suggestion applied from the viewer is written only into the edit file. Regenerating from a script or an earlier copy loses it unless that source also contains the change. Before regenerating a page, carry applied review changes into its source and check that they survive regeneration.
 
 ## Article 4. Complete independent review
 
@@ -62,4 +66,4 @@ After the independent reviewer records findings for all rendered pages, give the
 
 4.3 Record the independent reviewer's comprehension blockers, then its incidental form observations, in two separate tables, one row per finding, with columns `Page`, `Finding as stated`, `Kind`, `Decision`, and `Action or reason`. Use `wording`, `logic`, `inconsistency`, `unneeded`, or `layout` for kind and `adopt`, `reject`, or `hold` for decision.
 
-Decide each finding that adds or removes content by neutral clause 1.4 at the audience's knowledge, recording what only the presenter needs as presenter notes under neutral clause 2.8. Repair adopted findings in the order of neutral clause 8.3. Hold for the requester's decision a finding whose fix would change a claim's meaning, conflict with an active requirement, or exceed the editing scope of neutral clause 1.5. Regrouping pages alone is not held. Rerun your content and layout checks on affected pages, and include both tables in the handoff report.
+Decide each finding that adds or removes content by neutral clause 1.4 at the audience's knowledge, recording what only the presenter needs as presenter notes under neutral clause 2.8. Repair adopted findings in the order of neutral clause 8.3. Besides findings held under neutral clause 8.2, hold for the requester's decision one whose fix would change a claim's meaning or exceed the editing scope of neutral clause 1.5. Regrouping pages alone is not held. Rerun your content and layout checks on affected pages, and include both tables in the handoff report.

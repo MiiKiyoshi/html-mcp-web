@@ -20,11 +20,11 @@ The editing scope is the pages and kinds of change the requester has asked for o
 
 ## Article 2. Plan the explanation
 
-2.1 Before planning, establish purpose and intended use, the audience's starting knowledge and the understanding or decision they require, and the presenter's starting knowledge when it differs from the audience's. Derive page questions and their content from the current request and discussion, not from available material or the slots of an existing structure, and do not substitute an easier, documented, or measurable question for the one requested. For a live talk, make the explanation followable at speaking pace without dense text to read while listening.
+2.1 Before planning, establish purpose and intended use, the audience's starting knowledge and the understanding or decision they require, and the presenter's starting knowledge when it differs from the audience's. Derive page questions, their content, and its level of detail from the current request and discussion, not from sources, available material, or the slots of an existing structure, and do not substitute an easier, documented, or measurable question for the one requested. For a live talk, make the explanation followable at speaking pace without dense text to read while listening.
 
 Work backward to prerequisites, then order questions forward from what the audience knows, reusing established answers that later questions depend on. Record the starting knowledge and, for each required question, the one answer the audience should retain, its prerequisites, evidence, visual form, and successor. Record a gap that evidence cannot yet fill as unresolved.
 
-2.2 Before collecting content, identify authoritative sources for direction and terminology, and inspect requested visual references. Take intended design from authoritative design descriptions, construction from implementation sources, and what happened from primary measurements or execution records. Use secondary or additional sources only to fill a needed missing, inconsistent, or changing fact, checking current sources for changing facts. Sources establish truth, not the page's question or level of detail. For software execution claims, inspect the connecting call path. Verify that commands, files, paths, and implementations presented as existing do exist.
+2.2 Before collecting content, identify authoritative sources for direction and terminology, and inspect requested visual references. Take intended design from authoritative design descriptions, construction from implementation sources, and what happened from primary measurements or execution records. Use secondary or additional sources only to fill a needed missing, inconsistent, or changing fact, checking current sources for changing facts. For software execution claims, inspect the connecting call path. Verify that commands, files, paths, and implementations presented as existing do exist.
 
 2.3 Cite the claim's primary source, not a summary or repository merely carrying it, although a repository can be primary evidence for implementation. Include details needed to identify and interpret evidence. Credit borrowed material, mark adaptations, and attribute work to its actor. When a figure in a published source paper shows what a page needs, reuse it with its original figure number in the reference entry.
 
@@ -73,7 +73,7 @@ Presenter notes hold only what the presenter lacks and the page need not show, b
 
 3.1 Draft one element at a time in reading order, applying 1.4 to each and establishing missing prerequisites and relationships before dependent content. This order, not source order or available panel space, determines what comes next. Record only the elements each page needs, their reading order, and where their prerequisites are established.
 
-1. From audience knowledge and preceding pages, state the next question needed, the one answer to establish, and the chain it rests on with a method's need and intended effect. Select evidence the audience can check before page elements.
+1. From audience knowledge and preceding pages, state the next question needed, the one answer to establish, and the chain it rests on with a method's need and intended effect. Before choosing page elements, select evidence the audience can check.
 2. Name each object or action and place needed definitions before use. Construct the answer's relationship under Article 5 with the needed objects, operations, conditions, and evidence.
 3. Add words for what the visual and established context leave unsaid, including goals or constraints that explain a choice or omission.
 4. Title the page and, if using a lead, name its problem. Derive the takeaway from the visible explanation.
@@ -127,7 +127,7 @@ In text and scripts, including summaries and takeaways, identify quantities and 
 
 4.6 Set all mathematical notation on the page with KaTeX, in text and in SVG figures. This covers everything from a single variable or operator in a label to a whole formula or a numeric calculation with its units, including every subscript and superscript. Write each symbol everywhere, including titles and headers, in the form its definition gives, never a simplified variant. Reserve mathematical symbols for mathematics. Write words inside mathematical expressions in English, keeping surrounding explanations in the deck's language.
 
-Use one equation per definition step. Give each symbol one role and distinguish assumed from solved values. Use example values the audience can interpret without project context, and give each one a part in the example.
+Use one equation per definition step. Give each symbol one role and distinguish assumed from solved values.
 
 4.7 For sectioned decks, use the section name alone when sufficient. Otherwise append a short noun phrase naming the page's object, process, or comparison, separated by an em dash. Name the subject at the level explained, not its conclusion, incidental source, or an action used merely to obtain it. A defined interface, format, or dataset can itself be the subject. Use a group or stage name followed by a colon only for an established grouping or sequence the audience needs. Make title, visual, and takeaway address the same point.
 
@@ -165,7 +165,7 @@ Enclose separately labeled diagram parts and stages in separate panels with labe
 
 Size content for readability and required relationships. Do not add content or increase its width, height, spacing, font size, or padding merely to match panel shapes or fill unused space. Center compact content groups horizontally and vertically in their available area by default, preserving reading order and comparison alignment.
 
-5.6 Explain mechanisms with the smallest set of instances the audience can check by hand, chosen to distinguish the stated rule from a baseline or plausible shortcut through visible steps or results when the answer requires that distinction. For general rules, default to generic examples with short placeholder names and simple values. Use real names or measured values when identity or magnitude matters to the claim.
+5.6 Explain mechanisms with the smallest set of instances the audience can check by hand, chosen to distinguish the stated rule from a baseline or plausible shortcut through visible steps or results when the answer requires that distinction. For general rules, default to generic examples with short placeholder names and simple values the audience can interpret without project context, giving each value a part in the example. Use real names or measured values when identity or magnitude matters to the claim.
 
 Show purpose, operation, and conditions and scope beyond the instance, including input and response for model claims. When connecting concepts to code, formats, or records, keep source excerpts limited to the answer's needs and show their correspondence.
 
