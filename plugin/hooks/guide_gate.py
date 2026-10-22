@@ -3,9 +3,9 @@
 read the rules in the context it is working in.
 
 guide() names the files to read in full. A context that calls it records those files as unread,
-a Read that returned a whole file takes it off, and every html-mcp tool but guide() and
-setup_info() is refused while guide() has not answered in this context or a listed file has not
-been read in full. Review work runs through these tools (listen, read_comments, write_comments,
+a Read that returned a whole file, or found it unchanged since doing so, takes it off, and every
+html-mcp tool but guide() and setup_info() is refused while guide() has not answered in this
+context or a listed file has not been read in full. Review work runs through these tools (listen, read_comments, write_comments,
 layout, image) however the deck itself is edited, with Edit or with a script in a shell. The
 record is cleared whenever a context starts again (a new session, a resumed one, a cleared one,
 or the summary a compaction leaves), since what was read before is no longer in it. A subagent
@@ -137,16 +137,27 @@ def guide_read(event: dict) -> None:
 
 def file_read(event: dict) -> None:
     """A Read counts when it returned the whole file: from its first line, every line, and
-    every character, so a file cut at a line or a size limit does not."""
-    returned = (event.get("tool_response") or {}).get("file") or {}
-    path = os.path.realpath(returned.get("filePath") or (event.get("tool_input") or {}).get("file_path", ""))
-    try:
-        whole = Path(path).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return
-    if not (returned.get("startLine") == 1 and returned.get("numLines") == returned.get("totalLines")
-            and len(returned.get("content") or "") >= len(whole.rstrip("\n"))):
-        return
+    every character, so a file cut at a line or a size limit does not.
+
+    A Read without offset or limit counts too when Claude Code answers that the file is
+    unchanged. It answers so, without the contents, when the same Read already returned the
+    file in this context, as when guide() is called again and lists files read under its first
+    answer. Counting only returned contents left those files unread for good."""
+    response = event.get("tool_response") or {}
+    returned = response.get("file") or {}
+    request = event.get("tool_input") or {}
+    path = os.path.realpath(returned.get("filePath") or request.get("file_path", ""))
+    if response.get("type") == "file_unchanged":
+        if request.get("offset") is not None or request.get("limit") is not None:
+            return
+    else:
+        try:
+            whole = Path(path).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return
+        if not (returned.get("startLine") == 1 and returned.get("numLines") == returned.get("totalLines")
+                and len(returned.get("content") or "") >= len(whole.rstrip("\n"))):
+            return
     with held(event):
         projects = unread(event)
         if any(path in files for files in projects.values()):

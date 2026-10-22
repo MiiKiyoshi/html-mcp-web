@@ -74,6 +74,14 @@ def read(session: str, path: Path, agent: str | None = None, start: int = 1, lin
                          "tool_response": {"type": "text", "file": returned}}, session, agent)
 
 
+def unchanged(session: str, path: Path, offset: int | None = None, limit: int | None = None) -> dict:
+    """What the PostToolUse hook receives when Claude Code answers a Read of a file it already
+    returned in this context: the file's path and no contents."""
+    tool_input = {"file_path": str(path)} if offset is None else {"file_path": str(path), "offset": offset, "limit": limit}
+    return with_context({"cwd": str(path.parent), "tool_name": "Read", "tool_input": tool_input,
+                         "tool_response": {"type": "file_unchanged", "file": {"filePath": str(path)}}}, session, None)
+
+
 def reason(answer: dict | None) -> str | None:
     if answer is None:
         return None
@@ -109,6 +117,16 @@ def test_html_mcp_tools_wait_for_the_listed_files_and_wait_again_after_a_compact
     run("file-read", read("s1", guideline))
     for tool in ("listen", "read_comments", "write_comments", "layout", "image"):
         assert run("before-tool", call("s1", project, tool)) is None
+    # guide() called again in the same context lists the files again. Reading them again finds
+    # them unchanged, which counts for a whole Read and not for a part.
+    run("guide-read", guided("s1", content, rules))
+    assert reason(run("before-tool", call("s1", project))) is not None
+    run("file-read", unchanged("s1", production))
+    run("file-read", unchanged("s1", guideline, offset=2, limit=2))
+    waiting = reason(run("before-tool", call("s1", project)))
+    assert str(production) not in waiting and str(guideline) in waiting
+    run("file-read", unchanged("s1", guideline))
+    assert run("before-tool", call("s1", project)) is None
     # A compaction leaves a summary in place of what was read: refused again until guide()
     # answers and its files are read again.
     run("session-start", {"session_id": "s1", "cwd": str(project), "source": "compact"})
