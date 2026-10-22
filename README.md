@@ -145,6 +145,10 @@ extends: neutral
 
 A name you use replaces the built-in one of the same name. `do html init` offers both.
 
+## See also
+
+[tex-mcp-web](https://github.com/MiiKiyoshi/tex-mcp-web) reviews a LaTeX paper from its PDF the same way, while the agent edits the source.
+
 ## Acknowledgements
 
 MIT licensed. See [`LICENSE`](LICENSE). The source editor uses [Ace](https://ace.c9.io/) under the BSD license, and its license is included with the bundled files. Full-screen wheel navigation adapts the intent-detection strategy from [Swiper's Mousewheel module](https://github.com/nolimits4web/swiper/tree/master/src/modules/mousewheel) by Vladimir Kharlampidi and the Swiper contributors, under the MIT license.
