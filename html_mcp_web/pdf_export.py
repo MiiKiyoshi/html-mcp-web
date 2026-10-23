@@ -36,8 +36,12 @@ def print_artifact_pdf(artifact_url: str, layout: str) -> bytes:
         probe.bind(("127.0.0.1", 0))
         marionette_port = int(probe.getsockname()[1])
     profile = tempfile.mkdtemp(prefix="html_mcp_pdf_")
+    # Accessibility off: on a host where firefox turned it on, about half the prints of one
+    # deck failed at once with NS_ERROR_UNEXPECTED, each after the accessibility IPC error
+    # "PDocAccessibleConstructor ... handler returned false", and none failed without it.
     Path(profile, "user.js").write_text(
-        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+        f'user_pref("marionette.port", {marionette_port});\n'
+        'user_pref("accessibility.force_disabled", 1);\n', encoding="utf-8")
     proc = subprocess.Popen(
         ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
