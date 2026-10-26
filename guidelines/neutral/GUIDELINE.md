@@ -81,7 +81,7 @@ Presenter notes hold only what the presenter lacks and the page need not show, b
 
 3.2 Before writing a claim, distinguish fact, definition, observation, inference, assumption, proposal, decision, and unknown, provisional values from final ones, and external examples and proposed components from existing work. Establish a cause with evidence that distinguishes it from plausible alternatives, and name the source. Otherwise state the observation and label the explanation as proposed.
 
-State tested cases and conditions. If only part of the cases introduced was tested or shown, explain why and limit the conclusion accordingly. Source background facts and support claimed benefits separately from chosen settings. Omit unsupported claims or mark them unresolved. Cut self-evaluation, inflated claims, and process narration.
+State tested cases and conditions. If only part of the cases introduced was tested or shown, explain why and word the conclusion to cover only that part. Limit every claim through what it asserts to what its shown evidence supports, not through added qualifiers or caveats, and do not restate the scope of a claim about displayed evidence, which already refers to that evidence. Source background facts and support claimed benefits separately from chosen settings. Omit unsupported claims or mark them unresolved. Cut self-evaluation, inflated claims, and process narration.
 
 Ground relationships implied by conceptual drawings, including ordering, crossings, and meaningful relative size, in sources or checks under stated conditions. Omit unsupported relationships. Require exact shapes, timing, or proportions only when the question needs them.
 
@@ -133,7 +133,7 @@ Use one equation per definition step. Give each symbol one role and distinguish 
 
 4.8 Give content pages one lead and one takeaway by default. The lead is a short noun phrase directly naming the page's one problem with established terms. It may share title words, but must not repeat the title verbatim or use roundabout wording to avoid them. Do not use joined clauses, a question, or a list of figure contents. Keep explanation and answer out of the lead.
 
-The takeaway states the single conclusion supported by visible content, giving a qualitative rationale when the page justifies a design choice. For measurement results, state the qualitative trend or comparison about the tested claim or mechanism within the evidence's scope. Keep reported values, ranges, and counts with the evidence under 5.8, not in that takeaway. For other purposes, include a value only when the requested answer is that single value itself.
+The takeaway states the single conclusion supported by visible content, giving a qualitative rationale when the page justifies a design choice. For measurement results, state the qualitative trend or comparison that the shown evidence supports about the tested claim or mechanism. Keep reported values, ranges, and counts with the evidence under 5.8, not in that takeaway. For other purposes, include a value only when the requested answer is that single value itself.
 
 ## Article 5. Visuals
 
@@ -201,9 +201,9 @@ Apply 2.2 to 2.4 and 3.2 to script claims. Keep required attribution on the page
 
 Do not read out displayed measurements or calculated values. Interpret them for the claim or decision only when needed. Ratios and multiples, including those computed from displayed values, and values that define a rule may be spoken when they carry the explanation. Speak a value when the requested answer is that single value itself.
 
-6.4 State the presenter's own design choices as first person decisions using I or we accurately, and do not claim others' decisions. Keep necessary limitations and open items visible on the page as facts.
+6.4 State the presenter's own design choices as first person decisions using I or we accurately, and do not claim others' decisions. State a limitation of the shown evidence only when the displayed values themselves make it self-evident, such as a result that reverses between conditions, not when it must be inferred from a design or procedure. State it once, in one short line ending the last page that draws conclusions from those data, and speak it once in that page's script. Leave out every other flaw, including those known only from implementation, logs, or process records, and report them to the requester and, when the presenter's knowledge differs, in the presenter notes. When such a flaw makes a displayed claim false, correct or remove the claim instead of adding a caveat.
 
-In the script, speak limitations and open items only for a needed judgment, without advance apologies or wording that diminishes the presenter, including accurate statements of how much was borrowed or added or of the scale or resources behind a choice. This limit covers speech only. The page's attribution still distinguishes adopted material from original work.
+In the script, avoid advance apologies and wording that diminishes the presenter, including accurate statements of how much was borrowed or added or of the scale or resources behind a choice. This limit covers speech only. The page's attribution still distinguishes adopted material from original work.
 
 6.5 A cover script may include one short sentence recalling an earlier presentation or discussion to establish today's starting point, even if the audience already knows it. Otherwise keep the cover script to the opening. A divider script announces only its displayed section, and a contents script only the displayed organization.
 

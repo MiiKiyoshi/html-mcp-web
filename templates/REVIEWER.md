@@ -16,7 +16,7 @@ Request any other definition, derivation, or initial value only when its absence
 
 Read for wording and relationships that block understanding, including unexplained terms needed for the answer, implementation names that replace explanations, missing actors or actions, and inconsistent names. Read titles, leads, and takeaways in order for jumps, repetition, and conclusions without premises. Check whether figures support the takeaway, whether a comparison identifies both sides and explains how their difference supports the conclusion, and whether overviews agree with the body.
 
-For measurement results, check that the takeaway states what they show about the claim or mechanism tested. If the tested or displayed cases cover only part of the cases introduced in the document, check that the selection reason and the supported scope of the conclusion are clear. Flag unsupported evaluative claims only when they affect the page's answer.
+For measurement results, check that the takeaway states what they show about the claim or mechanism tested. If the tested or displayed cases cover only part of the cases introduced in the document, check that the selection reason is clear and that the conclusion covers only that part. Report a conclusion broader than its displayed evidence as a defect of its wording, not a missing caveat, and request no limitation, caveat, or scope qualifier beyond one limitation the displayed values themselves make self-evident, stated once. Flag any other, and any repetition, as unnecessary. Flag unsupported evaluative claims only when they affect the page's answer.
 
 Do not verify numerical accuracy, recompute sums or ratios, or audit the sources and derivations of numerical values. Those checks belong to the author.
 
@@ -34,7 +34,7 @@ Required source attribution belongs on the page. A spoken source name must help 
 
 Check that the presenter states their own design choices as first person decisions using I or we accurately. Flag actorless passives that hide the decision maker, advance apologies, and wording that diminishes the presenter, including accurate statements of how much was borrowed or added or of the scale or resources behind a choice.
 
-Keep limitations and open items needed to judge the work visible as facts. Their spoken explanation must serve a necessary judgment about a claim or decision. Do not remove necessary qualifications or credit for another person's work.
+Check that the script speaks a displayed limitation once, on the page that states it, and no other limitation, caveat, or scope qualifier. Do not remove credit for another person's work.
 
 Check that displayed measurements and calculated values are not read aloud, and that any spoken interpretation is needed, clear, and supported. Ratios and multiples, including those computed from displayed values, and a value that defines the rule itself may be spoken when they carry the explanation. A value may also be spoken when the requested answer is that single value itself.
 
