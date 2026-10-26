@@ -30,7 +30,7 @@ A cover may include one short sentence recalling an earlier presentation or disc
 
 Check that each reference identifies what is being discussed, terms have clear and consistent meanings, and sentences follow the visible explanation without jumps or contradictions. For each sentence, check whether removing it would lose information or guidance the audience needs. Flag unnecessary sentences, reasons, transitions, readings of visible text, and source recitation. Before requesting an addition, identify what the audience cannot understand without it.
 
-Required source attribution belongs on the page. A spoken source name must help the audience distinguish whose evidence or material is being discussed. For material borrowed from a shared source, flag repeated spoken attribution unless it is needed to keep evidence or material distinct.
+Required source attribution belongs on the page. A spoken source name must help the audience distinguish whose evidence or material is being discussed, and must not be a person's name that may be hard for the presenter to read aloud unless that name is the field's term for the result, method, or law. For material borrowed from a shared source, flag repeated spoken attribution unless it is needed to keep evidence or material distinct.
 
 Check that the presenter states their own design choices as first person decisions using I or we accurately. Flag actorless passives that hide the decision maker, advance apologies, and wording that diminishes the presenter, including accurate statements of how much was borrowed or added or of the scale or resources behind a choice.
 

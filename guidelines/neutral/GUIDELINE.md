@@ -193,7 +193,7 @@ When a column repeats one value in every row, state the value once outside the c
 
 6.1 Give each page one script, drafted or revised from its current rendering and established context so the presenter can speak from the page. Revise page and script together. Greetings and necessary transitions need not be drawn.
 
-Apply 2.2 to 2.4 and 3.2 to script claims. Keep required attribution on the page, including a requested statement of how the work relates to a source. Name a source aloud only to distinguish whose evidence or material is meant. When needed, attribute material borrowed from a shared source once, repeating only to preserve that distinction.
+Apply 2.2 to 2.4 and 3.2 to script claims. Keep required attribution on the page, including a requested statement of how the work relates to a source. Name a source aloud only to distinguish whose evidence or material is meant, and where a person's name for it may be hard for the presenter to read aloud, refer to it by its role, such as an earlier study, unless that name is the field's term for the result, method, or law. When needed, attribute material borrowed from a shared source once, repeating only to preserve that distinction.
 
 6.2 Begin each paragraph about visible content with an unspoken bracketed direction naming a place and order, not a topic. Follow 5.3 from the first explanatory region, adding inspection pauses where needed. Bind speech to the indicated objects and relationships. Repair drawing, paragraph, or order if they cannot be followed together.
 
