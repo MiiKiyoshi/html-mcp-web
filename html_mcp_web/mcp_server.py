@@ -163,7 +163,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             "Within the requester's editing "
             "scope, edit, check the affected pages with layout() and image() (grayscale=false "
             "when colour is in question), and reply with "
-            "write_comments. When a change lies outside that scope or its wording is the "
+            "write_comments. Do not repeat a thread reply in chat. When a change lies outside that scope or its wording is the "
             "requester's to choose, suggest instead of editing. The requester resolves threads. Call listen() when the user asks "
             "to listen and follow how. Do not poll or duplicate it. "
             f"Setup: read {INIT_GUIDE}."

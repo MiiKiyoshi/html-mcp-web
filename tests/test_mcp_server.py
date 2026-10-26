@@ -170,13 +170,13 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
     try:
         mcp = create_server(binding)
         # The setup guide's path is as long as the install location, the rest is bounded.
-        assert len(mcp.instructions) - len(str(INIT_GUIDE)) < 760
+        assert len(mcp.instructions) - len(str(INIT_GUIDE)) < 800
         # Setup lives in the guide: the instructions give its path and nothing else about it.
         assert mcp.instructions.endswith(f"Setup: read {INIT_GUIDE}.")
         for needed in ("read_comments(new=True)", "guide()", "layout()", "image()", "write_comments",
                        "listen()", "init.md"):
             assert needed in mcp.instructions, needed
-        for needed in ("asks to listen", "do not poll", "duplicate"):
+        for needed in ("asks to listen", "do not poll", "duplicate", "do not repeat a thread reply in chat"):
             assert needed in mcp.instructions.lower(), needed
         # A comment asking what a page means is met where the comment is handled, as a
         # report on the page rather than a question about the quoted words, judged from what
