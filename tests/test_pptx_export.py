@@ -562,7 +562,7 @@ RINGED = """
 .contents li::before { position: static; flex: none; display: flex; align-items: center; justify-content: center;
   width: 56px; height: 56px; margin-right: 20px; border: 2px solid #fff; border-radius: 50%;
   background: #335; color: #fff; }
-.divider .cap .no { display: flex; align-items: center; justify-content: center; width: 80px; height: 80px;
+.divider .cap .no { position: absolute; display: flex; align-items: center; justify-content: center; width: 80px; height: 80px;
   left: -40px; top: 50%; transform: translateY(-50%); border: 3px solid #fff; border-radius: 50%; background: #335; }
 """
 
@@ -655,8 +655,13 @@ def test_contents_and_divider_pages_come_over_as_text_and_shapes(tmp_path: Path,
     if ringed:
         assert divider["3"].auto_shape_type == MSO_SHAPE.OVAL
         assert divider["3"].text_frame.paragraphs[0].alignment == PP_ALIGN.CENTER
-    # The capsule is a shape of its own, its faint tint kept faint rather than made solid.
-    assert 'a:alpha val="6000"' in slides[2]._element.xml
+    # The line under the number and its name is a shape of its own, as long as the pair. A
+    # text box runs a few pixels past its last letter, so the line may end short of it.
+    if not ringed:
+        number, name = divider["3"], divider["Section name"]
+        assert any(shape.height <= 2 * px and shape.left <= number.left + px
+                   and shape.left + shape.width >= name.left + name.width - 10 * px
+                   and shape.top >= name.top + name.height for shape in plain_shapes(slides[2]))
     assert marks_left(slides[2], divider["3"], 0.15) == 0 and marks_left(slides[2], divider["Section name"], 0.15) == 0
 
 

@@ -41,7 +41,7 @@ A list with subitems and at least two outer items stays in one column while it f
 </section>
 ```
 
-`data-no` is the number in the capsule. `p.label` is its text. An optional `img.shot` places a picture to the right.
+`data-no` is the section number, set beside the section name. `p.label` is the name. An optional `img.shot` places a picture to the right.
 
 ### Appendix
 
