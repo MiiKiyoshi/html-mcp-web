@@ -48,8 +48,11 @@ button:disabled { cursor: default; opacity: .6; }
 
 .topbar h1 { margin: 0; font-size: .9rem; font-weight: 600; letter-spacing: .01em; }
 .artifact-meta { align-self: stretch; display: flex; align-items: center; padding-left: 1rem; border-left: 1px solid var(--line); }
-.artifact-tabs { display: flex; align-self: stretch; gap: 2px; padding-left: .75rem; border-left: 1px solid var(--line); }
-.artifact-tab { min-width: 72px; padding: .1rem .8rem; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: .82rem; }
+/* More tabs than the row holds scroll sideways, each label on one line: on a phone the
+   labels broke over three lines and the tabs past the screen's right edge could not be
+   reached. */
+.artifact-tabs { display: flex; align-self: stretch; min-width: 0; gap: 2px; padding-left: .75rem; border-left: 1px solid var(--line); overflow-x: auto; scrollbar-width: thin; }
+.artifact-tab { flex: none; white-space: nowrap; min-width: 72px; padding: .1rem .8rem; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: .82rem; }
 .artifact-tab.active { border-bottom-color: var(--accent); background: var(--accent-soft); color: #302e29; font-weight: 600; }
 .view-tabs { display: flex; align-self: stretch; margin-left: auto; }
 .view-tab { min-width: 58px; padding: .1rem .6rem; border: 0; border-top: 1px solid transparent; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: .82rem; }
@@ -512,7 +515,7 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
 @media (max-width: 560px) {
   .topbar { flex-wrap: wrap; gap: .4rem .6rem; padding: .3rem .5rem; }
   .topbar h1, .artifact-meta { display: none; }
-  .artifact-tabs { padding-left: 0; border-left: 0; }
+  .artifact-tabs { flex: 1 1 100%; padding-left: 0; border-left: 0; }
   .topbar-actions { margin-left: auto; flex-wrap: wrap; }
   .source-toolbar { flex-wrap: wrap; }
   .source-file { flex: 1 1 12rem; }

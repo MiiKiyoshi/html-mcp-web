@@ -89,6 +89,16 @@ function renderArtifactTabs() {
       onclick: () => selectArtifact(artifactId).catch((error) => alert(error.message)),
     }));
   }
+  // Tabs scroll sideways when they outnumber the row, so the open one is brought into the
+  // row. The row's own scroll is set rather than scrollIntoView, which also scrolls the page.
+  const active = tabs.querySelector(".artifact-tab.active");
+  if (active !== null) {
+    const left = active.offsetLeft - tabs.offsetLeft;
+    if (left < tabs.scrollLeft) tabs.scrollLeft = left;
+    else if (left + active.offsetWidth > tabs.scrollLeft + tabs.clientWidth) {
+      tabs.scrollLeft = left + active.offsetWidth - tabs.clientWidth;
+    }
+  }
 }
 
 // The frame that holds an artifact. The frame the page starts with is taken by the
