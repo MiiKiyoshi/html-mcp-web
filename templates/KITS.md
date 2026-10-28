@@ -28,7 +28,7 @@ Artifact Kits are what every artifact is built from, whatever its template, skin
 
 3.2 `pos` and `neg` mark an improvement and a regression. `nw` keeps a short label or status on one line.
 
-3.3 `code` carries identifiers. `pre` carries a code or file excerpt over several lines and keeps its line breaks. Both are set in Deck Mono, a subset of Noto Sans Mono that the builder embeds whenever either occurs, so the layout check and every reader use the same code face. How each is drawn is the layout's, under 9.12 and 10.7.
+3.3 `code` carries identifiers. `pre` carries a code or file excerpt over several lines and keeps its line breaks. Both are set in Deck Mono, a subset of Noto Sans Mono that the builder embeds whenever either or a `monospace` family (3.6) occurs, so the layout check and every reader use the same code face. How each is drawn is the layout's, under 9.12 and 10.7.
 
 3.4 `<mark data-hl="N">` colours a span by its role, with `N` from 1 to 5. A `<mark>` without `data-hl` takes role 1. It works in prose, table cells, lists, `code`, `pre`, and the HTML of an SVG `<foreignObject>`. The roles are light tints and the text keeps its own colour. The skin sets `--hl-1` to `--hl-5`, so content marks a role and never writes a colour. The browser fits the colour to the letters, so a figure needs no rectangles sized to its text. Fields in the lines of a file shown in a figure are marked in a `pre` inside a `<foreignObject>`:
 
@@ -39,6 +39,8 @@ Artifact Kits are what every artifact is built from, whatever its template, skin
 ```
 
 3.5 `p.hl-legend` names the roles with the same marks, each holding its role's name, as in `<p class="hl-legend"><mark data-hl="1">key</mark> <mark data-hl="2">value</mark></p>`. It also works inside a `<foreignObject>`.
+
+3.6 Content names a face only by a generic family, in a `font-family` attribute of an SVG element or a `font-family` in a `style`, and the builder sets it in the face the layout embeds for it: `monospace` in Deck Mono, and in a report `serif` and `sans-serif` in the report's text and heading faces, in a deck `sans-serif` in the deck's face. So a figure label measures the same in the layout check and in every browser. Any other family, a named face included, stops the build.
 
 ## Article 4. Tables and units
 

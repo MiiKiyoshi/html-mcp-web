@@ -16,6 +16,8 @@ from ..template_content import ContentParser, Element, parse_template_content
 
 HERE = Path(__file__).parent
 SKELETON = HERE / "skeleton.css"
+# The faces a generic family in the content is set in: the report embeds all three.
+FAMILIES = {"serif": "var(--serif)", "sans-serif": "var(--sans)", "monospace": "var(--mono)"}
 
 # The flow is built once as a column of blocks, outside the pages, and the script pours a
 # copy of it into the columns: a paragraph that reaches the foot of a column is cut after
@@ -713,7 +715,7 @@ def build(content_path: Path, output_path: Path, skin_dir: Path) -> None:
     for section in content.sections:
         if section.layout != "body":
             raise ValueError(f'a report has no {section.layout} page; data-layout belongs to a deck')
-        body_html, _ = prepare_body(section.body_html, content.references, numbers, content.lang)
+        body_html, _ = prepare_body(section.body_html, content.references, numbers, content.lang, FAMILIES)
         parser = ContentParser()
         parser.feed(body_html)
         parser.close()

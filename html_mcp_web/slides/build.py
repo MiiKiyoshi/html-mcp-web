@@ -43,6 +43,8 @@ from ..template_content import ContentParser, Element, parse_template_content
 
 HERE = Path(__file__).parent
 SKELETON = HERE / "skeleton.css"
+# The faces a generic family in the content is set in: a deck embeds its sans and its code face.
+FAMILIES = {"sans-serif": "var(--sans)", "monospace": "var(--mono)"}
 
 # A page is 1280x720 and the file may be opened in a window narrower than that. The
 # skeleton scales it by --deck-fit; only the number needs measuring, and only when the
@@ -397,7 +399,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
 
         # Opening and closing summaries bound the body; only the content between them
         # shares the remaining height. The closing summary uses the skin's lead styling.
-        content_html, cited = prepare_body(section.body_html, content.references, numbers, content.lang)
+        content_html, cited = prepare_body(section.body_html, content.references, numbers, content.lang, FAMILIES)
         # Comments before the lead, such as the skeleton's note on it, do not hide it.
         lead = re.match(r'\s*(?:<!--.*?-->\s*)*<p class="lead">.*?</p>', content_html, re.S)
         opening = lead.group(0).strip() if lead is not None else ""

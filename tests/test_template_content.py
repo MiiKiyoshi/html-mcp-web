@@ -210,6 +210,32 @@ def test_a_formula_in_a_figure_goes_in_a_foreign_object(tmp_path: Path) -> None:
             build(content, tmp_path / "slides.html", skin)
 
 
+def test_a_generic_family_is_set_in_the_face_the_layout_embeds(tmp_path: Path) -> None:
+    """A figure label written in monospace is drawn in the embedded code face, which every
+    browser has, and an HTML label's style likewise. A family the layout does not embed
+    stops the build, and a deck, which embeds no serif, stops on serif."""
+    from html_mcp_web.report.build import build as report
+    from html_mcp_web.slides.build import build as deck
+
+    content = tmp_path / "content.html"
+    page = ('<title>Faces</title><body data-author="R" data-meta="Lab"><section data-title="Figure">'
+            '<svg viewBox="0 0 300 100"><g font-family="{family}"><text x="10" y="20">Question:</text></g>'
+            '<foreignObject x="10" y="40" width="200" height="40"><div style="font-size: 8px; font-family: {family}">Answer:</div>'
+            '</foreignObject></svg></section></body>')
+    content.write_text(page.format(family="monospace"), encoding="utf-8")
+    report(content, tmp_path / "report.html", REPO / "templates" / "neutral-report")
+    built = (tmp_path / "report.html").read_text(encoding="utf-8")
+    assert '<g style="font-family: var(--mono)">' in built
+    assert '<div style="font-size: 8px; font-family: var(--mono)">' in built
+    assert 'font-family: "Deck Mono"' in built
+    for builder, skin, family in ((report, "neutral-report", "Courier New, monospace"),
+                                  (report, "neutral-report", "Menlo"),
+                                  (deck, "neutral-slides", "serif")):
+        content.write_text(page.format(family=family), encoding="utf-8")
+        with pytest.raises(ValueError, match="faces it embeds"):
+            builder(content, tmp_path / "out.html", REPO / "templates" / skin)
+
+
 def test_a_centred_label_is_one_line_of_plain_text(tmp_path: Path) -> None:
     """data-center measures a label as one run in its own font, so the build stops on one
     holding markup, broken into lines or written on another element. A foreignObject's

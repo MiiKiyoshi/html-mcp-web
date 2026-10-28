@@ -4842,12 +4842,14 @@ def test_a_label_is_broken_again_when_its_face_arrives_late(tmp_path: Path) -> N
         '<body data-author="A" data-meta="B">\n'
         '<section data-title="Late">'
         '<svg viewBox="0 0 1000 400" width="1000" height="400">'
-        '<text id="late" x="12" y="30" font-size="16" data-wrap="160" '
-        f'style="font-family: \'Late Face\', \'DejaVu Serif\', serif">{sentence}</text>'
+        f'<text id="late" x="12" y="30" font-size="16" data-wrap="160">{sentence}</text>'
         '</svg></section>\n'
         "</body>\n", encoding="utf-8")
     html = tmp_path / "slides.html"
     build(content, html, Path(__file__).resolve().parents[1] / "templates" / "neutral-slides")
+    # The deck's face, as a skin names it, comes after the page has loaded.
+    html.write_text(html.read_text(encoding="utf-8").replace(
+        "</head>", "<style>:root { --font: 'Late Face', 'DejaVu Serif'; }</style></head>", 1), encoding="utf-8")
     face = base64.b64encode(Path("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf").read_bytes()).decode()
 
     profile = tempfile.mkdtemp(prefix="html_mcp_late_")

@@ -277,13 +277,46 @@ def mark_text(body_html: str, lang: str) -> str:
     return body.root.inner_html()
 
 
+def set_families(body_html: str, families: dict[str, str]) -> str:
+    # A generic family is whatever face the reader's machine names for it: a figure's
+    # monospace label that fit its panel in the layout check's Firefox ran past the
+    # panel's border and was cut in a reader's browser, which took a wider face. A generic
+    # family, in an svg font-family attribute or a style, is set in the face the layout
+    # embeds for it, given in families, and a family the layout does not embed stops the
+    # build. A presentation attribute takes no var(), so the face goes to the style.
+    if "font-family" not in body_html:
+        return body_html
+    body = ContentParser()
+    body.feed(body_html)
+    body.close()
+
+    def face(value: str) -> str:
+        names = [name.strip().strip("'\"").lower() for name in value.split(",") if name.strip()]
+        generic = names[-1] if names else ""
+        if generic not in families or len(names) != 1:
+            raise ValueError(f'font-family "{value.strip()}": a page sets its text in the faces it embeds, '
+                             f"so a family is written as one of {', '.join(families)}")
+        return families[generic]
+
+    for element in descendants(body.root):
+        style = element.attributes.get("style") or ""
+        style = re.sub(r"font-family\s*:\s*([^;]+)", lambda match: f"font-family: {face(match.group(1))}", style)
+        if "font-family" in element.attributes:
+            style = f"font-family: {face(element.attributes.pop('font-family'))}" + (f"; {style}" if style else "")
+        if style:
+            element.attributes["style"] = style
+    return body.root.inner_html()
+
+
 def prepare_body(body_html: str, references: dict[str, str], numbers: dict[str, int],
-                 lang: str) -> tuple[str, list[str]]:
+                 lang: str, families: dict[str, str]) -> tuple[str, list[str]]:
     """One part of the content made ready for any page: its citations numbered, its svg
-    formulas checked, its figures' HTML lifted and, in a CJK document, its English words
-    marked and its parentheses given a break. Returns the HTML and the keys it cites."""
+    formulas checked, its families set in the layout's faces, its figures' HTML lifted
+    and, in a CJK document, its English words marked and its parentheses given a break.
+    Returns the HTML and the keys it cites."""
     check_svg_math(body_html)
     check_svg_center(body_html)
+    body_html = set_families(body_html, families)
     body_html, cited = cite_references(body_html, references, numbers)
     return mark_text(lift_svg_html(body_html), lang), cited
 
@@ -322,7 +355,7 @@ def mono_face(html_text: str) -> str:
     drew code in a Korean document in a CJK face half an em wide per letter while Chrome
     and Safari drew 0.6 em, so the layout check passed lines that ran out of their box on
     the reader's screen. Every browser now draws the one face it measures."""
-    if "<pre" not in html_text and "<code" not in html_text:
+    if "<pre" not in html_text and "<code" not in html_text and "var(--mono)" not in html_text:
         return ""
     faces = "".join(
         f'@font-face {{ font-family: "Deck Mono"; font-weight: {weight}; '
