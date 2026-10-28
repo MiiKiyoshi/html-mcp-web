@@ -323,3 +323,53 @@ def test_the_set_pages_hold_the_lines_the_pour_made(tmp_path: Path) -> None:
             lines[name] = client.execute_script(script)
     assert "data-frozen" in (tmp_path / "set.html").read_text(encoding="utf-8")
     assert len(lines["set"]) >= 2 and lines["set"] == lines["live"]
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_centred_label_has_the_middle_of_its_letters_on_its_point(tmp_path: Path) -> None:
+    """A label written with data-center at a shape's middle is moved by its letters'
+    extent in its face, and the set report keeps the move. The values are those of the
+    report face's letters, which match the drawn pixels to a tenth of a unit: a "+" at
+    14px is drawn from 0.84 left of its start to 6.90 right of it and has its middle 3.535
+    units above its baseline, and an italic W at 13px leans 1.725 units right of the middle
+    of its advance."""
+    html = content_html().replace(
+        "<figure>",
+        '<figure><svg viewBox="0 0 200 100" width="200" height="100">'
+        '<circle cx="50" cy="50" r="10" fill="none" stroke="#000"/><text x="50" y="50" font-size="14" data-center>+</text>'
+        '<rect x="100" y="30" width="40" height="40" fill="none" stroke="#000"/>'
+        '<text x="120" y="50" font-size="13" font-style="italic" text-anchor="middle" data-center>W</text>'
+        '<text x="160" y="50" font-size="13" dominant-baseline="central" data-center="y">B</text></svg>'
+        "<figcaption>Labels on shapes.</figcaption></figure>\n<figure>", 1)
+    moved = run_in_report(tmp_path, html, """
+return Array.from(document.querySelectorAll("text[data-center]")).map((text) =>
+  [text.textContent, text.getAttribute("dx"), text.getAttribute("dy"), text.style.dominantBaseline]);
+""")
+    assert "data-frozen" in (tmp_path / "report.html").read_text(encoding="utf-8")
+    plus, w, b = moved
+    assert plus[0] == "+" and abs(float(plus[1]) + 3.87) < 0.01 and abs(float(plus[2]) - 3.535) < 0.01, moved
+    assert w[0] == "W" and abs(float(w[1]) + 1.725) < 0.01 and abs(float(w[2]) - 4.13) < 0.01, moved
+    assert b[0] == "B" and b[1] is None and b[2] is not None and b[3] == "alphabetic", moved
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_wrapped_korean_label_breaks_only_at_its_spaces(tmp_path: Path) -> None:
+    """A report pours its pages from copies of the content, and a copied label is broken
+    from the sentence it was written with, not from the lines it showed: its lines read
+    back with a space at each break give that sentence. A Korean word is never broken,
+    and a Latin run beside Korean letters is hyphenated by its own letters only."""
+    sentences = ['수학 SFT가 "Answer:" 뒤 분포를 풀이 쪽으로 바꿔 같은 위치의 선택지 확률도 바뀐다',
+                 "이득 대비 간섭이 작은 layer와 module에 rank를 더 준다",
+                 "답을 내는 위치의 분포를 풀이 쪽으로 더 크게 바꿔야 하는 원래 모델이 낮은 확률을 주는 풀이를 배운다"]
+    labels = "".join(f'<text x="10" y="{20 + 60 * index}" data-wrap="134">{sentence}</text>'
+                     for index, sentence in enumerate(sentences))
+    html = content_html().replace("<body ", '<body data-lang="ko" ', 1).replace(
+        "<figure>", f'<figure><svg viewBox="0 0 160 200" font-size="9">{labels}</svg>'
+        "<figcaption>Labels.</figcaption></figure>\n<figure>", 1)
+    lines = run_in_report(tmp_path, html, """
+return Array.from(document.querySelectorAll("text[data-wrap]")).map((text) =>
+  Array.from(text.querySelectorAll("tspan"), (line) => line.textContent));
+""")
+    assert len(lines) == len(sentences), lines
+    for shown, sentence in zip(lines, sentences):
+        assert len(shown) >= 2 and " ".join(shown) == sentence, (shown, sentence)

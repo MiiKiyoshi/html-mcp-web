@@ -1134,6 +1134,68 @@ export function createLayoutChecks(dependencies) {
             `page ${index + 1} ${describeElement(svg.element)} label "${labelWords(label.text)}" runs past its box (${past.join(", ")})`,
             svg.element);
         }
+        // A label set alone on a small shape, such as a letter in a box or a sign in a
+        // circle, stands with the middle of its letters at the shape's middle. Placed by
+        // its baseline or by dominant-baseline="central", the middle of the face's em box,
+        // a "+" sat 3.5 units above its circle's middle and an italic W 1.7 units right of
+        // its box's. The letters are measured as data-center measures them: a canvas
+        // measureText in the label's font at a hundred times the size, round its first
+        // letter's origin. Its baseline is the top of its first letter's cell plus the
+        // cell's ascent, read with the label set on its alphabetic baseline for a moment:
+        // under dominant-baseline="central" the origin svg gives is the point the label
+        // was aligned at, 3.4 units above the baseline of a 10.5px "router". Read off the
+        // label's box with the canvas's ascent, the baseline of a "+" data-center had set
+        // on its circle's middle stood 0.9px off in the default serif. A label is taken as set on a shape when it is the only
+        // label whose letters' middle lies in it, it is centred (text-anchor middle or
+        // data-center) and the shape is at most five times its letters' height: a caption
+        // alone in a panel is not. 0.5px is the tolerance the set lines of a report hold.
+        const ruler = doc.createElement("canvas").getContext("2d");
+        const shapes = Array.from(svg.element.querySelectorAll("rect:not([data-html-slot]), circle, ellipse"))
+          .filter((shape) => shape.closest("defs, symbol, clipPath, mask, pattern, marker") === null)
+          .map((shape) => inViewport(shape))
+          .filter((box) => box !== null);
+        const inked = labels.filter((label) => label.text.querySelector("tspan") === null).map((label) => {
+          const style = doc.defaultView.getComputedStyle(label.text);
+          const size = parseFloat(style.fontSize);
+          ruler.font = `${style.fontStyle} ${style.fontWeight} ${size * 100}px ${style.fontFamily}`;
+          ruler.textAlign = "left";
+          const ink = ruler.measureText(label.text.textContent);
+          const ctm = label.text.getCTM();
+          if (ctm === null || label.text.getNumberOfChars() === 0) return null;
+          const k = 1 / 100;
+          const start = label.text.getStartPositionOfChar(0);
+          const top = label.text.getExtentOfChar(0).y;
+          const written = label.text.style.dominantBaseline;
+          label.text.style.dominantBaseline = "alphabetic";
+          const ascent = label.text.getStartPositionOfChar(0).y - label.text.getExtentOfChar(0).y;
+          label.text.style.dominantBaseline = written;
+          const baseline = top + ascent;
+          const at = (x, y) => [ctm.a * x + ctm.c * y + ctm.e, ctm.b * x + ctm.d * y + ctm.f];
+          const [x, y] = at(start.x + (ink.actualBoundingBoxRight - ink.actualBoundingBoxLeft) * k / 2,
+            baseline + (ink.actualBoundingBoxDescent - ink.actualBoundingBoxAscent) * k / 2);
+          const height = (ink.actualBoundingBoxAscent + ink.actualBoundingBoxDescent) * k * Math.abs(ctm.d);
+          const centred = style.textAnchor === "middle" || label.text.hasAttribute("data-center");
+          return { text: label.text, x, y, height, centred };
+        }).filter((label) => label !== null);
+        let offCentre = 0;
+        for (const label of inked) {
+          if (!label.centred || offCentre >= 3) continue;
+          const holder = shapes
+            .filter((shape) => shape.left <= label.x && label.x <= shape.right && shape.top <= label.y && label.y <= shape.bottom)
+            .sort((a, b) => (a.right - a.left) * (a.bottom - a.top) - (b.right - b.left) * (b.bottom - b.top))[0];
+          if (holder === undefined || holder.bottom - holder.top > label.height * 5) continue;
+          const alone = inked.filter((other) => holder.left <= other.x && other.x <= holder.right
+            && holder.top <= other.y && other.y <= holder.bottom).length === 1;
+          if (!alone) continue;
+          const dx = label.x - (holder.left + holder.right) / 2;
+          const dy = label.y - (holder.top + holder.bottom) / 2;
+          if (Math.hypot(dx, dy) <= 0.5) continue;
+          offCentre += 1;
+          addError(
+            `page ${index + 1} ${describeElement(svg.element)} label "${labelWords(label.text)}" stands off the middle of its shape `
+            + `by ${dx.toFixed(1).replace(/^-0\.0$/, "0.0")}px across and ${dy.toFixed(1).replace(/^-0\.0$/, "0.0")}px down. Put x and y at the shape's middle and add data-center`,
+            svg.element);
+        }
         // The HTML of a foreignObject, such as a formula or highlighted lines of a file, is
         // lifted into a layer over the drawing, and the checks above never saw it: the
         // layer is no part of the svg. Its lines answer to the same two rules as a label.

@@ -29,6 +29,9 @@ CJK_FILES = (("Kit Serif CJK", "NotoSerifCJKkr"), ("Kit Sans CJK", "NotoSansCJKk
 # Breaks a <text data-wrap> or <text data-fit> label into lines with the document's font.
 # The lines are chosen by TeX's algorithm, which comes with its own hyphenation patterns.
 WRAP = HERE / "wrap.js"
+# Sets a <text data-center> label or a <foreignObject data-center>'s HTML with the middle
+# of its letters at the point the content gives.
+CENTER = HERE / "center.js"
 COLUMNS = HERE / "columns.js"
 TEX_LINEBREAK = HERE / "vendor" / "tex-linebreak"
 
@@ -82,6 +85,32 @@ def check_svg_math(body_html: str) -> None:
     visit(body.root, False)
 
 
+def check_svg_center(body_html: str) -> None:
+    # data-center moves a label by the extent of its letters in its own font, read as one
+    # run: a tspan set in another style, or lines broken by data-wrap or data-fit, would
+    # be measured as letters they are not.
+    if "data-center" not in body_html:
+        return
+    body = ContentParser()
+    body.feed(body_html)
+    body.close()
+    for element in descendants(body.root):
+        if "data-center" not in element.attributes:
+            continue
+        value = element.attributes["data-center"] or ""
+        if element.tag not in ("text", "foreignobject") or value not in ("", "x", "y"):
+            raise ValueError(f'data-center="{value}" on a <{element.tag}>: it is written on an svg <text> '
+                             'or <foreignObject>, bare or as "x" or "y"')
+        if element.tag != "text":
+            continue
+        if any(isinstance(child, Element) for child in element.children):
+            raise ValueError(f'the label "{element.text().strip()}" with data-center holds markup; '
+                             "a centred label is plain text in one style")
+        if "data-wrap" in element.attributes or "data-fit" in element.attributes:
+            raise ValueError(f'the label "{element.text().strip()}" has data-center with data-wrap or data-fit; '
+                             "a centred label is one line")
+
+
 def descendants(element: Element) -> list[Element]:
     found = []
     for child in element.children:
@@ -128,9 +157,11 @@ def lift_svg_html(body_html: str) -> str:
             w, h = number(child, "width"), number(child, "height")
             svg.children[index] = Element("rect", {"x": f"{x:g}", "y": f"{y:g}", "width": f"{w:g}",
                                                    "height": f"{h:g}", "fill": "none", "data-html-slot": ""})
-            boxes.append(Element("div", {"class": "svg-html-box", "style":
-                                         f"left: {x - left:g}px; top: {y - top:g}px; width: {w:g}px; height: {h:g}px"},
-                                 child.children))
+            box = {"class": "svg-html-box", "style":
+                   f"left: {x - left:g}px; top: {y - top:g}px; width: {w:g}px; height: {h:g}px"}
+            if "data-center" in child.attributes:
+                box["data-center"] = child.attributes["data-center"] or ""
+            boxes.append(Element("div", box, child.children))
         layer = Element("div", {"class": "svg-html-layer", "data-viewbox": f"{width:g} {height:g}",
                                 "style": f"width: {width:g}px; height: {height:g}px"}, boxes)
         return Element("div", {"class": "svg-html"}, [svg, layer])
@@ -252,6 +283,7 @@ def prepare_body(body_html: str, references: dict[str, str], numbers: dict[str, 
     formulas checked, its figures' HTML lifted and, in a CJK document, its English words
     marked and its parentheses given a break. Returns the HTML and the keys it cites."""
     check_svg_math(body_html)
+    check_svg_center(body_html)
     body_html, cited = cite_references(body_html, references, numbers)
     return mark_text(lift_svg_html(body_html), lang), cited
 
@@ -356,8 +388,8 @@ def math_bundle() -> tuple[str, str]:
 
 def document_assets(html_text: str, lang: str) -> tuple[str, str]:
     """What a document carries besides its own markup, for the head and for the end of the
-    body: the CJK faces, the code face, KaTeX, the placing of lifted figure HTML, the svg label wrapper
-    and the sharing of a table's width, each only when the document uses it. Every template ends its document with
+    body: the CJK faces, the code face, KaTeX, the placing of lifted figure HTML, the svg label wrapper,
+    the centring of labels and the sharing of a table's width, each only when the document uses it. Every template ends its document with
     the same scripts in the same order, so math and figures come out the same in each."""
     math_head, math_foot = math_bundle() if has_math(html_text) else ("", "")
     wraps = "data-wrap=" in html_text or "data-fit=" in html_text
@@ -365,5 +397,6 @@ def document_assets(html_text: str, lang: str) -> tuple[str, str]:
         "\n  <script>" + path.read_text(encoding="utf-8") + "</script>"
         for path in (TEX_LINEBREAK / "lib.js", TEX_LINEBREAK / "hyphens_en-us.js", WRAP)) if wraps else ""
     svg_html = SVG_HTML_SCRIPT if "svg-html-layer" in html_text else ""
+    center = "\n  <script>" + CENTER.read_text(encoding="utf-8") + "</script>" if "data-center" in html_text else ""
     columns = "\n  <script>" + COLUMNS.read_text(encoding="utf-8") + "</script>" if "<table" in html_text else ""
-    return cjk_faces(html_text, lang) + mono_face(html_text) + math_head, math_foot + wrap + svg_html + columns
+    return cjk_faces(html_text, lang) + mono_face(html_text) + math_head, math_foot + wrap + svg_html + center + columns

@@ -210,6 +210,36 @@ def test_a_formula_in_a_figure_goes_in_a_foreign_object(tmp_path: Path) -> None:
             build(content, tmp_path / "slides.html", skin)
 
 
+def test_a_centred_label_is_one_line_of_plain_text(tmp_path: Path) -> None:
+    """data-center measures a label as one run in its own font, so the build stops on one
+    holding markup, broken into lines or written on another element. A foreignObject's
+    data-center goes with its HTML into the layer, and only a document that centres
+    carries the script."""
+    from html_mcp_web.slides.build import build
+
+    content = tmp_path / "content.html"
+    deck = ('<title>Deck</title><body data-author="R" data-meta="Lab"><section data-title="Figure">'
+            '<svg viewBox="0 0 300 100"><circle cx="20" cy="20" r="10"/>{label}'
+            '<foreignObject x="14" y="40" width="200" height="40" data-center="y"><div>$x$</div></foreignObject>'
+            '</svg></section></body>')
+    skin = REPO / "templates" / "neutral-slides"
+    content.write_text(deck.format(label='<text x="20" y="20" data-center>+</text>'), encoding="utf-8")
+    build(content, tmp_path / "slides.html", skin)
+    built = (tmp_path / "slides.html").read_text(encoding="utf-8")
+    assert '<div class="svg-html-box" style="left: 14px; top: 40px; width: 200px; height: 40px" data-center="y">' in built
+    assert "const centerText" in built
+    for label, message in (('<text x="20" y="20" data-center><tspan>+</tspan></text>', "holds markup"),
+                           ('<text x="20" y="20" data-center data-wrap="40">a b</text>', "is one line"),
+                           ('<text x="20" y="20" data-center="middle">+</text>', 'data-center="middle"'),
+                           ('<rect x="0" y="0" width="5" height="5" data-center/>', "on a <rect>")):
+        content.write_text(deck.format(label=label), encoding="utf-8")
+        with pytest.raises(ValueError, match=message):
+            build(content, tmp_path / "slides.html", skin)
+    content.write_text(deck.format(label='<text x="20" y="20">+</text>').replace(' data-center="y"', ""), encoding="utf-8")
+    build(content, tmp_path / "slides.html", skin)
+    assert "const centerText" not in (tmp_path / "slides.html").read_text(encoding="utf-8")
+
+
 def test_skin_fonts_are_embedded_like_katex_fonts(tmp_path: Path) -> None:
     from html_mcp_web.slides import build
 

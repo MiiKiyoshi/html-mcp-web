@@ -113,8 +113,11 @@ pre { margin: 6pt 0; font-family: var(--mono); font-size: 7.5pt; line-height: ca
 .eq { position: relative; }
 .eqno { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
 /* Inline math keeps the line pitch: KaTeX's own line height, measured in its faces, stood
-   above a line of this text and pushed the next line down. */
+   above a line of this text and pushed the next line down. Its stacks, such as a fraction
+   or a root, keep KaTeX's line height inside: at 0 WebKit drew a fraction's rule and its
+   letters 4px above where Firefox and Chromium drew them. */
 main.pages .katex:not(.katex-display .katex) { line-height: 0; }
+main.pages .katex:not(.katex-display .katex) .vlist-t { line-height: 1.2; }
 
 /* ---- Figures and tables: numbered, in the flow, moved whole ---- */
 /* A figure or table stands 12pt from the text and from the next figure, LaTeX's \intextsep

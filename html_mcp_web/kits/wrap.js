@@ -32,9 +32,9 @@
 // The lines carry no whitespace between them: a newline there is drawn as a space and
 // widens the bbox the layout check measures. Fonts arrive after the body, so the
 // wrapping runs once now and again when they are ready; the sentence each label started
-// from is kept here, since a hyphen the breaking added cannot be told from one the word
-// was written with once it is on the page. data-lines then holds the count for the
-// layout check to hold against data-max-lines.
+// from is kept in data-sentence, since a hyphen the breaking added cannot be told from
+// one the word was written with once it is on the page. data-lines then holds the count
+// for the layout check to hold against data-max-lines.
 (() => {
   // A report the builder has set keeps what was measured when it was set.
   if (document.documentElement.hasAttribute("data-frozen")) return;
@@ -43,13 +43,30 @@
   const tex = window.texLineBreak_lib;
   const englishPatterns = window["texLineBreak_hyphens_en-us"];
   const hyphenate = tex.createHyphenator(englishPatterns.default || englishPatterns);
-  const written = new WeakMap();
-
+  // The sentence a label started from is kept on the label itself, so a copy of it keeps
+  // it too: a report's pages are poured from copies, and a copy read its sentence back
+  // from the lines already shown, which hold no space between them, so the words at
+  // each break ran together ("분포를풀이") and a hyphen the breaking had added stayed in
+  // as a letter, to be followed by another ("layer와--").
   const sentence = (text) => {
-    if (!written.has(text)) {
-      written.set(text, text.textContent.trim().replace(/\s+/g, " "));
+    if (text.dataset.sentence === undefined) {
+      text.dataset.sentence = text.textContent.trim().replace(/\s+/g, " ");
     }
-    return written.get(text);
+    return text.dataset.sentence;
+  };
+
+  // Only a run of Latin letters is hyphenated, by the English patterns and their least
+  // two letters before a break and three after. A word of another script is never broken, as a Korean word is not in the
+  // body, and the letters of another script beside a Latin run are not counted as part
+  // of it: "layer와" took 와 for a third letter after the break and came out "lay-er와".
+  const pieces = (word) => {
+    const parts = [""];
+    for (const run of word.match(/[A-Za-z]+|[^A-Za-z]+/g) ?? []) {
+      const split = /^[A-Za-z]/.test(run) ? hyphenate(run) : [run];
+      parts[parts.length - 1] += split[0];
+      parts.push(...split.slice(1));
+    }
+    return parts;
   };
 
   // A label of its own, off the page, in the same font: the widths the breaking needs are
@@ -95,7 +112,7 @@
   const linesOf = (words, width, measure) => {
     const held = words.replace(/\[[^\][]*\]/g, (run) => run.replaceAll(" ", JOIN));
     const items = tex.layoutItemsFromString(held, (piece) => measure(spaced(piece)),
-      (word) => (word.includes("[") ? [word] : hyphenate(word)));
+      (word) => (word.includes("[") ? [word] : pieces(word)));
     // TeX may set a line's spaces narrower than they were drawn to fit one more word, and
     // then the line's own letters run past the width: on the last line, which is not
     // stretched to the width and so keeps what it was given, that ran 6px out of a 188px

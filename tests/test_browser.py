@@ -12,6 +12,7 @@ import pytest
 import yaml
 
 from html_mcp_web.config import load_config
+from html_mcp_web.kits import CENTER
 from html_mcp_web.project_server import SharedProjectServer
 
 
@@ -132,6 +133,16 @@ x</pre>
       <text x="14" y="80" font-size="14">fits</text>
       <text x="14" y="155" font-size="14">a label on no box is left alone even if long</text>
     </svg>
+    <!-- Labels on shapes: the first stands on its baseline at its circle's middle, the
+         second is centred by data-center, and the third is a caption alone in a panel. -->
+    <svg id="ondot" viewBox="0 0 300 120" width="300" height="120">
+      <circle cx="30" cy="30" r="12" fill="none" stroke="#333"/>
+      <text x="30" y="30" font-size="16" text-anchor="middle">+</text>
+      <circle cx="90" cy="30" r="12" fill="none" stroke="#333"/>
+      <text x="90" y="30" font-size="16" data-center>+</text>
+      <rect x="150" y="2" width="140" height="116" fill="none" stroke="#333"/>
+      <text x="220" y="110" font-size="12" text-anchor="middle">caption</text>
+    </svg>
     <!-- A marker parked outside the viewBox is painted where the line references it, and
          a box whose border sits half a stroke inside the edge keeps all of it. Neither is a
          cut drawing. -->
@@ -203,7 +214,7 @@ x</pre>
     <div style="height: 300px">overflow</div>
   </div>
 </section></main>
-</body></html>'''
+</body></html>'''.replace("</body>", f"<script>{CENTER.read_text(encoding='utf-8')}</script></body>")
 
 
 def wait_until(check, timeout: float = 15.0):
@@ -850,6 +861,9 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert any('"centred and wider than its box" runs past its box (left by' in error
                    and "right by" in error for error in boxed)
         assert not any("fits" in error or "left alone" in error for error in boxed)
+        # A label set on a shape stands with its letters' middle at the shape's middle.
+        off = [error for error in errors if "svg#ondot>" in error]
+        assert len(off) == 1 and "stands off the middle of its shape by 0.0px across and -" in off[0], off
 
         # The page is zoomed to fit the pane, so a narrower window must not change
         # which layout problems are reported.
