@@ -27,11 +27,12 @@ Registration is user-level, available in every folder. Do not ask about scope. A
 
 When Firefox is offered, give both outcomes so the user can choose:
 
-- Install: `layout()` and `image()`, with which the agent checks the pages it edits, and PDF
-  and PPTX export work. Firefox is installed for the whole system, which needs administrator
+- Install: `layout()` and `image()`, with which the agent checks the pages it edits, PDF
+  and PPTX export, and building a report, whose pages are set in Firefox, work. Firefox is installed for the whole system, which needs administrator
   rights, and on Debian or Ubuntu Mozilla's package repository is added to the system's sources.
-- Decline: the review page, comments and editing work. `layout()`, `image()`, and PDF and PPTX
-  export do not, since all of them render the pages in a headless Firefox, until it is installed.
+- Decline: the review page, comments, editing and building a deck work. `layout()`,
+  `image()`, PDF and PPTX export and building a report do not, since all of them render the
+  pages in a headless Firefox, until it is installed.
 
 ## 3. Install
 

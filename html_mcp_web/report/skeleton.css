@@ -40,12 +40,11 @@
 /* Hangul fills its em more than Latin letters do, and on the papers' pitch a Korean page
    read crowded. A Korean text takes the pitch that sets 53 lines in a column. */
 html:lang(ko) { --leading: 1.0755; }
-/* A Korean line whose letters would open past --letter-cap sets them that far apart and
-   spreads the rest between its words (the pour marks it). */
-.tight { text-justify: inter-word; letter-spacing: var(--letter-cap); }
-.tight.flat { letter-spacing: 0; }
 
 body { margin: 0; background: #fff; }
+/* Glyphs advance by their own fractional widths, as Firefox sets them: Chromium on Linux
+   rounded each advance to a whole pixel, and a line Firefox set ended up to 14px off. */
+main.pages { text-rendering: geometricPrecision; }
 main.pages section.page { width: 210mm; height: 297mm; overflow: hidden; }
 #report-flow { position: absolute; left: -10000px; top: 0; width: 240pt; }
 
@@ -69,6 +68,19 @@ main.pages section.page { width: 210mm; height: 297mm; overflow: hidden; }
 .title-block .affiliation { margin: 0; font-size: 10pt; line-height: 11.96pt; }
 
 /* ---- Text ---- */
+/* A line the builder set (10.13) stands as a block of its own and does not wrap again. The
+   first takes its paragraph's indent, and one that was justified is stretched to the
+   column on its own. */
+.ln { display: block; white-space: nowrap; text-indent: 0; }
+.ln:first-child { text-indent: inherit; }
+.ln.j { text-align: justify; text-align-last: justify; }
+/* A justified line once set keeps the spacing written on it and the browser spreads it no
+   further: --ls between the Hangul letters marked .ls, word-spacing between words, none
+   inside math or code. */
+.ln.set { text-align: left; text-align-last: auto; }
+.ln .ls { letter-spacing: var(--ls); }
+.ln :is(.katex, code) { word-spacing: normal; }
+.ln.h::after { content: "\2010"; }
 p { margin: 0; text-align: justify; text-indent: var(--indent); hyphens: auto; }
 h2 + p, h3 + p, p.cont { text-indent: 0; }
 /* A paragraph cut at the foot of a column keeps its last line full, as TeX's does. */
@@ -79,8 +91,9 @@ p.cont { text-indent: 0; }
 h2, h3 { margin: 9.21pt 0 2.47pt; font-size: 10.95pt; line-height: calc(13pt * var(--leading)); font-weight: 700; text-align: left; }
 h2 + h3 { margin-top: 2.69pt; }
 h2.abstract { margin-bottom: 0; }
-/* Paragraphs of a section stand a little apart, besides the indent of each first line. */
-:is(p, ul, ol) + :is(p, ul, ol) { margin-top: var(--parskip); }
+/* Paragraphs, lists and the wrapper holding an equation with its definitions stand a
+   little apart in a section, besides the indent of each first line. */
+:is(p, ul, ol, div) + :is(p, ul, ol, div) { margin-top: var(--parskip); }
 .secno { margin-right: 1em; }
 b, strong { font-weight: 700; }
 ul, ol { margin: 0; padding-left: 13pt; }

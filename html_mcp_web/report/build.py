@@ -26,6 +26,71 @@ SKELETON = HERE / "skeleton.css"
 # flow is poured again once they arrive.
 PAGINATE_SCRIPT = r"""<script>
 (() => {
+  // The width of the hyphen drawn after a line, which a range over its text leaves out.
+  const hyphen = (line) => {
+    const probe = document.createElement("span");
+    probe.textContent = "\u2010";
+    probe.style.cssText = "position: absolute; visibility: hidden";
+    line.append(probe);
+    const width = probe.getBoundingClientRect().width;
+    probe.remove();
+    return width;
+  };
+  // Where a line's letters and formulas begin and end: KaTeX's MathML copy is not drawn and
+  // its box is another size in each browser, and a hyphen drawn after the line adds its
+  // width.
+  const extent = (line) => {
+    const boxes = [];
+    const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const text = walker.currentNode;
+      if (text.parentElement.closest(".katex") !== null || text.data.trim() === "") continue;
+      const range = document.createRange();
+      range.selectNodeContents(text);
+      boxes.push(...Array.from(range.getClientRects()).filter((box) => box.width > 0));
+    }
+    line.querySelectorAll(".katex-html").forEach((formula) => boxes.push(formula.getBoundingClientRect()));
+    if (boxes.length === 0) return null;
+    const after = line.classList.contains("h") ? hyphen(line) : 0;
+    return { left: Math.min(...boxes.map((box) => box.left)), right: Math.max(...boxes.map((box) => box.right)) + after };
+  };
+  // The number of word spaces of a line, a run of spaces counting once, outside math and
+  // code and not at its ends.
+  const spacesOf = (line) => {
+    let count = 0;
+    let previous = "";
+    let started = false;
+    const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+    const pending = [];
+    while (walker.nextNode()) {
+      const text = walker.currentNode;
+      if (text.parentElement.closest(".katex, code") !== null) { if (text.parentElement.closest(".katex-html")) { started = true; previous = "x"; } continue; }
+      for (const character of text.data) {
+        if (character === " ") { if (started && previous !== " ") pending.push(1); }
+        else { count += pending.length; pending.length = 0; started = true; }
+        previous = character;
+      }
+    }
+    return count;
+  };
+
+  // A report the builder has set is written with its pages, and nothing is poured again.
+  // Another browser may advance a glyph or a formula by a fraction of a pixel more or
+  // less than Firefox did, which over a line ended it up to a few pixels from where Firefox
+  // ended it. Every line with word spaces carries the width Firefox gave its words, and is
+  // brought back to it by its word spaces, which Firefox, where it was measured, leaves.
+  if (document.documentElement.hasAttribute("data-frozen")) {
+    const settle = () => document.querySelectorAll(".ln[data-width]").forEach((line) => {
+      const spaces = Number(line.dataset.spaces);
+      const span = extent(line);
+      if (!(spaces > 0) || span === null) return;
+      const off = Number(line.dataset.width) - (span.right - span.left);
+      if (Math.abs(off) > 0.05) line.style.wordSpacing = `${(parseFloat(line.style.wordSpacing) || 0) + off / spaces}px`;
+    });
+    // Twice, since the first change of spacing is rounded by the browser again.
+    document.fonts.ready.then(() => { settle(); settle(); });
+    return;
+  }
   const flow = document.getElementById("report-flow");
   const holder = document.querySelector("main.pages");
   const pristine = flow.cloneNode(true);
@@ -327,78 +392,8 @@ PAGINATE_SCRIPT = r"""<script>
     const pages = Array.from(holder.children);
     for (const page of pages.slice(0, -1)) page.querySelectorAll(".column").forEach(spread);
     balance(pages[pages.length - 1]);
-    if (document.documentElement.lang === "ko") holder.querySelectorAll(".column > p, .column li:not(:has(ul, ol))").forEach(tighten);
   }
 
-  // A justified Korean line spreads its slack between letters as well as words (KITS 2.2),
-  // and a line with few spaces opened its Hangul by up to an eighth of an em, which reads as
-  // letters standing apart. On such a line the Hangul is set --letter-cap apart instead and
-  // the rest of the slack goes to its word spaces. That spacing takes less than the slack the
-  // letters had, so the line keeps its words, and one that would change anyway is put back
-  // as it was.
-  const HANGUL = /[가-힣]/;
-  function tighten(block) {
-    const lines = lineBoxes(block);
-    const justified = block.classList.contains("split") ? lines : lines.slice(0, -1);
-    if (justified.length === 0) return;
-    const style = getComputedStyle(block);
-    const cap = parseFloat(style.fontSize) * parseFloat(style.getPropertyValue("--letter-cap"));
-    const lineOf = (rect) => justified.findIndex((line) => (rect.top + rect.bottom) / 2 >= line.top && (rect.top + rect.bottom) / 2 < line.foot);
-    const segments = [];
-    const hangul = [];
-    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
-    while (walker.nextNode()) {
-      const text = walker.currentNode;
-      if (text.parentElement.closest('[lang="en"], .katex, code, .tight') !== null) continue;
-      for (let offset = 0; offset < text.length; offset += 1) {
-        const range = document.createRange();
-        range.setStart(text, offset);
-        range.setEnd(text, offset + 1);
-        const rect = Array.from(range.getClientRects()).find((box) => box.width > 0);
-        if (rect === undefined) continue;
-        const at = lineOf(rect);
-        if (at === -1) continue;
-        const segment = segments[segments.length - 1];
-        if (segment !== undefined && segment.text === text && segment.line === at && segment.end === offset) segment.end = offset + 1;
-        else segments.push({ text, line: at, start: offset, end: offset + 1 });
-        if (HANGUL.test(text.data[offset])) hangul.push({ line: at, width: rect.width });
-      }
-    }
-    // A letter's box takes in the space justification gives it, so a line's opening is the
-    // middle width of its Hangul past the width the face gives a Hangul letter, measured
-    // apart. The middle, since the letter beside a Latin word also carries the space the
-    // browser puts between the two scripts, which is no justification.
-    const probe = document.createElement("span");
-    probe.style.cssText = "position: absolute; visibility: hidden; white-space: nowrap; letter-spacing: normal; text-justify: none";
-    probe.textContent = "가나다라마바사아자차";
-    block.append(probe);
-    const natural = probe.getBoundingClientRect().width / 10;
-    probe.remove();
-    const byLine = new Map();
-    for (const letter of hangul) byLine.set(letter.line, [...(byLine.get(letter.line) ?? []), letter.width]);
-    const middle = (widths) => widths.slice().sort((x, y) => x - y)[widths.length >> 1];
-    const wide = new Set(Array.from(byLine).filter(([, widths]) => middle(widths) - natural > cap + 0.1).map(([line]) => line));
-    if (wide.size === 0) return;
-    const height = block.offsetHeight;
-    // Line by line from the last, whose segments come after the others' in each text node,
-    // so the offsets of the lines still to wrap hold.
-    for (const at of Array.from(wide).sort((x, y) => y - x)) {
-      const made = [];
-      for (const segment of segments.filter((part) => part.line === at).reverse()) {
-        const range = document.createRange();
-        range.setStart(segment.text, segment.start);
-        range.setEnd(segment.text, segment.end);
-        const span = document.createElement("span");
-        span.className = "tight";
-        range.surroundContents(span);
-        made.push(span);
-      }
-      const changed = () => block.offsetHeight !== height;
-      // Where even that spacing moves a word, the letters take none and the words all.
-      if (changed()) made.forEach((span) => span.classList.add("flat"));
-      if (changed()) for (const span of made) span.replaceWith(...span.childNodes);
-    }
-  }
 
   // The last page's two columns are made even, as a proceedings class ends a paper: its
   // blocks are poured again into both columns at the least height that holds them, found
@@ -461,8 +456,7 @@ PAGINATE_SCRIPT = r"""<script>
   // a two-column paper: left where the text stopped, the columns of a page ended at
   // different heights. The height left over goes first, evenly, to the space between the
   // paragraphs and list items of a section, up to 4pt each, then to the space above heads
-  // and around figures, up to 12pt each. It is added as padding, which no neighbouring
-  // margin swallows. What is still left is written on the column as data-underfull, in
+  // and around figures, up to 12pt each. What is still left is written on the column as data-underfull, in
   // points, for the layout check to report.
   const PT = 4 / 3;
   function spread(column) {
@@ -471,7 +465,7 @@ PAGINATE_SCRIPT = r"""<script>
     let slack = bottomOf(column) - last.getBoundingClientRect().bottom;
     if (slack <= 0.5) return;
     const blocks = Array.from(column.children);
-    const prose = (node) => /^(P|UL|OL)$/.test(node.tagName);
+    const prose = (node) => /^(P|UL|OL|DIV)$/.test(node.tagName);
     const paragraphs = [];
     // Under a title block or wide figures, the space down to the columns stretches too.
     const others = column.closest(".page-body").querySelector(".page-top").children.length > 0 ? [blocks[0]] : [];
@@ -479,16 +473,27 @@ PAGINATE_SCRIPT = r"""<script>
       if (index > 0) (prose(node) && prose(blocks[index - 1]) ? paragraphs : others).push(node);
       if (/^(UL|OL)$/.test(node.tagName)) paragraphs.push(...Array.from(node.children).slice(1));
     });
+    // The space between two blocks is the larger of their margins, which merge, so it grows
+    // by an amount when the later block's top margin becomes that space plus the amount.
+    // Padding would grow it too, but on a wrapper it also stopped its first child's margin
+    // from merging with the wrapper's, and that child's margin was added on top. A column's
+    // first block has no margin to grow and takes padding.
+    const gap = new Map([...paragraphs, ...others].map((node) => {
+      const previous = node.previousElementSibling;
+      const own = parseFloat(getComputedStyle(node).marginTop) || 0;
+      return [node, previous === null ? own : Math.max(own, parseFloat(getComputedStyle(previous).marginBottom) || 0)];
+    }));
+    const grow = (node, amount) => {
+      if (node === blocks[0]) node.style.paddingTop = `${amount}px`;
+      else node.style.marginTop = `${gap.get(node) + amount}px`;
+    };
     const share = (left) => {
       const each = [Math.min(4 * PT, left / Math.max(paragraphs.length, 1))];
       left -= paragraphs.length ? each[0] * paragraphs.length : 0;
       each.push(Math.min(12 * PT, Math.max(left, 0) / Math.max(others.length, 1)));
-      paragraphs.forEach((node) => { node.style.paddingTop = `${each[0]}px`; });
-      others.forEach((node) => { node.style.paddingTop = `${each[1]}px`; });
+      paragraphs.forEach((node) => grow(node, each[0]));
+      others.forEach((node) => grow(node, each[1]));
     };
-    // Padding can also stop a child's margin from merging with its parent's, which adds
-    // height of its own, so the result is measured and the share taken back by what ran
-    // past the foot.
     share(slack);
     const over = last.getBoundingClientRect().bottom - bottomOf(column);
     if (over > 0.5) share(slack - over);
@@ -496,8 +501,194 @@ PAGINATE_SCRIPT = r"""<script>
     if (left > 0.5) column.dataset.underfull = (left / PT).toFixed(1);
   }
 
+  // The builder sets every line the pour made as a block of its own and writes the pages
+  // down, so a reader's browser draws the lines Firefox broke and the layout check
+  // measured, whatever its own line breaking, justification or hyphenation would do. A
+  // line keeps the block's alignment, justified ones stretched to the column, and a word
+  // Firefox hyphenated at a line's end gets its hyphen drawn after the line, outside the
+  // text a comment quotes. A table keeps the column widths Firefox gave it.
+  function freezeLines(block) {
+    const lines = lineBoxes(block);
+    if (lines.length === 0) return;
+    const atoms = [];
+    const visit = (node) => {
+      for (const child of node.childNodes) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          for (let offset = 0; offset < child.length; offset += 1) {
+            if (child.data[offset].trim() !== "") atoms.push({ node: child, offset });
+          }
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+          // KaTeX may break inline math between the boxes it sets each part in, so those
+          // boxes are the parts a line holds.
+          if (child.matches(".katex")) child.querySelectorAll(".katex-html > .base").forEach((base) => atoms.push({ node: base, offset: null }));
+          else if (child.matches("img, svg, br")) atoms.push({ node: child, offset: null });
+          else if (!child.matches(".katex-mathml, .eqno")) visit(child);
+        }
+      }
+    };
+    visit(block);
+    const lineOf = (atom) => {
+      let rect;
+      if (atom.offset === null) rect = atom.node.getBoundingClientRect();
+      else {
+        const range = document.createRange();
+        range.setStart(atom.node, atom.offset);
+        range.setEnd(atom.node, atom.offset + 1);
+        rect = Array.from(range.getClientRects()).find((box) => box.width > 0) ?? range.getBoundingClientRect();
+      }
+      const middle = (rect.top + rect.bottom) / 2;
+      const at = lines.findIndex((line) => middle >= line.top && middle < line.foot);
+      return at === -1 ? (middle < lines[0].top ? 0 : lines.length - 1) : at;
+    };
+    const starts = [];
+    let current = -1;
+    for (const atom of atoms) {
+      const at = lineOf(atom);
+      if (at > current) { starts.push(atom); current = at; }
+    }
+    const style = getComputedStyle(block);
+    const justified = style.textAlign === "justify";
+    const lastJustified = justified && style.textAlignLast === "justify";
+    const before = (atom, range, edge) => {
+      if (atom.offset === null) range[edge === "start" ? "setStartBefore" : "setEndBefore"](atom.node);
+      else range[edge === "start" ? "setStart" : "setEnd"](atom.node, atom.offset);
+    };
+    // A word cut by the browser's hyphenation: the letters on either side of the break
+    // touch, with nothing between them in the text.
+    const hyphenated = starts.map((start, index) => {
+      if (index === starts.length - 1) return false;
+      const next = starts[index + 1];
+      const previous = atoms[atoms.indexOf(next) - 1];
+      if (previous.offset === null || next.offset === null) return false;
+      const between = document.createRange();
+      between.setStart(previous.node, previous.offset + 1);
+      between.setEnd(next.node, next.offset);
+      return between.toString() === "" && /\p{L}/u.test(previous.node.data[previous.offset]) && /\p{L}/u.test(next.node.data[next.offset]);
+    });
+    let after = null;
+    for (let index = starts.length - 1; index >= 0; index -= 1) {
+      const range = document.createRange();
+      if (index === 0) range.setStart(block, 0); else before(starts[index], range, "start");
+      if (after === null) range.setEnd(block, block.childNodes.length); else range.setEndBefore(after);
+      const line = document.createElement("span");
+      line.className = "ln";
+      if (index < starts.length - 1 ? justified : lastJustified) line.classList.add("j");
+      line.append(range.extractContents());
+      if (hyphenated[index]) line.classList.add("h");
+      if (after === null) block.append(line); else block.insertBefore(line, after);
+      after = line;
+    }
+    // A break opportunity has done its work once the lines are set, and Chrome took one
+    // even inside a line that does not wrap.
+    block.querySelectorAll("wbr").forEach((opportunity) => opportunity.remove());
+  }
+
+  // A justified line keeps its spacing as Firefox would spread it, written as letter and
+  // word spacing, which every browser draws alike, and is no longer justified by the
+  // browser: Chrome spread a Korean line between letters and WebKit between words only,
+  // so the same line ended at the same place with its words in other places. The slack
+  // goes to every space and, in a Korean document, every Hangul letter alike, as Firefox's
+  // inter-character justification spreads it, a letter taking no more than --letter-cap
+  // and the words the rest. A Latin word, a number, math and code are not spread inside.
+  const HANGUL = /[\uac00-\ud7a3]/;
+  function setSpacing(line) {
+    line.classList.remove("j");
+    line.classList.add("set");
+    const style = getComputedStyle(line);
+    const right = line.getBoundingClientRect().right - parseFloat(style.paddingRight);
+    const contentRight = () => extent(line).right;
+    const slack = right - contentRight();
+    if (!(slack > 0.05)) return;
+    const korean = document.documentElement.lang === "ko";
+    const cap = parseFloat(style.fontSize) * parseFloat(style.getPropertyValue("--letter-cap"));
+    const letters = [];
+    let spaces = 0;
+    const text = line.textContent;
+    const inner = text.trim();
+    const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+    let seen = 0;
+    const start = text.length - text.trimStart().length;
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const skip = node.parentElement.closest(".katex, code") !== null;
+      const latin = node.parentElement.closest('[lang="en"]') !== null;
+      for (let offset = 0; offset < node.length; offset += 1, seen += 1) {
+        const at = seen - start;
+        if (skip || at < 0 || at >= inner.length) continue;
+        if (node.data[offset] === " " && inner[at - 1] !== " ") spaces += 1;
+        else if (korean && !latin && HANGUL.test(node.data[offset]) && at < inner.length - 1) letters.push({ node, offset });
+      }
+    }
+    spaces = spacesOf(line);
+    const each = letters.length + spaces > 0 ? slack / (letters.length + spaces) : 0;
+    const letter = spaces > 0 ? Math.min(cap, each) : (letters.length ? slack / letters.length : 0);
+    const word = spaces > 0 ? (slack - letter * letters.length) / spaces : 0;
+    // Each letter's span, from the last so the offsets before it hold.
+    for (const { node, offset } of letters.reverse()) {
+      const range = document.createRange();
+      range.setStart(node, offset);
+      range.setEnd(node, offset + 1);
+      const span = document.createElement("span");
+      span.className = "ls";
+      range.surroundContents(span);
+    }
+    line.style.setProperty("--ls", `${letter}px`);
+    line.style.wordSpacing = `${word}px`;
+    // What the browser rounded is given back to the word spaces.
+    const off = right - contentRight();
+    if (spaces > 0 && Math.abs(off) > 0.05) line.style.wordSpacing = `${word + off / spaces}px`;
+  }
+
+  function freezeTable(table) {
+    const widths = [];
+    for (const row of table.rows) {
+      let column = 0;
+      for (const cell of row.cells) {
+        if (cell.colSpan === 1 && widths[column] === undefined) widths[column] = cell.getBoundingClientRect().width;
+        column += cell.colSpan;
+      }
+    }
+    const group = document.createElement("colgroup");
+    for (const width of widths) {
+      const col = document.createElement("col");
+      col.style.width = `${width}px`;
+      group.append(col);
+    }
+    table.style.width = `${table.getBoundingClientRect().width}px`;
+    table.style.tableLayout = "fixed";
+    table.prepend(group);
+  }
+
+  window.htmlMcpFreeze = () => {
+    holder.querySelectorAll("table").forEach(freezeTable);
+    const blocks = Array.from(holder.querySelectorAll("*")).filter((element) => {
+      if (element.closest("svg, pre, .katex, .katex-display, .svg-html-layer, .ln") !== null) return false;
+      // A displayed equation keeps its own layout, which a line would break up.
+      if (element.querySelector(".katex-display") !== null) return false;
+      if (!/^(block|list-item|table-cell)$/.test(getComputedStyle(element).display)) return false;
+      const direct = Array.from(element.childNodes).some((node) =>
+        (node.nodeType === Node.TEXT_NODE && node.data.trim() !== "") || (node.nodeType === Node.ELEMENT_NODE && node.matches(".katex, span, b, i, em, strong, code, a, mark, sub, sup, cite, wbr")));
+      const blockChild = Array.from(element.children).some((child) =>
+        !child.matches(".eqno") && /^(block|list-item|table|flex|grid)$/.test(getComputedStyle(child).display));
+      return direct && !blockChild;
+    });
+    blocks.forEach(freezeLines);
+    holder.querySelectorAll(".ln.j").forEach(setSpacing);
+    holder.querySelectorAll(".ln").forEach((line) => {
+      const span = extent(line);
+      const spaces = spacesOf(line);
+      if (span === null || spaces === 0) return;
+      line.dataset.width = (span.right - span.left).toFixed(3);
+      line.dataset.spaces = String(spaces);
+    });
+    document.documentElement.setAttribute("data-frozen", "");
+  };
+
   pour();
-  document.fonts.ready.then(pour);
+  document.fonts.ready.then(() => {
+    pour();
+    document.documentElement.setAttribute("data-poured", "");
+  });
 })();
 </script>"""
 
@@ -576,7 +767,8 @@ def build(content_path: Path, output_path: Path, skin_dir: Path) -> None:
            + inline_woff2((skin_dir / "skin.css").read_text(encoding="utf-8"), skin_dir / "fonts"))
     assets = document_assets(flow_html, lang)
     running = html.escape(f'{{"title": {_json(content.title)}, "author": {_json(content.author)}}}', quote=True)
-    output_path.write_text(f'''<!doctype html>
+    poured = output_path.with_name(f".{output_path.name}.pour.html")
+    poured.write_text(f'''<!doctype html>
 <html lang="{lang}">
 <head>
   <meta charset="utf-8">
@@ -595,7 +787,26 @@ def build(content_path: Path, output_path: Path, skin_dir: Path) -> None:
 </body>
 </html>
 ''', encoding="utf-8")
+    try:
+        output_path.write_text(set_pages(poured), encoding="utf-8")
+    finally:
+        poured.unlink()
     print(f"{output_path}: {len(content.sections)} sections, {figures} figures, {tables} tables")
+
+
+def set_pages(document: Path) -> str:
+    """The document with its pages set: Firefox pours the text into the columns once, and
+    what it made, every line in its place, is written down (KITS 10.13). Left to pour in
+    the reader's browser, Chrome or Safari broke and spread the lines its own way, and the
+    pages the reader saw were not the pages the layout check had measured."""
+    from ..firefox import firefox, wait_loaded
+
+    with firefox() as client:
+        client.navigate(document.resolve().as_uri())
+        wait_loaded(client, 'document.documentElement.hasAttribute("data-poured")', tries=150)
+        # In the page's own scope, where its script left the setting function.
+        return "<!doctype html>\n" + client.execute_script(
+            "window.htmlMcpFreeze(); return document.documentElement.outerHTML;", sandbox=None) + "\n"
 
 
 def _json(text: str) -> str:

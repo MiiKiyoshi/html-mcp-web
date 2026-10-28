@@ -36,6 +36,8 @@
 // was written with once it is on the page. data-lines then holds the count for the
 // layout check to hold against data-max-lines.
 (() => {
+  // A report the builder has set keeps what was measured when it was set.
+  if (document.documentElement.hasAttribute("data-frozen")) return;
   const NS = "http://www.w3.org/2000/svg";
   const STEP = 0.5;
   const tex = window.texLineBreak_lib;

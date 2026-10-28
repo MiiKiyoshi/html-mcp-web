@@ -9,12 +9,8 @@ Requires firefox and the marionette_driver package; callers surface the
 ImportError/FileNotFoundError message to the user instead of crashing.
 """
 import base64
-import shutil
-import socket
-import subprocess
-import tempfile
-import time
-from pathlib import Path
+
+from .firefox import firefox, wait_loaded
 
 PRINT_PAGE_CM = {
     "slides": (33.867, 19.05),
@@ -23,49 +19,17 @@ PRINT_PAGE_CM = {
 
 
 def print_artifact_pdf(artifact_url: str, layout: str) -> bytes:
-    from marionette_driver.marionette import Marionette
-
-    if shutil.which("firefox") is None:
-        raise FileNotFoundError("firefox is not installed")
     width_cm, height_cm = PRINT_PAGE_CM[layout]
-    # A port of its own for this firefox. Every project runs a server of its own, and on the
-    # default port an export attached to whatever browser already held it: another
-    # project's export, which failed this one with "No data received over socket" or gave
-    # it a page of the other project's deck.
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        marionette_port = int(probe.getsockname()[1])
-    profile = tempfile.mkdtemp(prefix="html_mcp_pdf_")
-    # Accessibility off: on a host where firefox turned it on, about half the prints of one
-    # deck failed at once with NS_ERROR_UNEXPECTED, each after the accessibility IPC error
-    # "PDocAccessibleConstructor ... handler returned false", and none failed without it.
-    Path(profile, "user.js").write_text(
-        f'user_pref("marionette.port", {marionette_port});\n'
-        'user_pref("accessibility.force_disabled", 1);\n', encoding="utf-8")
-    proc = subprocess.Popen(
-        ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    try:
-        client = Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=60)
-        client.start_session()
+    with firefox() as client:
         client.navigate(artifact_url)
-        for _ in range(50):
-            done = client.execute_script(
-                "return document.readyState === 'complete' && "
-                "Array.from(document.images).every(im => im.complete) && "
-                "document.fonts.status === 'loaded'")
-            if done:
-                break
-            time.sleep(0.2)
+        # A font that never arrives does not stop the print: it is the page as far as it got.
+        try:
+            wait_loaded(client)
+        except TimeoutError:
+            pass
         body = {
             "background": True, "shrinkToFit": False, "scale": 1.0,
             "margin": {"top": 0, "bottom": 0, "left": 0, "right": 0},
             "page": {"width": width_cm, "height": height_cm},
         }
-        pdf = client._send_message("WebDriver:Print", body, key="value")
-        client.delete_session()
-        return base64.b64decode(pdf)
-    finally:
-        proc.terminate()
-        shutil.rmtree(profile, ignore_errors=True)
+        return base64.b64decode(client._send_message("WebDriver:Print", body, key="value"))

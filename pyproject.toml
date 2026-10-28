@@ -24,6 +24,7 @@ dependencies = [
     "aiohttp>=3.9.0",
     "brotli>=1.0",
     "fonttools>=4.40",
+    "marionette_driver>=3.0",
     "pyyaml>=6.0",
     "watchdog>=3.0.0",
 ]
@@ -33,7 +34,6 @@ mcp = [
     "httpx>=0.27",
     "mcp>=1.0,<2",
     "pydantic>=2.0",
-    "marionette_driver>=3.0",
     "PyMuPDF>=1.24.12",
     "Pillow>=10.0",
     "python-pptx>=1.0",
@@ -42,7 +42,6 @@ mcp = [
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
-    "marionette_driver>=3.0",
     "python-pptx>=1.0",
     "lxml>=4.9",
 ]

@@ -96,7 +96,9 @@ pre code { padding: 0; border-radius: 0; background: none; font-family: inherit;
 .svg-html { position: relative; }
 .svg-html > svg { display: block; }
 .svg-html-layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
-.svg-html-box { position: absolute; pointer-events: auto; }
+/* The HTML of a foreignObject stands in the middle of its box from top to bottom, as a
+   label sits in the shape drawn for it. */
+.svg-html-box { position: absolute; pointer-events: auto; display: flex; flex-direction: column; justify-content: center; }
 .svg-html-box .katex-display { margin: 0; }
 
 /* A highlight colours the box the letters already take and adds nothing around them, so

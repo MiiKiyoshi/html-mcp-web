@@ -1,3 +1,4 @@
+import os
 import shutil
 import socket
 import subprocess
@@ -43,7 +44,9 @@ def run_in_report(tmp_path: Path, html: str, script: str, skin: Path | None = No
     command = ([sys.executable, str(BUILDER), str(content), str(report)] if skin is None else
                [sys.executable, "-c", "import sys; from pathlib import Path; from html_mcp_web.report import build; "
                 "build(Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3]))", str(content), str(report), str(skin)])
-    subprocess.run(command, check=True, capture_output=True, env={"PYTHONPATH": str(REPO), "PATH": "/usr/bin:/bin"})
+    # The PATH of the run, where the Firefox the tests use is found, since the build sets the
+    # pages in Firefox.
+    subprocess.run(command, check=True, capture_output=True, env={"PYTHONPATH": str(REPO), "PATH": os.environ["PATH"]})
 
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -212,8 +215,8 @@ return {pages: pages.length, feet, last, gaps, pitch: pt(parseFloat(getComputedS
 def test_columns_end_on_their_foot_under_every_skin(tmp_path: Path, skin: str, lang: str) -> None:
     """Every column but those of the last page ends on the foot of the text area, its
     slack spread between paragraphs, heads and figures, or says in data-underfull how far
-    it fell short, by less than the two lines a paragraph needs to begin. Paragraphs of a section stand 3pt apart. The last page's columns end
-    level. A Korean text takes the pitch that sets 53 lines in a column. All of this is
+    it fell short, by less than the two lines a paragraph needs to begin. Paragraphs of a section stand 3pt apart, and up to 4pt more where a column
+    spreads its slack. The last page's columns end level. A Korean text takes the pitch that sets 53 lines in a column. All of this is
     the engine's, so a skin that names only its own faces and colours gets it too."""
     other = tmp_path / "skin"
     other.mkdir()
@@ -226,11 +229,13 @@ def test_columns_end_on_their_foot_under_every_skin(tmp_path: Path, skin: str, l
     # What the gaps cannot take is less than the two lines a paragraph would need to begin.
     assert all(short < 2 * 10.95 for short, _ in result["feet"]), result["feet"]
     assert sum(short < 0.6 for short, _ in result["feet"]) >= len(result["feet"]) / 2, result["feet"]
-    assert result["gaps"] and all(abs(gap - 3) < 0.01 for gap in result["gaps"])
+    # 3pt apart, and up to 4pt more where a column spreads its slack.
+    assert result["gaps"] and all(3 - 0.01 <= gap <= 7 + 0.01 for gap in result["gaps"]), result["gaps"]
     pitch = 10.95 if lang == "en" else 10.95 * 1.0755
     assert abs(result["pitch"] - pitch) < 0.01
     first, second = result["last"]
-    assert abs(first - second) <= pitch * 2, result["last"]
+    # A cut leaves no line alone at either side, so the two may end up to three lines apart.
+    assert abs(first - second) <= pitch * 3, result["last"]
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
@@ -282,3 +287,39 @@ for (const block of document.querySelectorAll('main.pages .column > p')) {
 return out;""")
     assert result["letters"] and max(result["letters"]) < 0.01, sorted(result["letters"])[-5:]
     assert result["others"] and max(result["others"]) < 0.01, max(result["others"])
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_the_set_pages_hold_the_lines_the_pour_made(tmp_path: Path) -> None:
+    """The built report holds the pages Firefox poured, line for line: every page keeps
+    its lines, each beginning and ending with the same words, so a browser that would
+    break or justify them its own way draws the lines the layout check measured."""
+    import importlib
+
+    from html_mcp_web.firefox import firefox, wait_loaded
+
+    sentence = ("baseline보다 accuracy가 높은 adapter를 layer마다 고르고 retention과 "
+                "proxy dev score를 router 없이 checkpoint마다 비교한다. ")
+    paragraphs = "\n".join(f"<p>{index} {sentence * 5} {SENTENCE * 2}</p>" for index in range(1, 16))
+    html = content_html().replace("<body ", '<body data-lang="ko" ', 1)
+    html = html[:html.index('<section data-title="Method">')] + f'<section data-title="Method">{paragraphs}</section></body>'
+    content = tmp_path / "content.html"
+    content.write_text(html, encoding="utf-8")
+    engine = importlib.import_module("html_mcp_web.report.build")
+    skin = REPO / "templates" / "neutral-report"
+    engine.build(content, tmp_path / "set.html", skin)
+    real = engine.set_pages
+    try:
+        engine.set_pages = lambda document: document.read_text(encoding="utf-8")
+        engine.build(content, tmp_path / "live.html", skin)
+    finally:
+        engine.set_pages = real
+    script = (Path(__file__).with_name("report_lines.js")).read_text(encoding="utf-8")
+    lines = {}
+    with firefox() as client:
+        for name, ready in (("live", 'document.documentElement.hasAttribute("data-poured")'), ("set", "true")):
+            client.navigate((tmp_path / f"{name}.html").as_uri())
+            wait_loaded(client, ready, tries=150)
+            lines[name] = client.execute_script(script)
+    assert "data-frozen" in (tmp_path / "set.html").read_text(encoding="utf-8")
+    assert len(lines["set"]) >= 2 and lines["set"] == lines["live"]

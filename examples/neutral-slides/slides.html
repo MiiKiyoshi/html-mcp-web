@@ -59,10 +59,10 @@
 html:lang(ko) { word-break: keep-all; }
 /* Breaking only between words leaves a justified Korean line few spaces to take its slack,
    and in a narrow column they opened to two or three letters. A Korean line spreads its
-   slack between letters too, and an English word, marked lang="en" by the builder, only
-   between its words, so its letters stay together. */
+   slack between letters too, and a run the builder marked lang="en", math and code only
+   around them, so their letters stay together. */
 html:lang(ko) { text-justify: inter-character; }
-html:lang(ko) [lang="en"] { text-justify: inter-word; }
+html:lang(ko) :is([lang="en"], .katex, code) { text-justify: inter-word; }
 
 /* Chrome shapes the letters of an svg label at the size they will appear on screen, to
    keep them from being stretched: LayoutSVGInlineText asks
@@ -104,7 +104,9 @@ pre code { padding: 0; border-radius: 0; background: none; font-family: inherit;
 .svg-html { position: relative; }
 .svg-html > svg { display: block; }
 .svg-html-layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
-.svg-html-box { position: absolute; pointer-events: auto; }
+/* The HTML of a foreignObject stands in the middle of its box from top to bottom, as a
+   label sits in the shape drawn for it. */
+.svg-html-box { position: absolute; pointer-events: auto; display: flex; flex-direction: column; justify-content: center; }
 .svg-html-box .katex-display { margin: 0; }
 
 /* A highlight colours the box the letters already take and adds nothing around them, so
@@ -157,7 +159,9 @@ table thead th[colspan] { text-align: center; }
    changes. */
 
 :root {
-  font-family: var(--font, Inter, "Noto Sans KR", system-ui, sans-serif);
+  /* --font names a skin's faces. The CJK face the builder embeds for a CJK document follows
+     them, so a Korean deck is set in one face on every machine. */
+  font-family: var(--font, Inter), "Kit Sans CJK", system-ui, sans-serif;
   color: var(--ink);
 
   --ink: #22282c;
@@ -718,6 +722,8 @@ pre { margin: 12px 0; padding: 14px 18px; border-radius: 6px; background: var(--
 // kept whole gets data-fit-line, which the components draw without wrapping. A cell
 // spanning several columns is left to wrap.
 (() => {
+  // A report the builder has set keeps what was measured when it was set.
+  if (document.documentElement.hasAttribute("data-frozen")) return;
   const grid = (table) => {
     const columns = [];
     const covered = [];

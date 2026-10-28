@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -114,7 +115,13 @@ def test_neutral_slides_build_guarded_pages_and_speaker_scripts(tmp_path: Path) 
     assert all(chunk.rstrip().endswith("</section>") for chunk in before_each_script)
 
 
-def test_neutral_report_builds_a_numbered_flow_for_the_columns(tmp_path: Path) -> None:
+def test_neutral_report_builds_a_numbered_flow_for_the_columns(tmp_path: Path, monkeypatch, capsys) -> None:
+    """The flow the pour sets into pages: numbered heads, captions, citations and the
+    references. It is read before Firefox sets the pages, which the next test covers."""
+    import importlib
+
+    engine = importlib.import_module("html_mcp_web.report.build")
+    monkeypatch.setattr(engine, "set_pages", lambda document: document.read_text(encoding="utf-8"))
     content = tmp_path / "content.html"
     report = tmp_path / "report.html"
     content.write_text(
@@ -134,19 +141,10 @@ def test_neutral_report_builds_a_numbered_flow_for_the_columns(tmp_path: Path) -
 """,
         encoding="utf-8",
     )
-    builder = Path(__file__).parents[1] / "templates" / "neutral-report" / "build.py"
-
-    result = subprocess.run(
-        [sys.executable, str(builder), str(content), str(report)],
-        capture_output=True,
-        text=True,
-        check=True,
-        env=BUILD_ENV,
-    )
+    engine.build(content, report, Path(__file__).parents[1] / "templates" / "neutral-report")
 
     output = report.read_text(encoding="utf-8")
-    assert "2 sections, 1 figures, 1 tables" in result.stdout
-    # The pages are made in the browser, which alone can measure the lines.
+    assert "2 sections, 1 figures, 1 tables" in capsys.readouterr().out
     assert '<main class="pages"></main>' in output
     assert '<html lang="ko">' in output
     assert '<h2 class="abstract">Abstract</h2>' in output
@@ -211,7 +209,8 @@ def test_init_creates_a_viewable_plain_document(tmp_path, monkeypatch, layout, w
     assert width in text and height in text
 
 
-@pytest.mark.parametrize("layout", ["slides", "report"])
+@pytest.mark.parametrize("layout", ["slides", pytest.param("report", marks=pytest.mark.skipif(
+    shutil.which("firefox") is None, reason="a report is set in Firefox"))])
 def test_init_builds_missing_template_output(tmp_path, monkeypatch, layout):
     from html_mcp_web.template_content import parse_template_content
     monkeypatch.chdir(tmp_path)
@@ -224,8 +223,8 @@ def test_init_builds_missing_template_output(tmp_path, monkeypatch, layout):
     if layout == "slides":
         assert output.count('<section class="page') == 2
     else:
-        # A report's pages are made in the browser from the flow, which alone can measure lines.
-        assert '<main class="pages"></main>' in output and 'id="report-flow"' in output
+        # A report's pages are set when it is built, every line in its place.
+        assert "data-frozen" in output and '<section class="page"' in output and 'class="ln' in output
 
 
 def test_init_preserves_existing_sources_and_outputs(tmp_path, monkeypatch):

@@ -8,6 +8,8 @@
 // kept whole gets data-fit-line, which the components draw without wrapping. A cell
 // spanning several columns is left to wrap.
 (() => {
+  // A report the builder has set keeps what was measured when it was set.
+  if (document.documentElement.hasAttribute("data-frozen")) return;
   const grid = (table) => {
     const columns = [];
     const covered = [];
