@@ -31,7 +31,9 @@ def slides_html(text: str = "Selected sentence.") -> str:
     return f'''<!doctype html>
 <html><head><meta charset="utf-8"><title>Slides</title></head><body>
 <main class="pages">
-  <section class="page"><div data-layout-guard><h1>First</h1><p id="target">{text}</p>
+  <!-- The guard is taller than what it holds, so a subscript nudged below the last line by a
+       face of another size does not count as content past it on any host. -->
+  <section class="page"><div data-layout-guard style="height: 600px"><h1>First</h1><p id="target">{text}</p>
     <!-- Three lines: the first two live inside a bold run whose subscript dips below the
          baseline. Counting only bare text nodes, or letting the dip glue lines together,
          both undercount. -->
