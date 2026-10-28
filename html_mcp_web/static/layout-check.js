@@ -450,6 +450,18 @@ export function createLayoutChecks(dependencies) {
             + `on a ${Math.round(last)}px tail "${lineText(block, lines[lines.length - 1])}"`, block);
         }
       }
+      // A report's columns end on the foot of the text area on every page but the last
+      // (KITS 10.10). One the pour could not stretch that far ends short, which shows as a
+      // ragged foot, and how far short says how much the content has to give.
+      if (report && index < pages.length - 1) {
+        for (const [at, column] of Array.from(page.querySelectorAll(".column")).entries()) {
+          const last = column.lastElementChild;
+          if (last === null || column.offsetHeight === 0) continue;
+          const box = column.getBoundingClientRect();
+          const short = (box.bottom - last.getBoundingClientRect().bottom) / (box.height / column.offsetHeight) * 0.75;
+          if (short > 1) addWarning(`page ${index + 1} column ${at + 1} ends ${short.toFixed(1)}pt above the foot of the text area`, column);
+        }
+      }
       // Text placed with baseline-shift, alignment-baseline, or a tspan's dominant-baseline
       // is moved by Chromium and left on the baseline by Firefox, the browser this check
       // and the PDF use. Subscripts dropped through boxes and table rules in a reviewer's

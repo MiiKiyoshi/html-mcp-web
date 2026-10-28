@@ -17,8 +17,13 @@
   --size: 9pt;
   /* Math at the size of the text, as TeX sets it beside this face. */
   --math-scale: 1em;
-  --pitch: 10.95pt;
+  /* Every line pitch is its size in the proceedings class times --leading, 1 for a Latin
+     text, which then sets as the papers do. */
+  --leading: 1;
+  --pitch: calc(10.95pt * var(--leading));
   --indent: 10pt;
+  /* Space between paragraphs of a section, before a column's slack is shared (10.10). */
+  --parskip: 3pt;
   color: var(--ink);
   font-family: var(--serif);
   font-size: var(--size);
@@ -26,6 +31,10 @@
   font-kerning: normal;
   font-variant-ligatures: common-ligatures;
 }
+
+/* Hangul fills its em more than Latin letters do, and on the papers' pitch a Korean page
+   read crowded. A Korean text takes the pitch that sets 53 lines in a column. */
+html:lang(ko) { --leading: 1.0755; }
 
 body { margin: 0; background: #fff; }
 main.pages section.page { width: 210mm; height: 297mm; overflow: hidden; }
@@ -58,9 +67,11 @@ p.split { text-align-last: justify; }
 p.cont { text-indent: 0; }
 /* Baseline to baseline: text to a head 21.93pt, a section head to its first subsection
    15.69pt, a head to its text 13.70pt, the abstract's head to its text 11.18pt. */
-h2, h3 { margin: 9.21pt 0 2.47pt; font-size: 10.95pt; line-height: 13pt; font-weight: 700; text-align: left; }
+h2, h3 { margin: 9.21pt 0 2.47pt; font-size: 10.95pt; line-height: calc(13pt * var(--leading)); font-weight: 700; text-align: left; }
 h2 + h3 { margin-top: 2.69pt; }
 h2.abstract { margin-bottom: 0; }
+/* Paragraphs of a section stand a little apart, besides the indent of each first line. */
+:is(p, ul, ol) + :is(p, ul, ol) { margin-top: var(--parskip); }
 .secno { margin-right: 1em; }
 b, strong { font-weight: 700; }
 ul, ol { margin: 0; padding-left: 13pt; }
@@ -70,10 +81,12 @@ ul { list-style-type: "\2022\2002"; }
 li { margin: 0; text-align: justify; hyphens: auto; }
 ul ul, ol ol { padding-left: 10pt; }
 .lead { color: inherit; }
-.note, ul.notes { color: inherit; font-size: 8pt; line-height: 9.5pt; }
+.note, ul.notes { color: inherit; font-size: 8pt; line-height: calc(9.5pt * var(--leading)); }
 code { background: none; padding: 0; font-size: .9em; }
-pre { margin: 6pt 0; font-family: var(--mono); font-size: 7.5pt; line-height: 9pt; white-space: pre-wrap; }
+pre { margin: 6pt 0; font-family: var(--mono); font-size: 7.5pt; line-height: calc(9pt * var(--leading)); white-space: pre-wrap; }
 .eq, .katex-display { margin: 5pt 0; text-align: center; text-indent: 0; }
+/* The paragraph holds the space around its equation, and the display inside adds none. */
+.eq > .katex-display { margin: 0; }
 /* A displayed equation is numbered at the right edge of its column. */
 .eq { position: relative; }
 .eqno { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
@@ -88,7 +101,7 @@ figure { margin: 12pt 0; text-indent: 0; }
 .column > figure:first-child { margin-top: 0; }
 figure.wide { margin: 0 0 4pt; }
 figure img, figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
-figcaption { margin: 6pt 0 0; text-align: justify; font-size: 8pt; line-height: 9.6pt; font-weight: 700; }
+figcaption { margin: 6pt 0 0; text-align: justify; font-size: 8pt; line-height: calc(9.6pt * var(--leading)); font-weight: 700; }
 figcaption.single { text-align: center; }
 figure.table figcaption { margin: 0 0 6pt; }
 .caption-label { font-size: 9pt; }
@@ -96,7 +109,7 @@ figure.table figcaption { margin: 0 0 6pt; }
 /* The rules of booktabs, heavy above and below and light under the head, are boxes of
    their own height: printed, any border under a pixel came out at one width and the two
    weights looked the same. */
-table { position: relative; width: auto; margin: 0 auto; border-collapse: collapse; font-size: 8pt; line-height: 9.6pt; }
+table { position: relative; width: auto; margin: 0 auto; border-collapse: collapse; font-size: 8pt; line-height: calc(9.6pt * var(--leading)); }
 table::before, table::after, thead tr:last-child > ::after {
   content: ""; position: absolute; left: 0; right: 0; background: var(--line); }
 table::before { top: 0; height: .72pt; }
@@ -135,7 +148,7 @@ th.sep, td.sep { border-left-width: .4pt; }
 .units { margin: 0 0 2pt; text-align: right; font-size: 7pt; text-indent: 0; }
 
 /* ---- References ---- */
-ol.bib { list-style: none; padding: 0; font-size: 7pt; line-height: 8.2pt; }
+ol.bib { list-style: none; padding: 0; font-size: 7pt; line-height: calc(8.2pt * var(--leading)); }
 ol.bib li { position: relative; padding-left: 15pt; margin-bottom: 1.2pt; text-align: left; }
 ol.bib .bib-no { position: absolute; left: 0; }
 

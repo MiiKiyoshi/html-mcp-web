@@ -34,14 +34,16 @@ def content_html() -> str:
 """
 
 
-def run_in_report(tmp_path: Path, html: str, script: str) -> dict:
-    """Build html with the report template, open it in Firefox once its fonts are in, and
-    return what script returns."""
+def run_in_report(tmp_path: Path, html: str, script: str, skin: Path | None = None) -> dict:
+    """Build html with the neutral report skin, or with skin, open it in Firefox once its
+    fonts are in, and return what script returns."""
     content = tmp_path / "content.html"
     content.write_text(html, encoding="utf-8")
     report = tmp_path / "report.html"
-    subprocess.run([sys.executable, str(BUILDER), str(content), str(report)], check=True,
-                   capture_output=True, env={"PYTHONPATH": str(REPO), "PATH": "/usr/bin:/bin"})
+    command = ([sys.executable, str(BUILDER), str(content), str(report)] if skin is None else
+               [sys.executable, "-c", "import sys; from pathlib import Path; from html_mcp_web.report import build; "
+                "build(Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3]))", str(content), str(report), str(skin)])
+    subprocess.run(command, check=True, capture_output=True, env={"PYTHONPATH": str(REPO), "PATH": "/usr/bin:/bin"})
 
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -187,3 +189,45 @@ return {overflow, split: document.querySelectorAll('p.split').length, texts: joi
     assert result["english"] > 0
     expected = [f"{index} {sentence * 6}" for index in range(1, 25)]
     assert [text.strip() for text in result["texts"][1:]] == [text.strip() for text in expected]
+
+
+
+FEET = """
+const pages = Array.from(document.querySelectorAll('main.pages > section.page'));
+const pt = (px) => px * 0.75;
+const feet = pages.slice(0, -1).flatMap((page) => Array.from(page.querySelectorAll('.column'))
+  .filter((column) => column.lastElementChild !== null)
+  .map((column) => [pt(column.getBoundingClientRect().bottom - column.lastElementChild.getBoundingClientRect().bottom),
+                    column.dataset.underfull ?? null]));
+const last = Array.from(pages[pages.length - 1].querySelectorAll('.column'))
+  .map((column) => column.lastElementChild === null ? 0 : pt(column.lastElementChild.getBoundingClientRect().bottom - column.getBoundingClientRect().top));
+const gaps = [];
+for (const p of document.querySelectorAll('.column > p + p')) gaps.push(pt(parseFloat(getComputedStyle(p).marginTop)));
+return {pages: pages.length, feet, last, gaps, pitch: pt(parseFloat(getComputedStyle(document.querySelector('.column > p')).lineHeight))};"""
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@pytest.mark.parametrize("skin", ["neutral", "another"])
+@pytest.mark.parametrize("lang", ["en", "ko"])
+def test_columns_end_on_their_foot_under_every_skin(tmp_path: Path, skin: str, lang: str) -> None:
+    """Every column but those of the last page ends on the foot of the text area, its
+    slack spread between paragraphs, heads and figures, or says in data-underfull how far
+    it fell short, by less than the two lines a paragraph needs to begin. Paragraphs of a section stand 3pt apart. The last page's columns end
+    level. A Korean text takes the pitch that sets 53 lines in a column. All of this is
+    the engine's, so a skin that names only its own faces and colours gets it too."""
+    other = tmp_path / "skin"
+    other.mkdir()
+    (other / "skin.css").write_text(":root { --serif: serif; --sans: sans-serif; --accent: #a33; }\n", encoding="utf-8")
+    html = content_html().replace("<body ", f'<body data-lang="{lang}" ', 1)
+    result = run_in_report(tmp_path, html, FEET, None if skin == "neutral" else other)
+    assert result["pages"] >= 3
+    for short, underfull in result["feet"]:
+        assert short < 0.6 or (underfull is not None and abs(float(underfull) - short) < 0.6), result["feet"]
+    # What the gaps cannot take is less than the two lines a paragraph would need to begin.
+    assert all(short < 2 * 10.95 for short, _ in result["feet"]), result["feet"]
+    assert sum(short < 0.6 for short, _ in result["feet"]) >= len(result["feet"]) / 2, result["feet"]
+    assert result["gaps"] and all(abs(gap - 3) < 0.01 for gap in result["gaps"])
+    pitch = 10.95 if lang == "en" else 10.95 * 1.0755
+    assert abs(result["pitch"] - pitch) < 0.01
+    first, second = result["last"]
+    assert abs(first - second) <= pitch * 2, result["last"]
