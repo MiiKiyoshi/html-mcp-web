@@ -326,6 +326,44 @@ def test_the_set_pages_hold_the_lines_the_pour_made(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_set_report_drawn_larger_keeps_its_word_spaces(tmp_path: Path) -> None:
+    """The review page draws a report's pages scaled to its pane. A set report opened with
+    its pages drawn 1.1 times and 0.75 times their size gives its lines the word spaces it
+    gives them at their own size, where a page drawn larger had every space taken back and
+    its words drawn over each other."""
+    import importlib
+
+    from html_mcp_web.firefox import firefox, wait_loaded
+
+    sentence = ("baseline보다 accuracy가 높은 adapter를 layer마다 고르고 retention과 "
+                "proxy dev score를 router 없이 checkpoint마다 비교한다. ")
+    paragraphs = "\n".join(f"<p>{index} {sentence * 5}</p>" for index in range(1, 8))
+    html = content_html().replace("<body ", '<body data-lang="ko" ', 1)
+    html = html[:html.index('<section data-title="Method">')] + f'<section data-title="Method">{paragraphs}</section></body>'
+    content = tmp_path / "content.html"
+    content.write_text(html, encoding="utf-8")
+    engine = importlib.import_module("html_mcp_web.report.build")
+    engine.build(content, tmp_path / "1.html", REPO / "templates" / "neutral-report")
+    built = (tmp_path / "1.html").read_text(encoding="utf-8")
+    for scale in ("1.1", "0.75"):
+        (tmp_path / f"{scale}.html").write_text(built.replace(
+            "</head>", f"<style>main.pages > section.page {{ transform: scale({scale}); }}</style></head>", 1),
+            encoding="utf-8")
+    spaces = {}
+    with firefox() as client:
+        for scale in ("1", "1.1", "0.75"):
+            client.navigate((tmp_path / f"{scale}.html").as_uri())
+            wait_loaded(client, "document.fonts.status === 'loaded'", tries=150)
+            time.sleep(0.5)
+            spaces[scale] = client.execute_script(
+                "return Array.from(document.querySelectorAll('.ln[data-width]'), (line) => parseFloat(line.style.wordSpacing) || 0);",
+                sandbox=None)
+    assert len(spaces["1"]) > 10
+    for scale in ("1.1", "0.75"):
+        assert max(abs(a - b) for a, b in zip(spaces[scale], spaces["1"], strict=True)) < 0.1, scale
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_centred_label_has_the_middle_of_its_letters_on_its_point(tmp_path: Path) -> None:
     """A label written with data-center at a shape's middle is moved by its letters'
     extent in its face, and the set report keeps the move. The values are those of the

@@ -99,6 +99,10 @@ pre code { padding: 0; border-radius: 0; background: none; font-family: inherit;
 /* The HTML of a foreignObject stands in the middle of its box from top to bottom, as a
    label sits in the shape drawn for it. */
 .svg-html-box { position: absolute; pointer-events: auto; display: flex; flex-direction: column; justify-content: center; }
+/* A centred one has its HTML in the middle across as well, so what is left to move is
+   the difference of its ink from its advance: moved by the whole space a left-set line
+   left beside it, a box as wide as its figure ran off the page. */
+.svg-html-box[data-center] { align-items: center; }
 .svg-html-box .katex-display { margin: 0; }
 
 /* A highlight colours the box the letters already take and adds nothing around them, so

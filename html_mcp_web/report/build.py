@@ -79,12 +79,16 @@ PAGINATE_SCRIPT = r"""<script>
   // less than Firefox did, which over a line ended it up to a few pixels from where Firefox
   // ended it. Every line with word spaces carries the width Firefox gave its words, and is
   // brought back to it by its word spaces, which Firefox, where it was measured, leaves.
+  // The width is read in the page's own pixels: a page drawn larger or smaller, as the
+  // review page fits it to its pane, gave its lines that scale, and a page drawn 1.1 times
+  // its size had every space taken back until its words ran over each other.
   if (document.documentElement.hasAttribute("data-frozen")) {
     const settle = () => document.querySelectorAll(".ln[data-width]").forEach((line) => {
       const spaces = Number(line.dataset.spaces);
       const span = extent(line);
-      if (!(spaces > 0) || span === null) return;
-      const off = Number(line.dataset.width) - (span.right - span.left);
+      if (!(spaces > 0) || span === null || line.offsetWidth === 0) return;
+      const scale = line.getBoundingClientRect().width / line.offsetWidth;
+      const off = Number(line.dataset.width) - (span.right - span.left) / scale;
       if (Math.abs(off) > 0.05) line.style.wordSpacing = `${(parseFloat(line.style.wordSpacing) || 0) + off / spaces}px`;
     });
     // Twice, since the first change of spacing is rounded by the browser again.
