@@ -16,7 +16,7 @@ Artifact Kits are what every artifact is built from, whatever its template, skin
 
 2.1 `<title>` is the document's title. `<body>` carries `data-author`, the author line, and `data-meta`, further lines separated by `|`. Optional `data-sub` adds a subtitle.
 
-2.2 `data-lang` on `<body>` names the language the content is written in, `en` when it is absent. A document declared `ko` breaks Korean lines only between words, in every layout. In a document declared `ko`, `ja` or `zh`, the builder marks each run of Latin letters outside math and code as English, so a layout that hyphenates breaks those words by English rules.
+2.2 `data-lang` on `<body>` names the language the content is written in, `en` when it is absent. A document declared `ko` breaks Korean lines only between words, in every layout. In a document declared `ko`, `ja` or `zh`, the builder marks each run of Latin letters outside math and code as English, so a layout that hyphenates breaks those words by English rules. A justified line of a `ko` document spreads its slack between Korean letters as well as between words, and inside those English words only between words.
 
 2.3 Each direct `<section>` of `<body>` is one part of the document with its name in `data-title`. Article 9 says what a part is in a deck and Article 10 in a report.
 
