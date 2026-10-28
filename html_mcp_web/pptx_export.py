@@ -381,8 +381,23 @@ const emit = (el) => {
         const s2 = cs(td);
         // A cell that spans says so, and the row carries its own height: a spanning cell is
         // as tall as the rows it covers, which is not the height of the row it starts in.
+        // A cell's text sits inside its own padding, and a cell the page shows on one line stays
+        // on one line: a narrow column of a wide table, filled to its edge, broke its number
+        // over several lines under PowerPoint's own wider margins and pushed the table off the slide.
+        const range = document.createRange();
+        range.selectNodeContents(td);
+        // A subscript sits lower than its line but overlaps it, so a line ends only where the
+        // next box starts below the bottom of the boxes before it.
+        let lines = 0, bottom = -Infinity;
+        for (const b of [...range.getClientRects()].filter((b) => b.width > 0).sort((a, b) => a.top - b.top)) {
+          if (b.top >= bottom - 1) lines += 1;
+          bottom = Math.max(bottom, b.bottom);
+        }
         cells.push({rect: rel(td.getBoundingClientRect()), header: td.tagName.toLowerCase() === 'th',
                     colSpan: td.colSpan || 1, rowSpan: td.rowSpan || 1,
+                    padding: [parseFloat(s2.paddingLeft) || 0, parseFloat(s2.paddingTop) || 0,
+                              parseFloat(s2.paddingRight) || 0, parseFloat(s2.paddingBottom) || 0],
+                    oneLine: lines <= 1,
                     align: s2.textAlign, bg: s2.backgroundColor, para: paraOf(td, 0, 0),
                     borderBottom: [s2.borderBottomColor, parseFloat(s2.borderBottomWidth) || 0, s2.borderBottomStyle],
                     borderTop: [s2.borderTopColor, parseFloat(s2.borderTopWidth) || 0, s2.borderTopStyle],
@@ -821,8 +836,10 @@ def _add_table(slide, item: dict[str, Any], font: str) -> None:
             source = None if slot is None else slot[0]
             starts = slot is not None and slot[1]
             cell = table.cell(row_index, col)
-            cell.margin_left = cell.margin_right = Emu(int(6 * EMU_PER_PX))
-            cell.margin_top = cell.margin_bottom = Emu(int(4 * EMU_PER_PX))
+            if source is not None:
+                left, top, right, bottom = source["padding"]
+                cell.margin_left, cell.margin_top = Emu(int(left * EMU_PER_PX)), Emu(int(top * EMU_PER_PX))
+                cell.margin_right, cell.margin_bottom = Emu(int(right * EMU_PER_PX)), Emu(int(bottom * EMU_PER_PX))
             cell.vertical_anchor = MSO_ANCHOR.MIDDLE
             # A cell that starts a span is drawn over all of it, so its far sides are the
             # span's; a slot it covers is drawn on its own and takes the sides it sits on.
@@ -843,7 +860,7 @@ def _add_table(slide, item: dict[str, Any], font: str) -> None:
             if not starts:
                 continue
             frame = cell.text_frame
-            frame.word_wrap = True
+            frame.word_wrap = not source["oneLine"]
             _fill_paragraph(frame.paragraphs[0], source["para"], font, bold_all=source["header"])
 
 
