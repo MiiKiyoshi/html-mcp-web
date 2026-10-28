@@ -1181,7 +1181,12 @@ export function createLayoutChecks(dependencies) {
             baseline + (ink.actualBoundingBoxDescent - ink.actualBoundingBoxAscent) * k / 2);
           const height = (ink.actualBoundingBoxAscent + ink.actualBoundingBoxDescent) * k * Math.abs(ctm.d);
           const centred = style.textAnchor === "middle" || label.text.hasAttribute("data-center");
-          return { text: label.text, x, y, height, centred };
+          const corners = [[start.x - ink.actualBoundingBoxLeft * k, baseline - ink.actualBoundingBoxAscent * k],
+                           [start.x + ink.actualBoundingBoxRight * k, baseline + ink.actualBoundingBoxDescent * k]]
+            .map(([cx, cy]) => at(cx, cy));
+          const box = { left: Math.min(...corners.map(([cx]) => cx)), right: Math.max(...corners.map(([cx]) => cx)),
+                        top: Math.min(...corners.map(([, cy]) => cy)), bottom: Math.max(...corners.map(([, cy]) => cy)) };
+          return { text: label.text, x, y, height, centred, box };
         }).filter((label) => label !== null);
         let offCentre = 0;
         for (const label of inked) {
@@ -1679,10 +1684,34 @@ export function createLayoutChecks(dependencies) {
             if (box !== null) things.push(box);
           }
           things.push(...drawnRects.map((entry) => entry.box), ...labels.map((label) => label.box));
+          // A connector here is an arrow and the lines that lead into it, a headless line
+          // counted when an end of it lies on one already counted, as a branch drawn from
+          // an arrow's line does. An axis, a tick or a grid line meets no arrow.
+          const traces = new Map(connectors.map((connector) => [connector, cornersOf(connector.line)]));
+          const onTrace = (point, connector) => {
+            const corners = traces.get(connector);
+            if (corners === null || corners.length < 2) return false;
+            return corners.slice(1).some((to, spot) => {
+              const from = corners[spot];
+              const length = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+              const along = Math.max(0, Math.min(1, ((point.x - from.x) * (to.x - from.x) + (point.y - from.y) * (to.y - from.y)) / length ** 2));
+              return Math.hypot(from.x + along * (to.x - from.x) - point.x, from.y + along * (to.y - from.y) - point.y) <= 1.5;
+            });
+          };
+          const wired = new Set(connectors.filter((connector) => connector.heads[0] > 0 || connector.heads[1] > 0));
+          for (let grown = true; grown;) {
+            grown = false;
+            for (const connector of connectors) {
+              if (wired.has(connector) || connector.guide) continue;
+              if (!connector.ends.some((point) => Array.from(wired).some((other) => onTrace(point, other)))) continue;
+              wired.add(connector);
+              grown = true;
+            }
+          }
           for (const connector of connectors) {
             if (connector.guide) continue;
-            const corners = cornersOf(connector.line);
-            if (corners === null || corners.length < 2) {
+            const corners = traces.get(connector);
+            if (corners === null || corners.length < 2 || !wired.has(connector)) {
               const box = inViewport(connector.line);
               if (box !== null) things.push(box);
               continue;
@@ -1762,13 +1791,15 @@ export function createLayoutChecks(dependencies) {
           // A label or a line of a figure's HTML set against its panel's border reads as
           // cut: a bottom line drawn 0.3 units above the panel's lower edge. Each is held by
           // the smallest panel around its middle and keeps PANEL_INSET of its font size from
-          // every side, measured from the box of its letters.
+          // every side, measured from its letters: a label's ink, read as for its middle
+          // above, since its box holds the face's whole ascent and put a 16px title whose
+          // letters stood 10 units below the border at 4, and the box of a line of HTML.
           const centred = (outer, inner) => inner !== outer && outer.left < (inner.left + inner.right) / 2
             && (inner.left + inner.right) / 2 < outer.right && outer.top < (inner.top + inner.bottom) / 2
             && (inner.top + inner.bottom) / 2 < outer.bottom;
           const panelsHeld = drawnRects.map((entry) => entry.box)
             .filter((panel) => things.filter((thing) => centred(panel, thing)).length >= 3);
-          const written = labels.map((label) => ({ box: label.box, words: labelWords(label.text),
+          const written = labels.map((label) => ({ box: inked.find((entry) => entry.text === label.text)?.box ?? label.box, words: labelWords(label.text),
             size: parseFloat(doc.defaultView.getComputedStyle(label.text).fontSize)
               * Math.hypot(label.text.getCTM().a, label.text.getCTM().b) }));
           if (fromScreen !== undefined) {
