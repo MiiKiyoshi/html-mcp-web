@@ -364,6 +364,38 @@ def test_a_set_report_drawn_larger_keeps_its_word_spaces(tmp_path: Path) -> None
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_lines_of_a_figure_s_html_step_by_its_own_font_size(tmp_path: Path) -> None:
+    """Two lines of 8px text in a foreignObject, broken by a <br> or set as two divs, stand
+    1.35 font sizes apart, or at the leading the divs give, not at the body's 14.6px and
+    not a paragraph space apart."""
+    html = content_html().replace(
+        "<figure>",
+        '<figure><svg viewBox="0 0 300 100" width="300" height="100">'
+        '<foreignObject x="10" y="10" width="200" height="40"><div id="br" style="font-size: 8px">one<br>two</div></foreignObject>'
+        '<foreignObject x="10" y="55" width="200" height="40"><div id="divs" style="font-size: 8px">'
+        '<div style="line-height: 1.25">one</div><div style="line-height: 1.25">two</div></div></foreignObject></svg>'
+        "<figcaption>Two lines.</figcaption></figure>\n<figure>", 1)
+    steps = run_in_report(tmp_path, html, """
+const out = {};
+for (const id of ["br", "divs"]) {
+  const element = document.getElementById(id);
+  const box = element.closest(".svg-html-box");
+  const scale = box.getBoundingClientRect().height / box.offsetHeight;
+  const tops = [];
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  while (walker.nextNode()) {
+    range.selectNodeContents(walker.currentNode);
+    tops.push(range.getClientRects()[0].top / scale);
+  }
+  out[id] = tops[1] - tops[0];
+}
+return out;""")
+    assert abs(steps["br"] - 8 * 1.35) < 0.1, steps
+    assert abs(steps["divs"] - 8 * 1.25) < 0.1, steps
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_centred_label_has_the_middle_of_its_letters_on_its_point(tmp_path: Path) -> None:
     """A label written with data-center at a shape's middle is moved by its letters'
     extent in its face, and the set report keeps the move. The values are those of the

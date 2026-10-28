@@ -104,6 +104,11 @@ pre code { padding: 0; border-radius: 0; background: none; font-family: inherit;
    left beside it, a box as wide as its figure ran off the page. */
 .svg-html-box[data-center] { align-items: center; }
 .svg-html-box .katex-display { margin: 0; }
+/* A figure's HTML is a label, set at a figure's leading, the step a wrapped label takes
+   (KITS 5.3), in its own font size: the body's leading came down to it in pixels, and two
+   8px lines were drawn 14.6px apart. Its blocks stack without the page's paragraph space. */
+.svg-html-box { line-height: 1.35; }
+.svg-html-box :is(p, ul, ol, div) + :is(p, ul, ol, div) { margin-top: 0; }
 
 /* A highlight colours the box the letters already take and adds nothing around them, so
    the letters of a monospaced line keep their columns and a check of the text covers its
