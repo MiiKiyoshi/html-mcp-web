@@ -57,6 +57,12 @@
    keep-all breaks it only between words. Chinese and Japanese text has no spaces to
    break at, so the rule stays with documents declared Korean. */
 html:lang(ko) { word-break: keep-all; }
+/* Breaking only between words leaves a justified Korean line few spaces to take its slack,
+   and in a narrow column they opened to two or three letters. A Korean line spreads its
+   slack between letters too, and an English word, marked lang="en" by the builder, only
+   between its words, so its letters stay together. */
+html:lang(ko) { text-justify: inter-character; }
+html:lang(ko) [lang="en"] { text-justify: inter-word; }
 
 /* Chrome shapes the letters of an svg label at the size they will appear on screen, to
    keep them from being stretched: LayoutSVGInlineText asks
@@ -73,10 +79,6 @@ svg text { text-rendering: geometricPrecision; }
 .lead { color: var(--ink-soft); }
 .note { color: var(--muted); line-height: 1.5; }
 ul.notes { color: var(--muted); line-height: 1.55; }
-/* KaTeX sets inline math at 1.21 times the text, and with its subscripts the math filled the
-   whole line pitch of a notes item, so lines of math within one item touched. An item holding
-   math takes a pitch that leaves the math the gap text has. */
-ul.notes li:has(.katex) { line-height: 1.8; }
 .nw { white-space: nowrap; }
 .pos { color: var(--good); font-weight: 650; }
 .neg { color: var(--bad); font-weight: 650; }
@@ -458,6 +460,10 @@ p { margin: 0 0 12px; font-size: 19px; line-height: 1.5; }
 .note { margin-top: 12px; font-size: 15px; }
 ul.notes { margin: 12px 0 0; padding-left: 20px; font-size: 15px; }
 ul.notes li { margin-bottom: 3px; }
+/* A deck sets inline math at 1.21 times the text, and with its subscripts the math filled the
+   whole line pitch of a notes item, so lines of math within one item touched. An item holding
+   math takes a pitch that leaves the math the gap text has. */
+ul.notes li:has(.katex) { line-height: 1.8; }
 .units { margin: 0 0 4px; color: var(--muted); font-size: 13px; text-align: right; }
 .feedback { margin-top: 16px; padding: 10px 0 10px 16px; border-left: 3px solid var(--accent); color: var(--ink-soft); font-size: 17px; }
 .feedback b { margin-right: 8px; }

@@ -63,3 +63,13 @@ to its `.woff2`. Without `fonts`, runs are set in Arial and nothing is embedded.
 The neutral skins in this directory carry no organization identity, and the repository
 test `tests/test_repository_is_neutral.py` keeps it that way: a private skin lives
 under `~/.config/html-mcp-web/templates/` and is never committed here.
+
+## Report skins
+
+A report skin is a folder holding `skin.css`, which names the faces and colours of the
+paper, and `fonts/` with the `.woff2` files it declares, as `templates/neutral-report` does.
+Its `build.py` calls `html_mcp_web.report.build` with the folder. The frame, the measures
+and the pour come from `html_mcp_web/report/skeleton.css` and the engine's script, which
+`skin.css` follows: a skin can restate a measure, but the pour, the columns ending on
+their foot, the spacing it spreads and the balanced last page are the engine's and hold
+under every skin.

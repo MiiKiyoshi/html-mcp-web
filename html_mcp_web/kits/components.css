@@ -71,10 +71,6 @@ svg text { text-rendering: geometricPrecision; }
 .lead { color: var(--ink-soft); }
 .note { color: var(--muted); line-height: 1.5; }
 ul.notes { color: var(--muted); line-height: 1.55; }
-/* KaTeX sets inline math at 1.21 times the text, and with its subscripts the math filled the
-   whole line pitch of a notes item, so lines of math within one item touched. An item holding
-   math takes a pitch that leaves the math the gap text has. */
-ul.notes li:has(.katex) { line-height: 1.8; }
 .nw { white-space: nowrap; }
 .pos { color: var(--good); font-weight: 650; }
 .neg { color: var(--bad); font-weight: 650; }

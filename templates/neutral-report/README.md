@@ -10,10 +10,11 @@ column and page to page. It is built from the shared content format described in
 python3 build.py <content.html> <report.html>
 ```
 
-The builder writes the text as one flow, and a script in the document pours it into the
-columns when the page opens, because only the browser can measure the lines. Each column
-carries `data-layout-guard`, so a block taller than a column is reported by the layout
-check.
+The frame and the pour are the report engine's (`html_mcp_web/report`): this folder is a
+skin, holding `skin.css` with its faces and `fonts/`. The builder writes the text as one
+flow, and a script in the document pours it into the columns when the page opens, because
+only the browser can measure the lines. Each column carries `data-layout-guard`, so a
+block taller than a column is reported by the layout check.
 
 The faces in `fonts/` are Libertinus Serif and Sans, subset to Latin, Greek and the
 common symbols, under the SIL Open Font License in `fonts/LICENSE`. Hangul is not in them

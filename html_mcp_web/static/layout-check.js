@@ -462,6 +462,53 @@ export function createLayoutChecks(dependencies) {
           if (short > 1) addWarning(`page ${index + 1} column ${at + 1} ends ${short.toFixed(1)}pt above the foot of the text area`, column);
         }
       }
+      if (report) {
+        // A section or subsection head stands with at least two lines of its text in the
+        // same column (KITS 10.11): one left at a column's foot reads as the end of a part.
+        for (const [at, column] of Array.from(page.querySelectorAll(".column")).entries()) {
+          for (const head of column.querySelectorAll(":scope > :is(h2, h3)")) {
+            let next = head.nextElementSibling;
+            while (next !== null && (/^H[23]$/.test(next.tagName) || next.tagName === "FIGURE")) next = next.nextElementSibling;
+            const fontSize = parseFloat(doc.defaultView.getComputedStyle(head).fontSize) || 16;
+            let lines = 0;
+            if (next !== null) {
+              const range = doc.createRange();
+              range.selectNodeContents(next);
+              lines = groupLines(Array.from(range.getClientRects()), fontSize).length;
+            }
+            if (next === null || (lines < 2 && next.classList.contains("split"))) {
+              addError(`page ${index + 1} head "${readableText(head).slice(0, 32)}" stands at the foot of column ${at + 1} `
+                + "without two lines of its text", head);
+            }
+          }
+        }
+        // A word space a justified line opens past two thirds of the text's size (KITS 10.12)
+        // shows as a hole in the column. The widest one of a block is named with its line.
+        for (const block of page.querySelectorAll(".column > p, .column li")) {
+          const fontSize = parseFloat(doc.defaultView.getComputedStyle(block).fontSize) || 16;
+          const box = block.getBoundingClientRect();
+          const scale = block.offsetHeight > 0 ? box.height / block.offsetHeight : 1;
+          let widest = null;
+          const walker = doc.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+            if (node.parentElement.closest(".katex, code, pre") !== null) continue;
+            for (let offset = node.data.indexOf(" "); offset !== -1; offset = node.data.indexOf(" ", offset + 1)) {
+              const range = doc.createRange();
+              range.setStart(node, offset);
+              range.setEnd(node, offset + 1);
+              const space = range.getBoundingClientRect();
+              const width = space.width / scale;
+              if (space.height > 0 && width > fontSize * 2 / 3 && (widest === null || width > widest.width)) {
+                widest = { width, line: { coreTop: space.top, coreBottom: space.bottom } };
+              }
+            }
+          }
+          if (widest !== null) {
+            addError(`page ${index + 1} ${block.tagName.toLowerCase()} "${readableText(block).slice(0, 24)}…" opens a word space `
+              + `to ${(widest.width * 0.75).toFixed(1)}pt on the line "${lineText(block, widest.line)}"`, block);
+          }
+        }
+      }
       // Text placed with baseline-shift, alignment-baseline, or a tspan's dominant-baseline
       // is moved by Chromium and left on the baseline by Firefox, the browser this check
       // and the PDF use. Subscripts dropped through boxes and table rules in a reviewer's

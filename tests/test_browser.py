@@ -5242,6 +5242,47 @@ def test_a_short_last_line_is_a_fault_on_a_slide_and_a_page(tmp_path: Path) -> N
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_report_head_keeps_its_text_and_a_word_space_stays_narrow(tmp_path: Path) -> None:
+    """In a report, a head left at a column's foot without two lines of its text is a
+    fault, and so is a justified line that opens a word space past two thirds of the
+    text's size, named with the line it opens. A head followed by its text is not."""
+    words = "Every column of the paper carries text that runs on to the next column, "
+    paper = (
+        '<!doctype html><html><head><meta charset="utf-8"><title>Heads</title></head><body>'
+        '<main class="pages"><section class="page" style="width: 700px; height: 400px">'
+        '<div class="columns" style="display: grid; grid-template-columns: 300px 300px; gap: 20px; font: 12px serif">'
+        f'<div class="column" data-layout-guard style="height: 380px"><h3>Kept head</h3><p>{words * 3}</p>'
+        '<h2>Lonely head</h2></div>'
+        '<div class="column" data-layout-guard style="height: 380px">'
+        f'<p style="text-align: justify; word-spacing: 14px">{words * 3}</p></div>'
+        "</div></section></main></body></html>"
+    )
+    (tmp_path / "paper.html").write_text(paper, encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"paper": {"label": "Paper", "layout": "report", "main": "paper.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    try:
+        shared.ensure()
+
+        def checked():
+            artifact = get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["paper"]
+            return artifact if artifact["layout_check"]["checked_revision"] == artifact["revision"] else None
+
+        errors = wait_until(checked, timeout=90)["layout_check"]["errors"]
+        heads = [error for error in errors if "stands at the foot" in error]
+        spaces = [error for error in errors if "opens a word space" in error]
+        assert len(heads) == 1 and '"Lonely head"' in heads[0], errors
+        assert len(spaces) == 1 and '"Every column of the pape' in spaces[0] and "on the line" in spaces[0], errors
+    finally:
+        shared.stop()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path) -> None:
     """A page keeps the modules it loaded however the server changes under it, and the
     server runs no check of its own while a page is connected. So a page left open across

@@ -182,26 +182,34 @@ def cite_references(body_html: str, references: dict[str, str], numbers: dict[st
 LATIN_RUN = re.compile(r"[A-Za-z][A-Za-z'\u2019-]*(?:[ ,.:;()/'\u2019-]+[A-Za-z][A-Za-z'\u2019-]*)*")
 LATIN_SKIP = re.compile(MATH_SPANS.pattern + r"|&#?\w+;", re.S)
 UNMARKED = {"code", "pre", "svg", "script", "style", "math"}
+OPENING = re.compile(r"(?<=[^\s(\[{]{2})(?=\()")
 
 
-def mark_latin(body_html: str, lang: str) -> str:
+def mark_text(body_html: str, lang: str) -> str:
     # A browser hyphenates by the language of the text, and a Korean document's English
     # words, read as Korean, were never broken: a justified line in a narrow column put its
     # whole slack into a few spaces. In a Korean, Japanese or Chinese document every run
     # of Latin letters outside math and code is marked as English, and breaks as English.
+    # An opening parenthesis written against the word before it, as in "SGS-LoRA(Self",
+    # gives no break there in Unicode's rules, and with Korean breaking only at spaces the
+    # whole run had to stand on one line: a <wbr> before it lets the line end there.
     if lang.split("-")[0] not in {"ko", "ja", "zh"}:
         return body_html
     body = ContentParser()
     body.feed(body_html)
     body.close()
 
+    def english(text: str) -> str:
+        return "<wbr>".join(LATIN_RUN.sub(lambda m: f'<span lang="en">{m.group(0)}</span>', part)
+                            for part in OPENING.split(text))
+
     def mark(text: str) -> str:
         pieces, start = [], 0
         for skipped in LATIN_SKIP.finditer(text):
-            pieces.append(LATIN_RUN.sub(lambda m: f'<span lang="en">{m.group(0)}</span>', text[start:skipped.start()]))
+            pieces.append(english(text[start:skipped.start()]))
             pieces.append(skipped.group(0))
             start = skipped.end()
-        pieces.append(LATIN_RUN.sub(lambda m: f'<span lang="en">{m.group(0)}</span>', text[start:]))
+        pieces.append(english(text[start:]))
         return "".join(pieces)
 
     def visit(element: Element) -> None:
@@ -229,11 +237,11 @@ def mark_latin(body_html: str, lang: str) -> str:
 def prepare_body(body_html: str, references: dict[str, str], numbers: dict[str, int],
                  lang: str) -> tuple[str, list[str]]:
     """One part of the content made ready for any page: its citations numbered, its svg
-    formulas checked, its figures' HTML lifted and its English words marked in a CJK
-    document. Returns the HTML and the keys it cites."""
+    formulas checked, its figures' HTML lifted and, in a CJK document, its English words
+    marked and its parentheses given a break. Returns the HTML and the keys it cites."""
     check_svg_math(body_html)
     body_html, cited = cite_references(body_html, references, numbers)
-    return mark_latin(lift_svg_html(body_html), lang), cited
+    return mark_text(lift_svg_html(body_html), lang), cited
 
 
 # The layer of a figure's lifted HTML is drawn in the svg's own units, as its
