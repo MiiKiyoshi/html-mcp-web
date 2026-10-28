@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import shutil
@@ -6037,3 +6038,102 @@ return document.fonts.ready.then(() => {
             except subprocess.TimeoutExpired:
                 browser_process.kill()
         shutil.rmtree(profile, ignore_errors=True)
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_report_saved_in_quick_succession_shows_what_a_reload_shows(tmp_path: Path) -> None:
+    """A reviewer reported a report whose layout broke on the review page while its content
+    was saved again and again, and came back whole on a reload. After saves a third of a
+    second apart, each moving the line breaks of the first paragraph, the page shows the
+    newest build, and every line, head and figure stands where a reload puts it."""
+    sentence = "The router keeps the few blocks of keys it needs and attention reads only those. "
+    content = tmp_path / "content.html"
+
+    def write(extra: int) -> None:
+        paragraphs = "\n".join(f"<p>{index} {sentence * 6}</p>" for index in range(1, 14))
+        first = f"<p>Lead {'more words here ' * extra}{sentence * 4}</p>"
+        content.write_text(
+            '<!doctype html>\n<meta charset="utf-8">\n<title>Saves</title>\n'
+            '<body data-author="A" data-meta="B">\n'
+            f'<section data-title="Method">{first}\n{paragraphs}\n'
+            '<figure><svg viewBox="0 0 240 120"><rect width="240" height="120" fill="#ccc"/></svg>'
+            "<figcaption>A drawing.</figcaption></figure>\n"
+            f"{paragraphs}</section>\n</body>\n", encoding="utf-8")
+
+    write(0)
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"report": {"label": "Report", "layout": "report", "main": "report.html",
+                                 "template": "neutral-report", "content": "content.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_saves_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    shown = """
+const doc = document.querySelector("#artifact-frame")?.contentDocument;
+if (!doc || !doc.querySelector("main.pages .page") || doc.fonts.status !== "loaded") return null;
+const out = [];
+for (const [index, page] of Array.from(doc.querySelectorAll("main.pages > *")).entries()) {
+  const top = page.getBoundingClientRect();
+  for (const node of page.querySelectorAll(".ln, h2, figure")) {
+    const box = node.getBoundingClientRect();
+    out.push([index, node.textContent.slice(0, 24), Math.round(box.left - top.left), Math.round(box.top - top.top),
+              Math.round(box.width)]);
+  }
+}
+return {served: doc.documentElement.dataset.htmlMcpServed, frames: document.querySelectorAll("iframe.artifact-frame").length, out};
+"""
+    try:
+        shared.ensure()
+        report = tmp_path / "report.html"
+        wait_until(report.is_file, timeout=120)
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
+             "-width", "1400", "-height", "1000", "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.navigate(f"http://127.0.0.1:{port}/?artifact=report")
+        wait_until(lambda: browser.execute_script("return (() => {" + shown + "})()"), timeout=60)
+        for extra in range(1, 6):
+            write(extra)
+            time.sleep(0.3)
+
+        def settled():
+            # The build has read the last save, and the page has kept one document for a
+            # few seconds, its only frame.
+            state = get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["report"]
+            if state["build_error"] is not None or report.stat().st_mtime < content.stat().st_mtime:
+                return None
+            first = browser.execute_script("return (() => {" + shown + "})()")
+            time.sleep(3)
+            then = browser.execute_script("return (() => {" + shown + "})()")
+            return then if first is not None and first == then and then["frames"] == 1 else None
+
+        edited = wait_until(settled, timeout=120)
+        browser.refresh()
+        reloaded = wait_until(lambda: browser.execute_script("return (() => {" + shown + "})()"), timeout=60)
+        time.sleep(1)
+        reloaded = browser.execute_script("return (() => {" + shown + "})()")
+        assert edited["served"] == reloaded["served"]
+        assert len(edited["out"]) > 50 and edited["out"] == reloaded["out"]
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
