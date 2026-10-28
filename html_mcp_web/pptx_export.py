@@ -768,8 +768,49 @@ def _add_table(slide, item: dict[str, Any], font: str) -> None:
     from pptx.util import Emu
     rows = item["rows"]
     n_rows = len(rows)
-    n_cols = max(sum(cell["colSpan"] for cell in row["cells"]) for row in rows)
     x, y, w, h = item["rect"]
+    spans = {id(source): source["colSpan"] for row in rows for source in row["cells"]}
+
+    # A row holds one cell per slot it still has free, not one per column: a cell above it
+    # spanning down, or one before it spanning across, has already taken the rest. Filling by
+    # position in the row put a header group over the wrong columns and left the far side of
+    # the row empty. Each slot records the cell it belongs to and whether it starts there.
+    def place(n_cols):
+        owner = [[None] * n_cols for _ in range(n_rows)]
+        widths = [None] * n_cols
+        placed = []
+        for row_index, row in enumerate(rows):
+            col = 0
+            for source in row["cells"]:
+                while col < n_cols and owner[row_index][col] is not None:
+                    col += 1
+                if col >= n_cols:
+                    break
+                reach_rows = min(source["rowSpan"], n_rows - row_index)
+                reach_cols = min(spans[id(source)], n_cols - col)
+                for down in range(reach_rows):
+                    for across in range(reach_cols):
+                        owner[row_index + down][col + across] = (source, down == 0 and across == 0)
+                if spans[id(source)] == 1:
+                    widths[col] = source["rect"][2]
+                placed.append((row_index, col, reach_rows, reach_cols, source))
+                col += spans[id(source)]
+        spare = max(0.0, w - sum(width for width in widths if width is not None))
+        unknown = sum(1 for width in widths if width is None)
+        return owner, [width if width is not None else spare / unknown for width in widths], placed
+
+    # A colspan past the table's last column makes columns the page draws at no width, as
+    # a group row written with colspan="13" over nine columns does. In the slide each was a
+    # column of empty cells at the default text size, and every row grew to hold them. Those
+    # columns are dropped and the spans over them shortened.
+    n_cols = max(sum(cell["colSpan"] for cell in row["cells"]) for row in rows)
+    owner, widths, placed = place(n_cols)
+    dead = {col for col in range(n_cols) if widths[col] < 0.5}
+    if dead and len(dead) < n_cols:
+        for _, col, _, reach_cols, source in placed:
+            spans[id(source)] = max(1, spans[id(source)] - len(dead & set(range(col, col + reach_cols))))
+        n_cols -= len(dead)
+        owner, widths, placed = place(n_cols)
     graphic = slide.shapes.add_table(n_rows, n_cols, _px(x), _px(y), _px(w), _px(h))
     table = graphic.table
     tblPr = table._tbl.tblPr
@@ -780,29 +821,6 @@ def _add_table(slide, item: dict[str, Any], font: str) -> None:
         # No Style, No Grid: the style adds nothing, so the per-cell borders read from the
         # DOM are the only lines. The Table Grid style drew a full grid over them in PowerPoint.
         style.text = "{2D5ABB26-0587-4C30-8999-92F81FD0307C}"
-    # A row holds one cell per slot it still has free, not one per column: a cell above it
-    # spanning down, or one before it spanning across, has already taken the rest. Filling by
-    # position in the row put a header group over the wrong columns and left the far side of
-    # the row empty. Each slot records the cell it belongs to and whether it starts there.
-    owner = [[None] * n_cols for _ in range(n_rows)]
-    widths = [None] * n_cols
-    placed = []
-    for row_index, row in enumerate(rows):
-        col = 0
-        for source in row["cells"]:
-            while col < n_cols and owner[row_index][col] is not None:
-                col += 1
-            if col >= n_cols:
-                break
-            reach_rows = min(source["rowSpan"], n_rows - row_index)
-            reach_cols = min(source["colSpan"], n_cols - col)
-            for down in range(reach_rows):
-                for across in range(reach_cols):
-                    owner[row_index + down][col + across] = (source, down == 0 and across == 0)
-            if source["colSpan"] == 1:
-                widths[col] = source["rect"][2]
-            placed.append((row_index, col, reach_rows, reach_cols, source))
-            col += source["colSpan"]
     # Two cells meet along one edge and the page draws a single line there. Writing each cell
     # its own four sides left one of a pair asking for a line where the other asked for none,
     # and the slots a spanning cell covers asked for nothing at all, so a reader that draws
@@ -818,10 +836,8 @@ def _add_table(slide, item: dict[str, Any], font: str) -> None:
             before, after = (row_index + down, col), (row_index + down, col + reach_cols)
             vertical[before] = _wider(vertical.get(before), source["borderLeft"])
             vertical[after] = _wider(vertical.get(after), source["borderRight"])
-    spare = max(0.0, w - sum(width for width in widths if width is not None))
-    unknown = sum(1 for width in widths if width is None)
     for col in range(n_cols):
-        table.columns[col].width = _px(widths[col] if widths[col] is not None else spare / unknown)
+        table.columns[col].width = _px(widths[col])
     for row_index, row in enumerate(rows):
         table.rows[row_index].height = _px(row["rect"][3])
     reach = {(row_index, col): (reach_rows, reach_cols)
