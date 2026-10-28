@@ -83,6 +83,9 @@ PAGINATE_SCRIPT = r"""<script>
       if (box.width === 0) continue;
       const last = lines[lines.length - 1];
       if (last !== undefined && box.top < last.bottom - 1) {
+        // A line's top is its highest box: a Latin word's box starts lower than the Hangul
+        // around it, and a line that began with one was cut below its own Hangul letters.
+        last.top = Math.min(last.top, box.top);
         last.bottom = Math.max(last.bottom, box.bottom);
         last.right = Math.max(last.right, box.right);
         continue;
@@ -296,7 +299,7 @@ def build(content_path: Path, output_path: Path) -> None:
     for section in content.sections:
         if section.layout != "body":
             raise ValueError(f'a report has no {section.layout} page; data-layout belongs to a deck')
-        body_html, _ = prepare_body(section.body_html, content.references, numbers)
+        body_html, _ = prepare_body(section.body_html, content.references, numbers, content.lang)
         parser = ContentParser()
         parser.feed(body_html)
         parser.close()

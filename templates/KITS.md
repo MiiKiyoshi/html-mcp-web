@@ -16,7 +16,7 @@ Artifact Kits are what every artifact is built from, whatever its template, skin
 
 2.1 `<title>` is the document's title. `<body>` carries `data-author`, the author line, and `data-meta`, further lines separated by `|`. Optional `data-sub` adds a subtitle.
 
-2.2 `data-lang` on `<body>` names the language the content is written in, `en` when it is absent. A document declared `ko` breaks Korean lines only between words, in every layout.
+2.2 `data-lang` on `<body>` names the language the content is written in, `en` when it is absent. A document declared `ko` breaks Korean lines only between words, in every layout. In a document declared `ko`, `ja` or `zh`, the builder marks each run of Latin letters outside math and code as English, so a layout that hyphenates breaks those words by English rules.
 
 2.3 Each direct `<section>` of `<body>` is one part of the document with its name in `data-title`. Article 9 says what a part is in a deck and Article 10 in a report.
 
@@ -174,7 +174,7 @@ A list with subitems and at least two outer items stays in one column while it f
 
 11.1 `layout(artifact=...)` checks the current document and `layout(artifact=..., page=...)` one page. It waits for the check. An empty `errors` means the current revision has no layout errors. Under the neutral guideline, `warnings` lists likely faults the check cannot confirm and is left out when there are none: an SVG plot that numbers an axis without naming it in the drawing, which a title outside the drawing also clears. The same call returns blocks and free space. Build failures appear as described in [README.md](README.md#with-a-template).
 
-11.2 The check reports clipped body content, title text outside the title bar or over an image in it, and on contents and divider pages overflow anywhere above the footer bar, using the scaled size of a contents list. On deck pages it reports a text block outside `pre` whose last line is no wider than six font sizes or a quarter of its widest other line, quoting that line's words, and overflowing lines in `pre`.
+11.2 The check reports clipped body content, title text outside the title bar or over an image in it, and on contents and divider pages overflow anywhere above the footer bar, using the scaled size of a contents list. On deck pages it reports a text block outside `pre` whose last line is no wider than six font sizes or a quarter of its widest other line, quoting that line's words, and overflowing lines in `pre`. On report pages it reports the same of a paragraph or list item outside the references, and a paragraph that runs on into the next column is judged by its last part against the lines of all its parts.
 
 11.3 For inline SVG it reports shapes beyond the `viewBox`, borders of rectangles, circles, ellipses and polygons cut at the `viewBox` edge, empty space of a quarter or more of a side, overlapping labels, and labels beyond the sides of the rectangle they sit on, naming the side and the excess.
 

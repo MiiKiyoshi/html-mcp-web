@@ -151,10 +151,10 @@ def test_neutral_report_builds_a_numbered_flow_for_the_columns(tmp_path: Path) -
     assert '<html lang="ko">' in output
     assert '<h2 class="abstract">Abstract</h2>' in output
     assert '<h2><span class="secno">1</span>Results</h2>' in output
-    assert '<span class="secno">1.1</span>Accuracy' in output
+    assert '<span class="secno">1.1</span><span lang="en">Accuracy</span>' in output
     # A table's caption stands above it and a figure's below, each numbered in its kind.
     assert '<figure class="table"><figcaption><span class="caption-label">Table 1: </span>' in output
-    assert '<span class="caption-label">Figure 1: </span>A drawing.</figcaption></figure>' in output
+    assert '<span class="caption-label">Figure 1: </span><span lang="en">A drawing</span>.</figcaption></figure>' in output
     assert '<span class="cite">[1]</span>' in output
     assert '<li id="a"><span class="bib-no">[1]</span>A. Author. 2026. A Paper.</li>' in output
     assert "TECHNICAL REPORT" not in output

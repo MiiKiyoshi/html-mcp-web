@@ -397,7 +397,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
 
         # Opening and closing summaries bound the body; only the content between them
         # shares the remaining height. The closing summary uses the skin's lead styling.
-        content_html, cited = prepare_body(section.body_html, content.references, numbers)
+        content_html, cited = prepare_body(section.body_html, content.references, numbers, content.lang)
         # Comments before the lead, such as the skeleton's note on it, do not hide it.
         lead = re.match(r'\s*(?:<!--.*?-->\s*)*<p class="lead">.*?</p>', content_html, re.S)
         opening = lead.group(0).strip() if lead is not None else ""

@@ -75,7 +75,7 @@ ul, ol { margin: 0; padding-left: 13pt; }
 /* The bullet is the text face's own: the browser's bullet face is taller than the line and
    opened every item's first line by half a point. */
 ul { list-style-type: "\2022\2002"; }
-li { margin: 0; text-align: justify; }
+li { margin: 0; text-align: justify; hyphens: auto; }
 ul ul, ol ol { padding-left: 10pt; }
 .lead { color: inherit; }
 .note, ul.notes { color: inherit; font-size: 8pt; line-height: 9.5pt; }
@@ -121,6 +121,17 @@ tbody + tbody > tr:first-child > ::before {
 thead tr:not(:last-child) > th[colspan] { position: relative; padding-bottom: 4pt; }
 thead tr:not(:last-child) > th[colspan]::after {
   content: ""; position: absolute; left: .5em; right: .5em; bottom: 0; height: .27pt; background: var(--line); }
+/* A screen has no width under a pixel: there .72pt and .45pt both came out one pixel, a
+   box under a pixel could vanish at a zoom, and scaled down the heavy rule could look the
+   lighter. On screen the rules are borders, which never draw under one pixel: the heavy
+   two pixels, the light one pixel in a paler tone, which still reads lighter where a zoom
+   draws both at one pixel. */
+@media screen {
+  table::before, table::after { height: 0; background: none; border-top: 2px solid var(--line); }
+  thead tr:last-child > ::after, tbody + tbody > tr:first-child > ::before,
+  thead tr:not(:last-child) > th[colspan]::after {
+    height: 0; background: none; border-top: 1px solid color-mix(in srgb, var(--line) 50%, transparent); }
+}
 /* Rows on the text's own pitch, as a tabular sets them, with the space booktabs keeps at
    its rules. Neighbouring cells stand 9pt apart, as in the papers' tables. */
 th, td { padding: 0 4.5pt; border: 0; vertical-align: baseline; }

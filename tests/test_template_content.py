@@ -519,3 +519,18 @@ def test_the_rows_of_th_at_the_top_become_the_head(tmp_path: Path) -> None:
             '<tr><th>Design</th><th>a</th><th>b</th></tr></thead>\n<tr><th>aes</th>') in body
     assert '<table><thead><tr><th>Name</th><th>Role</th></tr></thead><tbody><tr><td>x</td>' in body
     assert '<thead><tr><th>H</th></tr></thead><tr><th>kept</th></tr>' in body
+
+
+def test_english_words_in_a_korean_document_are_marked_english() -> None:
+    """A browser breaks a word by the language of its text. A run of Latin letters in a
+    Korean document is marked English, while math, code, entities and a document in
+    English are left as they are."""
+    from html_mcp_web.kits import mark_latin
+
+    source = ('<p>수학 SFT loss에 $p_{\\theta}(x)$ 와 R&amp;D, <code>run_vg</code> 그리고 '
+              'parameter-efficient fine-tuning을 <b>LoRA</b>로.</p>')
+    assert mark_latin(source, "ko") == (
+        '<p>수학 <span lang="en">SFT loss</span>에 $p_{\\theta}(x)$ 와 <span lang="en">R</span>&amp;'
+        '<span lang="en">D</span>, <code>run_vg</code> 그리고 <span lang="en">parameter-efficient '
+        'fine-tuning</span>을 <b><span lang="en">LoRA</span></b>로.</p>')
+    assert mark_latin(source, "en") == source

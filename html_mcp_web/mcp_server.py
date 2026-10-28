@@ -433,7 +433,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 # Only with a tail among the errors: words are cheapest to cut, and cut to clear
                 # one, a definition came out that no one could read.
                 + ("Clear a wasted last line with a line break, a column width, or a page split, "
-                   "without shortening or rewording the text. "
+                   "without shortening the text. In a report's running text, rewrite a sentence of "
+                   "the paragraph so its last line carries more, never by cutting a definition. "
                    if any("wastes its last line" in error for error in result["errors"]) else "")
                 + "Then check layout() and image() for the page again.")
         return result

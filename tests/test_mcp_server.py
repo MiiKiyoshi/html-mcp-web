@@ -729,7 +729,7 @@ def test_layout_reports_the_revisions_errors_and_a_pages_detail(tmp_path: Path, 
         assert "font size or padding only after" in whole["note"]
         # A wasted last line is cleared without touching the words: shortened to clear one,
         # a definition came out that no one could read. The advice comes only with a tail.
-        assert "without shortening or rewording the text" in whole["note"]
+        assert "without shortening the text" in whole["note"]
         first = answer(mcp.call_tool("layout", {"artifact": "slides", "page": 1}))
         assert "font size or padding only after" in first["note"]
         assert "wasted last line" not in first["note"]

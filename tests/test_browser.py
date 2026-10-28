@@ -5185,11 +5185,10 @@ def test_svg_labels_are_laid_out_in_the_drawings_own_units(tmp_path: Path) -> No
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
-def test_a_short_last_line_is_a_fault_on_a_slide_and_prose_on_a_page(tmp_path: Path) -> None:
-    """A block whose last line holds a few words wastes a line a slide needed, so a deck
-    is told. A report is flowing prose, every paragraph ends with a partial line, and
-    filling a tail there means changing a sentence for no reason of its own, so a report
-    is not told. Overflow is a fault in both and still is."""
+def test_a_short_last_line_is_a_fault_on_a_slide_and_a_page(tmp_path: Path) -> None:
+    """A block whose last line holds a few words wastes a line the page needed, on a slide
+    and in a report's columns alike. A report paragraph cut at the foot of a column is
+    judged by the part that ends it in the next column, with the lines before it."""
     page = (
         '<!doctype html><html><head><meta charset="utf-8"><title>Tail</title></head><body>'
         '<main class="pages"><section class="page" style="width: 700px; height: 400px">'
@@ -5198,8 +5197,19 @@ def test_a_short_last_line_is_a_fault_on_a_slide_and_prose_on_a_page(tmp_path: P
         "counts the line as wasted while a page reads it as the end of a paragraph:<br>ok.</p>"
         "</div></section></main></body></html>"
     )
+    long = "A paragraph that runs on past the foot of its column and into the next one, " * 3
+    paper = (
+        '<!doctype html><html><head><meta charset="utf-8"><title>Tail</title></head><body>'
+        '<main class="pages"><section class="page" style="width: 700px; height: 400px">'
+        '<div class="columns" style="display: grid; grid-template-columns: 300px 300px; gap: 20px; font: 16px sans-serif">'
+        f'<div class="column" data-layout-guard style="height: 380px"><p>{long}<br>ok.</p>'
+        f'<p class="split" style="text-align: justify; text-align-last: justify">{long}</p></div>'
+        '<div class="column" data-layout-guard style="height: 380px"><p class="cont">its end.</p>'
+        f'<p>{long}and its last line is long enough to stand.</p></div>'
+        "</div></section></main></body></html>"
+    )
     (tmp_path / "deck.html").write_text(page, encoding="utf-8")
-    (tmp_path / "paper.html").write_text(page, encoding="utf-8")
+    (tmp_path / "paper.html").write_text(paper, encoding="utf-8")
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
@@ -5225,7 +5235,8 @@ def test_a_short_last_line_is_a_fault_on_a_slide_and_prose_on_a_page(tmp_path: P
         tails = {name: [error for error in artifact["layout_check"]["errors"] if "wastes its last line" in error]
                  for name, artifact in seen.items()}
         assert len(tails["deck"]) == 1, seen["deck"]["layout_check"]["errors"]
-        assert tails["paper"] == [], seen["paper"]["layout_check"]["errors"]
+        assert len(tails["paper"]) == 2, seen["paper"]["layout_check"]["errors"]
+        assert '"ok."' in tails["paper"][0] and '"its end."' in tails["paper"][1], tails["paper"]
     finally:
         shared.stop()
 

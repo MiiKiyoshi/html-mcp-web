@@ -179,12 +179,61 @@ def cite_references(body_html: str, references: dict[str, str], numbers: dict[st
     return body.root.inner_html(), sorted(cited, key=numbers.__getitem__)
 
 
-def prepare_body(body_html: str, references: dict[str, str], numbers: dict[str, int]) -> tuple[str, list[str]]:
+LATIN_RUN = re.compile(r"[A-Za-z][A-Za-z'\u2019-]*(?:[ ,.:;()/'\u2019-]+[A-Za-z][A-Za-z'\u2019-]*)*")
+LATIN_SKIP = re.compile(MATH_SPANS.pattern + r"|&#?\w+;", re.S)
+UNMARKED = {"code", "pre", "svg", "script", "style", "math"}
+
+
+def mark_latin(body_html: str, lang: str) -> str:
+    # A browser hyphenates by the language of the text, and a Korean document's English
+    # words, read as Korean, were never broken: a justified line in a narrow column put its
+    # whole slack into a few spaces. In a Korean, Japanese or Chinese document every run
+    # of Latin letters outside math and code is marked as English, and breaks as English.
+    if lang.split("-")[0] not in {"ko", "ja", "zh"}:
+        return body_html
+    body = ContentParser()
+    body.feed(body_html)
+    body.close()
+
+    def mark(text: str) -> str:
+        pieces, start = [], 0
+        for skipped in LATIN_SKIP.finditer(text):
+            pieces.append(LATIN_RUN.sub(lambda m: f'<span lang="en">{m.group(0)}</span>', text[start:skipped.start()]))
+            pieces.append(skipped.group(0))
+            start = skipped.end()
+        pieces.append(LATIN_RUN.sub(lambda m: f'<span lang="en">{m.group(0)}</span>', text[start:]))
+        return "".join(pieces)
+
+    def visit(element: Element) -> None:
+        children: list[Element | str] = []
+        run: list[str] = []
+        for child in [*element.children, None]:
+            if isinstance(child, str) and not child.startswith("<!--"):
+                run.append(child)
+                continue
+            if run:
+                children.append(mark("".join(run)))
+                run = []
+            if isinstance(child, Element):
+                if child.tag not in UNMARKED and "lang" not in child.attributes:
+                    visit(child)
+                children.append(child)
+            elif child is not None:
+                children.append(child)
+        element.children = children
+
+    visit(body.root)
+    return body.root.inner_html()
+
+
+def prepare_body(body_html: str, references: dict[str, str], numbers: dict[str, int],
+                 lang: str) -> tuple[str, list[str]]:
     """One part of the content made ready for any page: its citations numbered, its svg
-    formulas checked and its figures' HTML lifted. Returns the HTML and the keys it cites."""
+    formulas checked, its figures' HTML lifted and its English words marked in a CJK
+    document. Returns the HTML and the keys it cites."""
     check_svg_math(body_html)
     body_html, cited = cite_references(body_html, references, numbers)
-    return lift_svg_html(body_html), cited
+    return mark_latin(lift_svg_html(body_html), lang), cited
 
 
 # The layer of a figure's lifted HTML is drawn in the svg's own units, as its

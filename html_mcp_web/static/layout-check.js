@@ -397,19 +397,18 @@ export function createLayoutChecks(dependencies) {
         }
       }
       // A block whose last line holds only a few characters wastes a full line of
-      // height, and on a slide that line is what the block above or below it needed:
-      // the fix is a line break, a column width, or a page split. Shortening the words to
-      // fit made a definition no one could read. On a report page the text is flowing
-      // prose, every paragraph ends with a partial line, and the only way to fill a
-      // tail is to lengthen or shorten a sentence for no reason of its own; on an A4
-      // line a quarter of the width is several words, and a document of alternating
-      // English and Korean paragraphs drew five of these in three pages. So the tail
-      // is a slide's fault, and a report's overflow and overlaps are still faults.
+      // height, and that line is what the block above or below it needed: the fix is a
+      // line break, a column width, a page split, or on a report page a sentence
+      // rewritten. Shortening the words to fit made a definition no one could read.
       // Scope: any block-level element that directly contains text because a tag
       // whitelist missed styled divs. Container elements hold only child elements,
       // so they filter out here. A code block is left out: its lines are the source,
-      // prompt or log as written, and no rewording can fill a tail there.
-      const tails = state.artifact.layout === "report" ? [] : page.querySelectorAll("[data-layout-guard] *");
+      // prompt or log as written, and no rewording can fill a tail there. A report's
+      // paragraph cut at the foot of a column ends in the part that goes on in the next,
+      // and that part is judged with the lines of the parts before it. A reference in the
+      // list is cited as published and has no sentence to rewrite.
+      const report = state.artifact.layout === "report";
+      const tails = page.querySelectorAll(report ? ".column > p:not(.split), .column li:not(ol.bib > li)" : "[data-layout-guard] *");
       for (const block of tails) {
         if (block.closest("pre") !== null) continue;
         const style = doc.defaultView.getComputedStyle(block);
@@ -422,12 +421,20 @@ export function createLayoutChecks(dependencies) {
         // two groups when an inline box sits well below the baseline, which a subscript or
         // one of KaTeX's own boxes does, and that reported one-line bullets as wasteful.
         const lineHeight = parseFloat(style.lineHeight) || fontSize * 1.2;
-        if (Math.round(block.getBoundingClientRect().height / lineHeight) < 2) continue;
-        const range = doc.createRange();
-        range.selectNodeContents(block);
-        const lines = groupLines(Array.from(range.getClientRects()), fontSize);
-        if (lines.length < 2) continue;
-        const widths = lines.map((l) => l.right - l.left);
+        const parts = [block];
+        if (report) {
+          const flowed = Array.from(doc.querySelectorAll(".column > p"));
+          for (let at = flowed.indexOf(parts[0]); at > 0 && parts[0].classList.contains("cont"); at -= 1) parts.unshift(flowed[at - 1]);
+        }
+        if (parts.reduce((sum, part) => sum + Math.round(part.getBoundingClientRect().height / lineHeight), 0) < 2) continue;
+        const lineSets = parts.map((part) => {
+          const range = doc.createRange();
+          range.selectNodeContents(part);
+          return groupLines(Array.from(range.getClientRects()), fontSize);
+        });
+        const lines = lineSets[lineSets.length - 1];
+        const widths = lineSets.flat().map((l) => l.right - l.left);
+        if (widths.length < 2 || lines.length === 0) continue;
         const last = widths[widths.length - 1];
         const widest = Math.max(...widths.slice(0, -1));
         // A tail is wasteful when it is tiny in absolute terms (a few characters)

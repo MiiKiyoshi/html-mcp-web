@@ -153,3 +153,37 @@ return {
     assert len(result["tops"]) >= 2
     assert all(count == 1 or share <= 0.7 for count, share in result["tops"])
     assert result["overflow"] == []
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_korean_text_with_english_words_is_cut_inside_its_column(tmp_path: Path) -> None:
+    """In a Korean document the English words are marked as English, and a box of one
+    starts lower on its line than the Hangul around it. A paragraph cut at a column's foot
+    is still cut below the last line that fits, so nothing runs past the foot and no letter
+    is lost or doubled."""
+    # Most words are English with a Korean particle, so many lines open with an English box.
+    sentence = ("baseline보다 accuracy가 높은 adapter를 layer마다 고르고 retention과 "
+                "proxy dev score를 router 없이 checkpoint마다 비교한다. ")
+    paragraphs = "\n".join(f"<p>{index} {sentence * 6}</p>" for index in range(1, 25))
+    html = content_html().replace("<body ", '<body data-lang="ko" ', 1)
+    html = html[:html.index('<section data-title="Method">')] + f'<section data-title="Method">{paragraphs}</section></body>'
+    result = run_in_report(tmp_path, html, """
+const overflow = [];
+for (const column of document.querySelectorAll('.column')) {
+  const foot = column.getBoundingClientRect().bottom + 0.5;
+  for (const child of column.children) {
+    if (child.getBoundingClientRect().bottom > foot) overflow.push(child.textContent.slice(0, 30));
+  }
+}
+const joined = [];
+for (const p of document.querySelectorAll('section.page .column > p')) {
+  if (p.classList.contains('cont')) joined[joined.length - 1] = joined[joined.length - 1].replace(/\\u2010$/, '') + p.textContent;
+  else joined.push(p.textContent);
+}
+return {overflow, split: document.querySelectorAll('p.split').length, texts: joined,
+        english: document.querySelectorAll('.column span[lang="en"]').length};""")
+    assert result["overflow"] == []
+    assert result["split"] > 0
+    assert result["english"] > 0
+    expected = [f"{index} {sentence * 6}" for index in range(1, 25)]
+    assert [text.strip() for text in result["texts"][1:]] == [text.strip() for text in expected]
