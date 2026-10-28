@@ -84,11 +84,14 @@ PAGINATE_SCRIPT = r"""<script>
     const box = node.getBoundingClientRect();
     const scale = node.offsetHeight > 0 ? box.height / node.offsetHeight : 1;
     const pitch = (parseFloat(style.lineHeight) || 16) * scale;
+    const letter = (parseFloat(style.fontSize) || 12) * scale;
     const range = document.createRange();
     range.selectNodeContents(node);
     const lines = [];
     for (const rect of range.getClientRects()) {
-      if (rect.width === 0) continue;
+      // A box much shorter than a letter is no line of text: KaTeX sets subscripts, rules
+      // and accents in boxes of their own, and one below the text began a line of its own.
+      if (rect.width === 0 || rect.height < letter * 0.6) continue;
       const middle = (rect.top + rect.bottom) / 2;
       const last = lines[lines.length - 1];
       if (last !== undefined && Math.abs(middle - last.middle) < pitch / 2) {
@@ -306,6 +309,77 @@ PAGINATE_SCRIPT = r"""<script>
     const pages = Array.from(holder.children);
     for (const page of pages.slice(0, -1)) page.querySelectorAll(".column").forEach(spread);
     balance(pages[pages.length - 1]);
+    if (document.documentElement.lang === "ko") holder.querySelectorAll(".column > p, .column li:not(:has(ul, ol))").forEach(tighten);
+  }
+
+  // A justified Korean line spreads its slack between letters as well as words (KITS 2.2),
+  // and a line with few spaces opened its Hangul by up to an eighth of an em, which reads as
+  // letters standing apart. On such a line the Hangul is set --letter-cap apart instead and
+  // the rest of the slack goes to its word spaces. That spacing takes less than the slack the
+  // letters had, so the line keeps its words, and one that would change anyway is put back
+  // as it was.
+  const HANGUL = /[가-힣]/;
+  function tighten(block) {
+    const lines = lineBoxes(block);
+    const justified = block.classList.contains("split") ? lines : lines.slice(0, -1);
+    if (justified.length === 0) return;
+    const style = getComputedStyle(block);
+    const cap = parseFloat(style.fontSize) * parseFloat(style.getPropertyValue("--letter-cap"));
+    const lineOf = (rect) => justified.findIndex((line) => (rect.top + rect.bottom) / 2 >= line.top && (rect.top + rect.bottom) / 2 < line.foot);
+    const segments = [];
+    const hangul = [];
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const text = walker.currentNode;
+      if (text.parentElement.closest('[lang="en"], .katex, code, .tight') !== null) continue;
+      for (let offset = 0; offset < text.length; offset += 1) {
+        const range = document.createRange();
+        range.setStart(text, offset);
+        range.setEnd(text, offset + 1);
+        const rect = Array.from(range.getClientRects()).find((box) => box.width > 0);
+        if (rect === undefined) continue;
+        const at = lineOf(rect);
+        if (at === -1) continue;
+        const segment = segments[segments.length - 1];
+        if (segment !== undefined && segment.text === text && segment.line === at && segment.end === offset) segment.end = offset + 1;
+        else segments.push({ text, line: at, start: offset, end: offset + 1 });
+        if (HANGUL.test(text.data[offset])) hangul.push({ line: at, width: rect.width });
+      }
+    }
+    // A letter's box takes in the space justification gives it, so a line's opening is the
+    // middle width of its Hangul past the width the face gives a Hangul letter, measured
+    // apart. The middle, since the letter beside a Latin word also carries the space the
+    // browser puts between the two scripts, which is no justification.
+    const probe = document.createElement("span");
+    probe.style.cssText = "position: absolute; visibility: hidden; white-space: nowrap; letter-spacing: normal; text-justify: none";
+    probe.textContent = "가나다라마바사아자차";
+    block.append(probe);
+    const natural = probe.getBoundingClientRect().width / 10;
+    probe.remove();
+    const byLine = new Map();
+    for (const letter of hangul) byLine.set(letter.line, [...(byLine.get(letter.line) ?? []), letter.width]);
+    const middle = (widths) => widths.slice().sort((x, y) => x - y)[widths.length >> 1];
+    const wide = new Set(Array.from(byLine).filter(([, widths]) => middle(widths) - natural > cap + 0.1).map(([line]) => line));
+    if (wide.size === 0) return;
+    const height = block.offsetHeight;
+    // Line by line from the last, whose segments come after the others' in each text node,
+    // so the offsets of the lines still to wrap hold.
+    for (const at of Array.from(wide).sort((x, y) => y - x)) {
+      const made = [];
+      for (const segment of segments.filter((part) => part.line === at).reverse()) {
+        const range = document.createRange();
+        range.setStart(segment.text, segment.start);
+        range.setEnd(segment.text, segment.end);
+        const span = document.createElement("span");
+        span.className = "tight";
+        range.surroundContents(span);
+        made.push(span);
+      }
+      const changed = () => block.offsetHeight !== height;
+      // Where even that spacing moves a word, the letters take none and the words all.
+      if (changed()) made.forEach((span) => span.classList.add("flat"));
+      if (changed()) for (const span of made) span.replaceWith(...span.childNodes);
+    }
   }
 
   // The last page's two columns are made even, as a proceedings class ends a paper: its

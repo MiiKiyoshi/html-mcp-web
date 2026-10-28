@@ -231,3 +231,54 @@ def test_columns_end_on_their_foot_under_every_skin(tmp_path: Path, skin: str, l
     assert abs(result["pitch"] - pitch) < 0.01
     first, second = result["last"]
     assert abs(first - second) <= pitch * 2, result["last"]
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_korean_line_opens_its_letters_no_further_than_the_cap(tmp_path: Path) -> None:
+    """A justified Korean line spreads its slack between letters, but no line opens its
+    Hangul past --letter-cap: the rest goes to its word spaces. A number, a bracket and a
+    citation stay closed, since the slack goes around them."""
+    words = ["가나다라마바사아", "자차카타파하", "거너더러머버서어저처", "고노도로모보소오", "구누두루무부수우주추쿠"]
+    sentence = " ".join(words) + " (Figure 1c) 11/24에는 1.5점 "
+    paragraphs = "\n".join(f"<p>{sentence * 4}</p>" for _ in range(6))
+    html = content_html().replace("<body ", '<body data-lang="ko" ', 1)
+    html = html[:html.index('<section data-title="Method">')] + f'<section data-title="Method">{paragraphs}</section></body>'
+    result = run_in_report(tmp_path, html, """
+const out = {letters: [], others: []};
+for (const block of document.querySelectorAll('main.pages .column > p')) {
+  const style = getComputedStyle(block);
+  const size = parseFloat(style.fontSize);
+  const cap = size * parseFloat(style.getPropertyValue('--letter-cap'));
+  const probe = document.createElement('span');
+  probe.style.cssText = 'position: absolute; visibility: hidden; white-space: nowrap';
+  probe.textContent = '가나다라마바사아자차';
+  block.append(probe);
+  const natural = probe.getBoundingClientRect().width / 10;
+  probe.remove();
+  const lines = new Map();
+  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const text = walker.currentNode;
+    for (let i = 0; i < text.length; i += 1) {
+      const range = document.createRange();
+      range.setStart(text, i); range.setEnd(text, i + 1);
+      const rect = range.getBoundingClientRect();
+      if (rect.width === 0) continue;
+      if (/[\\uac00-\\ud7a3]/.test(text.data[i])) {
+        const key = Math.round(rect.top);
+        lines.set(key, [...(lines.get(key) ?? []), rect.width]);
+      } else if (/[0-9A-Za-z/.()]/.test(text.data[i]) && /[0-9A-Za-z/.()]/.test(text.data[i + 1] ?? ' ')) {
+        const next = document.createRange();
+        next.setStart(text, i + 1); next.setEnd(text, i + 2);
+        out.others.push((next.getBoundingClientRect().left - rect.right) / size);
+      }
+    }
+  }
+  for (const widths of lines.values()) {
+    widths.sort((a, b) => a - b);
+    out.letters.push((widths[widths.length >> 1] - natural - cap) / size);
+  }
+}
+return out;""")
+    assert result["letters"] and max(result["letters"]) < 0.01, sorted(result["letters"])[-5:]
+    assert result["others"] and max(result["others"]) < 0.01, max(result["others"])

@@ -179,8 +179,11 @@ def cite_references(body_html: str, references: dict[str, str], numbers: dict[st
     return body.root.inner_html(), sorted(cited, key=numbers.__getitem__)
 
 
-LATIN_RUN = re.compile(r"[A-Za-z][A-Za-z'\u2019-]*(?:[ ,.:;()/'\u2019-]+[A-Za-z][A-Za-z'\u2019-]*)*")
-LATIN_SKIP = re.compile(MATH_SPANS.pattern + r"|&#?\w+;", re.S)
+# Hangul syllables and jamo, kana, CJK ideographs and their punctuation and full-width forms.
+CJK = "\u1100-\u11ff\u3000-\u303f\u3040-\u30ff\u3130-\u318f\u4e00-\u9fff\uac00-\ud7a3\uff00-\uffef"
+# A run of everything else between spaces: Latin words, numbers with their points, slashes
+# and hyphens, brackets and punctuation, entities included.
+OTHER_RUN = re.compile(r"(?:&#?\w+;|[^\s" + CJK + r"])+")
 UNMARKED = {"code", "pre", "svg", "script", "style", "math"}
 OPENING = re.compile(r"(?<=[^\s(\[{]{2})(?=\()")
 
@@ -189,7 +192,10 @@ def mark_text(body_html: str, lang: str) -> str:
     # A browser hyphenates by the language of the text, and a Korean document's English
     # words, read as Korean, were never broken: a justified line in a narrow column put its
     # whole slack into a few spaces. In a Korean, Japanese or Chinese document every run
-    # of Latin letters outside math and code is marked as English, and breaks as English.
+    # outside math and code that is not of those scripts, a Latin word, a number such as
+    # 11/24 or 1.5, a bracket or a citation, is marked as English: it breaks as English,
+    # and a justified line spreads its slack only around it, never between its letters,
+    # which opened "(Figure 1c)" into single characters.
     # An opening parenthesis written against the word before it, as in "SGS-LoRA(Self",
     # gives no break there in Unicode's rules, and with Korean breaking only at spaces the
     # whole run had to stand on one line: a <wbr> before it lets the line end there.
@@ -200,15 +206,15 @@ def mark_text(body_html: str, lang: str) -> str:
     body.close()
 
     def english(text: str) -> str:
-        return "<wbr>".join(LATIN_RUN.sub(lambda m: f'<span lang="en">{m.group(0)}</span>', part)
+        return "<wbr>".join(OTHER_RUN.sub(lambda m: f'<span lang="en">{m.group(0)}</span>', part)
                             for part in OPENING.split(text))
 
     def mark(text: str) -> str:
         pieces, start = [], 0
-        for skipped in LATIN_SKIP.finditer(text):
-            pieces.append(english(text[start:skipped.start()]))
-            pieces.append(skipped.group(0))
-            start = skipped.end()
+        for math in MATH_SPANS.finditer(text):
+            pieces.append(english(text[start:math.start()]))
+            pieces.append(math.group(0))
+            start = math.end()
         pieces.append(english(text[start:]))
         return "".join(pieces)
 

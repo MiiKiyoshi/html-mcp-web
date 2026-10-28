@@ -522,20 +522,21 @@ def test_the_rows_of_th_at_the_top_become_the_head(tmp_path: Path) -> None:
 
 
 def test_english_words_in_a_korean_document_are_marked_english_and_parentheses_break() -> None:
-    """A browser breaks a word by the language of its text. A run of Latin letters in a
-    Korean document is marked English, while math, code, entities and a document in
-    English are left as they are."""
+    """A browser breaks a word by the language of its text, and spreads a justified Korean
+    line around such a run but not inside it. Every run between spaces that is not Korean,
+    a word, a number with its points or a bracket, entities included, is marked English in
+    a Korean document, while math, code and a document in English are left as they are."""
     from html_mcp_web.kits import mark_text
 
     source = ('<p>수학 SFT loss에 $p_{\\theta}(x)$ 와 R&amp;D, <code>run_vg</code> 그리고 '
               'parameter-efficient fine-tuning을 <b>LoRA</b>로.</p>')
     assert mark_text(source, "ko") == (
-        '<p>수학 <span lang="en">SFT loss</span>에 $p_{\\theta}(x)$ 와 <span lang="en">R</span>&amp;'
-        '<span lang="en">D</span>, <code>run_vg</code> 그리고 <span lang="en">parameter-efficient '
-        'fine-tuning</span>을 <b><span lang="en">LoRA</span></b>로.</p>')
+        '<p>수학 <span lang="en">SFT</span> <span lang="en">loss</span>에 $p_{\\theta}(x)$ 와 '
+        '<span lang="en">R&amp;D,</span> <code>run_vg</code> 그리고 <span lang="en">parameter-efficient</span> '
+        '<span lang="en">fine-tuning</span>을 <b><span lang="en">LoRA</span></b>로<span lang="en">.</span></p>')
     assert mark_text(source, "en") == source
     # A parenthesis written against a word of two letters or more gives the line a place
     # to end, and one after a single letter, as in f(x), does not.
     assert mark_text("<p>여닫는 SGS-LoRA(Self-Gated)와 f(x), 결과(3)</p>", "ko") == (
-        '<p>여닫는 <span lang="en">SGS-LoRA</span><wbr>(<span lang="en">Self-Gated</span>)와 '
-        '<span lang="en">f(x</span>), 결과<wbr>(3)</p>')
+        '<p>여닫는 <span lang="en">SGS-LoRA</span><wbr><span lang="en">(Self-Gated)</span>와 '
+        '<span lang="en">f(x),</span> 결과<wbr><span lang="en">(3)</span></p>')

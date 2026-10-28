@@ -482,6 +482,52 @@ export function createLayoutChecks(dependencies) {
             }
           }
         }
+        // A justified Korean line that opens its Hangul past --letter-cap (KITS 10.12) reads
+        // as letters standing apart. A letter's box takes in what justification gives it, so
+        // a line's opening is the middle width of its Hangul past the width the face gives a
+        // Hangul letter set apart; the middle, since a letter beside a Latin word also takes
+        // the browser's space between the scripts.
+        for (const block of doc.documentElement.lang === "ko" ? page.querySelectorAll(".column > p, .column li") : []) {
+          const style = doc.defaultView.getComputedStyle(block);
+          const fontSize = parseFloat(style.fontSize) || 16;
+          const cap = fontSize * (parseFloat(style.getPropertyValue("--letter-cap")) || 0.05);
+          const box = block.getBoundingClientRect();
+          const scale = block.offsetHeight > 0 ? box.height / block.offsetHeight : 1;
+          const pitch = (parseFloat(style.lineHeight) || fontSize * 1.2) * scale;
+          const probe = doc.createElement("span");
+          probe.style.cssText = "position: absolute; visibility: hidden; white-space: nowrap; letter-spacing: normal; text-justify: none";
+          probe.textContent = "가나다라마바사아자차";
+          block.append(probe);
+          const natural = probe.getBoundingClientRect().width / 10;
+          probe.remove();
+          const lines = [];
+          const walker = doc.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+            if (node.parentElement.closest('[lang="en"], .katex, code') !== null) continue;
+            for (let offset = 0; offset < node.length; offset += 1) {
+              if (!/[\uac00-\ud7a3]/.test(node.data[offset])) continue;
+              const range = doc.createRange();
+              range.setStart(node, offset);
+              range.setEnd(node, offset + 1);
+              const rect = range.getBoundingClientRect();
+              if (rect.width === 0) continue;
+              const middle = (rect.top + rect.bottom) / 2;
+              let line = lines.find((entry) => Math.abs(entry.middle - middle) < pitch / 2);
+              if (line === undefined) lines.push(line = { middle, top: rect.top, bottom: rect.bottom, widths: [] });
+              line.widths.push(rect.width);
+            }
+          }
+          let worst = null;
+          for (const line of lines) {
+            const widths = line.widths.slice().sort((x, y) => x - y);
+            const opening = (widths[widths.length >> 1] - natural) / scale;
+            if (opening > cap + 0.15 && (worst === null || opening > worst.opening)) worst = { opening, line };
+          }
+          if (worst !== null) {
+            addError(`page ${index + 1} ${block.tagName.toLowerCase()} "${readableText(block).slice(0, 24)}…" opens its letters `
+              + `${(worst.opening / fontSize).toFixed(2)}em apart on the line "${lineText(block, { coreTop: worst.line.top, coreBottom: worst.line.bottom })}"`, block);
+          }
+        }
         // A word space a justified line opens past two thirds of the text's size (KITS 10.12)
         // shows as a hole in the column. The widest one of a block is named with its line.
         for (const block of page.querySelectorAll(".column > p, .column li")) {

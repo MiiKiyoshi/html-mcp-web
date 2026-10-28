@@ -24,6 +24,8 @@
   --indent: 10pt;
   /* Space between paragraphs of a section, before a column's slack is shared (10.10). */
   --parskip: 3pt;
+  /* The most a justified Korean line opens between two of its letters (10.12). */
+  --letter-cap: 0.05em;
   color: var(--ink);
   font-family: var(--serif);
   font-size: var(--size);
@@ -35,6 +37,10 @@
 /* Hangul fills its em more than Latin letters do, and on the papers' pitch a Korean page
    read crowded. A Korean text takes the pitch that sets 53 lines in a column. */
 html:lang(ko) { --leading: 1.0755; }
+/* A Korean line whose letters would open past --letter-cap sets them that far apart and
+   spreads the rest between its words (the pour marks it). */
+.tight { text-justify: inter-word; letter-spacing: var(--letter-cap); }
+.tight.flat { letter-spacing: 0; }
 
 body { margin: 0; background: #fff; }
 main.pages section.page { width: 210mm; height: 297mm; overflow: hidden; }
