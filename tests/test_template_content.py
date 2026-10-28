@@ -501,3 +501,21 @@ def test_the_authoring_skeleton_keeps_its_lead_under_the_title(tmp_path: Path) -
     build(content, tmp_path / "slides.html", REPO / "templates" / "neutral-slides")
     body = (tmp_path / "slides.html").read_text(encoding="utf-8").split('<div class="body" data-layout-guard>')[1]
     assert body.index('<p class="lead">Page introduction.</p>') < body.index('<div class="rest">')
+
+
+def test_the_rows_of_th_at_the_top_become_the_head(tmp_path: Path) -> None:
+    """Leading rows of th cells are the table's head with or without thead: they move into
+    a thead, and a row holding a td, or a table already carrying a thead, is left alone."""
+    content = tmp_path / "content.html"
+    content.write_text('''<title>T</title><body data-author="A" data-meta="B">
+<section data-title="Tables">
+<table class="num"><tr><th></th><th colspan="2">Time</th></tr><tr><th>Design</th><th>a</th><th>b</th></tr>
+<tr><th>aes</th><td>1</td><td>2</td></tr></table>
+<table><tbody><tr><th>Name</th><th>Role</th></tr><tr><td>x</td><td>y</td></tr></tbody></table>
+<table><thead><tr><th>H</th></tr></thead><tr><th>kept</th></tr><tr><td>z</td></tr></table>
+</section></body>''', encoding="utf-8")
+    body = parse_template_content(content).sections[0].body_html
+    assert ('<table class="num"><thead><tr><th></th><th colspan="2">Time</th></tr>'
+            '<tr><th>Design</th><th>a</th><th>b</th></tr></thead>\n<tr><th>aes</th>') in body
+    assert '<table><thead><tr><th>Name</th><th>Role</th></tr></thead><tbody><tr><td>x</td>' in body
+    assert '<thead><tr><th>H</th></tr></thead><tr><th>kept</th></tr>' in body

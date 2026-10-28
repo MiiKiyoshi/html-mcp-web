@@ -134,12 +134,19 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
    width, it widened the wrapper and the table filled it, stretched four times over. */
 .table-fit > .units { contain: inline-size; }
 th { font-weight: 650; letter-spacing: .025em; }
-th, td { text-align: right; }
+/* Cells align left, as words do. A table of numbers, marked num, aligns its value columns
+   right so the digits stand in place, and keeps its first column of labels left. */
+th, td { text-align: left; }
 th.sep, td.sep { border-left: 1px solid var(--line); }
-th:first-child, td:first-child { text-align: left; }
+/* A column columns.js keeps whole when a table shares out its width. */
+[data-fit-line] { white-space: nowrap; }
+table.num :is(th, td) { text-align: right; }
+table.num :is(th, td):first-child { text-align: left; }
 /* A row whose first column is spanned from above starts in a later column, and the
    builder gives that first cell its column number, so it aligns with its column. */
-th:first-child[data-column], td:first-child[data-column] { text-align: right; }
+table.num :is(th, td):first-child[data-column] { text-align: right; }
+/* A head cell over several columns names their group and stands over their middle. */
+table thead th[colspan] { text-align: center; }
 
 /* A two-column paper on an A4 page, set the way a conference proceedings class sets it:
    a 504pt text block of two 240pt columns 24pt apart, 9pt type on a 10.95pt line, bold
@@ -233,7 +240,9 @@ pre { margin: 6pt 0; font-family: var(--mono); font-size: 7.5pt; line-height: 9p
 main.pages .katex:not(.katex-display .katex) { line-height: 0; }
 
 /* ---- Figures and tables: numbered, in the flow, moved whole ---- */
-figure { margin: 10pt 0; text-indent: 0; }
+/* A figure or table stands 12pt from the text and from the next figure, LaTeX's \intextsep
+   and \floatsep. */
+figure { margin: 12pt 0; text-indent: 0; }
 .column > figure:first-child { margin-top: 0; }
 figure.wide { margin: 0 0 4pt; }
 figure img, figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
@@ -242,13 +251,32 @@ figcaption.single { text-align: center; }
 figure.table figcaption { margin: 0 0 6pt; }
 .caption-label { font-size: 9pt; }
 
-table { width: auto; margin: 0 auto; border-collapse: collapse; font-size: 8pt; line-height: 9.6pt; border-top: .72pt solid var(--line); border-bottom: .72pt solid var(--line); }
-thead tr:last-child th, thead tr:last-child td { border-bottom: .45pt solid var(--line); }
-/* Rows on the text's own pitch, as a tabular sets them, with a little air at the rules. */
-th, td { padding: 0 4pt; border: 0; vertical-align: baseline; }
-tbody tr:first-child td { padding-top: 2.5pt; }
-tbody tr:last-child td { padding-bottom: 1.5pt; }
-thead th { padding-top: 1.5pt; padding-bottom: 1.5pt; }
+/* The rules of booktabs, heavy above and below and light under the head, are boxes of
+   their own height: printed, any border under a pixel came out at one width and the two
+   weights looked the same. */
+table { position: relative; width: auto; margin: 0 auto; border-collapse: collapse; font-size: 8pt; line-height: 9.6pt; }
+table::before, table::after, thead tr:last-child > ::after {
+  content: ""; position: absolute; left: 0; right: 0; background: var(--line); }
+table::before { top: 0; height: .72pt; }
+table::after { bottom: 0; height: .72pt; }
+thead tr:last-child > * { position: relative; }
+thead tr:last-child > ::after { bottom: 0; height: .45pt; }
+/* A later row group, such as a row of averages in a tbody of its own, opens with the light
+   rule, \midrule. */
+tbody + tbody > tr:first-child > * { position: relative; }
+tbody + tbody > tr:first-child > ::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: .45pt; background: var(--line); }
+/* A group's head has a thin rule under it, kept short of the neighbouring groups', as
+   booktabs' \cmidrule(lr) draws it. */
+thead tr:not(:last-child) > th[colspan] { position: relative; padding-bottom: 4pt; }
+thead tr:not(:last-child) > th[colspan]::after {
+  content: ""; position: absolute; left: .5em; right: .5em; bottom: 0; height: .27pt; background: var(--line); }
+/* Rows on the text's own pitch, as a tabular sets them, with the space booktabs keeps at
+   its rules. Neighbouring cells stand 9pt apart, as in the papers' tables. */
+th, td { padding: 0 4.5pt; border: 0; vertical-align: baseline; }
+tbody tr:first-child > * { padding-top: 1.9pt; }
+tbody tr:last-child > * { padding-bottom: 2.9pt; }
+thead th { padding-top: 2.6pt; padding-bottom: 2.7pt; }
 th { font-weight: 400; letter-spacing: 0; }
 th.sep, td.sep { border-left-width: .4pt; }
 .units { margin: 0 0 2pt; text-align: right; font-size: 7pt; text-indent: 0; }
@@ -287,7 +315,7 @@ ol.bib .bib-no { position: absolute; left: 0; }
 <h2><span class="secno">3</span>Results</h2>
 <p>We compare the nightly runs of 8 to 14 September, split by file name, with those of 15 to 21 September, split by duration. Table 1 gives each runner's median finishing time over the seven nights of each week.</p>
 <figure class="table"><figcaption><span class="caption-label">Table 1: </span>Median finishing time of each runner over seven nights, by the split used.</figcaption>
-<table>
+<table class="num">
 <thead><tr><th>Runner</th><th>By file name</th><th>By duration</th><th>Change</th></tr></thead>
 <tbody>
 <tr><td>1</td><td>74 min</td><td>47 min</td><td>−27 min</td></tr>
@@ -322,6 +350,71 @@ ol.bib .bib-no { position: absolute; left: 0; }
   renderMathInElement(document.body, options);
   (window.htmlMcpPageSetup ??= []).push((root) => renderMathInElement(root, options));
 })();</script>
+  <script>// A table too wide for its place shares the width out as tabularx does: a column whose
+// longest line fits in an even share of the width left keeps that line whole, and the
+// columns of longer text divide what remains and wrap. Left to the browser, every column
+// gave up width in proportion to its text, so a column of short labels such as "TODO 1-5"
+// broke in two beside a column of sentences that could have taken the line.
+//
+// The widths are measured on the page, in the face it is set in, and a cell of a column
+// kept whole gets data-fit-line, which the components draw without wrapping. A cell
+// spanning several columns is left to wrap.
+(() => {
+  const grid = (table) => {
+    const columns = [];
+    const covered = [];
+    Array.from(table.rows).forEach((row, r) => {
+      let column = 0;
+      for (const cell of row.cells) {
+        while (covered[r]?.[column]) column += 1;
+        for (let down = 0; down < cell.rowSpan; down += 1) {
+          for (let across = 0; across < cell.colSpan; across += 1) {
+            (covered[r + down] ??= [])[column + across] = true;
+          }
+        }
+        if (cell.colSpan === 1) (columns[column] ??= []).push(cell);
+        column += cell.colSpan;
+      }
+    });
+    return columns;
+  };
+
+  const fit = (table) => {
+    const cells = Array.from(table.querySelectorAll("[data-fit-line]"));
+    cells.forEach((cell) => cell.removeAttribute("data-fit-line"));
+    const width = table.offsetWidth;
+    if (width === 0) return;
+    const columns = grid(table).map((column) => column ?? []);
+    // Each column's longest line: the table laid out with no line broken.
+    const before = table.style.width;
+    table.style.width = "max-content";
+    table.querySelectorAll("th, td").forEach((cell) => cell.setAttribute("data-fit-line", ""));
+    const longest = columns.map((column) => column.length ? column[0].offsetWidth : 0);
+    const natural = table.offsetWidth;
+    table.querySelectorAll("th, td").forEach((cell) => cell.removeAttribute("data-fit-line"));
+    table.style.width = before;
+    if (natural <= width + 0.5) return;
+    let open = columns.map((_, index) => index).filter((index) => columns[index].length);
+    let left = width;
+    for (;;) {
+      const share = left / open.length;
+      const kept = open.filter((index) => longest[index] <= share);
+      if (kept.length === 0 || kept.length === open.length) break;
+      for (const index of kept) {
+        left -= longest[index];
+        columns[index].forEach((cell) => cell.setAttribute("data-fit-line", ""));
+      }
+      open = open.filter((index) => !kept.includes(index));
+    }
+  };
+
+  window.htmlMcpFitColumns = fit;
+  const setup = (root) => root.querySelectorAll("table").forEach(fit);
+  setup(document);
+  document.fonts.ready.then(() => setup(document));
+  (window.htmlMcpPageSetup ??= []).push(setup);
+})();
+</script>
 <script>
 (() => {
   const flow = document.getElementById("report-flow");
@@ -361,6 +454,11 @@ ol.bib .bib-no { position: absolute; left: 0; }
     return page;
   }
 
+  // A table shares out the width of the place it lands in, a column or the page.
+  const fitTables = (block) => {
+    const tables = block.tagName === "TABLE" ? [block] : Array.from(block.querySelectorAll?.("table") ?? []);
+    tables.forEach((table) => window.htmlMcpFitColumns(table));
+  };
   const bottomOf = (column) => column.getBoundingClientRect().bottom;
   const fits = (node, column) => node.getBoundingClientRect().bottom <= bottomOf(column) + 0.5;
 
@@ -468,14 +566,25 @@ ol.bib .bib-no { position: absolute; left: 0; }
         pageNumber += 1;
         page = newPage(pageNumber);
         columnIndex = 0;
+        // Wide figures that waited stack at the top while they take no more than 0.7 of the
+        // page, LaTeX's \dbltopfraction, and the rest wait for the page after. One alone
+        // always goes. Stacked past the page, they pushed the columns out of it.
         const top = page.querySelector(".page-top");
-        while (waitingWide.length) top.append(waitingWide.shift());
+        const limit = page.querySelector(".page-body").getBoundingClientRect().height * 0.7;
+        while (waitingWide.length) {
+          const figure = waitingWide[0];
+          top.append(figure);
+          fitTables(figure);
+          if (top.getBoundingClientRect().height > limit && top.children.length > 1) { figure.remove(); break; }
+          waitingWide.shift();
+        }
       }
       column = page.querySelectorAll(".column")[columnIndex];
       // Figures that waited go first, as many as the column holds.
       while (waitingColumn.length) {
         const figure = waitingColumn[0];
         column.append(figure);
+        fitTables(figure);
         if (!fits(figure, column) && column.children.length > 1) { figure.remove(); break; }
         waitingColumn.shift();
       }
@@ -498,6 +607,7 @@ ol.bib .bib-no { position: absolute; left: 0; }
         continue;
       }
       column.append(block);
+      fitTables(block);
       if (fits(block, column)) {
         // A head stays with the two lines of text after it. A figure between them floats
         // and is not what the head is kept with.

@@ -126,9 +126,34 @@ def _script_child(element: Element) -> Element | None:
     return matches[0] if matches else None
 
 
+def _group_head_rows(section: Element) -> None:
+    # The rows of th cells at the top of a table are its head, written with thead or not:
+    # a layout draws the rule under the head and gives the head rows their own spacing.
+    for table in _elements(section, "table"):
+        groups = [child for child in table.children if isinstance(child, Element)]
+        if any(child.tag == "thead" for child in groups):
+            continue
+        holder = next((child for child in groups if child.tag == "tbody"), table)
+        rows = [child for child in holder.children if isinstance(child, Element) and child.tag == "tr"]
+        head = []
+        for row in rows:
+            cells = [child for child in row.children if isinstance(child, Element)]
+            if not cells or any(cell.tag != "th" for cell in cells):
+                break
+            head.append(row)
+        if not head or len(head) == len(rows):
+            continue
+        holder.children = [child for child in holder.children if not any(child is row for row in head)]
+        thead = Element("thead", {}, head)
+        if holder is table:
+            table.children.insert(0, thead)
+        else:
+            table.children.insert(table.children.index(holder), thead)
+
+
 def _mark_shifted_rows(section: Element) -> None:
-    # The components align a table's first column to the left and the rest to the right,
-    # by :first-child. A row whose first column is taken by a cell spanning down from
+    # The components align a num table's first column to the left and the rest to the
+    # right, by :first-child. A row whose first column is taken by a cell spanning down from
     # above starts in a later column, and its first cell would take the first column's
     # alignment. That cell gets its column as data-column, which keeps its own column's
     # alignment. A rowspan reaches no further than its row group.
@@ -185,6 +210,7 @@ def parse_template_content(path: Path) -> TemplateContent:
         if layout == "body" and "data-title" not in section.attributes:
             raise ValueError("each direct body section requires data-title")
         script = _script_child(section)
+        _group_head_rows(section)
         _mark_shifted_rows(section)
         sections.append(ContentSection(
             title=section.attributes.get("data-title", "").strip(),

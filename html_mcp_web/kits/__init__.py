@@ -23,6 +23,7 @@ MONO = HERE / "vendor" / "noto-sans-mono"
 # Breaks a <text data-wrap> or <text data-fit> label into lines with the document's font.
 # The lines are chosen by TeX's algorithm, which comes with its own hyphenation patterns.
 WRAP = HERE / "wrap.js"
+COLUMNS = HERE / "columns.js"
 TEX_LINEBREAK = HERE / "vendor" / "tex-linebreak"
 
 
@@ -254,8 +255,8 @@ def math_bundle() -> tuple[str, str]:
 
 def document_assets(html_text: str) -> tuple[str, str]:
     """What a document carries besides its own markup, for the head and for the end of the
-    body: the code face, KaTeX, the placing of lifted figure HTML and the svg label
-    wrapper, each only when the document uses it. Every template ends its document with
+    body: the code face, KaTeX, the placing of lifted figure HTML, the svg label wrapper
+    and the sharing of a table's width, each only when the document uses it. Every template ends its document with
     the same scripts in the same order, so math and figures come out the same in each."""
     math_head, math_foot = math_bundle() if has_math(html_text) else ("", "")
     wraps = "data-wrap=" in html_text or "data-fit=" in html_text
@@ -263,4 +264,5 @@ def document_assets(html_text: str) -> tuple[str, str]:
         "\n  <script>" + path.read_text(encoding="utf-8") + "</script>"
         for path in (TEX_LINEBREAK / "lib.js", TEX_LINEBREAK / "hyphens_en-us.js", WRAP)) if wraps else ""
     svg_html = SVG_HTML_SCRIPT if "svg-html-layer" in html_text else ""
-    return mono_face(html_text) + math_head, math_foot + wrap + svg_html
+    columns = "\n  <script>" + COLUMNS.read_text(encoding="utf-8") + "</script>" if "<table" in html_text else ""
+    return mono_face(html_text) + math_head, math_foot + wrap + svg_html + columns

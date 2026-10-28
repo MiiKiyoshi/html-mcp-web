@@ -135,12 +135,19 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
    width, it widened the wrapper and the table filled it, stretched four times over. */
 .table-fit > .units { contain: inline-size; }
 th { font-weight: 650; letter-spacing: .025em; }
-th, td { text-align: right; }
+/* Cells align left, as words do. A table of numbers, marked num, aligns its value columns
+   right so the digits stand in place, and keeps its first column of labels left. */
+th, td { text-align: left; }
 th.sep, td.sep { border-left: 1px solid var(--line); }
-th:first-child, td:first-child { text-align: left; }
+/* A column columns.js keeps whole when a table shares out its width. */
+[data-fit-line] { white-space: nowrap; }
+table.num :is(th, td) { text-align: right; }
+table.num :is(th, td):first-child { text-align: left; }
 /* A row whose first column is spanned from above starts in a later column, and the
    builder gives that first cell its column number, so it aligns with its column. */
-th:first-child[data-column], td:first-child[data-column] { text-align: right; }
+table.num :is(th, td):first-child[data-column] { text-align: right; }
+/* A head cell over several columns names their group and stands over their middle. */
+table thead th[colspan] { text-align: center; }
 
 /* Slide engine skeleton: where things sit on a 1280x720 page. A skin sets the variables
    below and supplies chrome images through the slots the builder emits; it does not
@@ -646,7 +653,7 @@ pre { margin: 12px 0; padding: 14px 18px; border-radius: 6px; background: var(--
       <text x="331" y="346" text-anchor="middle" fill="#6d777c" font-size="13">runner</text>
     </svg>
     <div>
-      <table>
+      <table class="num">
         <thead><tr><th></th><th>File name</th><th>Duration</th></tr></thead>
         <tbody>
           <tr><td>Slowest runner</td><td>74 min</td><td class="pos">47 min</td></tr>
@@ -695,6 +702,71 @@ pre { margin: 12px 0; padding: 14px 18px; border-radius: 6px; background: var(--
     </div>
 
   </main>
+  <script>// A table too wide for its place shares the width out as tabularx does: a column whose
+// longest line fits in an even share of the width left keeps that line whole, and the
+// columns of longer text divide what remains and wrap. Left to the browser, every column
+// gave up width in proportion to its text, so a column of short labels such as "TODO 1-5"
+// broke in two beside a column of sentences that could have taken the line.
+//
+// The widths are measured on the page, in the face it is set in, and a cell of a column
+// kept whole gets data-fit-line, which the components draw without wrapping. A cell
+// spanning several columns is left to wrap.
+(() => {
+  const grid = (table) => {
+    const columns = [];
+    const covered = [];
+    Array.from(table.rows).forEach((row, r) => {
+      let column = 0;
+      for (const cell of row.cells) {
+        while (covered[r]?.[column]) column += 1;
+        for (let down = 0; down < cell.rowSpan; down += 1) {
+          for (let across = 0; across < cell.colSpan; across += 1) {
+            (covered[r + down] ??= [])[column + across] = true;
+          }
+        }
+        if (cell.colSpan === 1) (columns[column] ??= []).push(cell);
+        column += cell.colSpan;
+      }
+    });
+    return columns;
+  };
+
+  const fit = (table) => {
+    const cells = Array.from(table.querySelectorAll("[data-fit-line]"));
+    cells.forEach((cell) => cell.removeAttribute("data-fit-line"));
+    const width = table.offsetWidth;
+    if (width === 0) return;
+    const columns = grid(table).map((column) => column ?? []);
+    // Each column's longest line: the table laid out with no line broken.
+    const before = table.style.width;
+    table.style.width = "max-content";
+    table.querySelectorAll("th, td").forEach((cell) => cell.setAttribute("data-fit-line", ""));
+    const longest = columns.map((column) => column.length ? column[0].offsetWidth : 0);
+    const natural = table.offsetWidth;
+    table.querySelectorAll("th, td").forEach((cell) => cell.removeAttribute("data-fit-line"));
+    table.style.width = before;
+    if (natural <= width + 0.5) return;
+    let open = columns.map((_, index) => index).filter((index) => columns[index].length);
+    let left = width;
+    for (;;) {
+      const share = left / open.length;
+      const kept = open.filter((index) => longest[index] <= share);
+      if (kept.length === 0 || kept.length === open.length) break;
+      for (const index of kept) {
+        left -= longest[index];
+        columns[index].forEach((cell) => cell.setAttribute("data-fit-line", ""));
+      }
+      open = open.filter((index) => !kept.includes(index));
+    }
+  };
+
+  window.htmlMcpFitColumns = fit;
+  const setup = (root) => root.querySelectorAll("table").forEach(fit);
+  setup(document);
+  document.fonts.ready.then(() => setup(document));
+  (window.htmlMcpPageSetup ??= []).push(setup);
+})();
+</script>
 <script>
 window.htmlMcpPageSetup ??= [];
 (() => {

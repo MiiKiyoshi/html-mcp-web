@@ -90,7 +90,9 @@ pre { margin: 6pt 0; font-family: var(--mono); font-size: 7.5pt; line-height: 9p
 main.pages .katex:not(.katex-display .katex) { line-height: 0; }
 
 /* ---- Figures and tables: numbered, in the flow, moved whole ---- */
-figure { margin: 10pt 0; text-indent: 0; }
+/* A figure or table stands 12pt from the text and from the next figure, LaTeX's \intextsep
+   and \floatsep. */
+figure { margin: 12pt 0; text-indent: 0; }
 .column > figure:first-child { margin-top: 0; }
 figure.wide { margin: 0 0 4pt; }
 figure img, figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
@@ -99,13 +101,32 @@ figcaption.single { text-align: center; }
 figure.table figcaption { margin: 0 0 6pt; }
 .caption-label { font-size: 9pt; }
 
-table { width: auto; margin: 0 auto; border-collapse: collapse; font-size: 8pt; line-height: 9.6pt; border-top: .72pt solid var(--line); border-bottom: .72pt solid var(--line); }
-thead tr:last-child th, thead tr:last-child td { border-bottom: .45pt solid var(--line); }
-/* Rows on the text's own pitch, as a tabular sets them, with a little air at the rules. */
-th, td { padding: 0 4pt; border: 0; vertical-align: baseline; }
-tbody tr:first-child td { padding-top: 2.5pt; }
-tbody tr:last-child td { padding-bottom: 1.5pt; }
-thead th { padding-top: 1.5pt; padding-bottom: 1.5pt; }
+/* The rules of booktabs, heavy above and below and light under the head, are boxes of
+   their own height: printed, any border under a pixel came out at one width and the two
+   weights looked the same. */
+table { position: relative; width: auto; margin: 0 auto; border-collapse: collapse; font-size: 8pt; line-height: 9.6pt; }
+table::before, table::after, thead tr:last-child > ::after {
+  content: ""; position: absolute; left: 0; right: 0; background: var(--line); }
+table::before { top: 0; height: .72pt; }
+table::after { bottom: 0; height: .72pt; }
+thead tr:last-child > * { position: relative; }
+thead tr:last-child > ::after { bottom: 0; height: .45pt; }
+/* A later row group, such as a row of averages in a tbody of its own, opens with the light
+   rule, \midrule. */
+tbody + tbody > tr:first-child > * { position: relative; }
+tbody + tbody > tr:first-child > ::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: .45pt; background: var(--line); }
+/* A group's head has a thin rule under it, kept short of the neighbouring groups', as
+   booktabs' \cmidrule(lr) draws it. */
+thead tr:not(:last-child) > th[colspan] { position: relative; padding-bottom: 4pt; }
+thead tr:not(:last-child) > th[colspan]::after {
+  content: ""; position: absolute; left: .5em; right: .5em; bottom: 0; height: .27pt; background: var(--line); }
+/* Rows on the text's own pitch, as a tabular sets them, with the space booktabs keeps at
+   its rules. Neighbouring cells stand 9pt apart, as in the papers' tables. */
+th, td { padding: 0 4.5pt; border: 0; vertical-align: baseline; }
+tbody tr:first-child > * { padding-top: 1.9pt; }
+tbody tr:last-child > * { padding-bottom: 2.9pt; }
+thead th { padding-top: 2.6pt; padding-bottom: 2.7pt; }
 th { font-weight: 400; letter-spacing: 0; }
 th.sep, td.sep { border-left-width: .4pt; }
 .units { margin: 0 0 2pt; text-align: right; font-size: 7pt; text-indent: 0; }

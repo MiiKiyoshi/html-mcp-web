@@ -34,13 +34,11 @@ def content_html() -> str:
 """
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
-def test_the_text_runs_on_across_columns_and_pages_whole(tmp_path: Path) -> None:
-    """The flow is poured into two columns a page: nothing runs past the foot of a column,
-    a paragraph cut at a foot goes on at the head of the next column with not a letter lost
-    or doubled, and a figure moves whole."""
+def run_in_report(tmp_path: Path, html: str, script: str) -> dict:
+    """Build html with the report template, open it in Firefox once its fonts are in, and
+    return what script returns."""
     content = tmp_path / "content.html"
-    content.write_text(content_html(), encoding="utf-8")
+    content.write_text(html, encoding="utf-8")
     report = tmp_path / "report.html"
     subprocess.run([sys.executable, str(BUILDER), str(content), str(report)], check=True,
                    capture_output=True, env={"PYTHONPATH": str(REPO), "PATH": "/usr/bin:/bin"})
@@ -62,7 +60,17 @@ def test_the_text_runs_on_across_columns_and_pages_whole(tmp_path: Path) -> None
                 break
             time.sleep(0.2)
         time.sleep(0.5)
-        result = browser.execute_script("""
+        return browser.execute_script(script)
+    finally:
+        process.kill()
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_the_text_runs_on_across_columns_and_pages_whole(tmp_path: Path) -> None:
+    """The flow is poured into two columns a page: nothing runs past the foot of a column,
+    a paragraph cut at a foot goes on at the head of the next column with not a letter lost
+    or doubled, and a figure moves whole."""
+    result = run_in_report(tmp_path, content_html(), """
 const pages = Array.from(document.querySelectorAll('main.pages > section.page'));
 const overflow = [];
 for (const column of document.querySelectorAll('.column')) {
@@ -88,8 +96,6 @@ return {
   items: document.querySelectorAll('.column li').length,
   flowLeft: document.getElementById('report-flow').children.length,
 };""")
-    finally:
-        process.kill()
 
     assert result["pages"] >= 3
     assert all(count == 2 for count in result["columns"])
@@ -100,3 +106,50 @@ return {
     assert result["figures"] == [True]
     assert result["items"] >= 3
     assert result["flowLeft"] == 0
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_tables_share_their_width_and_wide_figures_leave_room(tmp_path: Path) -> None:
+    """A first row of th becomes the table's head. A column of short labels keeps each
+    label on one line beside a column of longer text. Wide figures waiting for a
+    page stack at its top only to 0.7 of it, and no column overflows."""
+    work = ["teacher data, NLL selection, math proxy", "anchor KL, layer selection, combination, efficiency",
+            "proxy dev, reference tools, held-out checks"]
+    rows = "".join(f"<tr><td>{role}</td><td>TODO {n}-{n + 4}</td><td>{text}</td></tr>"
+                   for role, n, text in zip("ABC", (1, 6, 11), work))
+    wide = "".join(f'<figure class="wide"><svg viewBox="0 0 500 300" width="500" height="300">'
+                   f'<rect width="500" height="300" fill="#ccc"/></svg><figcaption>Wide {n}.</figcaption></figure>'
+                   for n in range(3))
+    table = f"<figure><table><tr><th>Role</th><th>Part 1</th><th>Part 2</th></tr>{rows}</table><figcaption>Work.</figcaption></figure>"
+    # Korean text breaks only between words, the case in which the browser left the short
+    # column too narrow for its labels.
+    html = content_html().replace("<ul>", table + wide + "<ul>", 1).replace("<body ", '<body data-lang="ko" ', 1)
+    result = run_in_report(tmp_path, html, """
+const table = document.querySelector('.column table');
+const overflow = [];
+for (const column of document.querySelectorAll('.column')) {
+  const foot = column.getBoundingClientRect().bottom + 0.5;
+  for (const child of column.children) {
+    if (child.getBoundingClientRect().bottom > foot && column.children.length > 1) overflow.push(child.textContent.slice(0, 30));
+  }
+}
+const line = parseFloat(getComputedStyle(table).lineHeight);
+return {
+  head: table.tHead !== null && table.tHead.rows.length === 1,
+  labels: Array.from(table.tBodies[0].rows).map((row) => {
+    const range = document.createRange();
+    range.selectNodeContents(row.cells[1]);
+    return range.getBoundingClientRect().height < line * 1.5;
+  }),
+  tops: Array.from(document.querySelectorAll('.page')).map((page) => [
+    page.querySelectorAll('.page-top figure.wide').length,
+    page.querySelector('.page-top').offsetHeight / page.querySelector('.page-body').offsetHeight,
+  ]).filter(([count]) => count > 0),
+  overflow,
+};""")
+    assert result["head"]
+    assert result["labels"] == [True, True, True]
+    assert sum(count for count, _ in result["tops"]) == 3
+    assert len(result["tops"]) >= 2
+    assert all(count == 1 or share <= 0.7 for count, share in result["tops"])
+    assert result["overflow"] == []

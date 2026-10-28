@@ -127,9 +127,16 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
    width, it widened the wrapper and the table filled it, stretched four times over. */
 .table-fit > .units { contain: inline-size; }
 th { font-weight: 650; letter-spacing: .025em; }
-th, td { text-align: right; }
+/* Cells align left, as words do. A table of numbers, marked num, aligns its value columns
+   right so the digits stand in place, and keeps its first column of labels left. */
+th, td { text-align: left; }
 th.sep, td.sep { border-left: 1px solid var(--line); }
-th:first-child, td:first-child { text-align: left; }
+/* A column columns.js keeps whole when a table shares out its width. */
+[data-fit-line] { white-space: nowrap; }
+table.num :is(th, td) { text-align: right; }
+table.num :is(th, td):first-child { text-align: left; }
 /* A row whose first column is spanned from above starts in a later column, and the
    builder gives that first cell its column number, so it aligns with its column. */
-th:first-child[data-column], td:first-child[data-column] { text-align: right; }
+table.num :is(th, td):first-child[data-column] { text-align: right; }
+/* A head cell over several columns names their group and stands over their middle. */
+table thead th[colspan] { text-align: center; }

@@ -25,7 +25,8 @@ HERE = Path(__file__).parent
 # its last whole line and goes on at the head of the next, a list is cut between its items,
 # and a figure or table that does not fit waits for the head of the next column while the
 # text goes on past it. A figure marked wide waits for the top of the next page, across
-# both columns. The fonts change the lines, so the flow is poured again once they arrive.
+# both columns, as many as fill no more than 0.7 of it. The fonts change the lines, so the
+# flow is poured again once they arrive.
 PAGINATE_SCRIPT = r"""<script>
 (() => {
   const flow = document.getElementById("report-flow");
@@ -65,6 +66,11 @@ PAGINATE_SCRIPT = r"""<script>
     return page;
   }
 
+  // A table shares out the width of the place it lands in, a column or the page.
+  const fitTables = (block) => {
+    const tables = block.tagName === "TABLE" ? [block] : Array.from(block.querySelectorAll?.("table") ?? []);
+    tables.forEach((table) => window.htmlMcpFitColumns(table));
+  };
   const bottomOf = (column) => column.getBoundingClientRect().bottom;
   const fits = (node, column) => node.getBoundingClientRect().bottom <= bottomOf(column) + 0.5;
 
@@ -172,14 +178,25 @@ PAGINATE_SCRIPT = r"""<script>
         pageNumber += 1;
         page = newPage(pageNumber);
         columnIndex = 0;
+        // Wide figures that waited stack at the top while they take no more than 0.7 of the
+        // page, LaTeX's \dbltopfraction, and the rest wait for the page after. One alone
+        // always goes. Stacked past the page, they pushed the columns out of it.
         const top = page.querySelector(".page-top");
-        while (waitingWide.length) top.append(waitingWide.shift());
+        const limit = page.querySelector(".page-body").getBoundingClientRect().height * 0.7;
+        while (waitingWide.length) {
+          const figure = waitingWide[0];
+          top.append(figure);
+          fitTables(figure);
+          if (top.getBoundingClientRect().height > limit && top.children.length > 1) { figure.remove(); break; }
+          waitingWide.shift();
+        }
       }
       column = page.querySelectorAll(".column")[columnIndex];
       // Figures that waited go first, as many as the column holds.
       while (waitingColumn.length) {
         const figure = waitingColumn[0];
         column.append(figure);
+        fitTables(figure);
         if (!fits(figure, column) && column.children.length > 1) { figure.remove(); break; }
         waitingColumn.shift();
       }
@@ -202,6 +219,7 @@ PAGINATE_SCRIPT = r"""<script>
         continue;
       }
       column.append(block);
+      fitTables(block);
       if (fits(block, column)) {
         // A head stays with the two lines of text after it. A figure between them floats
         // and is not what the head is kept with.

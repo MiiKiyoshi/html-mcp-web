@@ -42,11 +42,15 @@ Artifact Kits are what every artifact is built from, whatever its template, skin
 
 ## Article 4. Tables and units
 
-4.1 The first column of a `table` aligns left and the others right, and each cell aligns by the column it occupies under `rowspan` and `colspan`. `sep` on a cell draws a column boundary at its left.
+4.1 Every cell of a `table` aligns left. `table.num` marks a table of numbers: its first column aligns left and the others right, and each cell aligns by the column it occupies under `rowspan` and `colspan`. A head cell spanning several columns is centred over them. `sep` on a cell draws a column boundary at its left.
 
 4.2 `p.units` carries shared metrics, units, values shared by every row, brief metric definitions, and notation keys for a table or plot. Production clause 2.2 governs its placement and its consistency across pages.
 
 4.3 `div.table-fit` sizes a compact table to its contents and centres it, as in `<div class="table-fit"><p class="units">…</p><table>…</table></div>`. The table's `p.units` goes inside the same wrapper, before the table, so it ends at the table's right edge, and a key longer than the table wraps to its width.
+
+4.4 The rows of `th` cells at the top of a table are its head, written in a `thead` or not. Rows after it may be split into several `tbody` groups, such as a row of averages after the designs.
+
+4.5 A table too wide for its place shares the width as LaTeX's tabularx does. A column whose longest line fits in an even share of the width left keeps that line whole, and the columns of longer text divide the rest and wrap.
 
 ## Article 5. Figures
 
@@ -154,7 +158,7 @@ A list with subitems and at least two outer items stays in one column while it f
 
 10.3 `<section data-title="Abstract" data-abstract>` is the abstract, with an unnumbered head. Every other section is numbered by the builder, so `data-title` carries the name alone, and an `h3` in a numbered section is a numbered subsection. A section with `data-layout` stops the build, since contents and divider pages belong to a deck.
 
-10.4 A `figure` holds one `figcaption` with no number of its own. A figure holding a `table` is numbered as a table with its caption above, any other as a figure with its caption below. `figure.wide` spans both columns at the top of the next page. A figure that does not fit where it falls waits for the head of the next column while the text goes on.
+10.4 A `figure` holds one `figcaption` with no number of its own. A figure holding a `table` is numbered as a table with its caption above, any other as a figure with its caption below. `figure.wide` spans both columns at the top of the next page, and wide figures stack there while they fill no more than 0.7 of it, the rest waiting for the page after. A figure that does not fit where it falls waits for the head of the next column while the text goes on.
 
 10.5 `p.eq` holds a displayed equation and takes its number at the right.
 
@@ -163,6 +167,8 @@ A list with subitems and at least two outer items stays in one column while it f
 10.7 `code` is set in the text without a chip, and `pre` in the column with long lines wrapped at its edge.
 
 10.8 A report has no lead or takeaway line: `p.lead` is set as an ordinary paragraph and `p.takeaway` is not used.
+
+10.9 A table is drawn as booktabs draws it, in 8pt: a heavy rule above and below, a light rule under the head and between `tbody` groups, and a short thin rule under each head cell that spans a group of columns. Neighbouring cells stand 9pt apart, and a figure or table stands 12pt from the text around it.
 
 ## Article 11. Layout check reports
 
