@@ -438,7 +438,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
     </section>{script}''')
 
     body_html = chr(10).join(pages)
-    assets = document_assets(body_html)
+    assets = document_assets(body_html, content.lang)
     notes = NOTES_SPREAD_SCRIPT if re.search(r'<ul class="[^"]*\bnotes\b', body_html) else ""
     document = f'''<!doctype html>
 <html lang="{content.lang}">

@@ -574,7 +574,7 @@ def build(content_path: Path, output_path: Path, skin_dir: Path) -> None:
     # The skin is read last, so it restates what it changes of the frame.
     css = (COMPONENTS.read_text(encoding="utf-8") + "\n" + SKELETON.read_text(encoding="utf-8") + "\n"
            + inline_woff2((skin_dir / "skin.css").read_text(encoding="utf-8"), skin_dir / "fonts"))
-    assets = document_assets(flow_html)
+    assets = document_assets(flow_html, lang)
     running = html.escape(f'{{"title": {_json(content.title)}, "author": {_json(content.author)}}}', quote=True)
     output_path.write_text(f'''<!doctype html>
 <html lang="{lang}">

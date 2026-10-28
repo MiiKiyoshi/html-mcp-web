@@ -4,7 +4,9 @@
    changes. */
 
 :root {
-  font-family: var(--font, Inter, "Noto Sans KR", system-ui, sans-serif);
+  /* --font names a skin's faces. The CJK face the builder embeds for a CJK document follows
+     them, so a Korean deck is set in one face on every machine. */
+  font-family: var(--font, Inter), "Kit Sans CJK", system-ui, sans-serif;
   color: var(--ink);
 
   --ink: #22282c;

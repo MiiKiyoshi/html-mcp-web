@@ -540,3 +540,24 @@ def test_english_words_in_a_korean_document_are_marked_english_and_parentheses_b
     assert mark_text("<p>여닫는 SGS-LoRA(Self-Gated)와 f(x), 결과(3)</p>", "ko") == (
         '<p>여닫는 <span lang="en">SGS-LoRA</span><wbr><span lang="en">(Self-Gated)</span>와 '
         '<span lang="en">f(x),</span> 결과<wbr><span lang="en">(3)</span></p>')
+
+
+def test_a_korean_document_carries_its_own_hangul_faces() -> None:
+    """A Korean document embeds the CJK serif and sans subset to the characters it uses,
+    so every machine sets Hangul in the face the layout check measured. An English
+    document carries none."""
+    import base64
+    import io
+    import re
+
+    from fontTools.ttLib import TTFont
+
+    from html_mcp_web.kits import cjk_faces
+
+    style = cjk_faces("<p>가나다 한글</p>", "ko")
+    faces = re.findall(r'font-family: "(Kit (?:Serif|Sans) CJK)"; font-weight: (\d+); src: url\(data:font/woff2;base64,([^)]+)\)', style)
+    assert [(family, weight) for family, weight, _ in faces] == [
+        ("Kit Serif CJK", "400"), ("Kit Serif CJK", "700"), ("Kit Sans CJK", "400"), ("Kit Sans CJK", "700")]
+    cmap = set(TTFont(io.BytesIO(base64.b64decode(faces[0][2]))).getBestCmap())
+    assert {ord(c) for c in "가나다한글"} <= cmap and ord("라") not in cmap
+    assert cjk_faces("<p>English</p>", "en") == ""

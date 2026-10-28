@@ -12,8 +12,11 @@
   --muted: #000;
   --paper: #fff;
   --line: #000;
-  --serif: "Noto Serif KR", "Nanum Myeongjo", "AppleMyungjo", "Batang", "UnBatang", serif;
-  --sans: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  /* A skin names its Latin faces in --serif-face and --sans-face. The CJK faces the builder
+     embeds for a CJK document follow them, so its own script is set in the same face on
+     every machine, and the check breaks the lines the reader sees. */
+  --serif: var(--serif-face, "Kit Serif CJK"), "Kit Serif CJK", serif;
+  --sans: var(--sans-face, "Kit Sans CJK"), "Kit Sans CJK", sans-serif;
   --size: 9pt;
   /* Math at the size of the text, as TeX sets it beside this face. */
   --math-scale: 1em;

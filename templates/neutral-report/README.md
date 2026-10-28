@@ -17,5 +17,5 @@ only the browser can measure the lines. Each column carries `data-layout-guard`,
 block taller than a column is reported by the layout check.
 
 The faces in `fonts/` are Libertinus Serif and Sans, subset to Latin, Greek and the
-common symbols, under the SIL Open Font License in `fonts/LICENSE`. Hangul is not in them
-and is set in the reader's Korean serif.
+common symbols, under the SIL Open Font License in `fonts/LICENSE`. Hangul is not in them:
+a Korean document is set in the Noto CJK KR faces the builder embeds (KITS 2.2).

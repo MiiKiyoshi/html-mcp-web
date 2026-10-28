@@ -10,6 +10,8 @@ its content, document_assets on the whole of it, and reads COMPONENTS before its
 from __future__ import annotations
 
 import base64
+import html
+import io
 import re
 from pathlib import Path
 
@@ -20,6 +22,10 @@ HERE = Path(__file__).parent
 COMPONENTS = HERE / "components.css"
 KATEX = HERE / "vendor" / "katex"
 MONO = HERE / "vendor" / "noto-sans-mono"
+# The faces a document in a CJK language sets its own script in, by language: the
+# family's serif and sans, each a regular and a bold file. Only Korean is shipped.
+CJK_FACES = {"ko": HERE / "vendor" / "noto-cjk-kr"}
+CJK_FILES = (("Kit Serif CJK", "NotoSerifCJKkr"), ("Kit Sans CJK", "NotoSansCJKkr"))
 # Breaks a <text data-wrap> or <text data-fit> label into lines with the document's font.
 # The lines are chosen by TeX's algorithm, which comes with its own hyphenation patterns.
 WRAP = HERE / "wrap.js"
@@ -293,6 +299,38 @@ def mono_face(html_text: str) -> str:
     return f"\n  <style>\n{inline_woff2(faces, MONO)}  </style>"
 
 
+def cjk_faces(html_text: str, lang: str) -> str:
+    """The CJK faces of a document in a CJK language, subset to the characters it uses and
+    embedded, under the names the layouts put after their Latin faces: "Kit Serif CJK" and
+    "Kit Sans CJK". Left to the reader's system, Hangul was set in whatever Korean face a
+    machine had, the layout check's UnBatang on the server and another on the reader's
+    Mac, and the lines broke differently on each, so a short last line the reader saw was
+    not there in the check."""
+    folder = CJK_FACES.get(lang.split("-")[0])
+    if folder is None:
+        return ""
+    from fontTools import subset
+    from fontTools.ttLib import TTFont
+
+    used = {ord(character) for character in html.unescape(html_text)}
+    faces = []
+    for family, stem in CJK_FILES:
+        for weight, name in ((400, "Regular"), (700, "Bold")):
+            font = TTFont(folder / f"{stem}-{name}.woff2")
+            options = subset.Options()
+            options.flavor = "woff2"
+            options.layout_features = ["*"]
+            subsetter = subset.Subsetter(options)
+            subsetter.populate(unicodes=used & set(font.getBestCmap()))
+            subsetter.subset(font)
+            buffer = io.BytesIO()
+            font.save(buffer)
+            data = base64.b64encode(buffer.getvalue()).decode("ascii")
+            faces.append(f'@font-face {{ font-family: "{family}"; font-weight: {weight}; '
+                         f'src: url(data:font/woff2;base64,{data}) format("woff2"); }}\n')
+    return "\n  <style>\n" + "".join(faces) + "  </style>"
+
+
 def math_bundle() -> tuple[str, str]:
     """KaTeX for the head and the foot, everything inlined so the file opens offline.
 
@@ -316,9 +354,9 @@ def math_bundle() -> tuple[str, str]:
     return head, foot
 
 
-def document_assets(html_text: str) -> tuple[str, str]:
+def document_assets(html_text: str, lang: str) -> tuple[str, str]:
     """What a document carries besides its own markup, for the head and for the end of the
-    body: the code face, KaTeX, the placing of lifted figure HTML, the svg label wrapper
+    body: the CJK faces, the code face, KaTeX, the placing of lifted figure HTML, the svg label wrapper
     and the sharing of a table's width, each only when the document uses it. Every template ends its document with
     the same scripts in the same order, so math and figures come out the same in each."""
     math_head, math_foot = math_bundle() if has_math(html_text) else ("", "")
@@ -328,4 +366,4 @@ def document_assets(html_text: str) -> tuple[str, str]:
         for path in (TEX_LINEBREAK / "lib.js", TEX_LINEBREAK / "hyphens_en-us.js", WRAP)) if wraps else ""
     svg_html = SVG_HTML_SCRIPT if "svg-html-layer" in html_text else ""
     columns = "\n  <script>" + COLUMNS.read_text(encoding="utf-8") + "</script>" if "<table" in html_text else ""
-    return mono_face(html_text) + math_head, math_foot + wrap + svg_html + columns
+    return cjk_faces(html_text, lang) + mono_face(html_text) + math_head, math_foot + wrap + svg_html + columns

@@ -22,6 +22,8 @@ classifiers = [
 
 dependencies = [
     "aiohttp>=3.9.0",
+    "brotli>=1.0",
+    "fonttools>=4.40",
     "pyyaml>=6.0",
     "watchdog>=3.0.0",
 ]
@@ -35,7 +37,6 @@ mcp = [
     "PyMuPDF>=1.24.12",
     "Pillow>=10.0",
     "python-pptx>=1.0",
-    "fonttools>=4.40",
     "lxml>=4.9",
 ]
 dev = [
@@ -43,7 +44,6 @@ dev = [
     "pytest-asyncio>=0.21",
     "marionette_driver>=3.0",
     "python-pptx>=1.0",
-    "fonttools>=4.40",
     "lxml>=4.9",
 ]
 

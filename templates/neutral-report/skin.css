@@ -1,6 +1,6 @@
 /* The neutral report: Libertinus Serif and Sans, embedded from fonts/ so every reader and
-   the layout check set the same lines. Hangul is not in them and falls to the reader's
-   Korean serif. */
+   the layout check set the same lines. Hangul is not in them and is set in the CJK faces
+   the builder embeds for a Korean document. */
 
 @font-face { font-family: "Report Serif"; font-weight: 400; font-style: normal; src: url(fonts/LibertinusSerif-Regular.woff2) format("woff2"); }
 @font-face { font-family: "Report Serif"; font-weight: 700; font-style: normal; src: url(fonts/LibertinusSerif-Bold.woff2) format("woff2"); }
@@ -10,6 +10,6 @@
 @font-face { font-family: "Report Sans"; font-weight: 700; font-style: normal; src: url(fonts/LibertinusSans-Bold.woff2) format("woff2"); }
 
 :root {
-  --serif: "Report Serif", "Noto Serif KR", "Nanum Myeongjo", "AppleMyungjo", "Batang", "UnBatang", serif;
-  --sans: "Report Sans", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --serif-face: "Report Serif";
+  --sans-face: "Report Sans";
 }

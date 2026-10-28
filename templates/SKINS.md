@@ -27,6 +27,8 @@ bottom edge. The body reserves that height below its content across the full wid
 the references in that strip to the right of the chrome. Both values default to
 `0`. The layout check reports content text that overlaps chrome in a page corner.
 
+`--font` names a deck skin's faces, without a generic family at its end: the CJK face the builder embeds for a Korean deck follows it, before the system's. A report skin names its Latin faces in `--serif-face` and `--sans-face` the same way.
+
 `footer_label` and `cover_footer_label` put text at the right of the footer bar;
 `font_links` adds `<link>` or `<style>` tags to the head. The document's language comes
 from the content's `data-lang`, not the skin. Images are embedded as data URIs, so the
