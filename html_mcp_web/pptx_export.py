@@ -268,7 +268,10 @@ const runsOf = (node, out, base) => {
       // A full-bleed page keeps the disc in its picture, so its digit stays a digit.
       const marker = painted && !fullBleed ? badgeRun(n, s, base) : null;
       if (marker) { out.push(marker); continue; }
-      const chipBg = (painted && tg === 'code') ? s.backgroundColor : base.chip;
+      // Every inline background travels the same way, whatever paints it: a highlight mark, a
+      // code chip, or a span coloured in place. Only code carried it before, and a table's
+      // marked cells came out plain.
+      const chipBg = (painted && s.display.startsWith('inline')) ? s.backgroundColor : base.chip;
       const b = Object.assign({}, base, {
         bold: (parseInt(s.fontWeight) >= 600) || base.bold,
         italic: s.fontStyle === 'italic' || base.italic,
@@ -599,7 +602,7 @@ def _no_marker(p_xml) -> None:
 
 
 def _set_run_highlight(run, color) -> None:
-    """A `<code>` chip's background becomes the run's highlight, the only inline background
+    """An inline element's background becomes the run's highlight, the only inline background
     a pptx run has. It goes right after the fill so the rPr child order stays valid."""
     from pptx.oxml.ns import qn
     rPr = run._r.get_or_add_rPr()

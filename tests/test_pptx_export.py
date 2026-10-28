@@ -415,6 +415,7 @@ def test_the_page_is_carried_over_as_it_is_laid_out(tmp_path: Path) -> None:
   <img src="fig/wide.png" style="width:300px;height:100px;object-fit:contain">
   <div><svg viewBox="0 0 200 100" width="200" height="100"><rect x="5" y="5" width="190" height="90" fill="none" stroke="#333"/><text x="10" y="60" font-size="12">axis label</text></svg></div>
   <p>step <span style="display:inline-block;min-width:1.25em;height:1.25em;text-align:center;border-radius:50%;background:#243943;color:#fff;font-size:13px">2</span> then <code>chip</code></p>
+  <table><tr><td><mark data-hl="2">marked</mark></td><td><span style="background:#f6dfc9">painted</span></td></tr></table>
 </section>
 </body>
 ''', encoding="utf-8")
@@ -455,6 +456,13 @@ def test_the_page_is_carried_over_as_it_is_laid_out(tmp_path: Path) -> None:
     assert badge._r.find(qn("a:rPr")).find(qn("a:highlight")) is None
     chip = next(run for run in runs if run.text == "chip")
     assert chip._r.find(qn("a:rPr")).find(qn("a:highlight")) is not None  # a code chip still is one
+
+    # Any inline background is the run's highlight in the page's colour, a role mark or a
+    # span painted in place alike, in a table cell as in a line of text.
+    table = kinds["TABLE"][0].table
+    for cell, colour in ((table.cell(0, 0), "FBDCC3"), (table.cell(0, 1), "F6DFC9")):
+        highlight = cell.text_frame.paragraphs[0].runs[0]._r.find(qn("a:rPr")).find(qn("a:highlight"))
+        assert highlight is not None and highlight.find(qn("a:srgbClr")).get("val") == colour
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")

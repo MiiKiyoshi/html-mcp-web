@@ -99,7 +99,7 @@ Missing or duplicate reference IDs and undefined citation keys stop the build. C
 
 ## Highlights
 
-`<mark data-hl="N">` colours a span by its role, with `N` from 1 to 5. It works in prose, table cells, `code`, `pre`, and the HTML of an SVG `<foreignObject>`. The browser fits the colour to the letters, so a figure needs no rectangles sized to its text. A `<mark>` without `data-hl` takes role 1. The roles are light tints, and the text keeps its own colour. A skin restates `--hl-1` to `--hl-5` to match its palette.
+`<mark data-hl="N">` colours a span by its role, with `N` from 1 to 5. It works in prose, table cells, `code`, `pre`, and the HTML of an SVG `<foreignObject>`. The browser fits the colour to the letters, so a figure needs no rectangles sized to its text. A `<mark>` without `data-hl` takes role 1. The roles are light tints, and the text keeps its own colour. A skin restates `--hl-1` to `--hl-5` to match its palette, so content marks a role and never writes a colour. The marks print in PDF and become text highlights in PowerPoint.
 
 Fields in the lines of a file shown in a figure are marked in a `pre` inside a `<foreignObject>`:
 
