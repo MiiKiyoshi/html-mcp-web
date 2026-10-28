@@ -212,8 +212,9 @@ def test_a_formula_in_a_figure_goes_in_a_foreign_object(tmp_path: Path) -> None:
 
 def test_a_generic_family_is_set_in_the_face_the_layout_embeds(tmp_path: Path) -> None:
     """A figure label written in monospace is drawn in the embedded code face, which every
-    browser has, and an HTML label's style likewise. A family the layout does not embed
-    stops the build, and a deck, which embeds no serif, stops on serif."""
+    browser has, and an HTML label's style likewise. A list takes the face of its first
+    generic family, and matplotlib's list of named faces takes sans-serif. A deck, which
+    embeds no serif, stops on serif."""
     from html_mcp_web.report.build import build as report
     from html_mcp_web.slides.build import build as deck
 
@@ -228,12 +229,14 @@ def test_a_generic_family_is_set_in_the_face_the_layout_embeds(tmp_path: Path) -
     assert '<g style="font-family: var(--mono)">' in built
     assert '<div style="font-size: 8px; font-family: var(--mono)">' in built
     assert 'font-family: "Deck Mono"' in built
-    for builder, skin, family in ((report, "neutral-report", "Courier New, monospace"),
-                                  (report, "neutral-report", "Menlo"),
-                                  (deck, "neutral-slides", "serif")):
+    for family, var in (("Courier New, monospace", "--mono"), ("'DejaVu Sans', 'Bitstream Vera Sans', sans-serif", "--sans"),
+                        ("STIXGeneral", "--sans"), ("Georgia, serif, monospace", "--serif")):
         content.write_text(page.format(family=family), encoding="utf-8")
-        with pytest.raises(ValueError, match="faces it embeds"):
-            builder(content, tmp_path / "out.html", REPO / "templates" / skin)
+        report(content, tmp_path / "report.html", REPO / "templates" / "neutral-report")
+        assert f'<g style="font-family: var({var})">' in (tmp_path / "report.html").read_text(encoding="utf-8")
+    content.write_text(page.format(family="serif"), encoding="utf-8")
+    with pytest.raises(ValueError, match="faces it embeds"):
+        deck(content, tmp_path / "out.html", REPO / "templates" / "neutral-slides")
 
 
 def test_a_centred_label_is_one_line_of_plain_text(tmp_path: Path) -> None:

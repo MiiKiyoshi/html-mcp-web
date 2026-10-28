@@ -26,6 +26,7 @@ MONO = HERE / "vendor" / "noto-sans-mono"
 # family's serif and sans, each a regular and a bold file. Only Korean is shipped.
 CJK_FACES = {"ko": HERE / "vendor" / "noto-cjk-kr"}
 CJK_FILES = (("Kit Serif CJK", "NotoSerifCJKkr"), ("Kit Sans CJK", "NotoSansCJKkr"))
+GENERIC_FAMILIES = ("serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui")
 # Breaks a <text data-wrap> or <text data-fit> label into lines with the document's font.
 # The lines are chosen by TeX's algorithm, which comes with its own hyphenation patterns.
 WRAP = HERE / "wrap.js"
@@ -278,12 +279,14 @@ def mark_text(body_html: str, lang: str) -> str:
 
 
 def set_families(body_html: str, families: dict[str, str]) -> str:
-    # A generic family is whatever face the reader's machine names for it: a figure's
+    # A family is whatever face the reader's machine has under that name: a figure's
     # monospace label that fit its panel in the layout check's Firefox ran past the
-    # panel's border and was cut in a reader's browser, which took a wider face. A generic
-    # family, in an svg font-family attribute or a style, is set in the face the layout
-    # embeds for it, given in families, and a family the layout does not embed stops the
-    # build. A presentation attribute takes no var(), so the face goes to the style.
+    # panel's border and was cut in a reader's browser, which took a wider face. So every
+    # family, in an svg font-family attribute or a style, is set in a face the layout
+    # embeds, given in families: the first generic family in the list chooses it, and a
+    # list of named faces only, such as matplotlib's mathtext, takes sans-serif. A generic
+    # family the layout does not embed stops the build. A presentation attribute takes no
+    # var(), so the face goes to the style.
     if "font-family" not in body_html:
         return body_html
     body = ContentParser()
@@ -292,10 +295,10 @@ def set_families(body_html: str, families: dict[str, str]) -> str:
 
     def face(value: str) -> str:
         names = [name.strip().strip("'\"").lower() for name in value.split(",") if name.strip()]
-        generic = names[-1] if names else ""
-        if generic not in families or len(names) != 1:
+        generic = next((name for name in names if name in GENERIC_FAMILIES), "sans-serif")
+        if generic not in families:
             raise ValueError(f'font-family "{value.strip()}": a page sets its text in the faces it embeds, '
-                             f"so a family is written as one of {', '.join(families)}")
+                             f"and this layout embeds one for {', '.join(families)}")
         return families[generic]
 
     for element in descendants(body.root):
