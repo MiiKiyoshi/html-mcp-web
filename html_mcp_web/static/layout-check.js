@@ -132,6 +132,10 @@ export function createLayoutChecks(dependencies) {
   const STRETCH_TOLERANCE = 0.01;
   // How much of a band in a figure panel only connectors cross may go spare, in font sizes.
   const BAND_SLACK = 0.8;
+  // How far, in its font size, a figure label stays from the border of the panel it is in.
+  const PANEL_INSET = 0.4;
+  // How far, in its font size, an arrowhead's tip stays from a label.
+  const HEAD_CLEARANCE = 0.2;
 
   // What to do with a bullet that interprets a table or figure from elsewhere on the page.
   const INTERPRETATION_ADVICE = "Put the bullet in a list directly below that visual, in the same column (neutral 5.8)";
@@ -1222,9 +1226,8 @@ export function createLayoutChecks(dependencies) {
             top: Math.min(...corners.map(([, y]) => y)), bottom: Math.max(...corners.map(([, y]) => y)),
           };
         };
-        let liftedFaults = 0;
-        for (const lifted of liftedBoxes) {
-          if (fromScreen === undefined || liftedFaults >= 3) break;
+        // The lines of a lifted box in the viewport space, and its font size there.
+        const liftedLines = (lifted) => {
           // The layer is scaled to the viewBox, and its letters with it.
           const scale = lifted.offsetWidth > 0 ? lifted.getBoundingClientRect().width / lifted.offsetWidth : 1;
           const fontSize = (parseFloat(doc.defaultView.getComputedStyle(lifted).fontSize) || 16) * scale;
@@ -1238,7 +1241,12 @@ export function createLayoutChecks(dependencies) {
             range.selectNodeContents(node);
             letters.push(...range.getClientRects());
           }
-          const lines = groupLines(letters, fontSize).map(viewRect);
+          return { lines: groupLines(letters, fontSize).map(viewRect), fontSize };
+        };
+        let liftedFaults = 0;
+        for (const lifted of liftedBoxes) {
+          if (fromScreen === undefined || liftedFaults >= 3) break;
+          const { lines } = liftedLines(lifted);
           const words = readableText(lifted).slice(0, 30);
           const hidden = labels.find((label) => lines.some((line) => printedOver(line, label.box)));
           if (hidden !== undefined) {
@@ -1485,6 +1493,37 @@ export function createLayoutChecks(dependencies) {
           }
         }
         for (const message of tangles) addError(message, svg.element);
+        // A head that stops at a label's edge reads as running into it: a label begun at the
+        // very x of an arrow's tip was not run over and passed. A head keeps HEAD_CLEARANCE
+        // of the label's font size from the box of its letters.
+        // A label in a shape, such as a sign in a circle, has the shape's border between it
+        // and a head stopped outside the shape.
+        const rims = Array.from(svg.element.querySelectorAll("rect:not([data-html-slot]), circle, ellipse"))
+          .filter((shape) => shape.closest("defs, symbol, clipPath, mask, pattern, marker") === null)
+          .map(inViewport).filter((box) => box !== null);
+        const within = (point, box) => box.left < point.x && point.x < box.right && box.top < point.y && point.y < box.bottom;
+        let touching = 0;
+        for (const connector of connectors) {
+          for (const end of [0, 1]) {
+            if (connector.heads[end] === 0 || touching >= 3) continue;
+            const tip = connector.ends[end];
+            for (const { text, box } of labels) {
+              const across = Math.max(box.left - tip.x, 0, tip.x - box.right);
+              const down = Math.max(box.top - tip.y, 0, tip.y - box.bottom);
+              if (within(tip, box)) continue;
+              const middle = { x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 };
+              if (rims.some((shape) => within(middle, shape) && !within(tip, shape))) continue;
+              const size = parseFloat(doc.defaultView.getComputedStyle(text).fontSize) * Math.hypot(text.getCTM().a, text.getCTM().b);
+              const gap = Math.hypot(across, down);
+              if (gap >= HEAD_CLEARANCE * size) continue;
+              touching += 1;
+              addError(`page ${index + 1} ${describeElement(svg.element)} arrowhead of ${trace(connector)} stops `
+                + `${gap.toFixed(1)}px from the label "${labelWords(text)}". Leave ${(HEAD_CLEARANCE * size).toFixed(1)}px or more`,
+                svg.element);
+              break;
+            }
+          }
+        }
         // A connector that leaves a box by one side in a short stub and then turns to pass
         // another side of that box, or that enters by one side after a short stub turned
         // from beyond another, takes a bend it does not need: leaving or entering by that
@@ -1719,6 +1758,40 @@ export function createLayoutChecks(dependencies) {
                   svg.element);
               }
             }
+          }
+          // A label or a line of a figure's HTML set against its panel's border reads as
+          // cut: a bottom line drawn 0.3 units above the panel's lower edge. Each is held by
+          // the smallest panel around its middle and keeps PANEL_INSET of its font size from
+          // every side, measured from the box of its letters.
+          const centred = (outer, inner) => inner !== outer && outer.left < (inner.left + inner.right) / 2
+            && (inner.left + inner.right) / 2 < outer.right && outer.top < (inner.top + inner.bottom) / 2
+            && (inner.top + inner.bottom) / 2 < outer.bottom;
+          const panelsHeld = drawnRects.map((entry) => entry.box)
+            .filter((panel) => things.filter((thing) => centred(panel, thing)).length >= 3);
+          const written = labels.map((label) => ({ box: label.box, words: labelWords(label.text),
+            size: parseFloat(doc.defaultView.getComputedStyle(label.text).fontSize)
+              * Math.hypot(label.text.getCTM().a, label.text.getCTM().b) }));
+          if (fromScreen !== undefined) {
+            for (const lifted of liftedBoxes) {
+              const { lines, fontSize } = liftedLines(lifted);
+              const words = readableText(lifted).slice(0, 30);
+              written.push(...lines.map((box) => ({ box, words, size: fontSize * Math.hypot(fromScreen.a, fromScreen.b) })));
+            }
+          }
+          let tight = 0;
+          for (const { box, words, size } of written) {
+            const panel = panelsHeld.filter((candidate) => centred(candidate, box))
+              .sort((a, b) => (a.right - a.left) * (a.bottom - a.top) - (b.right - b.left) * (b.bottom - b.top))[0];
+            if (panel === undefined || tight >= 3) continue;
+            const [side, gap] = Object.entries({ left: box.left - panel.left, right: panel.right - box.right,
+              top: box.top - panel.top, bottom: panel.bottom - box.bottom }).sort((a, b) => a[1] - b[1])[0];
+            if (gap >= PANEL_INSET * size) continue;
+            tight += 1;
+            addWarning(
+              `page ${index + 1} ${describeElement(svg.element)} "${words}" sits ${(gap / unit).toFixed(1)} units from the `
+              + `${side} border of its panel at (${Math.round((panel.left - placed.x) / unit + svg.view.x)},`
+              + `${Math.round((panel.top - placed.y) / unit + svg.view.y)}), under ${PANEL_INSET} of its font size. Move it in`,
+              svg.element);
           }
         }
         // A label the deck wrapped (data-wrap) records its line count in data-lines; one

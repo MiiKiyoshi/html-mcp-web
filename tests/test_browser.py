@@ -150,20 +150,37 @@ x</pre>
     <svg id="spare" viewBox="0 0 300 200" width="300" height="200">
       <defs><marker id="spare-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
       <rect x="1" y="1" width="298" height="198" fill="#f6f8f8" stroke="#333"/>
-      <text x="10" y="14" font-size="12">panel</text>
+      <text x="150" y="24" font-size="12">panel</text>
       <rect x="20" y="20" width="60" height="30" fill="#fff" stroke="#333"/>
       <rect x="20" y="140" width="60" height="30" fill="#fff" stroke="#333"/>
       <line x1="50" y1="50" x2="50" y2="140" stroke="#333" marker-end="url(#spare-head)"/>
-      <text x="10" y="192" font-size="12">note</text>
+      <text x="10" y="186" font-size="12">note</text>
     </svg>
     <svg id="snug" viewBox="0 0 300 130" width="300" height="130">
       <defs><marker id="snug-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
       <rect x="1" y="1" width="298" height="128" fill="#f6f8f8" stroke="#333"/>
-      <text x="10" y="14" font-size="12">panel</text>
+      <text x="150" y="24" font-size="12">panel</text>
       <rect x="20" y="20" width="60" height="30" fill="#fff" stroke="#333"/>
       <rect x="20" y="64" width="60" height="30" fill="#fff" stroke="#333"/>
       <line x1="50" y1="50" x2="50" y2="64" stroke="#333" marker-end="url(#snug-head)"/>
-      <text x="10" y="120" font-size="12">note</text>
+      <text x="10" y="114" font-size="12">note</text>
+    </svg>
+    <!-- An arrow whose tip stops at the first letter of its label, and one that stops at
+         a circle with a sign in it, which the circle's border keeps apart. -->
+    <svg id="touch" viewBox="0 0 300 60" width="300" height="60">
+      <defs><marker id="touch-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+      <line x1="10" y1="20" x2="100" y2="20" stroke="#333" marker-end="url(#touch-head)"/>
+      <text x="100" y="24" font-size="12">label</text>
+      <line x1="10" y1="45" x2="188" y2="45" stroke="#333" marker-end="url(#touch-head)"/>
+      <circle cx="200" cy="45" r="12" fill="#fff" stroke="#333"/>
+      <text x="200" y="45" font-size="16" data-center>+</text>
+    </svg>
+    <!-- A panel's last line set against its lower border, under a title well inside it. -->
+    <svg id="inset" viewBox="0 0 300 100" width="300" height="100">
+      <rect x="1" y="1" width="298" height="98" fill="#f6f8f8" stroke="#333"/>
+      <text x="10" y="20" font-size="12">title</text>
+      <rect x="10" y="30" width="80" height="30" fill="#fff" stroke="#333"/>
+      <text x="10" y="97" font-size="12">last line</text>
     </svg>
     <!-- A marker parked outside the viewBox is painted where the line references it, and
          a box whose border sits half a stroke inside the edge keeps all of it. Neither is a
@@ -893,6 +910,12 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert len(spare) == 1 and "leaves a band 90 units tall from y 50 to 140 that only connectors cross" in spare[0], spare
         assert not any("svg#snug>" in warning for warning in warnings), warnings
         assert not any("leaves a band" in warning and "svg#spare>" not in warning for warning in warnings), warnings
+        # An arrowhead stopped at a label's first letter is an error, one stopped at the
+        # circle a sign sits in is not, and a line against its panel's border is a warning.
+        touch = [error for error in errors if "svg#touch>" in error]
+        assert len(touch) == 1 and 'stops 0.0px from the label "label"' in touch[0], touch
+        inset = [warning for warning in warnings if "svg#inset>" in warning]
+        assert len(inset) == 1 and '"last line" sits' in inset[0] and "bottom border of its panel" in inset[0], inset
 
         # The page is zoomed to fit the pane, so a narrower window must not change
         # which layout problems are reported.
