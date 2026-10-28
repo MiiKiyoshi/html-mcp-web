@@ -1,52 +1,119 @@
-:root {
-  font-family: Inter, "Noto Sans KR", system-ui, sans-serif;
-  color: #252b2e;
+/* A two-column paper on an A4 page, set the way a conference proceedings class sets it:
+   a 504pt text block of two 240pt columns 24pt apart, 9pt type on a 10.95pt line, bold
+   serif section heads, captions in bold, and a running head in small sans. The page is
+   A4, so the block is centred across the width and keeps its height from the top.
 
-  --ink: #252b2e;
-  --ink-soft: #505b60;
-  --accent-soft: #edf2f1;
+   The faces are Libertinus Serif and Sans, embedded from fonts/ so every reader and the
+   layout check set the same lines. Hangul is not in them and falls to the reader's
+   Korean serif. */
+
+@font-face { font-family: "Report Serif"; font-weight: 400; font-style: normal; src: url(fonts/LibertinusSerif-Regular.woff2) format("woff2"); }
+@font-face { font-family: "Report Serif"; font-weight: 700; font-style: normal; src: url(fonts/LibertinusSerif-Bold.woff2) format("woff2"); }
+@font-face { font-family: "Report Serif"; font-weight: 400; font-style: italic; src: url(fonts/LibertinusSerif-Italic.woff2) format("woff2"); }
+@font-face { font-family: "Report Serif"; font-weight: 700; font-style: italic; src: url(fonts/LibertinusSerif-BoldItalic.woff2) format("woff2"); }
+@font-face { font-family: "Report Sans"; font-weight: 400; font-style: normal; src: url(fonts/LibertinusSans-Regular.woff2) format("woff2"); }
+@font-face { font-family: "Report Sans"; font-weight: 700; font-style: normal; src: url(fonts/LibertinusSans-Bold.woff2) format("woff2"); }
+
+:root {
+  --ink: #000;
+  --ink-soft: #000;
+  --muted: #000;
+  --paper: #fff;
+  --line: #000;
+  --serif: "Report Serif", "Noto Serif KR", "Nanum Myeongjo", "AppleMyungjo", "Batang", "UnBatang", serif;
+  --sans: "Report Sans", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --size: 9pt;
+  /* Math at the size of the text, as TeX sets it beside this face. */
+  --math-scale: 1em;
+  --pitch: 10.95pt;
+  --indent: 10pt;
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: var(--size);
+  line-height: var(--pitch);
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures;
 }
 
-.page-header { height: 35mm; margin: 0 19mm; padding-top: 12mm; border-bottom: .7mm solid var(--accent); }
-.report-title { display: block; margin-bottom: 3mm; color: var(--muted); font-size: 9pt; letter-spacing: .04em; }
-.page-header h2 { margin: 0; color: var(--ink); font-size: 23pt; font-weight: 620; line-height: 1.12; letter-spacing: -.02em; }
-.report-body { height: 238mm; margin: 7mm 19mm 0; overflow: hidden; }
+body { margin: 0; background: #fff; }
+main.pages section.page { width: 210mm; height: 297mm; overflow: hidden; }
+#report-flow { position: absolute; left: -10000px; top: 0; width: 240pt; }
 
-footer { position: absolute; left: 19mm; right: 19mm; bottom: 0; height: 10mm; border-top: .3mm solid var(--line); }
-footer span { position: absolute; left: 50%; top: 3mm; transform: translateX(-50%); color: var(--muted); font-size: 8pt; font-variant-numeric: tabular-nums; }
+/* ---- Page frame ---- */
+.running-head { position: absolute; left: 45.64pt; width: 504pt; top: 59.85pt; display: flex; justify-content: space-between; font-family: var(--sans); font-size: 7pt; line-height: 10pt; }
+.page-body { position: absolute; left: 45.64pt; width: 504pt; top: 85.2pt; height: 624.15pt; display: flex; flex-direction: column; }
+.page-top { flex: none; }
+.page-top:not(:empty) { margin-bottom: 8.8pt; }
+.columns { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: 240pt 240pt; column-gap: 24pt; }
+.column { position: relative; min-height: 0; }
+.column > :first-child { margin-top: 0 !important; }
+/* A head that opens a column sits on the first text line's baseline, as TeX's topskip puts it. */
+.column > :is(h2, h3):first-child { margin-top: -1.8pt !important; }
 
-.cover-rule { position: absolute; left: 0; top: 0; bottom: 0; width: 8mm; background: var(--accent); }
-.cover-content { position: absolute; left: 28mm; right: 24mm; top: 54mm; }
-.document-type { margin: 0 0 12mm; color: var(--accent); font-size: 10pt; font-weight: 700; letter-spacing: .12em; }
-.cover h1 { max-width: 150mm; margin: 0; color: var(--ink); font-size: 34pt; font-weight: 620; line-height: 1.12; letter-spacing: -.025em; }
-.cover-sub { max-width: 150mm; margin: 6mm 0 0; color: var(--muted); font-size: 14pt; line-height: 1.35; }
-.cover-meta { margin-top: 58mm; padding-top: 7mm; border-top: .5mm solid var(--line); color: var(--muted); font-size: 11pt; line-height: 1.55; }
-.cover-meta .author { margin-bottom: 2mm; color: var(--ink); font-size: 14pt; }
+/* ---- Title block, across both columns of the first page ---- */
+.title-block { margin-top: -5.3pt; text-align: center; }
+.title-block p { text-align: center; text-indent: 0; hyphens: manual; }
+.title-block h1 { margin: 0; font-family: var(--sans); font-size: 17.28pt; line-height: 19.93pt; font-weight: 700; }
+.title-block .subtitle { margin: 4pt 0 0; font-family: var(--sans); font-size: 10pt; line-height: 11.96pt; }
+.title-block .authors { margin: 9.4pt 0 0; font-size: 12pt; line-height: 12.9pt; }
+.title-block .affiliation { margin: 0; font-size: 10pt; line-height: 11.96pt; }
 
-p { margin: 0 0 4mm; font-size: 10.5pt; line-height: 1.6; }
-.lead { margin-bottom: 7mm; color: var(--ink-soft); font-size: 13pt; line-height: 1.5; }
-.note { margin-top: 4mm; font-size: 8.5pt; }
-h3 { margin: 8mm 0 3mm; color: var(--ink); font-size: 14pt; font-weight: 650; }
-ul.notes { margin: 4mm 0 0; padding-left: 6mm; font-size: 9pt; }
-ul.notes li { margin-bottom: 1.5mm; }
-.callout { margin: 7mm 0; padding: 5mm 6mm; border-left: 1.2mm solid var(--accent); background: var(--accent-soft); color: var(--ink-soft); font-size: 10.5pt; line-height: 1.55; }
+/* ---- Text ---- */
+p { margin: 0; text-align: justify; text-indent: var(--indent); hyphens: auto; }
+h2 + p, h3 + p, p.cont { text-indent: 0; }
+/* A paragraph cut at the foot of a column keeps its last line full, as TeX's does. */
+p.split { text-align-last: justify; }
+p.cont { text-indent: 0; }
+/* Baseline to baseline: text to a head 21.93pt, a section head to its first subsection
+   15.69pt, a head to its text 13.70pt, the abstract's head to its text 11.18pt. */
+h2, h3 { margin: 9.21pt 0 2.47pt; font-size: 10.95pt; line-height: 13pt; font-weight: 700; text-align: left; }
+h2 + h3 { margin-top: 2.69pt; }
+h2.abstract { margin-bottom: 0; }
+.secno { margin-right: 1em; }
+b, strong { font-weight: 700; }
+ul, ol { margin: 0; padding-left: 13pt; }
+/* The bullet is the text face's own: the browser's bullet face is taller than the line and
+   opened every item's first line by half a point. */
+ul { list-style-type: "\2022\2002"; }
+li { margin: 0; text-align: justify; }
+ul ul, ol ol { padding-left: 10pt; }
+.lead { color: inherit; }
+.note, ul.notes { color: inherit; font-size: 8pt; line-height: 9.5pt; }
+code { background: none; padding: 0; font-size: .9em; }
+pre { margin: 6pt 0; font-family: var(--mono); font-size: 7.5pt; line-height: 9pt; white-space: pre-wrap; }
+.eq, .katex-display { margin: 5pt 0; text-align: center; text-indent: 0; }
+/* A displayed equation is numbered at the right edge of its column. */
+.eq { position: relative; }
+.eqno { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+/* Inline math keeps the line pitch: KaTeX's own line height, measured in its faces, stood
+   above a line of this text and pushed the next line down. */
+main.pages .katex:not(.katex-display .katex) { line-height: 0; }
 
-.metrics { display: grid; grid-template-columns: repeat(3, 1fr); margin: 7mm 0; border-top: .3mm solid var(--line); border-bottom: .3mm solid var(--line); }
-.metric { padding: 5mm; border-left: .3mm solid var(--line); }
-.metric:first-child { border-left: 0; }
-.metric strong { margin-bottom: 2mm; color: var(--ink); font-size: 23pt; font-weight: 620; }
-.metric span { font-size: 9pt; }
+/* ---- Figures and tables: numbered, in the flow, moved whole ---- */
+figure { margin: 10pt 0; text-indent: 0; }
+.column > figure:first-child { margin-top: 0; }
+figure.wide { margin: 0 0 4pt; }
+figure img, figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+figcaption { margin: 6pt 0 0; text-align: justify; font-size: 8pt; line-height: 9.6pt; font-weight: 700; }
+figcaption.single { text-align: center; }
+figure.table figcaption { margin: 0 0 6pt; }
+.caption-label { font-size: 9pt; }
 
-table { margin: 5mm 0; }
-th, td { padding: 2.7mm 3mm; border-bottom: .3mm solid var(--line); font-size: 9pt; }
-th { border-bottom: .7mm solid var(--accent); color: var(--ink); font-size: 8pt; }
-.dense th, .dense td { padding: 1.8mm 2mm; font-size: 8pt; }
+table { width: auto; margin: 0 auto; border-collapse: collapse; font-size: 8pt; line-height: 9.6pt; border-top: .72pt solid var(--line); border-bottom: .72pt solid var(--line); }
+thead tr:last-child th, thead tr:last-child td { border-bottom: .45pt solid var(--line); }
+/* Rows on the text's own pitch, as a tabular sets them, with a little air at the rules. */
+th, td { padding: 0 4pt; border: 0; vertical-align: baseline; }
+tbody tr:first-child td { padding-top: 2.5pt; }
+tbody tr:last-child td { padding-bottom: 1.5pt; }
+thead th { padding-top: 1.5pt; padding-bottom: 1.5pt; }
+th { font-weight: 400; letter-spacing: 0; }
+th.sep, td.sep { border-left-width: .4pt; }
+.units { margin: 0 0 2pt; text-align: right; font-size: 7pt; text-indent: 0; }
 
-.two { grid-template-columns: 1fr 1fr; gap: 9mm; }
-figure { margin: 7mm 0; }
-figure img, figure svg { display: block; max-width: 100%; height: auto; }
-figcaption { margin-top: 2mm; color: var(--muted); font-size: 8pt; line-height: 1.45; }
-code { padding: .3mm 1.2mm; border-radius: .8mm; }
+/* ---- References ---- */
+ol.bib { list-style: none; padding: 0; font-size: 7pt; line-height: 8.2pt; }
+ol.bib li { position: relative; padding-left: 15pt; margin-bottom: 1.2pt; text-align: left; }
+ol.bib .bib-no { position: absolute; left: 0; }
 
-@media screen { main.pages section.page { box-shadow: 0 2px 14px rgba(25, 35, 42, .09); } }
+@media screen { main.pages section.page { box-shadow: 0 1px 8px rgba(0, 0, 0, .12); } }
 @media print { main.pages section.page { box-shadow: none; } }

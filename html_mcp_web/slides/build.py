@@ -2,8 +2,9 @@
 
 Usage: python -m html_mcp_web.slides <content.html> <slides.html> --skin <dir>
 
-Components come from components.css, which a report is built from too; where they sit
-on a 1280x720 page comes from skeleton.css, wrap.js and this module. A skin directory
+What a component is, and math, citations and figures, come from html_mcp_web.kits, which
+a report is built from too; where they sit on a 1280x720 page comes from skeleton.css
+and this module. A skin directory
 supplies:
 
     skin.css     variable overrides and chrome styling (required)
@@ -37,18 +38,11 @@ import re
 import sys
 from pathlib import Path
 
+from ..kits import COMPONENTS, check_svg_math, document_assets, inline_woff2, prepare_body
 from ..template_content import ContentParser, Element, parse_template_content
 
 HERE = Path(__file__).parent
 SKELETON = HERE / "skeleton.css"
-# What a component is, which a report is built from too; the skeleton says where it sits
-# on a 1280x720 page.
-COMPONENTS = HERE.parent / "components.css"
-# Breaks a <text data-wrap> or <text data-fit> label into lines with the skin's font, in
-# the deck; a deck with no such label carries none of it. The lines are chosen by TeX's
-# algorithm, which comes with its own hyphenation patterns.
-WRAP = HERE / "wrap.js"
-TEX_LINEBREAK = HERE / "vendor" / "tex-linebreak"
 
 # A page is 1280x720 and the file may be opened in a window narrower than that. The
 # skeleton scales it by --deck-fit; only the number needs measuring, and only when the
@@ -160,34 +154,6 @@ NOTES_SPREAD_SCRIPT = """<script>
 })();
 </script>"""
 
-# The layer of a figure's lifted HTML is drawn in the svg's own units, as its
-# foreignObject was: it takes the scale and offset the default viewBox fit gives the
-# svg inside its box. Both are measured in layout pixels, so a transform scaling the
-# whole page, the deck's or the viewer's, applies to the layer once, like the svg. The
-# box is measured again when its size changes, which a page that was not drawn gets.
-SVG_HTML_SCRIPT = """<script>
-(() => {
-  const place = (layer) => {
-    const holder = layer.parentElement;
-    const svg = holder.firstElementChild;
-    if (holder.offsetWidth === 0) return;
-    const [width, height] = layer.dataset.viewbox.split(" ").map(Number);
-    const outer = holder.getBoundingClientRect();
-    const zoom = outer.width / holder.offsetWidth;
-    const box = svg.getBoundingClientRect();
-    const w = box.width / zoom, h = box.height / zoom;
-    const k = Math.min(w / width, h / height);
-    const x = (box.left - outer.left) / zoom + (w - width * k) / 2;
-    const y = (box.top - outer.top) / zoom + (h - height * k) / 2;
-    layer.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
-  };
-  const sized = new ResizeObserver((entries) => entries.forEach((entry) => place(entry.target.lastElementChild)));
-  const setup = (root) => root.querySelectorAll(".svg-html-layer").forEach((layer) => { place(layer); sized.observe(layer.parentElement); });
-  setup(document);
-  (window.htmlMcpPageSetup ??= []).push(setup);
-})();
-</script>"""
-
 # Widths the embedded images are downscaled to; a slot only needs what its box shows.
 SLOT_WIDTHS = {
     "cover_band_left": 500,
@@ -227,22 +193,6 @@ def data_uri(path: Path, width: int) -> str:
     return uri
 
 
-def inline_woff2(css: str, fonts_dir: Path) -> str:
-    """Replace url(fonts/NAME.woff2) references with the file's data URI.
-
-    A deck then carries its own type: the same text wraps the same way on every machine
-    that opens it, and the layout check, which runs on the review server's fonts, judges
-    what the reader will actually see. Only woff2 is embedded; every browser this targets
-    reads it, and the woff/ttf fallbacks some stylesheets list alongside are dropped.
-    """
-    def inline_font(match: re.Match) -> str:
-        data = base64.b64encode((fonts_dir / match.group(1)).read_bytes()).decode()
-        return f'url(data:font/woff2;base64,{data})'
-
-    css = re.sub(r"url\((?:['\"])?fonts/([^)'\"]+\.woff2)(?:['\"])?\)", inline_font, css)
-    return re.sub(r',\s*url\((?:[\'"])?fonts/[^)\'"]+\.(?:woff|ttf)(?:[\'"])?\)\s*format\("(?:woff|truetype)"\)', "", css)
-
-
 class Skin:
     def __init__(self, directory: Path):
         self.directory = directory
@@ -273,150 +223,6 @@ class Skin:
                 self._images[image_name] = data_uri(self.directory / "assets" / image_name, SLOT_WIDTHS[name])
             uris.append(self._images[image_name])
         return uris
-
-
-KATEX = HERE / "vendor" / "katex"
-# Delimiters auto-render recognises; a deck that uses none of them gets no math bundle.
-MATH_MARKERS = re.compile(r"\$[^$]|\\\(|\\\[")
-
-
-def has_math(html_text: str) -> bool:
-    return MATH_MARKERS.search(html_text) is not None
-
-
-MATH_SPANS = re.compile(r"(?<!\\)\$\$.+?(?<!\\)\$\$|(?<!\\)\$[^$]+?(?<!\\)\$|\\\(.+?\\\)|\\\[.+?\\\]", re.S)
-
-
-def check_svg_math(body_html: str) -> None:
-    # The renderer puts HTML in place of a formula, and an svg <text> draws no HTML, so a
-    # formula written there vanished without a trace. Inside the svg a <foreignObject>
-    # holds HTML, and a formula in it renders like one in the body.
-    if "<svg" not in body_html or not has_math(body_html):
-        return
-    body = ContentParser()
-    body.feed(body_html)
-    body.close()
-
-    def visit(element: Element, in_svg: bool) -> None:
-        for child in element.children:
-            if not isinstance(child, Element) or child.tag == "foreignobject":
-                continue
-            if in_svg and child.tag == "text":
-                found = MATH_SPANS.search(child.text())
-                if found is not None:
-                    raise ValueError(f'the formula "{found.group(0)}" in an svg <text> is not drawn; '
-                                     "put it in a <foreignObject> inside the svg")
-            visit(child, in_svg or child.tag == "svg")
-
-    visit(body.root, False)
-
-
-def lift_svg_html(body_html: str) -> str:
-    # A figure's HTML, such as a formula, is written in a <foreignObject> of its svg. On a
-    # scaled page Safari drew that HTML away from its place while the rest of the page
-    # stood right, so the builder lifts it into a layer over the svg, which the deck's
-    # script places and scales to the viewBox. An unfilled rect marked data-html-slot
-    # keeps its place in the drawing, so the drawing's extent stays what it was, and the
-    # layout check takes it for no box a label sits on.
-    if "<foreignobject" not in body_html.lower():
-        return body_html
-    body = ContentParser()
-    body.feed(body_html)
-    body.close()
-
-    def number(element: Element, name: str, default: str | None = None) -> float:
-        value = element.attributes.get(name, default)
-        if value is None or not re.fullmatch(r"-?\d*\.?\d+", value.strip()):
-            raise ValueError(f'a <foreignObject> needs a number for {name}, not "{value}"')
-        return float(value)
-
-    def lift(svg: Element) -> Element:
-        if any(isinstance(inner, Element) and inner.tag == "foreignobject"
-               for child in svg.children if isinstance(child, Element) for inner in _descendants(child)):
-            raise ValueError("a <foreignObject> sits directly in its <svg>, not inside a group")
-        if svg.attributes.get("preserveaspectratio", "xMidYMid meet").strip() not in ("xMidYMid", "xMidYMid meet"):
-            raise ValueError("an <svg> holding a <foreignObject> keeps the default preserveAspectRatio")
-        view = svg.attributes.get("viewbox", "").replace(",", " ").split()
-        if len(view) != 4:
-            raise ValueError("an <svg> holding a <foreignObject> needs a viewBox")
-        left, top, width, height = (float(value) for value in view)
-        boxes = []
-        for index, child in enumerate(svg.children):
-            if not isinstance(child, Element) or child.tag != "foreignobject":
-                continue
-            x, y = number(child, "x", "0"), number(child, "y", "0")
-            w, h = number(child, "width"), number(child, "height")
-            svg.children[index] = Element("rect", {"x": f"{x:g}", "y": f"{y:g}", "width": f"{w:g}",
-                                                   "height": f"{h:g}", "fill": "none", "data-html-slot": ""})
-            boxes.append(Element("div", {"class": "svg-html-box", "style":
-                                         f"left: {x - left:g}px; top: {y - top:g}px; width: {w:g}px; height: {h:g}px"},
-                                 child.children))
-        layer = Element("div", {"class": "svg-html-layer", "data-viewbox": f"{width:g} {height:g}",
-                                "style": f"width: {width:g}px; height: {height:g}px"}, boxes)
-        return Element("div", {"class": "svg-html"}, [svg, layer])
-
-    def visit(element: Element, in_paragraph: bool) -> None:
-        for index, child in enumerate(element.children):
-            if not isinstance(child, Element):
-                continue
-            if child.tag == "svg":
-                if any(isinstance(inner, Element) and inner.tag == "foreignobject" for inner in _descendants(child)):
-                    if in_paragraph:
-                        raise ValueError("a figure holding a <foreignObject> stands outside a <p>")
-                    element.children[index] = lift(child)
-                continue
-            visit(child, in_paragraph or child.tag == "p")
-
-    visit(body.root, False)
-    return body.root.inner_html()
-
-
-def _descendants(element: Element) -> list[Element]:
-    found = []
-    for child in element.children:
-        if isinstance(child, Element):
-            found.append(child)
-            found.extend(_descendants(child))
-    return found
-
-
-MONO = HERE / "vendor" / "noto-sans-mono"
-
-
-def mono_face(html_text: str) -> str:
-    """The code face, embedded when the document sets code. Left to the system, Firefox
-    drew code in a Korean document in a CJK face half an em wide per letter while Chrome
-    and Safari drew 0.6 em, so the layout check passed lines that ran out of their box on
-    the reader's screen. Every browser now draws the one face it measures."""
-    if "<pre" not in html_text and "<code" not in html_text:
-        return ""
-    faces = "".join(
-        f'@font-face {{ font-family: "Deck Mono"; font-weight: {weight}; '
-        f'src: url(fonts/NotoSansMono-{name}.woff2) format("woff2"); }}\n'
-        for weight, name in ((400, "Regular"), (700, "Bold")))
-    return f"\n  <style>\n{inline_woff2(faces, MONO)}  </style>"
-
-
-def math_bundle() -> tuple[str, str]:
-    """KaTeX for the head and the foot, everything inlined so the file opens offline.
-
-    Fonts go into the stylesheet as data URIs; the woff and ttf fallbacks the upstream
-    CSS also lists are dropped, since every browser this targets reads woff2. Rendering
-    runs synchronously at the end of the body, before load fires, so a print snapshot
-    taken after load already sees the rendered math.
-    """
-    css = inline_woff2((KATEX / "katex.min.css").read_text(encoding="utf-8"), KATEX / "fonts")
-    head = f"\n  <style>\n{css}\n  </style>"
-    foot = (
-        "\n  <script>" + (KATEX / "katex.min.js").read_text(encoding="utf-8") + "</script>"
-        "\n  <script>" + (KATEX / "auto-render.min.js").read_text(encoding="utf-8") + "</script>"
-        "\n  <script>(() => {\n  const options = {delimiters: ["
-        "{left: '$$', right: '$$', display: true}, {left: '\\\\[', right: '\\\\]', display: true}, "
-        "{left: '$', right: '$', display: false}, {left: '\\\\(', right: '\\\\)', display: false}], "
-        "throwOnError: false};\n  renderMathInElement(document.body, options);\n"
-        "  (window.htmlMcpPageSetup ??= []).push((root) => renderMathInElement(root, options));\n})();</script>"
-    )
-    return head, foot
 
 
 def images(uris: list[str], class_name: str) -> str:
@@ -491,40 +297,6 @@ def contents_list(body_html: str, count: str | None) -> tuple[str, int | None]:
             if all(item is not other for other in nested):
                 item.children = [Element("span", {"class": "entry"}, item.children)]
     return body.root.inner_html(), columns
-
-
-def cite_references(body_html: str, references: dict[str, str], numbers: dict[str, int]) -> tuple[str, list[str]]:
-    # A <cite> names one or more references by key, separated by commas, and becomes
-    # their numbers in brackets. A reference takes its number where the deck first cites
-    # it, so numbers holds the deck's numbering so far. Returns the content and the keys
-    # this page cites, in number order. Inside an svg the numbers are a tspan: an HTML
-    # span there ends the drawing where it stands when the browser reads the page.
-    if "<cite" not in body_html:
-        return body_html, []
-    body = ContentParser()
-    body.feed(body_html)
-    body.close()
-    cited: list[str] = []
-
-    def visit(element: Element, in_svg: bool) -> None:
-        for index, child in enumerate(element.children):
-            if not isinstance(child, Element):
-                continue
-            if child.tag != "cite":
-                visit(child, in_svg or child.tag == "svg")
-                continue
-            keys = [key.strip() for key in child.text().split(",")]
-            for key in keys:
-                if key not in references:
-                    raise ValueError(f'<cite> names "{key}", which ol.references does not define')
-                numbers.setdefault(key, len(numbers) + 1)
-                if key not in cited:
-                    cited.append(key)
-            label = ", ".join(str(numbers[key]) for key in keys)
-            element.children[index] = Element("tspan" if in_svg else "span", {"class": "cite"}, [f"[{label}]"])
-
-    visit(body.root, False)
-    return body.root.inner_html(), sorted(cited, key=numbers.__getitem__)
 
 
 def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
@@ -625,8 +397,7 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
 
         # Opening and closing summaries bound the body; only the content between them
         # shares the remaining height. The closing summary uses the skin's lead styling.
-        content_html, cited = cite_references(section.body_html, content.references, numbers)
-        content_html = lift_svg_html(content_html)
+        content_html, cited = prepare_body(section.body_html, content.references, numbers)
         # Comments before the lead, such as the skeleton's note on it, do not hide it.
         lead = re.match(r'\s*(?:<!--.*?-->\s*)*<p class="lead">.*?</p>', content_html, re.S)
         opening = lead.group(0).strip() if lead is not None else ""
@@ -667,14 +438,10 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
     </section>{script}''')
 
     body_html = chr(10).join(pages)
-    math = math_bundle() if has_math(body_html) else ("", "")
-    wraps = "data-wrap=" in body_html or "data-fit=" in body_html
-    wrap = "".join(
-        "\n  <script>" + path.read_text(encoding="utf-8") + "</script>"
-        for path in (TEX_LINEBREAK / "lib.js", TEX_LINEBREAK / "hyphens_en-us.js", WRAP)) if wraps else ""
+    assets = document_assets(body_html)
     notes = NOTES_SPREAD_SCRIPT if re.search(r'<ul class="[^"]*\bnotes\b', body_html) else ""
     document = f'''<!doctype html>
-<html lang="{skin.label("lang") or "en"}">
+<html lang="{content.lang}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -685,14 +452,14 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
 {SKELETON.read_text(encoding="utf-8")}
 /* ---- skin: {skin_dir.name} ---- */
 {skin.css}
-  </style>{mono_face(body_html)}{math[0]}
+  </style>{assets[0]}
 </head>
 <body>
   <main class="pages">
 
 {body_html}
 
-  </main>{math[1]}{wrap}{CONTENTS_FIT_SCRIPT if "data-contents-fit" in body_html else ""}{SVG_HTML_SCRIPT if "svg-html-layer" in body_html else ""}{notes}
+  </main>{assets[1]}{CONTENTS_FIT_SCRIPT if "data-contents-fit" in body_html else ""}{notes}
 {FIT_SCRIPT}
 </body>
 </html>

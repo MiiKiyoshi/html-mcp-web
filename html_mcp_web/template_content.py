@@ -96,6 +96,9 @@ class TemplateContent:
     cover_script_html: str
     sections: list[ContentSection]
     subtitle: str = ""
+    # The language the content is written in, from the body's data-lang: it decides where
+    # lines may break, and Korean breaks only between words.
+    lang: str = "en"
     # A reference's markup by its key, from the body's ol.references.
     references: dict[str, str] = field(default_factory=dict)
 
@@ -212,5 +215,6 @@ def parse_template_content(path: Path) -> TemplateContent:
         cover_script_html=cover_script.inner_html().strip() if cover_script is not None else "",
         sections=sections,
         subtitle=body.attributes.get("data-sub", "").strip(),
+        lang=body.attributes.get("data-lang", "en").strip() or "en",
         references=references,
     )

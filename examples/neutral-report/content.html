@@ -1,45 +1,59 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>Duration-based sharding for the nightly suite</title>
-<body data-author="Build and CI team" data-meta="Technical note|22 September 2026">
-<section data-title="Summary">
-  <p class="lead">Since 15 September the nightly suite splits its tests across the eight runners by measured duration instead of by file name. It now finishes in 47 minutes instead of 74.</p>
-  <h3>What changed</h3>
-  <p>The scheduler reads each test's median duration over the last seven nightly runs. It places the longest test first, each on the runner with the least total time so far, until every test has a runner.</p>
-  <h3>What stayed the same</h3>
-  <p>The same eight runners run the same 2,140 tests. The order of tests within a runner, the retry rule, and the report format are unchanged.</p>
-  <h3>Why it helps</h3>
-  <p>The suite is finished only when its slowest runner is. Splitting by file name gave runner 1 the whole integration folder, so it ran for 74 minutes while runner 8 sat idle after 18.</p>
-  <p class="note">All times are from the nightly runs of 15 to 21 September.</p>
+<title>Duration-Based Sharding for a Nightly Test Suite</title>
+<body data-author="Build and CI Team" data-meta="Technical Note|22 September 2026">
+
+<section data-title="Abstract" data-abstract>
+<p>A nightly suite of 2,140 tests runs on eight runners and is finished only when its slowest runner is. Splitting the tests by file name gave one runner the whole integration folder, and the suite took 74 minutes while another runner sat idle after 18. Since 15 September the suite splits its tests by measured duration instead of by file name. It now finishes in 47 minutes instead of 74. We describe the split, the measurements behind it, and the two kinds of test that still fall back to the old split.</p>
+</section>
+
+<section data-title="Introduction">
+<p>The nightly suite checks every change merged during the day before the next morning's release candidate is cut. Its finishing time sets how early that candidate can be cut, and every minute the suite runs past the start of the working day is a minute in which a failure found overnight cannot yet be fixed.</p>
+<p>The suite is finished when its slowest runner is. The total test time does not change with the split, so a split that leaves one runner with much more work than the others makes the whole suite wait for that runner. Splitting by file name did exactly that: the integration tests sit in one folder, and their file names sort them onto the first runner.</p>
+<p>This note makes three points. First, the old split put 74 minutes of work on one runner and 18 on another. Second, a greedy split by measured duration, the longest-first rule <cite>graham1969</cite>, brings every runner within two minutes of the others. Third, new tests and reruns still bypass the split, and we describe the fixes that go in next.</p>
+</section>
+
+<section data-title="Method">
+<p>The scheduler reads each test's median duration over the last seven nightly runs. It sorts the tests from longest to shortest and places each one on the runner with the least total time so far, until every test has a runner. Let $t_i$ be the median duration of test $i$ and $T_r$ the total time placed on runner $r$. Each test goes to</p>
+<p class="eq">$$r^\ast = \arg\min_{r} T_r, \qquad T_{r^\ast} \leftarrow T_{r^\ast} + t_i.$$</p>
+<p>The median over seven runs rather than the last run keeps one slow night, such as a night with a congested network, from moving a test to another runner. A test that failed in one of the seven runs keeps its duration, since a failing test still occupies its runner for that long.</p>
+<h3>What Stayed the Same</h3>
+<p>The same eight runners run the same 2,140 tests. The order of tests within a runner, the retry rule, and the report format are unchanged. Only the assignment of tests to runners differs, so a failure seen under the new split points at the same test it would have pointed at before.</p>
 </section>
 
 <section data-title="Results">
-  <p class="lead">Every runner now ends within two minutes of the others.</p>
-  <table>
-    <thead>
-      <tr><th>Runner</th><th>By file name</th><th>By duration</th><th>Change</th></tr>
-    </thead>
-    <tbody>
-      <tr><td>1</td><td>74 min</td><td>47 min</td><td>−27 min</td></tr>
-      <tr><td>2</td><td>61 min</td><td>46 min</td><td>−15 min</td></tr>
-      <tr><td>3</td><td>58 min</td><td>46 min</td><td>−12 min</td></tr>
-      <tr><td>4</td><td>49 min</td><td>46 min</td><td>−3 min</td></tr>
-      <tr><td>5</td><td>41 min</td><td>46 min</td><td>+5 min</td></tr>
-      <tr><td>6</td><td>37 min</td><td>46 min</td><td>+9 min</td></tr>
-      <tr><td>7</td><td>30 min</td><td>46 min</td><td>+16 min</td></tr>
-      <tr><td>8</td><td>18 min</td><td>45 min</td><td>+27 min</td></tr>
-    </tbody>
-  </table>
-  <p>The total test time is 368 minutes both ways, since only the split changed. Runners that used to finish early now take more of the work, and the suite ends when runner 1 does, 27 minutes sooner.</p>
+<p>We compare the nightly runs of 8 to 14 September, split by file name, with those of 15 to 21 September, split by duration. Table 1 gives each runner's median finishing time over the seven nights of each week.</p>
+<figure>
+<table>
+<thead><tr><th>Runner</th><th>By file name</th><th>By duration</th><th>Change</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>74 min</td><td>47 min</td><td>−27 min</td></tr>
+<tr><td>2</td><td>61 min</td><td>46 min</td><td>−15 min</td></tr>
+<tr><td>3</td><td>58 min</td><td>46 min</td><td>−12 min</td></tr>
+<tr><td>4</td><td>49 min</td><td>46 min</td><td>−3 min</td></tr>
+<tr><td>5</td><td>41 min</td><td>46 min</td><td>+5 min</td></tr>
+<tr><td>6</td><td>37 min</td><td>46 min</td><td>+9 min</td></tr>
+<tr><td>7</td><td>30 min</td><td>46 min</td><td>+16 min</td></tr>
+<tr><td>8</td><td>18 min</td><td>45 min</td><td>+27 min</td></tr>
+</tbody>
+</table>
+<figcaption>Median finishing time of each runner over seven nights, by the split used.</figcaption>
+</figure>
+<p>The total test time is 368 minutes both ways, since only the split changed. Runners that used to finish early now take more of the work, and the suite ends when runner 1 does, 27 minutes sooner. The spread between the first and the last runner to finish fell from 56 minutes to 2.</p>
+<p>The longest-first rule is not optimal in general, but its result is at most a third longer than the best possible split <cite>graham1969</cite>. Here the longest single test takes 9 minutes, under a fifth of a runner's share, which leaves the rule little room to err: the best split cannot end before 46 minutes, the total divided by eight, and ours ends at 47.</p>
 </section>
 
-<section data-title="Open issues">
-  <p class="lead">Two kinds of test still fall back to the old split.</p>
-  <h3>New tests</h3>
-  <p>A test added this week has no recorded duration, so it is placed by file name. Until it has seven runs, we will give it the median of the other tests in its folder.</p>
-  <h3>Reruns after a flaky failure</h3>
-  <p>A rerun goes back to the runner that failed, which already has its full share. We will send reruns to the spare ninth runner instead.</p>
-  <h3>Next measurement</h3>
-  <p>Both fixes go in on 29 September. We will compare the finish times of that week with the table on the previous page.</p>
+<section data-title="Open Issues">
+<p>Two kinds of test still fall back to the old split.</p>
+<h3>New Tests</h3>
+<p>A test added this week has no recorded duration, so it is placed by file name. Until it has seven runs, we will give it the median of the other tests in its folder.</p>
+<h3>Reruns After a Flaky Failure</h3>
+<p>A rerun goes back to the runner that failed, which already has its full share. We will send reruns to the spare ninth runner instead.</p>
+<h3>Next Measurement</h3>
+<p>Both fixes go in on 29 September. We will compare the finishing times of that week with Table 1.</p>
 </section>
+
+<ol class="references">
+<li id="graham1969">R. L. Graham. 1969. Bounds on Multiprocessing Timing Anomalies. <i>SIAM Journal on Applied Mathematics</i> 17, 2 (1969), 416–429.</li>
+</ol>
 </body>

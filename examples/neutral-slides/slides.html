@@ -6,7 +6,7 @@
   <title>Sharding the nightly test suite</title>
   
   <style>
-/* What the components of templates/README.md are, in the part that holds whatever page
+/* What the components of templates/KITS.md are, in the part that holds whatever page
    they sit on. A deck's page is 1280x720 pixels and a report's is A4, so sizes, spacing
    and rules measured in millimetres stay with each of those; a colour, a weight, an
    alignment and the shape of a component do not change with the paper and stand here
@@ -22,8 +22,20 @@
   --paper: #fffefd;
   --good: #2f756a;
   --bad: #a24b47;
-  --mono: ui-monospace, monospace;
+  /* Deck Mono is the code face the builders embed, so the layout check and every reader
+     measure the same letters. A skin that names another face embeds it too. */
+  --mono: "Deck Mono", ui-monospace, monospace;
   --code-bg: #ecefef;
+  /* Highlight roles 1 to 5 for mark: light tints, so the text keeps its own colour, and
+     each a hue of its own, none the grey of --code-bg that a pre is drawn on. */
+  --hl-1: #d3e4f6;
+  --hl-2: #fbdcc3;
+  --hl-3: #d4ecd2;
+  --hl-4: #e6daf3;
+  --hl-5: #f6ebb0;
+  /* KaTeX's faces stand smaller than most text faces, so math is set 1.21 times the text
+     unless a layout's own face is matched to it at another size. */
+  --math-scale: 1.21em;
 
   /* Safari measures a line of text one way when it can take its simplified path and
      another when it cannot, and the two drift apart along the line: a paragraph carrying
@@ -40,6 +52,12 @@
 * { box-sizing: border-box; }
 .page { position: relative; padding: 0; background: var(--paper); }
 
+/* Korean separates words with spaces, but browsers break its text between any two
+   syllables, so a word wrapped mid-word and left one syllable alone on the last line.
+   keep-all breaks it only between words. Chinese and Japanese text has no spaces to
+   break at, so the rule stays with documents declared Korean. */
+html:lang(ko) { word-break: keep-all; }
+
 /* Chrome shapes the letters of an svg label at the size they will appear on screen, to
    keep them from being stretched: LayoutSVGInlineText asks
    calculateScreenFontSizeScalingFactor for that size and shapes the glyphs for it. The
@@ -55,18 +73,70 @@ svg text { text-rendering: geometricPrecision; }
 .lead { color: var(--ink-soft); }
 .note { color: var(--muted); line-height: 1.5; }
 ul.notes { color: var(--muted); line-height: 1.55; }
+/* KaTeX sets inline math at 1.21 times the text, and with its subscripts the math filled the
+   whole line pitch of a notes item, so lines of math within one item touched. An item holding
+   math takes a pitch that leaves the math the gap text has. */
+ul.notes li:has(.katex) { line-height: 1.8; }
 .nw { white-space: nowrap; }
 .pos { color: var(--good); font-weight: 650; }
 .neg { color: var(--bad); font-weight: 650; }
 code { background: var(--code-bg); font-family: var(--mono); font-size: .92em; }
+/* A code block is one box: the chip background belongs to inline code, so a code inside a
+   pre gives it up. */
+pre code { padding: 0; border-radius: 0; background: none; font-family: inherit; font-size: inherit; }
+.cite { white-space: nowrap; }
+
+/* KaTeX sets .katex to 1.21em. Next to a line of text that reads right, because the maths
+   glyphs are optically smaller, but a display equation stands alone and the enlargement
+   makes it overpower the body. A display equation takes the size of the paragraph it sits
+   in. The selector carries a class more than KaTeX's own, whose stylesheet is written
+   after this file and would otherwise win. */
+.pages .katex-display > .katex { font-size: 1em; }
+/* HTML a figure carries in a <foreignObject>, such as a formula, is lifted by the builder
+   into a layer over the svg, in the svg's units, which the deck's script places. Each box
+   keeps its foreignObject's place and size. A display formula there has no margin: it
+   moved down by 1em in Chromium and Firefox and not in WebKit. The layer covers the
+   whole drawing, so it lets the pointer through to the svg and only its boxes take it:
+   over the labels it caught every press, and a reader could select none of them to
+   comment on. */
+.svg-html { position: relative; }
+.svg-html > svg { display: block; }
+.svg-html-layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
+.svg-html-box { position: absolute; pointer-events: auto; }
+.svg-html-box .katex-display { margin: 0; }
+
+/* A highlight colours the box the letters already take and adds nothing around them, so
+   the letters of a monospaced line keep their columns and a check of the text covers its
+   highlight too. Inside a figure's foreignObject the browser fits it to the letters, which
+   rectangles drawn under svg text from a guessed letter width never were. */
+mark { color: inherit; background: var(--hl-1); border-radius: .15em; }
+mark[data-hl="2"] { background: var(--hl-2); }
+mark[data-hl="3"] { background: var(--hl-3); }
+mark[data-hl="4"] { background: var(--hl-4); }
+mark[data-hl="5"] { background: var(--hl-5); }
+.hl-legend { display: flex; flex-wrap: wrap; gap: .3em 1em; }
 
 .two { display: grid; }
+/* A boxed block that is a column on its own keeps its own height and sits at the middle of
+   the row: stretched to a taller column beside it, its rule or background ran far below its
+   words, a height added only to match the neighbour. A column wrapped in a div still takes
+   the row's height. */
+.two > .card, .two > pre { align-self: center; }
 .metric strong { display: block; }
 .metric span { color: var(--ink-soft); line-height: 1.4; }
 
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+/* A compact table keeps its own size and sits in the middle of its row: stretched to the
+   body's width, its columns stood far apart and the eye crossed empty space from a label to
+   its value. The table inside still fills this wrapper, which takes the table's width. */
+.table-fit { width: fit-content; margin-inline: auto; }
+/* The table's units and notation key ride inside its wrapper, so they end at the table's
+   right edge. A key longer than the table wraps to its width: counted in the wrapper's
+   width, it widened the wrapper and the table filled it, stretched four times over. */
+.table-fit > .units { contain: inline-size; }
 th { font-weight: 650; letter-spacing: .025em; }
 th, td { text-align: right; }
+th.sep, td.sep { border-left: 1px solid var(--line); }
 th:first-child, td:first-child { text-align: left; }
 /* A row whose first column is spanned from above starts in a later column, and the
    builder gives that first cell its column number, so it aligns with its column. */
@@ -159,7 +229,6 @@ th:first-child[data-column], td:first-child[data-column] { text-align: right; }
   line-height: 1.35;
   text-align: left;
 }
-.cite { white-space: nowrap; }
 /* A picture keeps its own proportions. The body is a column flex box, and its default
    stretch handed an image with no stated width the whole column: max-height then cut only
    the height, so a 4:3 figure was drawn 1196x300, at 4:1. Centred because that is where a
@@ -175,16 +244,23 @@ th:first-child[data-column], td:first-child[data-column] { text-align: right; }
   height: var(--bbar-height);
   background: var(--bbar-color);
 }
-.bbar .pageno {
+/* The page number and the label span the bar's height and are centred in it by their
+   capital height, not their line box: a line box keeps room for descenders below the
+   digits, so centring it set the digits low in the bar. The trim applies to a block
+   container, so these stay blocks and centre their line with align-content. */
+.bbar .pageno, .bbar .bbar-label {
   position: absolute;
-  left: 50%;
-  top: 5px;
-  transform: translateX(-50%);
+  top: 0;
+  bottom: 0;
+  display: block;
+  align-content: center;
+  white-space: nowrap;
   color: var(--bbar-ink);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-box: trim-both cap alphabetic;
 }
-.bbar .bbar-label { position: absolute; right: 26px; top: 7px; color: var(--bbar-ink); font-size: 14px; }
+.bbar .pageno { left: 50%; transform: translateX(-50%); font-size: 11px; font-variant-numeric: tabular-nums; }
+.bbar .bbar-label { right: 26px; font-size: 14px; }
 
 /* ---- Cover ---- */
 .cover .band { position: relative; height: var(--cover-band-height); padding: var(--cover-padding); background: var(--primary); }
@@ -279,7 +355,15 @@ th:first-child[data-column], td:first-child[data-column] { text-align: right; }
   color: var(--accent);
   font-size: 17px;
   font-weight: 650;
+  /* Centred in the ring by the digits' own height, as in the footer bar. */
+  display: block;
+  align-content: center;
   text-align: center;
+  line-height: 1;
+  text-box: trim-both cap alphabetic;
+  /* Proportional digits: a tabular 1 keeps a full digit's width, and its narrow ink sat
+     left of the ring's centre. */
+  font-variant-numeric: proportional-nums;
 }
 /* An item ending in a ul of sub-items, which the builder marks has-sub, is a grid, and
    so is every item of a list in columns. The skin's number keeps its own box in the
@@ -328,26 +412,30 @@ th:first-child[data-column], td:first-child[data-column] { text-align: right; }
 .contents .venue, .divider .venue { margin-right: 10px; color: var(--accent); font-size: 17px; }
 .contents .by, .divider .by { margin-left: 10px; color: #9fb1ae; font-size: 17px; }
 
-/* The capsule follows its own text and stops at 620px, so a short label stays compact. */
+/* The section number and its name share one baseline, the name's first line when it wraps,
+   above a hairline as long as the pair. The pair follows its own text and stops at 620px,
+   so a short name stays compact. */
 .divider .cap {
   position: relative;
-  display: inline-block;
+  display: flex;
+  align-items: baseline;
+  gap: 28px;
+  width: fit-content;
   max-width: 620px;
-  margin-top: 210px;
-  padding: 26px 34px 26px 96px;
-  border-left: 5px solid var(--accent);
-  background: rgba(255, 255, 255, .06);
+  margin-top: 236px;
+  padding-bottom: 26px;
+  border-bottom: 1px solid rgba(255, 255, 255, .22);
 }
 .divider .cap .no {
-  position: absolute;
-  left: 30px;
-  top: 24px;
+  flex: none;
   color: var(--accent);
-  font-size: 34px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
+  font-size: 72px;
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
 }
-.divider .cap .label { margin: 0; color: white; font-size: 28px; line-height: 1.3; }
+.divider .cap .label { margin: 0; color: white; font-size: 40px; font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; }
 .divider .shot {
   position: absolute;
   right: 92px;
@@ -376,10 +464,8 @@ ul.notes li { margin-bottom: 3px; }
 
 /* Text right below a table hugs the last row line without this gap. */
 table + p, table + table { margin-top: 16px; }
-/* keep-all so a cell breaks between words: CJK text otherwise wraps mid-word. */
-th, td { padding: 8px 13px; border-bottom: 1px solid var(--line); font-size: 17px; word-break: keep-all; }
+th, td { padding: 8px 13px; border-bottom: 1px solid var(--line); font-size: 17px; }
 th { border-bottom: 2px solid var(--accent); color: var(--primary); font-size: 14px; }
-th.sep, td.sep { border-left: 1px solid var(--line); }
 tfoot td { border-top: 2px solid var(--accent); border-bottom: 0; font-weight: 700; }
 .dense th, .dense td { padding: 4px 10px; font-size: 15px; line-height: 1.25; }
 .dense th { font-size: 13px; }
@@ -396,7 +482,8 @@ tfoot td { border-top: 2px solid var(--accent); border-bottom: 0; font-weight: 7
 /* The two columns share the row's height, and a column that wraps its blocks in a div
    spreads them over it the way the body spreads its own (.body > .rest above): beside a
    tall figure, a short stack of cards sat in a clump at the top and left the rest of the
-   column empty. A column that is one block (a figure, a table) keeps its own height. */
+   column empty. A column that is one block keeps its own height: a figure or a table draws
+   no box that a stretch would show, and a card sits at the row's middle (components.css). */
 .two { grid-template-columns: 1.15fr 1fr; gap: 36px; align-items: stretch; }
 .two > div { display: flex; flex-direction: column; justify-content: space-evenly; }
 .card { padding: 4px 0 4px 22px; border-left: 2px solid var(--accent); }
@@ -409,26 +496,7 @@ code { padding: 1px 6px; border-radius: 3px; }
 pre { margin: 12px 0; padding: 14px 18px; border-radius: 6px; background: var(--code-block-bg);
       font-family: var(--mono); font-size: 16px; line-height: 1.5; color: var(--ink);
       white-space: pre; }
-pre code { padding: 0; border-radius: 0; background: none; font-family: inherit; font-size: inherit; }
 
-/* KaTeX sets .katex to 1.21em. Next to a line of text that reads right, because the maths
-   glyphs are optically smaller, but a display equation stands alone and the enlargement
-   makes it overpower the body. A display equation takes the size of the paragraph it sits
-   in. The selector carries a class more than KaTeX's own, whose stylesheet is written
-   after this file and would otherwise win. */
-.pages .katex-display > .katex { font-size: 1em; }
-/* HTML a figure carries in a <foreignObject>, such as a formula, is lifted by the builder
-   into a layer over the svg, in the svg's units, which the deck's script places. Each box
-   keeps its foreignObject's place and size. A display formula there has no margin: it
-   moved down by 1em in Chromium and Firefox and not in WebKit. The layer covers the
-   whole drawing, so it lets the pointer through to the svg and only its boxes take it:
-   over the labels it caught every press, and a reader could select none of them to
-   comment on. */
-.svg-html { position: relative; }
-.svg-html > svg { display: block; }
-.svg-html-layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
-.svg-html-box { position: absolute; pointer-events: auto; }
-.svg-html-box .katex-display { margin: 0; }
 
 .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; position: relative; margin: 34px 0 28px; counter-reset: step; }
 .flow::before { content: ""; position: absolute; left: 22px; right: 22px; top: 14px; height: 1px; background: var(--line); }
@@ -628,6 +696,7 @@ pre code { padding: 0; border-radius: 0; background: none; font-family: inherit;
 
   </main>
 <script>
+window.htmlMcpPageSetup ??= [];
 (() => {
   const root = document.documentElement;
   if (root.hasAttribute("data-html-mcp-layout")) return;

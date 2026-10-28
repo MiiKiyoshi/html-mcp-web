@@ -6,7 +6,7 @@ Edit the file named by `edit_file` in `guide()`'s answer.
 
 In each new or resumed context, and after a reset or compaction, call `guide()` and read every file in its `read` list in full before editing.
 
-Consult references in `consult`, including [COMPONENTS.md](COMPONENTS.md), only by the section needed for the current component or layout report. Read [SKINS.md](SKINS.md) when developing a skin. [REVIEWER.md](REVIEWER.md) is the text you copy verbatim to the independent reviewer under [PRODUCTION.md](PRODUCTION.md) Article 4.
+Consult references in `consult`, including [KITS.md](KITS.md), only by the article needed for the current component or layout report. Read [SKINS.md](SKINS.md) when developing a skin. [REVIEWER.md](REVIEWER.md) is the text you copy verbatim to the independent reviewer under [PRODUCTION.md](PRODUCTION.md) Article 4.
 
 ## With a template
 
@@ -28,7 +28,7 @@ Consult references in `consult`, including [COMPONENTS.md](COMPONENTS.md), only 
 </body>
 ```
 
-The slide engine adds a cover, then one page per section. `data-meta` uses `|` for line breaks. Optional `data-sub` adds a cover subtitle. Each page can have one `aside.script`. Slide scripts become PowerPoint notes and are excluded from PDF and presentation view. The report template builds the same cover and pages and leaves scripts out.
+A deck makes a cover and then one page per section, and a report sets the sections as a two-column paper whose text runs on across columns and pages. [KITS.md](KITS.md) gives what every part of this file becomes, and in Articles 9 and 10 what only a deck or only a report has, such as the takeaway and the speaker script of a deck.
 
 Image paths are relative to the project directory containing `.html-mcp-web.yaml`, not the content file.
 

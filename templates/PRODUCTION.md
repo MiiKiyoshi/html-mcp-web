@@ -16,7 +16,7 @@ Fit content to its box at a readable size, preserving its proportions. When it d
 
 2.2 Put a table's shared information once in `p.units`, directly above the table and aligned to its right edge: its units, any metric shared by all value columns, any value shared by all rows under neutral clause 5.9, and any needed key to cell notation.
 
-Use the same placement for a plot's keys to marks that do not identify data series and for brief metric definitions needed to read table or plot values under neutral clauses 4.3 and 5.8. A metric's defining equation goes in the page text before the visual, not in `p.units`. Keep data series legends with the plot. See [units and notation keys](COMPONENTS.md#tables-and-units).
+Use the same placement for a plot's keys to marks that do not identify data series and for brief metric definitions needed to read table or plot values under neutral clauses 4.3 and 5.8. A metric's defining equation goes in the page text before the visual, not in `p.units`. Keep data series legends with the plot. See [units and notation keys](KITS.md#article-4-tables-and-units).
 
 2.3 For a drawing you make, prefer inline SVG over a picture of it when other components do not carry it. A figure reused unchanged under neutral clause 2.3 stays an image.
 
@@ -30,9 +30,9 @@ Size the figure's box for readable detail and the relationships it must show, wi
 
 2.7 For diagrams of boxes and arrows, prefer horizontal and vertical connectors unless another route clarifies the relationship. Join connectors entering the same element near their sources. Split connectors leaving the same element near their targets. Keep branches short and the common segment long. Follow neutral clause 5.4 for direction, source and target relationships, entry and exit sides, and permitted merges. Remove a bend or detour when another entry or exit side avoids it without changing reading order or intended connections, obscuring junctions, or adding crossings or label overlaps.
 
-2.8 Set mathematical notation under neutral clause 4.6 using the forms in the component reference. Define only the symbols an equation introduces whose meaning it does not show, not the quantity it defines, in a bulleted HTML list directly below it. For an equation inside a panel or column, keep the list inside that panel or column. Begin each definition with the symbol or expression in inline math, followed by a colon and its meaning under neutral clause 4.3.
+2.8 Set mathematical notation under neutral clause 4.6 using the forms in [KITS.md](KITS.md#article-6-math) Article 6. Define only the symbols an equation introduces whose meaning it does not show, not the quantity it defines, in a bulleted HTML list directly below it. For an equation inside a panel or column, keep the list inside that panel or column. Begin each definition with the symbol or expression in inline math, followed by a colon and its meaning under neutral clause 4.3.
 
-2.9 Show source attribution on a page only through `<ol class="references">` entries and their `<cite>` markers, as described in [References and citations](COMPONENTS.md#references-and-citations).
+2.9 Show source attribution on a page only through `<ol class="references">` entries and their `<cite>` markers, as described in [references and citations](KITS.md#article-7-references-and-citations).
 
 2.10 For the bullets below a visual under neutral clause 5.8, use HTML lists outside SVG, images, or tables, in the same column as that visual.
 
@@ -40,7 +40,7 @@ Size the figure's box for readable detail and the relationships it must show, wi
 
 3.1 Render affected pages with `image()`, with `grayscale=false` when colour is in question, and perform the content guideline's checks in the scope and order of neutral Article 7.
 
-3.2 Use `layout(artifact=..., page=...)` to check each affected page's errors. Consult [Layout check reports](COMPONENTS.md#layout-check-reports) to interpret the result. Read the returned blocks and free space only when the rendered page leaves a placement or spacing question unresolved.
+3.2 Use `layout(artifact=..., page=...)` to check each affected page's errors. Consult [layout check reports](KITS.md#article-11-layout-check-reports) to interpret the result. Read the returned blocks and free space only when the rendered page leaves a placement or spacing question unresolved.
 
 3.3 A suggestion applied from the viewer is written only into the edit file. Regenerating from a script or an earlier copy loses it unless that source also contains the change. Before regenerating a page, carry applied review changes into its source and check that they survive regeneration.
 

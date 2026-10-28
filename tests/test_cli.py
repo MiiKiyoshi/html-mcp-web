@@ -114,20 +114,22 @@ def test_neutral_slides_build_guarded_pages_and_speaker_scripts(tmp_path: Path) 
     assert all(chunk.rstrip().endswith("</section>") for chunk in before_each_script)
 
 
-def test_neutral_report_builds_a4_cover_and_guarded_pages(tmp_path: Path) -> None:
+def test_neutral_report_builds_a_numbered_flow_for_the_columns(tmp_path: Path) -> None:
     content = tmp_path / "content.html"
     report = tmp_path / "report.html"
     content.write_text(
         """<!doctype html>
 <meta charset="utf-8">
 <title>Experiment Report</title>
-<body data-author="Research Team" data-meta="Evaluation|13 August 2026">
-<section data-title="Executive Summary">
-  <p class="lead">Measured evidence from the current evaluation.</p>
-</section>
+<body data-author="Research Team" data-meta="Evaluation|13 August 2026" data-lang="ko">
+<section data-title="Abstract" data-abstract><p>Summary.</p></section>
 <section data-title="Results">
-  <table><tbody><tr><td>Alpha</td><td>18.4%</td></tr></tbody></table>
+  <p>As measured <cite>a</cite>.</p>
+  <h3>Accuracy</h3>
+  <figure><table><tbody><tr><td>Alpha</td><td>18.4%</td></tr></tbody></table><figcaption>Accuracy.</figcaption></figure>
+  <figure><img src="x.png" alt=""><figcaption>A drawing.</figcaption></figure>
 </section>
+<ol class="references"><li id="a">A. Author. 2026. A Paper.</li></ol>
 </body>
 """,
         encoding="utf-8",
@@ -143,11 +145,19 @@ def test_neutral_report_builds_a4_cover_and_guarded_pages(tmp_path: Path) -> Non
     )
 
     output = report.read_text(encoding="utf-8")
-    assert "cover + 2 report pages" in result.stdout
-    assert output.count('<section class="page') == 3
-    assert output.count("data-layout-guard") == 2
-    assert "Evaluation<br>" in output
-    assert "3 / 3" in output
+    assert "2 sections, 1 figures, 1 tables" in result.stdout
+    # The pages are made in the browser, which alone can measure the lines.
+    assert '<main class="pages"></main>' in output
+    assert '<html lang="ko">' in output
+    assert '<h2 class="abstract">Abstract</h2>' in output
+    assert '<h2><span class="secno">1</span>Results</h2>' in output
+    assert '<span class="secno">1.1</span>Accuracy' in output
+    # A table's caption stands above it and a figure's below, each numbered in its kind.
+    assert '<figure class="table"><figcaption><span class="caption-label">Table 1: </span>' in output
+    assert '<span class="caption-label">Figure 1: </span>A drawing.</figcaption></figure>' in output
+    assert '<span class="cite">[1]</span>' in output
+    assert '<li id="a"><span class="bib-no">[1]</span>A. Author. 2026. A Paper.</li>' in output
+    assert "TECHNICAL REPORT" not in output
     # A hundredth of a pixel between the letters, as the slide engine carries: it keeps
     # Safari off the measuring path that opens a gap before an inline box of another size.
     assert "letter-spacing: 0.01px;" in output
@@ -211,7 +221,11 @@ def test_init_builds_missing_template_output(tmp_path, monkeypatch, layout):
     assert len(parsed.sections) == 1
     output = (tmp_path / "output/main.html").read_text()
     assert '<main class="pages">' in output
-    assert output.count('<section class="page') == 2
+    if layout == "slides":
+        assert output.count('<section class="page') == 2
+    else:
+        # A report's pages are made in the browser from the flow, which alone can measure lines.
+        assert '<main class="pages"></main>' in output and 'id="report-flow"' in output
 
 
 def test_init_preserves_existing_sources_and_outputs(tmp_path, monkeypatch):

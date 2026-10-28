@@ -1,4 +1,4 @@
-/* What the components of templates/COMPONENTS.md are, in the part that holds whatever page
+/* What the components of templates/KITS.md are, in the part that holds whatever page
    they sit on. A deck's page is 1280x720 pixels and a report's is A4, so sizes, spacing
    and rules measured in millimetres stay with each of those; a colour, a weight, an
    alignment and the shape of a component do not change with the paper and stand here
@@ -25,6 +25,9 @@
   --hl-3: #d4ecd2;
   --hl-4: #e6daf3;
   --hl-5: #f6ebb0;
+  /* KaTeX's faces stand smaller than most text faces, so math is set 1.21 times the text
+     unless a layout's own face is matched to it at another size. */
+  --math-scale: 1.21em;
 
   /* Safari measures a line of text one way when it can take its simplified path and
      another when it cannot, and the two drift apart along the line: a paragraph carrying
@@ -70,6 +73,29 @@ ul.notes li:has(.katex) { line-height: 1.8; }
 .pos { color: var(--good); font-weight: 650; }
 .neg { color: var(--bad); font-weight: 650; }
 code { background: var(--code-bg); font-family: var(--mono); font-size: .92em; }
+/* A code block is one box: the chip background belongs to inline code, so a code inside a
+   pre gives it up. */
+pre code { padding: 0; border-radius: 0; background: none; font-family: inherit; font-size: inherit; }
+.cite { white-space: nowrap; }
+
+/* KaTeX sets .katex to 1.21em. Next to a line of text that reads right, because the maths
+   glyphs are optically smaller, but a display equation stands alone and the enlargement
+   makes it overpower the body. A display equation takes the size of the paragraph it sits
+   in. The selector carries a class more than KaTeX's own, whose stylesheet is written
+   after this file and would otherwise win. */
+.pages .katex-display > .katex { font-size: 1em; }
+/* HTML a figure carries in a <foreignObject>, such as a formula, is lifted by the builder
+   into a layer over the svg, in the svg's units, which the deck's script places. Each box
+   keeps its foreignObject's place and size. A display formula there has no margin: it
+   moved down by 1em in Chromium and Firefox and not in WebKit. The layer covers the
+   whole drawing, so it lets the pointer through to the svg and only its boxes take it:
+   over the labels it caught every press, and a reader could select none of them to
+   comment on. */
+.svg-html { position: relative; }
+.svg-html > svg { display: block; }
+.svg-html-layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
+.svg-html-box { position: absolute; pointer-events: auto; }
+.svg-html-box .katex-display { margin: 0; }
 
 /* A highlight colours the box the letters already take and adds nothing around them, so
    the letters of a monospaced line keep their columns and a check of the text covers its
@@ -87,7 +113,7 @@ mark[data-hl="5"] { background: var(--hl-5); }
    the row: stretched to a taller column beside it, its rule or background ran far below its
    words, a height added only to match the neighbour. A column wrapped in a div still takes
    the row's height. */
-.two > .card, .two > .callout, .two > pre { align-self: center; }
+.two > .card, .two > pre { align-self: center; }
 .metric strong { display: block; }
 .metric span { color: var(--ink-soft); line-height: 1.4; }
 
@@ -102,6 +128,7 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
 .table-fit > .units { contain: inline-size; }
 th { font-weight: 650; letter-spacing: .025em; }
 th, td { text-align: right; }
+th.sep, td.sep { border-left: 1px solid var(--line); }
 th:first-child, td:first-child { text-align: left; }
 /* A row whose first column is spanned from above starts in a later column, and the
    builder gives that first cell its column number, so it aligns with its column. */

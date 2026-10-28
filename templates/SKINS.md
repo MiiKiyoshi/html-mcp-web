@@ -1,8 +1,8 @@
 # Developing a skin
 
 Copy `templates/neutral-slides` and edit `skin.css`. The variables a skin may set are
-listed at the top of two files: `html_mcp_web/components.css` holds the ones a deck
-shares with a report (`--accent`, `--paper`, `--line`, `--muted`, …), and
+listed at the top of two files: `html_mcp_web/kits/components.css` holds the ones every
+template reads (`--accent`, `--paper`, `--line`, `--muted`, …), and
 `html_mcp_web/slides/skeleton.css` the ones only a slide has (`--primary`, the title bar
 and body box measurements `--tbar-height`, `--body-height`, `--body-padding`, …, and the
 footer bar). A skin restates only what it changes.
@@ -28,8 +28,9 @@ the references in that strip to the right of the chrome. Both values default to
 `0`. The layout check reports content text that overlaps chrome in a page corner.
 
 `footer_label` and `cover_footer_label` put text at the right of the footer bar;
-`font_links` adds `<link>` or `<style>` tags to the head; `lang` sets the document
-language. Images are embedded as data URIs, so the built file opens anywhere.
+`font_links` adds `<link>` or `<style>` tags to the head. The document's language comes
+from the content's `data-lang`, not the skin. Images are embedded as data URIs, so the
+built file opens anywhere.
 
 A skin can carry its own body face. Put the `.woff2` files under `fonts/` and declare
 them in `skin.css` with `@font-face { src: url(fonts/NAME.woff2) format("woff2"); }`;

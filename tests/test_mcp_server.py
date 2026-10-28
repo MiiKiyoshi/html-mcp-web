@@ -645,7 +645,7 @@ def test_guide_names_the_file_to_edit_what_to_read_and_what_to_consult(tmp_path:
         templates = Path(__file__).resolve().parents[1] / "templates"
         assert answer_["edit_file"] == str(tmp_path / "slides.html")
         assert answer_["read"] == [str(templates / "README.md"), str(templates / "PRODUCTION.md")]
-        assert answer_["consult"] == [str(templates / "COMPONENTS.md"), str(templates / "REVIEWER.md")]
+        assert answer_["consult"] == [str(templates / "KITS.md"), str(templates / "REVIEWER.md")]
         assert "reader-facing unit" not in json.dumps(answer_, ensure_ascii=False)
         with pytest.raises(Exception, match="unknown artifact"):
             asyncio.run(mcp.call_tool("guide", {"artifact": "report"}))

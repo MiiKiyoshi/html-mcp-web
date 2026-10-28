@@ -46,7 +46,7 @@ this form:
 
     Layout    : slides, 16:9 (default), or report, A4
     Template  : neutral-slides, plain slides without organization marks (slide default)
-                neutral-report, a cover and one page per section (report default)
+                neutral-report, a two-column paper (report default)
     Guideline : neutral, writing rules the agent follows for slides (slide default)
                 none, no writing guideline (report default)
     File      : slides.html (to be created)

@@ -45,7 +45,7 @@ do html init
 
 Choose slides (16:9) or a report (A4). Slides default to `neutral-slides`, a plain template
 without organization marks, and `neutral`, writing rules the agent follows for slides. Reports
-default to `neutral-report`, with a cover and one page per section, and no guideline. The agent
+default to `neutral-report`, a two-column paper, and no guideline. The agent
 shows the choices and the document file it will create or reuse. Accept the defaults or name
 what to change.
 
