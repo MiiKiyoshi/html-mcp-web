@@ -130,6 +130,8 @@ export function createLayoutChecks(dependencies) {
   // a numerical tolerance. Sizes and matrices here are unrounded, so an even scale or a
   // rotation comes out at 1 within float error.
   const STRETCH_TOLERANCE = 0.01;
+  // How much of a band in a figure panel only connectors cross may go spare, in font sizes.
+  const BAND_SLACK = 0.8;
 
   // What to do with a bullet that interprets a table or figure from elsewhere on the page.
   const INTERPRETATION_ADVICE = "Put the bullet in a list directly below that visual, in the same column (neutral 5.8)";
@@ -1606,6 +1608,117 @@ export function createLayoutChecks(dependencies) {
                 : `enters ${panelName(box)} by its ${join.side} side after turning ${Math.round(stubLength)} units short of it from beyond its ${other} side. Enter by the ${other} side`),
               connector.line);
             break;
+          }
+        }
+        // A band across a panel that only connectors cross is room the figure spends on
+        // them: a return arrow dropped 26 units under a row of labels and ran back along
+        // the bottom, where 14 units held its head and a visible line, and a branch ran 46
+        // units down to a label set level with a box in the next panel, leaving 23 empty
+        // units under the box above it. A panel is a painted rect that holds three or more
+        // drawn things. Its things, and connector runs along the band's direction, fill
+        // the rows (or columns) of the panel, and a gap between two of them that a
+        // connector run crosses is a band. The band keeps the panel's typical gap, the
+        // median of its gaps no connector crosses, and each crossing run that ends inside
+        // it keeps its head and the half head of line shown behind it, as above, or two
+        // stroke widths without a head. What it could lose beyond those is reported when
+        // it reaches that typical gap and BAND_SLACK of the figure's font size, so a dense
+        // figure, whose gaps are all small, is left alone. Read in viewBox units.
+        {
+          const placed = placeViewBox(svg.element, svg.view, svg.element.getBoundingClientRect());
+          const unit = placed.scale;
+          const things = [];
+          const runs = [];
+          const painted = (element) => {
+            const paint = doc.defaultView.getComputedStyle(element);
+            return paint.visibility !== "hidden" && (paint.fill !== "none" || paint.stroke !== "none");
+          };
+          for (const element of svg.element.querySelectorAll("circle, ellipse, polygon, path, image, use, rect[data-html-slot]")) {
+            if (element.closest("defs, symbol, clipPath, mask, pattern, marker") !== null) continue;
+            if (connectors.some((connector) => connector.line === element)) continue;
+            if (!element.matches("rect, image, use") && !painted(element)) continue;
+            const box = inViewport(element);
+            if (box !== null) things.push(box);
+          }
+          things.push(...drawnRects.map((entry) => entry.box), ...labels.map((label) => label.box));
+          for (const connector of connectors) {
+            if (connector.guide) continue;
+            const corners = cornersOf(connector.line);
+            if (corners === null || corners.length < 2) {
+              const box = inViewport(connector.line);
+              if (box !== null) things.push(box);
+              continue;
+            }
+            const ctm = connector.line.getCTM();
+            const scale = Math.hypot(ctm.a, ctm.b);
+            const stroke = connector.strokeWidth * scale;
+            for (let spot = 1; spot < corners.length; spot++) {
+              const [from, to] = [corners[spot - 1], corners[spot]];
+              const head = (spot === 1 ? connector.heads[0] : 0) || (spot === corners.length - 1 ? connector.heads[1] : 0);
+              const run = { from, to, stroke, head: head * scale };
+              if (Math.abs(from.x - to.x) < 0.05) runs.push({ ...run, across: "y" });
+              else if (Math.abs(from.y - to.y) < 0.05) runs.push({ ...run, across: "x" });
+              else things.push({ left: Math.min(from.x, to.x), right: Math.max(from.x, to.x),
+                                 top: Math.min(from.y, to.y), bottom: Math.max(from.y, to.y) });
+            }
+          }
+          const median = (values) => {
+            const sorted = [...values].sort((a, b) => a - b);
+            const middle = sorted.length >> 1;
+            return sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+          };
+          const sizes = labels.map((label) => parseFloat(doc.defaultView.getComputedStyle(label.text).fontSize)
+            * Math.hypot(label.text.getCTM().a, label.text.getCTM().b));
+          const em = sizes.length > 0 ? median(sizes) : 10 * unit;
+          const holds = (outer, inner) => inner !== outer && inner.left >= outer.left - 0.5 && inner.right <= outer.right + 0.5
+            && inner.top >= outer.top - 0.5 && inner.bottom <= outer.bottom + 0.5;
+          let bands = 0;
+          for (const panel of drawnRects.map((entry) => entry.box)) {
+            const inside = things.filter((thing) => holds(panel, thing));
+            if (inside.length < 3) continue;
+            for (const [axis, low, high, side, sideLow, sideHigh] of [["y", "top", "bottom", "x", "left", "right"],
+                                                                       ["x", "left", "right", "y", "top", "bottom"]]) {
+              const mine = runs.filter((run) => Math.min(run.from[side], run.to[side]) < panel[sideHigh]
+                && Math.max(run.from[side], run.to[side]) > panel[sideLow]
+                && Math.max(run.from[axis], run.to[axis]) > panel[low] && Math.min(run.from[axis], run.to[axis]) < panel[high]);
+              const spans = inside.map((thing) => [thing[low], thing[high]]);
+              for (const run of mine.filter((entry) => entry.across !== axis)) {
+                const half = Math.max(run.stroke, run.head) / 2;
+                spans.push([run.from[axis] - half, run.from[axis] + half]);
+              }
+              spans.sort((a, b) => a[0] - b[0]);
+              const rows = [];
+              for (const [start, end] of spans) {
+                if (rows.length > 0 && start <= rows[rows.length - 1][1]) rows[rows.length - 1][1] = Math.max(rows[rows.length - 1][1], end);
+                else rows.push([start, end]);
+              }
+              const gaps = rows.slice(1).map((row, spot) => [rows[spot][1], row[0]]);
+              const crossing = ([start, end]) => mine.filter((run) => run.across === axis
+                && Math.min(run.from[axis], run.to[axis]) < end - 0.5 && Math.max(run.from[axis], run.to[axis]) > start + 0.5);
+              const open = gaps.filter((gap) => crossing(gap).length === 0).map(([start, end]) => end - start);
+              const typical = median(open.length > 0 ? open : gaps.map(([start, end]) => end - start));
+              for (const gap of gaps) {
+                const [start, end] = gap;
+                const runsIn = crossing(gap);
+                if (runsIn.length === 0) continue;
+                let spare = end - start - typical;
+                for (const run of runsIn) {
+                  const near = Math.min(run.from[axis], run.to[axis]);
+                  const far = Math.max(run.from[axis], run.to[axis]);
+                  if (near < start - 1 && far > end + 1) continue;
+                  const least = run.head > 0 ? run.head + Math.max(run.head / 2, 2 * run.stroke) : 2 * run.stroke;
+                  spare = Math.min(spare, Math.min(far, end) - Math.max(near, start) - least);
+                }
+                if (spare < Math.max(typical, BAND_SLACK * em) || bands >= 3) continue;
+                bands += 1;
+                const at = (value, along) => Math.round(((value - placed[along]) / unit + svg.view[along]));
+                addWarning(
+                  `page ${index + 1} ${describeElement(svg.element)} panel at (${at(panel.left, "x")},${at(panel.top, "y")}) `
+                  + `leaves a band ${Math.round((end - start) / unit)} units ${axis === "y" ? "tall" : "wide"} from ${axis} `
+                  + `${at(start, axis)} to ${at(end, axis)} that only connectors cross, ${Math.round(spare / unit)} units more `
+                  + "than they and the panel's usual gap need. Close the band up",
+                  svg.element);
+              }
+            }
           }
         }
         // A label the deck wrapped (data-wrap) records its line count in data-lines; one

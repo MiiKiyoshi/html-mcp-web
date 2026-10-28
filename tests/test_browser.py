@@ -144,6 +144,27 @@ x</pre>
       <rect x="150" y="2" width="140" height="116" fill="none" stroke="#333"/>
       <text x="220" y="110" font-size="12" text-anchor="middle">caption</text>
     </svg>
+    <!-- A panel whose arrow runs down a band 90 units tall to the box below, where its
+         head and a short line need 8: the band is reported. The same arrow over a 14-unit
+         band is snug and is not. -->
+    <svg id="spare" viewBox="0 0 300 200" width="300" height="200">
+      <defs><marker id="spare-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+      <rect x="1" y="1" width="298" height="198" fill="#f6f8f8" stroke="#333"/>
+      <text x="10" y="14" font-size="12">panel</text>
+      <rect x="20" y="20" width="60" height="30" fill="#fff" stroke="#333"/>
+      <rect x="20" y="140" width="60" height="30" fill="#fff" stroke="#333"/>
+      <line x1="50" y1="50" x2="50" y2="140" stroke="#333" marker-end="url(#spare-head)"/>
+      <text x="10" y="192" font-size="12">note</text>
+    </svg>
+    <svg id="snug" viewBox="0 0 300 130" width="300" height="130">
+      <defs><marker id="snug-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+      <rect x="1" y="1" width="298" height="128" fill="#f6f8f8" stroke="#333"/>
+      <text x="10" y="14" font-size="12">panel</text>
+      <rect x="20" y="20" width="60" height="30" fill="#fff" stroke="#333"/>
+      <rect x="20" y="64" width="60" height="30" fill="#fff" stroke="#333"/>
+      <line x1="50" y1="50" x2="50" y2="64" stroke="#333" marker-end="url(#snug-head)"/>
+      <text x="10" y="120" font-size="12">note</text>
+    </svg>
     <!-- A marker parked outside the viewBox is painted where the line references it, and
          a box whose border sits half a stroke inside the edge keeps all of it. Neither is a
          cut drawing. -->
@@ -865,6 +886,13 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         # A label set on a shape stands with its letters' middle at the shape's middle.
         off = [error for error in errors if "svg#ondot>" in error]
         assert len(off) == 1 and "stands off the middle of its shape by 0.0px across and -" in off[0], off
+        # A band only a connector crosses, taller than the connector and the panel's
+        # usual gap need, is a warning, and a snug one is not.
+        warnings = get_json(f"{base}/state")["artifacts"]["slides"]["layout_check"]["warnings"]
+        spare = [warning for warning in warnings if "svg#spare>" in warning]
+        assert len(spare) == 1 and "leaves a band 90 units tall from y 50 to 140 that only connectors cross" in spare[0], spare
+        assert not any("svg#snug>" in warning for warning in warnings), warnings
+        assert not any("leaves a band" in warning and "svg#spare>" not in warning for warning in warnings), warnings
 
         # The page is zoomed to fit the pane, so a narrower window must not change
         # which layout problems are reported.
