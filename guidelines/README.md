@@ -1,6 +1,9 @@
 # Guidelines
 
-Content conventions for presentation material. Each package lives at
+Content conventions for presentation material. The built-in `neutral-slides` and
+`neutral-report` are the neutral guidelines of the two layouts. A guideline that extends one
+of them applies to that layout's artifacts, and an artifact of the other layout follows its
+own neutral guideline instead. Each package lives at
 `guidelines/<name>/GUIDELINE.md`. Related references, fixtures, and scripts stay in the
 same package when they exist. Page geometry belongs to template documentation. Shared
 components belong to `templates/KITS.md` and production rules to

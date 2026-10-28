@@ -264,6 +264,22 @@ def get_guideline_files(config: Config) -> list[Path]:
     return files
 
 
+# The neutral guideline of each layout. They share their principles and the numbers of
+# the clauses they share, and each adds what only its kind of document has.
+NEUTRAL = {"slides": "neutral-slides", "report": "neutral-report"}
+
+
+def guideline_files_for(config: Config, layout: str) -> list[Path]:
+    """The guideline files an artifact of layout follows, base first. A chain built on the
+    neutral guideline of the other layout is for that layout's documents, as a meeting
+    guideline built on neutral-slides is for decks, and a report in the same project
+    follows its own neutral guideline instead."""
+    files = get_guideline_files(config)
+    if files and files[0].parent.name in NEUTRAL.values() and files[0].parent.name != NEUTRAL[layout]:
+        return [_guideline_file(NEUTRAL[layout])]
+    return files
+
+
 def get_template_dir(config: Config, artifact_id: str) -> Path | None:
     template = config.artifacts[artifact_id].template
     if template is None:

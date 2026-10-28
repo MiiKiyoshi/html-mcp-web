@@ -2475,7 +2475,7 @@ def test_semicolons_and_stretching_are_reported_and_normal_cases_are_not(tmp_pat
     # The punctuation and spacing rules are the neutral guideline's, and hold only under it.
     # Stretching is a defect of the rendering whatever the guideline. Hidden page content is
     # not counted, and a script is, shown or not.
-    for guideline, expected in (("neutral", stretched + neutral_only), (None, stretched)):
+    for guideline, expected in (("neutral-slides", stretched + neutral_only), (None, stretched)):
         port = available_port()
         config_path = tmp_path / ".html-mcp-web.yaml"
         config_path.write_text(yaml.safe_dump({
@@ -2548,7 +2548,7 @@ def test_a_panel_stretched_far_past_its_content_is_reported_under_the_neutral_gu
         "Let it keep its own height, centered in the row [p1:0.1.0]",
     ]
     # Panel heights are a rule of the neutral guideline, not a defect of the rendering.
-    for guideline, expected in (("neutral", reported), (None, [])):
+    for guideline, expected in (("neutral-slides", reported), (None, [])):
         port = available_port()
         config_path = tmp_path / ".html-mcp-web.yaml"
         config_path.write_text(yaml.safe_dump({
@@ -2617,7 +2617,7 @@ def test_a_table_column_saying_the_same_in_every_row_is_reported_under_the_neutr
         "the line above the table and drop the column [p2:0.0.0.1.0]",
     ]
     # Repetition down a column is a rule of the neutral guideline, not a defect of the rendering.
-    for guideline, expected in (("neutral", reported), (None, [])):
+    for guideline, expected in (("neutral-slides", reported), (None, [])):
         port = available_port()
         config_path = tmp_path / ".html-mcp-web.yaml"
         config_path.write_text(yaml.safe_dump({
@@ -2682,7 +2682,7 @@ def test_a_bullet_citing_a_visual_from_another_column_is_reported_under_the_neut
         "directly below it. Put the bullet in a list directly below that visual, in the same column (neutral 5.8) [p1:0.0.0.1.0]",
     ]
     # Where an interpretation goes is a rule of the neutral guideline, not a defect of the rendering.
-    for guideline, expected in (("neutral", reported), (None, [])):
+    for guideline, expected in (("neutral-slides", reported), (None, [])):
         port = available_port()
         config_path = tmp_path / ".html-mcp-web.yaml"
         config_path.write_text(yaml.safe_dump({
@@ -2741,7 +2741,7 @@ def test_a_plot_axis_numbered_without_a_name_is_a_warning_under_the_neutral_guid
     <svg id="panels" width="560" height="230" viewBox="0 0 560 230">{panel(0, "(a) Fits", True)}{panel(290, "(b) Misses", False)}</svg>
   </div></section>
 </main></body></html>''', encoding="utf-8")
-    for guideline in ("neutral", None):
+    for guideline in ("neutral-slides", None):
         port = available_port()
         config_path = tmp_path / ".html-mcp-web.yaml"
         config_path.write_text(yaml.safe_dump({

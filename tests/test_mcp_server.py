@@ -249,7 +249,7 @@ def test_setup_info_reports_paths_and_choices_without_connecting(tmp_path: Path,
         assert set(templates["incomplete"]) == {"user/house", "user/neutral-slides"}
         # A missing user folder is reported as missing, not left out.
         assert info["guidelines"]["user"] == {"dir": str(user_config / "guidelines"), "entries": None}
-        assert "neutral" in info["guidelines"]["built_in"]["entries"]
+        assert {"neutral-slides", "neutral-report"} <= set(info["guidelines"]["built_in"]["entries"])
         # A report only: no binding, no server, no file.
         assert binding.bound_config_path() is None
         assert sorted(tmp_path.rglob("*")) == files
@@ -743,13 +743,44 @@ def test_layout_reports_the_revisions_errors_and_a_pages_detail(tmp_path: Path, 
         binding.stop()
 
 
+def test_guide_gives_each_artifact_the_neutral_guideline_of_its_layout(tmp_path: Path, monkeypatch) -> None:
+    """A deck and a report in one project, under a meeting guideline built on
+    neutral-slides: the deck reads neutral-slides and the meeting guideline, the report
+    neutral-report, and the neutral checks are on for both."""
+    user_config = tmp_path / "user-config"
+    meeting = user_config / "guidelines" / "team-meeting" / "GUIDELINE.md"
+    meeting.parent.mkdir(parents=True)
+    meeting.write_text("---\nextends: neutral-slides\n---\n# Team meeting\n", encoding="utf-8")
+    monkeypatch.setattr(config_module, "USER_CONFIG_DIR", user_config)
+    config = project(tmp_path)
+    (tmp_path / "report.html").write_text(
+        '<!doctype html><html><body><main class="pages"><section class="page"></section></main></body></html>',
+        encoding="utf-8")
+    data = yaml.safe_load(config.config_path.read_text(encoding="utf-8"))
+    data["artifacts"]["report"] = {"label": "Report", "layout": "report", "main": "report.html"}
+    data["guideline"] = "team-meeting"
+    config.config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    built_in = Path(config_module.__file__).resolve().parent.parent / "guidelines"
+
+    binding = ProjectBinding(tmp_path)
+    try:
+        mcp = create_server(binding)
+        assert guided(mcp, "slides")["read"][-2:] == [str(built_in / "neutral-slides" / "GUIDELINE.md"), str(meeting)]
+        assert guided(mcp, "report")["read"][-1] == str(built_in / "neutral-report" / "GUIDELINE.md")
+        assert str(meeting) not in guided(mcp, "report")["read"]
+        artifacts = asyncio.run(binding.require_client().request_json("GET", "/state"))["artifacts"]
+        assert artifacts["slides"]["neutral_guideline"] and artifacts["report"]["neutral_guideline"]
+    finally:
+        binding.stop()
+
+
 def test_guide_lists_the_configured_guideline_after_the_one_it_extends(
     tmp_path: Path, monkeypatch,
 ) -> None:
     user_config = tmp_path / "user-config"
     guideline_path = user_config / "guidelines" / "team-meeting" / "GUIDELINE.md"
     guideline_path.parent.mkdir(parents=True)
-    guideline_text = "---\nextends: neutral\n---\n# Team meeting\n\nNever inline this marker in discovery.\n"
+    guideline_text = "---\nextends: neutral-slides\n---\n# Team meeting\n\nNever inline this marker in discovery.\n"
     guideline_path.write_text(guideline_text, encoding="utf-8")
     monkeypatch.setattr(config_module, "USER_CONFIG_DIR", user_config)
     config = project(tmp_path)
@@ -763,7 +794,7 @@ def test_guide_lists_the_configured_guideline_after_the_one_it_extends(
         answer_ = guided(mcp)
         # The guideline it extends comes first, so the general rules are read before
         # the ones that add to or override them.
-        neutral = Path(config_module.__file__).resolve().parent.parent / "guidelines" / "neutral" / "GUIDELINE.md"
+        neutral = Path(config_module.__file__).resolve().parent.parent / "guidelines" / "neutral-slides" / "GUIDELINE.md"
         assert answer_["read"][-2:] == [str(neutral), str(guideline_path)]
         assert "Never inline this marker" not in json.dumps(answer_)
         # Paths are the whole of it: no resources beside them to keep in step.

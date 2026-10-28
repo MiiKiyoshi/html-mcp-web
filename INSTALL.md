@@ -85,8 +85,8 @@ information:
 
 - `neutral-slides`: plain 16:9 slides without organization marks. The default template for slides.
 - `neutral-report`: a two-column paper on A4. The default template for reports.
-- `neutral`: writing rules the agent follows for slides. Selected by default for slides. Reports
-  use no guideline by default.
+- `neutral-slides` and `neutral-report` guidelines: writing rules the agent follows for slides
+  and for a paper. Selected by default for each layout.
 
 They can add their own templates and guidelines, which will also appear among the choices at
 setup.

@@ -195,8 +195,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             notes = Path(entry["template_dir"]) / "README.md"
             if notes.is_file():
                 read.append(str(notes))
-        if state.get("guideline") is not None:
-            read.extend(state["guideline"]["paths"])
+        # The guideline of this artifact's layout, base first.
+        read.extend(entry["guideline"])
         return {"edit_file": str((Path(state["project_dir"]) / entry["edit_file"]).resolve()),
                 "read": read, "consult": [str(docs / "KITS.md"), str(docs / "REVIEWER.md")]}
 

@@ -1071,7 +1071,7 @@ async def test_layout_names_semicolons_in_the_floorplan(client, monkeypatch) -> 
         pass
 
     monkeypatch.setattr(review, "_ensure_layout_checked", unfinished)
-    monkeypatch.setattr(review.config, "guideline", "neutral")
+    monkeypatch.setattr(review.config, "guideline", "neutral-slides")
     assert "floorplan" not in await (await test_client.get("/artifacts/slides/layout")).json()
     (review.project_dir / "slides.FLOORPLAN.md").write_text(
         "# Plan\n"

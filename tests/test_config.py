@@ -125,13 +125,13 @@ def test_guideline_is_a_named_user_file(tmp_path: Path, monkeypatch) -> None:
 def test_a_user_guideline_overrides_the_built_in_one(tmp_path: Path, monkeypatch) -> None:
     user_config = tmp_path / ".config" / "html-mcp-web"
     monkeypatch.setattr(config_module, "USER_CONFIG_DIR", user_config)
-    config = Config.from_dict({"artifacts": {"slides": artifact()}, "guideline": "neutral"})
-    built_in = Path(config_module.__file__).resolve().parent.parent / "guidelines" / "neutral" / "GUIDELINE.md"
+    config = Config.from_dict({"artifacts": {"slides": artifact()}, "guideline": "neutral-slides"})
+    built_in = Path(config_module.__file__).resolve().parent.parent / "guidelines" / "neutral-slides" / "GUIDELINE.md"
     assert get_guideline_files(config) == [built_in]
     assert built_in.is_file()
-    own = user_config / "guidelines" / "neutral" / "GUIDELINE.md"
+    own = user_config / "guidelines" / "neutral-slides" / "GUIDELINE.md"
     own.parent.mkdir(parents=True)
-    own.write_text("# My neutral\n", encoding="utf-8")
+    own.write_text("# My neutral slides\n", encoding="utf-8")
     assert get_guideline_files(config) == [own]
 
 
@@ -140,9 +140,9 @@ def test_a_guideline_extends_another_and_is_read_after_it(tmp_path: Path, monkey
     monkeypatch.setattr(config_module, "USER_CONFIG_DIR", user_config)
     own = user_config / "guidelines" / "team-meeting" / "GUIDELINE.md"
     own.parent.mkdir(parents=True)
-    own.write_text("---\nextends: neutral\n---\n# Team meeting\n", encoding="utf-8")
+    own.write_text("---\nextends: neutral-slides\n---\n# Team meeting\n", encoding="utf-8")
     config = Config.from_dict({"artifacts": {"slides": artifact()}, "guideline": "team-meeting"})
-    built_in = Path(config_module.__file__).resolve().parent.parent / "guidelines" / "neutral" / "GUIDELINE.md"
+    built_in = Path(config_module.__file__).resolve().parent.parent / "guidelines" / "neutral-slides" / "GUIDELINE.md"
     assert get_guideline_files(config) == [built_in, own]
 
     own.write_text("---\nextends: missing\n---\n", encoding="utf-8")
@@ -154,7 +154,7 @@ def test_a_guideline_extends_another_and_is_read_after_it(tmp_path: Path, monkey
     own.write_text("---\nextends: team-meeting\n---\n", encoding="utf-8")
     with pytest.raises(ValueError, match="extends itself"):
         get_guideline_files(config)
-    own.write_text("---\nextend: neutral\n---\n", encoding="utf-8")
+    own.write_text("---\nextend: neutral-slides\n---\n", encoding="utf-8")
     with pytest.raises(ValueError, match="takes only extends"):
         get_guideline_files(config)
 
@@ -194,3 +194,26 @@ def test_public_template_is_used_when_user_template_is_absent(tmp_path: Path, mo
     assert template.name == "neutral-slides"
     assert template.parent.name == "templates"
     assert template.is_dir()
+
+
+def test_an_artifact_follows_the_neutral_guideline_of_its_layout(tmp_path: Path, monkeypatch) -> None:
+    """A guideline built on the neutral guideline of one layout is for that layout's
+    documents, so a report in the same project follows neutral-report instead, while a
+    guideline built on nothing neutral applies to every artifact."""
+    from html_mcp_web.config import guideline_files_for
+
+    user_config = tmp_path / ".config" / "html-mcp-web"
+    monkeypatch.setattr(config_module, "USER_CONFIG_DIR", user_config)
+    meeting = user_config / "guidelines" / "team-meeting" / "GUIDELINE.md"
+    meeting.parent.mkdir(parents=True)
+    meeting.write_text("---\nextends: neutral-slides\n---\n# Team meeting\n", encoding="utf-8")
+    built_in = Path(config_module.__file__).resolve().parent.parent / "guidelines"
+    config = Config.from_dict({"artifacts": {"slides": artifact()}, "guideline": "team-meeting"})
+    assert guideline_files_for(config, "slides") == [built_in / "neutral-slides" / "GUIDELINE.md", meeting]
+    assert guideline_files_for(config, "report") == [built_in / "neutral-report" / "GUIDELINE.md"]
+    plain = user_config / "guidelines" / "plain" / "GUIDELINE.md"
+    plain.parent.mkdir(parents=True)
+    plain.write_text("# Plain\n", encoding="utf-8")
+    config = Config.from_dict({"artifacts": {"slides": artifact()}, "guideline": "plain"})
+    assert guideline_files_for(config, "report") == [plain]
+    assert (built_in / "neutral-report" / "GUIDELINE.md").is_file()

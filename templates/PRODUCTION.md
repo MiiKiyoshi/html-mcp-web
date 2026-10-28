@@ -1,6 +1,6 @@
 # Production rules
 
-Neutral clauses cited below are in the [neutral content guideline](../guidelines/neutral/GUIDELINE.md).
+Neutral clauses cited below are in the neutral guideline of the artifact's layout, [neutral-slides](../guidelines/neutral-slides/GUIDELINE.md) for a deck and [neutral-report](../guidelines/neutral-report/GUIDELINE.md) for a report, which number the clauses they share alike.
 
 ## Article 1. Plan the document
 

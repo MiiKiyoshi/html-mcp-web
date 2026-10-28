@@ -1,5 +1,7 @@
 # Neutral Technical Slides: Content Guideline
 
+This guideline is for a deck. It shares its principles with neutral-report and numbers the clauses the two share alike, so a clause cited by number means the same in both. Article 6 holds what only a deck has.
+
 ## Article 1. Priorities and shared terms
 
 1.1 A deck is accepted when it brings the audience to the requested understanding or decision with grounded claims and values within authorized scope. The audience following each page's one answer ranks above rigor and completeness.

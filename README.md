@@ -43,9 +43,10 @@ Once per folder, start the agent in the folder that holds (or will hold) your ar
 do html init
 ```
 
-Choose slides (16:9) or a report (A4). Slides default to `neutral-slides`, a plain template
-without organization marks, and `neutral`, writing rules the agent follows for slides. Reports
-default to `neutral-report`, a two-column paper, and no guideline. The agent
+Choose slides (16:9) or a report (A4). Slides default to the `neutral-slides` template, plain
+slides without organization marks, and the `neutral-slides` guideline, writing rules the agent
+follows for slides. Reports default to the `neutral-report` template, a two-column paper, and
+the `neutral-report` guideline, writing rules for a paper. The agent
 shows the choices and the document file it will create or reuse. Accept the defaults or name
 what to change.
 
@@ -123,7 +124,7 @@ port: 8765
 | `artifacts.<id>.layout` | `slides` (16:9) or `report` (A4). |
 | `artifacts.<id>.main` | The HTML file the page shows. |
 | `artifacts.<id>.template`, `.content` | A template name and the content file it builds `main` from. |
-| `guideline` | A writing guideline the agent follows, such as the built-in `neutral`. |
+| `guideline` | A writing guideline the agent follows, such as the built-in `neutral-slides` or `neutral-report`. A guideline built on the neutral guideline of one layout applies to that layout's artifacts, and an artifact of the other layout follows its own neutral guideline. |
 | `watch` | Files whose saves refresh the page. |
 | `ignore` | Patterns excluded even when they match `watch`. |
 | `port` | This folder's review page port. Any free port works. Init picks the first free one from 8765, so each folder can have its own. |
@@ -133,13 +134,14 @@ port: 8765
 Put a template in `~/.config/html-mcp-web/templates/<name>/`. Start from a copy of
 `templates/neutral-slides`, as [`templates/SKINS.md`](templates/SKINS.md) explains. Put a
 writing guideline for the agent in `~/.config/html-mcp-web/guidelines/<name>/GUIDELINE.md`.
-To build on the built-in [`neutral`](guidelines/neutral/GUIDELINE.md) guideline instead of
-copying it, open your file with this front matter, write only the rules you add or change,
-and say that yours win where the two differ:
+To build on a built-in guideline, [`neutral-slides`](guidelines/neutral-slides/GUIDELINE.md)
+or [`neutral-report`](guidelines/neutral-report/GUIDELINE.md), instead of copying it, open your
+file with this front matter, write only the rules you add or change, and say that yours win
+where the two differ:
 
 ```markdown
 ---
-extends: neutral
+extends: neutral-slides
 ---
 ```
 

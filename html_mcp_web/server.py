@@ -38,7 +38,8 @@ from .config import (
     ArtifactConfig,
     Config,
     get_content_file,
-    get_guideline_files,
+    NEUTRAL,
+    guideline_files_for,
     get_main_file,
     get_project_dir,
     get_template_dir,
@@ -452,8 +453,21 @@ class HtmlReviewServer:
                   if runtime.content_file is not None]
         return roots
 
+    def artifact_guideline(self, artifact_id: str) -> list[Path]:
+        return guideline_files_for(self.config, self.config.artifacts[artifact_id].layout)
+
+    def artifact_state(self, runtime: ArtifactRuntime) -> dict[str, Any]:
+        guidelines = self.artifact_guideline(runtime.artifact_id)
+        return {
+            **runtime.state(),
+            # The guideline this artifact follows and the ones it extends, base first.
+            "guideline": [str(path) for path in guidelines],
+            # The checks that carry a neutral guideline's own rules run only where it applies.
+            "neutral_guideline": bool(guidelines) and guidelines[0].parent.name in NEUTRAL.values(),
+        }
+
     def project_state(self) -> dict[str, Any]:
-        guidelines = get_guideline_files(self.config)
+        artifacts = {artifact_id: self.artifact_state(runtime) for artifact_id, runtime in self.artifacts.items()}
         return {
             # The tag of the code being served. A page stamped with another one is running
             # code this server no longer serves, and reloads itself on seeing this.
@@ -463,12 +477,7 @@ class HtmlReviewServer:
             "port": self.config.port,
             "review": {"calls": self.review_calls, "consumed": self.review_consumed,
                        "waiters": self.review_waiters},
-            # The configured guideline and the ones it extends, base first.
-            "guideline": ({"name": self.config.guideline, "paths": [str(path) for path in guidelines]}
-                          if guidelines else None),
-            # The checks that carry the neutral guideline's own rules run only where it applies.
-            "neutral_guideline": any(path.parent.name == "neutral" for path in guidelines),
-            "artifacts": {artifact_id: runtime.state() for artifact_id, runtime in self.artifacts.items()},
+            "artifacts": artifacts,
             # Whether the layout can be checked at all: only the server checks it, with Firefox.
             "layout_checker": shutil.which("firefox") is not None,
         }
@@ -1011,7 +1020,7 @@ class HtmlReviewServer:
         # Measured before its fonts or images arrived, the page reports again once they have,
         # and that report is the one kept.
         if not settled:
-            return web.json_response(runtime.state())
+            return web.json_response(self.artifact_state(runtime))
         runtime.layout_revision = revision
         runtime.layout_errors = list(errors)
         runtime.layout_warnings = list(warnings)
@@ -1020,7 +1029,7 @@ class HtmlReviewServer:
         runtime.space_pages = space_pages
         runtime.layout_room = room_for_errors(errors, space_pages)
         await self.broadcast({"type": "layout_checked", **self.project_state()})
-        return web.json_response(runtime.state())
+        return web.json_response(self.artifact_state(runtime))
 
     async def _ensure_layout_checked(self, runtime: ArtifactRuntime, host: str) -> None:
         """Run the server's own layout check of the current revision.
@@ -1104,8 +1113,9 @@ class HtmlReviewServer:
         if runtime.build_error is not None:
             data["build_error"] = runtime.build_error
         # The planning record beside the edit file, `<artifact>.FLOORPLAN.md`, is prose too,
-        # under the neutral guideline that asks for one.
-        floorplan = None if not any(path.parent.name == "neutral" for path in get_guideline_files(self.config)) \
+        # under the neutral guidelines, which ask for one.
+        guidelines = self.artifact_guideline(runtime.artifact_id)
+        floorplan = None if not (guidelines and guidelines[0].parent.name in NEUTRAL.values()) \
             else floorplan_semicolons(
                 (runtime.content_file or runtime.main_file).parent / f"{runtime.artifact_id}.FLOORPLAN.md")
         if floorplan is not None:

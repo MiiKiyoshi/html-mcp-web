@@ -302,7 +302,7 @@ export function createLayoutChecks(dependencies) {
     // A speaker script follows its page. What it says is prose like the page's, and a
     // paragraph with nothing in it is only spacing. Both are rules of the neutral
     // guideline rather than defects of any rendering, so they hold only where it applies.
-    const neutral = state.project?.neutral_guideline === true;
+    const neutral = state.artifact?.neutral_guideline === true;
     for (const block of neutral ? root.querySelectorAll(":scope > .script-block") : []) {
       let owner = block.previousElementSibling;
       while (owner !== null && !owner.matches("section.page")) owner = owner.previousElementSibling;
