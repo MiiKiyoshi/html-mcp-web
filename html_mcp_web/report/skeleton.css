@@ -106,6 +106,8 @@ main.pages .katex:not(.katex-display .katex) { line-height: 0; }
 figure { margin: 12pt 0; text-indent: 0; }
 .column > figure:first-child { margin-top: 0; }
 figure.wide { margin: 0 0 4pt; }
+/* Text under the figures at a column's top stands 20pt below them, LaTeX's \textfloatsep. */
+.column > figure + :not(figure) { margin-top: 20pt; }
 figure img, figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
 figcaption { margin: 6pt 0 0; text-align: justify; font-size: 8pt; line-height: calc(9.6pt * var(--leading)); font-weight: 700; }
 figcaption.single { text-align: center; }

@@ -20,8 +20,8 @@ SKELETON = HERE / "skeleton.css"
 # The flow is built once as a column of blocks, outside the pages, and the script pours a
 # copy of it into the columns: a paragraph that reaches the foot of a column is cut after
 # its last whole line and goes on at the head of the next, a list is cut between its items,
-# and a figure or table that does not fit waits for the head of the next column while the
-# text goes on past it. A figure marked wide waits for the top of the next page, across
+# and a figure or table stands at the top of a column, this one while it holds only
+# figures and the next otherwise, while the text goes on past it. A figure marked wide waits for the top of the next page, across
 # both columns, as many as fill no more than 0.7 of it. The fonts change the lines, so the
 # flow is poured again once they arrive.
 PAGINATE_SCRIPT = r"""<script>
@@ -70,6 +70,12 @@ PAGINATE_SCRIPT = r"""<script>
   };
   const bottomOf = (column) => column.getBoundingClientRect().bottom;
   const fits = (node, column) => node.getBoundingClientRect().bottom <= bottomOf(column) + 0.5;
+  // A figure at a column's top fits it and, with the figures above it, fills no more than
+  // 0.7 of it.
+  const atTop = (figure, column) => {
+    const box = column.getBoundingClientRect();
+    return fits(figure, column) && figure.getBoundingClientRect().bottom - box.top <= box.height * 0.7;
+  };
 
   // The lines of a paragraph inside a column, as one rectangle per line. A box joins the
   // line whose middle is within half a pitch of its own: joining boxes that overlapped
@@ -222,12 +228,13 @@ PAGINATE_SCRIPT = r"""<script>
         }
       }
       column = page.querySelectorAll(".column")[columnIndex];
-      // Figures that waited go first, as many as the column holds.
+      // Figures that waited go first, in their order, while they fit and fill no more than
+      // 0.7 of the column, LaTeX's \topfraction. One alone always goes.
       while (waitingColumn.length) {
         const figure = waitingColumn[0];
         column.append(figure);
         fitTables(figure);
-        if (!fits(figure, column) && column.children.length > 1) { figure.remove(); break; }
+        if (!atTop(figure, column) && column.children.length > 1) { figure.remove(); break; }
         waitingColumn.shift();
       }
     };
@@ -244,7 +251,20 @@ PAGINATE_SCRIPT = r"""<script>
         waitingWide.push(block);
         continue;
       }
-      if (isFloat(block) && waitingColumn.length) {
+      // A figure or table stands at the top of a column, as LaTeX's [t] places it: at the
+      // top of this one while it holds only figures, else at the top of the next, after
+      // those already waiting, so the numbers keep their order and none comes before the
+      // place it is written.
+      if (isFloat(block)) {
+        if (waitingColumn.length || Array.from(column.children).some((node) => !isFloat(node))) {
+          waitingColumn.push(block);
+          continue;
+        }
+        column.append(block);
+        fitTables(block);
+        if (atTop(block, column)) continue;
+        if (column.children.length === 1) { nextColumn(); continue; }
+        block.remove();
         waitingColumn.push(block);
         continue;
       }
@@ -255,12 +275,16 @@ PAGINATE_SCRIPT = r"""<script>
         // and is not what the head is kept with.
         const following = blocks.find((next) => !isFloat(next));
         if (/^H[23]$/.test(block.tagName) && following !== undefined) {
+          // The head stays when what follows can begin under it as the pour would set it: a
+          // copy is placed and cut the same way, so a paragraph whose cut would leave a line
+          // alone, or a list whose first item does not fit, sends the head on.
           const probe = following.cloneNode(true);
           column.append(probe);
-          const lines = probe.tagName === "P" ? lineBoxes(probe) : [];
-          const room = lines.length >= 2 ? lines[1].foot : probe.getBoundingClientRect().bottom;
+          let room = fits(probe, column);
+          if (!room && /^(P|LI)$/.test(probe.tagName)) room = splitParagraph(probe, column) !== null;
+          else if (!room && /^(UL|OL)$/.test(probe.tagName)) room = splitList(probe, column) !== null;
           probe.remove();
-          if (room > bottomOf(column) + 0.5 && column.children.length > 1) {
+          if (!room && column.children.length > 1) {
             block.remove();
             // A section head right above a subsection head goes on with it.
             const above = column.lastElementChild;
@@ -270,12 +294,6 @@ PAGINATE_SCRIPT = r"""<script>
             blocks.unshift(...heads);
           }
         }
-        continue;
-      }
-      if (isFloat(block)) {
-        block.remove();
-        if (column.children.length === 0) { column.append(block); nextColumn(); continue; }
-        waitingColumn.push(block);
         continue;
       }
       let rest = null;
@@ -398,10 +416,18 @@ PAGINATE_SCRIPT = r"""<script>
       frame.style.height = `${height}px`;
       columns.forEach((column) => column.replaceChildren());
       const queue = items.map((node) => node.cloneNode(true));
+      const deferred = [];
       let index = 0;
+      const second = () => { index = 1; columns[1].append(...deferred); };
       while (queue.length) {
         const column = columns[index];
         const block = queue.shift();
+        // A figure keeps to a column's top: after text it opens the second column.
+        if (isFloat(block) && Array.from(column.children).some((node) => !isFloat(node))) {
+          if (index === 1) return false;
+          deferred.push(block);
+          continue;
+        }
         column.append(block);
         if (fits(block, column)) continue;
         if (index === 1) return false;
@@ -415,9 +441,10 @@ PAGINATE_SCRIPT = r"""<script>
         }
         queue.unshift(rest);
         if (/^H[23]$/.test(column.lastElementChild?.tagName ?? "")) queue.unshift(column.lastElementChild);
-        index = 1;
+        second();
       }
-      return true;
+      if (index === 0 && deferred.length) second();
+      return Array.from(columns[1].children).every((node) => fits(node, columns[1]));
     };
     let low = 0, high = full;
     while (high - low > 1) {
