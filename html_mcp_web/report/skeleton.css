@@ -3,16 +3,8 @@
    serif section heads, captions in bold, and a running head in small sans. The page is
    A4, so the block is centred across the width and keeps its height from the top.
 
-   The faces are Libertinus Serif and Sans, embedded from fonts/ so every reader and the
-   layout check set the same lines. Hangul is not in them and falls to the reader's
-   Korean serif. */
-
-@font-face { font-family: "Report Serif"; font-weight: 400; font-style: normal; src: url(fonts/LibertinusSerif-Regular.woff2) format("woff2"); }
-@font-face { font-family: "Report Serif"; font-weight: 700; font-style: normal; src: url(fonts/LibertinusSerif-Bold.woff2) format("woff2"); }
-@font-face { font-family: "Report Serif"; font-weight: 400; font-style: italic; src: url(fonts/LibertinusSerif-Italic.woff2) format("woff2"); }
-@font-face { font-family: "Report Serif"; font-weight: 700; font-style: italic; src: url(fonts/LibertinusSerif-BoldItalic.woff2) format("woff2"); }
-@font-face { font-family: "Report Sans"; font-weight: 400; font-style: normal; src: url(fonts/LibertinusSans-Regular.woff2) format("woff2"); }
-@font-face { font-family: "Report Sans"; font-weight: 700; font-style: normal; src: url(fonts/LibertinusSans-Bold.woff2) format("woff2"); }
+   Every report skin sets its text on this frame: a skin names its faces and colours in
+   its own skin.css, which is read after this sheet. */
 
 :root {
   --ink: #000;
@@ -20,8 +12,8 @@
   --muted: #000;
   --paper: #fff;
   --line: #000;
-  --serif: "Report Serif", "Noto Serif KR", "Nanum Myeongjo", "AppleMyungjo", "Batang", "UnBatang", serif;
-  --sans: "Report Sans", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --serif: "Noto Serif KR", "Nanum Myeongjo", "AppleMyungjo", "Batang", "UnBatang", serif;
+  --sans: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --size: 9pt;
   /* Math at the size of the text, as TeX sets it beside this face. */
   --math-scale: 1em;

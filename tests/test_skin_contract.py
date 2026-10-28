@@ -19,7 +19,8 @@ COMPONENTS = REPO / "html_mcp_web" / "kits" / "components.css"
 SKELETON = REPO / "html_mcp_web" / "slides" / "skeleton.css"
 BUILD = REPO / "html_mcp_web" / "slides" / "build.py"
 NEUTRAL = REPO / "templates" / "neutral-slides" / "skin.css"
-REPORT = REPO / "templates" / "neutral-report" / "template.css"
+REPORT = REPO / "html_mcp_web" / "report" / "skeleton.css"
+REPORT_SKIN = REPO / "templates" / "neutral-report" / "skin.css"
 USER_TEMPLATES = Path.home() / ".config" / "html-mcp-web" / "templates"
 BROWSER_RULE = "letter-spacing: 0.01px;"
 
@@ -70,7 +71,7 @@ def test_the_browser_rule_stands_once_and_says_why() -> None:
     which both builders read, and nowhere else: a second copy is only as good as the day
     it was made."""
     sheets = {"components": COMPONENTS, "skeleton": SKELETON, "report": REPORT,
-              "neutral skin": NEUTRAL}
+              "neutral skin": NEUTRAL, "neutral report skin": REPORT_SKIN}
     carrying = {name for name, sheet in sheets.items() if BROWSER_RULE in sheet.read_text(encoding="utf-8")}
     assert carrying == {"components"}, carrying
     lines = COMPONENTS.read_text(encoding="utf-8").split("\n")
