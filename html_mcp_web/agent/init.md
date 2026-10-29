@@ -8,10 +8,11 @@ discovered config and an existing binding may differ. A successful binding is re
 the MCP process is restarted.
 
 A subfolder requested for the document belongs in main and content, which are resolved
-relative to the config's directory. When the user names none, put each artifact in a folder of
-its own under an `artifacts` folder of the project, `artifacts/<name>/`, which holds its main,
-its content and its floorplan. Two artifacts never keep their main or content in one folder:
-the configuration stops on it. Inspect first and confirm any choices the user has not
+relative to the config's directory. The artifact's folder is the user's to choose, and setup
+asks for it unless the user already named it. The recommended place is a folder of its own
+under an `artifacts` folder of the project, `artifacts/<name>/`, holding its main, its content
+and its floorplan. Two artifacts never keep their main or content in one folder: the
+configuration stops on it. Inspect first and confirm any choices the user has not
 already authorized. Setup is complete only when the current MCP connection resolves the
 intended document.
 
@@ -52,7 +53,8 @@ this form:
                 neutral-report, a two-column paper (report default)
     Guideline : neutral-slides, writing rules the agent follows for slides (slide default)
                 neutral-report, writing rules the agent follows for a paper (report default)
-    File      : artifacts/talk/slides.html (to be created)
+    Folder    : artifacts/talk/ (recommended), or another folder you name
+    File      : slides.html (to be created)
 
 Adapt the selected choices and filename to the user's request and existing files. Show whether
 the document file will be created or reused. Include available user templates and guidelines
@@ -63,10 +65,10 @@ Tell the user they can accept the defaults or name what to change. Ask only abou
 have not already authorized. Apply explicit choices or a request for defaults without asking
 again. Do not treat silence as agreement.
 
-Keep configuration paths, source directories, content and build details, ports, and watch
-patterns out of the summary. Show a file location only when needed to distinguish the user's
-choices. Handle an occupied port by selecting a free one as in section 1, without asking the
-user.
+Always ask for the folder, with `artifacts/<name>/` as the recommended answer, unless the user
+already named it. Keep configuration paths beyond that folder, source directories, content and
+build details, ports, and watch patterns out of the summary. Handle an occupied port by
+selecting a free one as in section 1, without asking the user.
 
 If a documented default is missing or unusable, check the installation, lookup paths, and
 overrides before presenting the list as complete or writing the configuration. If a problem
