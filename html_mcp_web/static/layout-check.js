@@ -1176,13 +1176,23 @@ export function createLayoutChecks(dependencies) {
           const ascent = label.text.getStartPositionOfChar(0).y - label.text.getExtentOfChar(0).y;
           label.text.style.dominantBaseline = written;
           const baseline = top + ascent;
+          // The ends of the ink are read off the first and the last letter where svg set
+          // them. svg gave a space in "next: 5 → 6" 3.5 units where the canvas gave 2.8,
+          // and the letters' whole extent from the canvas put the middle of a label drawn
+          // centred on its box 1.1 units left of the box's.
+          const letters = Array.from(label.text.textContent);
+          const first = ruler.measureText(letters[0]);
+          const last = ruler.measureText(letters[letters.length - 1]);
+          const left = start.x - first.actualBoundingBoxLeft * k;
+          const right = label.text.getEndPositionOfChar(label.text.getNumberOfChars() - 1).x
+            - (last.width - last.actualBoundingBoxRight) * k;
           const at = (x, y) => [ctm.a * x + ctm.c * y + ctm.e, ctm.b * x + ctm.d * y + ctm.f];
-          const [x, y] = at(start.x + (ink.actualBoundingBoxRight - ink.actualBoundingBoxLeft) * k / 2,
+          const [x, y] = at((left + right) / 2,
             baseline + (ink.actualBoundingBoxDescent - ink.actualBoundingBoxAscent) * k / 2);
           const height = (ink.actualBoundingBoxAscent + ink.actualBoundingBoxDescent) * k * Math.abs(ctm.d);
           const centred = style.textAnchor === "middle" || label.text.hasAttribute("data-center");
-          const corners = [[start.x - ink.actualBoundingBoxLeft * k, baseline - ink.actualBoundingBoxAscent * k],
-                           [start.x + ink.actualBoundingBoxRight * k, baseline + ink.actualBoundingBoxDescent * k]]
+          const corners = [[left, baseline - ink.actualBoundingBoxAscent * k],
+                           [right, baseline + ink.actualBoundingBoxDescent * k]]
             .map(([cx, cy]) => at(cx, cy));
           const box = { left: Math.min(...corners.map(([cx]) => cx)), right: Math.max(...corners.map(([cx]) => cx)),
                         top: Math.min(...corners.map(([, cy]) => cy)), bottom: Math.max(...corners.map(([, cy]) => cy)) };
