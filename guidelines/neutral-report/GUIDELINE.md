@@ -4,53 +4,53 @@ This guideline is for a report set as a two-column paper. It shares its principl
 
 ## Article 1. Priorities and shared terms
 
-1.1 A report is accepted when it brings its reader to the requested understanding or decision with grounded claims and values within authorized scope. The reader following each section's argument ranks above rigor and completeness.
+1.1 **Judge a report by the reader's understanding.** A report is accepted when it brings its reader to the requested understanding or decision with grounded claims and values within authorized scope. The reader following each section's argument ranks above rigor and completeness.
 
-1.2 Section and subsection headings, the abstract, and captions are defaults unless explicitly required. Adapt any default that obscures meaning, repeats content, or displaces needed explanation. Marked pending placeholders are exempt from density and evidence requirements.
+1.2 **Headings, abstract, and captions are adaptable defaults.** Section and subsection headings, the abstract, and captions are defaults unless explicitly required. Adapt any default that obscures meaning, repeats content, or displaces needed explanation. Marked pending placeholders are exempt from density and evidence requirements.
 
-1.3 An argument is followed only through a chain in which each claim or step follows from definitions and premises established before it in the report or in the reader's knowledge.
+1.3 **Each step follows from established premises.** An argument is followed only through a chain in which each claim or step follows from definitions and premises established before it in the report or in the reader's knowledge.
 
-1.4 Put in the report only what the reader needs to follow its argument, apart from required attribution, and keep other detail in the planning records.
+1.4 **Include only what the reader needs.** Put in the report only what the reader needs to follow its argument, apart from required attribution, and keep other detail in the planning records.
 
 Before adding an element, or retaining one whose supporting context has changed, identify the information, condition, distinction, or guidance it gives that the reader needs there to follow the argument. Count what the reader's knowledge and existing words, figures, and conventions already give. If omission loses nothing needed, omit the element. Apply this test at every scale, and judge necessity separately from clarity or fit. Within a sentence or label, a word or ending that marks how other words relate gives that relation, so omit it only when those words already give the relation as the reader reads them.
 
-1.5 A requester decision is a requirement or approval given explicitly by the requester or by a reviewer to whom the requester delegated that authority. It binds within its scope until replaced or withdrawn, and code, logs, earlier reports, and handoff notes do not reinterpret it. Everything else, including plans, section structure, layouts, and reviewed drafts, is a revisable author choice. Reuse approved wording, tables, and figures that express the required content, and preserve wording specified as exact. A sentence the requester has said reads well is approved wording.
+1.5 **Treat only requester decisions as binding.** A requester decision is a requirement or approval given explicitly by the requester or by a reviewer to whom the requester delegated that authority. It binds within its scope until replaced or withdrawn, and code, logs, earlier reports, and handoff notes do not reinterpret it. Everything else, including plans, section structure, layouts, and reviewed drafts, is a revisable author choice. Reuse approved wording, tables, and figures that express the required content, and preserve wording specified as exact. A sentence the requester has said reads well is approved wording.
 
 The editing scope is the sections and kinds of change the requester has asked for or allowed. Edit within it and within placement constraints, and ask before exceeding it or an explicit page limit. New measurements and their criteria are the requester's to choose: report a doubted claim and what could test it, and change no claim because of a measurement the requester did not ask for.
 
-1.6 Report a conflict between a requester decision and a rule, current evidence, or another active requirement, without silently changing the decision, suppressing the observation, or dropping the requirement.
+1.6 **Report conflicts, never silently resolve them.** Report a conflict between a requester decision and a rule, current evidence, or another active requirement, without silently changing the decision, suppressing the observation, or dropping the requirement.
 
 ## Article 2. Plan the argument
 
-2.1 Before planning, establish purpose and intended use, the reader's starting knowledge, and the understanding or decision they require. Derive the questions the report answers, their content, and its level of detail from the current request and discussion, not from sources, available material, or the slots of an existing structure, and do not substitute an easier, documented, or measurable question for the one requested.
+2.1 **Derive questions from the request, not sources.** Before planning, establish purpose and intended use, the reader's starting knowledge, and the understanding or decision they require. Derive the questions the report answers, their content, and its level of detail from the current request and discussion, not from sources, available material, or the slots of an existing structure, and do not substitute an easier, documented, or measurable question for the one requested.
 
 Work backward to prerequisites, then order questions forward from what the reader knows, reusing established answers that later questions depend on. Record the starting knowledge and, for each required question, the answer the reader should retain, its prerequisites, evidence, form, and successor. Record a gap that evidence cannot yet fill as unresolved.
 
-2.2 Before collecting content, identify authoritative sources for direction and terminology, and inspect requested references. Take intended design from authoritative design descriptions, construction from implementation sources, and what happened from primary measurements or execution records. Use secondary or additional sources only to fill a needed missing, inconsistent, or changing fact, checking current sources for changing facts. For a claim that one part produces an effect, trace the connection from cause to effect in the implementation or records. Verify that commands, files, paths, and implementations presented as existing do exist.
+2.2 **Take each fact from its authoritative source.** Before collecting content, identify authoritative sources for direction and terminology, and inspect requested references. Take intended design from authoritative design descriptions, construction from implementation sources, and what happened from primary measurements or execution records. Use secondary or additional sources only to fill a needed missing, inconsistent, or changing fact, checking current sources for changing facts. For a claim that one part produces an effect, trace the connection from cause to effect in the implementation or records. Verify that commands, files, paths, and implementations presented as existing do exist.
 
 When the report restates a plan, proposal, or earlier report, check each of its claims and citations against the primary source, and write what the source says, including where the source corrects what the earlier text said of it.
 
-2.3 Cite the claim's primary source, not a summary or repository merely carrying it, although a repository can be primary evidence for implementation. Include details needed to identify and interpret evidence. Credit borrowed material, mark adaptations, and attribute work to its actor. When a figure in a published source shows what the report needs and its notation, labels, and label language agree with the report's under 4.1, 4.4, and 4.6, reuse it, citing its location in the source in the reference entry. Otherwise redraw it in the report's notation and mark it adapted.
+2.3 **Cite primary sources and credit borrowed material.** Cite the claim's primary source, not a summary or repository merely carrying it, although a repository can be primary evidence for implementation. Include details needed to identify and interpret evidence. Credit borrowed material, mark adaptations, and attribute work to its actor. When a figure in a published source shows what the report needs and its notation, labels, and label language agree with the report's under 4.1, 4.4, and 4.6, reuse it, citing its location in the source in the reference entry. Otherwise redraw it in the report's notation and mark it adapted.
 
-2.4 Check primary evidence that a reported result exists and is final, and mark pending results or omit the claims that depend on them. Generate results and derived numbers from primary data before placing them in figures or tables, and compare reported values with that output. Identify each quantity as measured, source-reported, assumed, chosen, or computed, showing its source, decision record, or derivation, and verify chosen settings against their configuration or decision record.
+2.4 **Derive every reported value from primary data.** Check primary evidence that a reported result exists and is final, and mark pending results or omit the claims that depend on them. Generate results and derived numbers from primary data before placing them in figures or tables, and compare reported values with that output. Identify each quantity as measured, source-reported, assumed, chosen, or computed, showing its source, decision record, or derivation, and verify chosen settings against their configuration or decision record.
 
 Record the inputs, rules, and assumptions needed to recompute values. Compute a value over everything its rule covers, including the cases hardest to handle. For counts, identify the items and how groups form the total.
 
 Before calculating an example, establish the validity of its inputs and rule and limit the conclusion accordingly. Label illustrative and assumed values and check their calculations separately. An example does not establish a measured result. When a method or setting changes how results are produced, do not apply it to results produced without it, even as an illustration.
 
-2.5 Build the chain of 1.3 before drafting. Before introducing a concept, identify the concrete problem that makes it needed, and connect a method's change to its intended effect on that problem.
+2.5 **Build and trace the chain before drafting.** Build the chain of 1.3 before drafting. Before introducing a concept, identify the concrete problem that makes it needed, and connect a method's change to its intended effect on that problem.
 
 Trace the mechanism or calculation steps the argument needs through primary sources, from inputs, operations, and conditions through outputs and their later use to the required result. Record each step's primary source location. For each value or claim the argument rests on, record the definitions and premises it follows from, marking which the reader already knows. Check simplifications against that trace, and mark unresolved steps as unverified in the plan and in dependent drafts.
 
-2.6 Derive the sections and subsections from the required argument under Article 6. Existing headings and proposed lengths do not constrain them unless the requester fixed them. Order the questions and answers with their prerequisites and evidence, and group steps by causal chain, comparison, mechanism, or decision. Each subsection answers one question with evidence in a readable form chosen under 5.1 and 5.2.
+2.6 **Derive sections from the required argument.** Derive the sections and subsections from the required argument under Article 6. Existing headings and proposed lengths do not constrain them unless the requester fixed them. Order the questions and answers with their prerequisites and evidence, and group steps by causal chain, comparison, mechanism, or decision. Each subsection answers one question with evidence in a readable form chosen under 5.1 and 5.2.
 
 Record this sequence and grouping before drafting, as the section map, showing each section and subsection with the others at its level.
 
 If the needed explanation exceeds a page limit, reduce the scope within authorized constraints. Do not meet a length by inventing terms, obscuring relationships, or omitting needed explanation. When removing content, remove what fails 1.4 or repeats a claim. Keep the prerequisites, definitions, mechanism or calculation steps, conditions, evidence, local context, and details the reader needs to follow each answer and its reasoning.
 
-2.7 Order sections by prerequisites under 6.1. Distinguish background from the subject by explanatory role, not source or novelty, and make headings match. For empirical work, present method, setup, then results.
+2.7 **Order sections by prerequisites.** Order sections by prerequisites under 6.1. Distinguish background from the subject by explanatory role, not source or novelty, and make headings match. For empirical work, present method, setup, then results.
 
-2.8 Keep the planning records in one file outside the report, in the report's language, recording choices as they are made. The file holds:
+2.8 **Keep planning records in one file.** Keep the planning records in one file outside the report, in the report's language, recording choices as they are made. The file holds:
 
 1. the starting knowledge and the question records of 2.1,
 2. the value derivations of 2.4,
@@ -59,7 +59,7 @@ If the needed explanation exceeds a page limit, reduce the scope within authoriz
 5. a term table giving each unfamiliar term's definition and the section where it is first defined,
 6. revision history, and each decision with its authority, scope, reason, and status as active, replaced, or withdrawn, recording the author's implementation of a requester's instruction as an author choice.
 
-2.9 The plan is provisional. When research or drafting reveals missing explanation or contradicts planned claims:
+2.9 **Revise the plan from the required outcome.** The plan is provisional. When research or drafting reveals missing explanation or contradicts planned claims:
 
 1. Return to the required outcome and reassess which claims matter to it.
 2. Revise or withdraw unsupported author claims.
@@ -69,14 +69,14 @@ If the needed explanation exceeds a page limit, reduce the scope within authoriz
 
 ## Article 3. Draft sections
 
-3.1 Draft in reading order, applying 1.4 to each paragraph, figure, table, and equation and establishing missing prerequisites and relationships before dependent content. This order, not source order, determines what comes next.
+3.1 **Draft in reading order, not source order.** Draft in reading order, applying 1.4 to each paragraph, figure, table, and equation and establishing missing prerequisites and relationships before dependent content. This order, not source order, determines what comes next.
 
 1. From the reader's knowledge and preceding sections, state the next question, the answer to establish, and the chain it rests on with a method's need and intended effect. Select evidence the reader can check.
 2. Name each object or action and place needed definitions before use. Construct the answer's relationship under Article 5 with the needed objects, operations, conditions, and evidence.
 3. Write the paragraphs that carry the argument, citing each figure and table where the text needs it.
 4. Head the section and subsection under 4.7.
 
-3.2 Before writing a claim, distinguish fact, definition, observation, inference, assumption, proposal, decision, and unknown, provisional values from final ones, and external examples and proposed components from existing work. Establish the cause of an observed result with evidence that distinguishes it from plausible alternatives, and name the source. Otherwise state the observation and label the explanation as proposed.
+3.2 **Claim only what shown evidence supports.** Before writing a claim, distinguish fact, definition, observation, inference, assumption, proposal, decision, and unknown, provisional values from final ones, and external examples and proposed components from existing work. Establish the cause of an observed result with evidence that distinguishes it from plausible alternatives, and name the source. Otherwise state the observation and label the explanation as proposed.
 
 State tested cases and the conditions under which a claim holds, in the sentence that makes it, such as the evaluation script or data on which it was measured. If only part of the cases introduced was tested or shown, explain why and word the conclusion to cover only that part. Limit every claim through what it asserts to what its shown evidence supports, not through added qualifiers or caveats. Source background facts and support claimed benefits separately from chosen settings. Omit unsupported claims or mark them unresolved. Cut self-evaluation, inflated claims, and process narration.
 
@@ -84,7 +84,7 @@ State a problem and why it is one. Do not replace it with an evasive phrase that
 
 Ground relationships implied by conceptual drawings, including ordering, crossings, and meaningful relative size, in sources or checks under stated conditions. Omit unsupported relationships.
 
-3.3 For a process or comparison, show:
+3.3 **Show each step's actor, inputs, and outputs.** For a process or comparison, show:
 
 1. each step's actor, inputs, and outputs, and how its output determines the next step,
 2. the conditions and actions for branches, repeats, stops, and rejected inputs,
@@ -92,21 +92,21 @@ Ground relationships implied by conceptual drawings, including ordering, crossin
 4. for multiple actors, each one's role, what it receives, decides, and produces, what it may change, and the resulting states,
 5. for a reduction or other change to objects or states, the affected range and what is retained, extended, replaced, or discarded.
 
-3.4 Explain an object or relationship where it first raises a question, or just before. Show outputs where produced and uses where consumed. Refer to figures, tables, equations, and sections by their numbers. Repeat prerequisites as local context only to avoid looking elsewhere or recalling hidden detail, without proving them again. Refer forward only to locate the answer to a deliberately open question.
+3.4 **Explain objects where they first raise questions.** Explain an object or relationship where it first raises a question, or just before. Show outputs where produced and uses where consumed. Refer to figures, tables, equations, and sections by their numbers. Repeat prerequisites as local context only to avoid looking elsewhere or recalling hidden detail, without proving them again. Refer forward only to locate the answer to a deliberately open question.
 
-3.5 Establish each claim once. Where a claim recurs beyond such local context (3.4), add a consequence or interpretation. Expand an overview by answering a further question, not repeating the topic. Combine subjects only through a real connection. Resolve or report contradictions with earlier sections.
+3.5 **Establish each claim only once.** Establish each claim once. Where a claim recurs beyond such local context (3.4), add a consequence or interpretation. Expand an overview by answering a further question, not repeating the topic. Combine subjects only through a real connection. Resolve or report contradictions with earlier sections.
 
-3.6 For an unfamiliar mechanism, show what happens to named objects, what changes, what stays fixed, and what follows before attaching its name and definition. Establish its referent and defining rule at the section's level, then build the formal explanation on those relationships. Accept introductory simplifications that preserve the relationships and agree with the formal explanation and with grounded drawings (3.2).
+3.6 **Show the mechanism before naming it.** For an unfamiliar mechanism, show what happens to named objects, what changes, what stays fixed, and what follows before attaching its name and definition. Establish its referent and defining rule at the section's level, then build the formal explanation on those relationships. Accept introductory simplifications that preserve the relationships and agree with the formal explanation and with grounded drawings (3.2).
 
 To justify a model over a simpler one, show what the simpler model misses, why it matters, and how the chosen model accounts for it, comparing under conditions that isolate that difference.
 
 ## Article 4. Words and notation
 
-4.1 Think and draft each text in its reader's language rather than translating it. Name each object or action as the reader and field name it in the report's language, including established loanwords, with expressions of clear meaning and actual common use, in headings, captions, and labels too. Where the field uses an English term, write the English term, such as baseline, backbone, adapter, retention, or word problem, not a translation of it. Do not form names by literally translating internal code names or foreign words, or replace established terms with paraphrases or coinages to sound plainer. Avoid rarely used words and word pairings, and common words in a part of speech unusual for them, even when their dictionary meanings fit.
+4.1 **Use established field terms, never coinages.** Think and draft each text in its reader's language rather than translating it. Name each object or action as the reader and field name it in the report's language, including established loanwords, with expressions of clear meaning and actual common use, in headings, captions, and labels too. Where the field uses an English term, write the English term, such as baseline, backbone, adapter, retention, or word problem, not a translation of it. Do not form names by literally translating internal code names or foreign words, or replace established terms with paraphrases or coinages to sound plainer. Avoid rarely used words and word pairings, and common words in a part of speech unusual for them, even when their dictionary meanings fit.
 
 Where no established term fits, describe the relevant objects, properties, and relationships. Do not substitute unexplained identifiers, working labels, or type signatures for explanation. Retain command, option, and data structure names needed to identify the subject.
 
-4.2 When describing an action or change, first state what acts or changes and what happens to the affected object, with no long list or long clause between the action and its participants. Name the operation itself, such as multiplying an output by a factor below one, not a vague verb for its effect, such as weakening it, and name an object, not a figure of speech for it. Use a verb of a person's intention, knowledge, promise, perception, memory, or feeling for an object, program, model, or quantity only when the field uses that verb for such a subject: a router that turns an adapter on, a model that gives an answer a high probability, not one that knows the answer or finds it natural. Name steps by object and operation at the level explained, not a hidden substep.
+4.2 **Name the actor and the concrete operation.** When describing an action or change, first state what acts or changes and what happens to the affected object, with no long list or long clause between the action and its participants. Name the operation itself, such as multiplying an output by a factor below one, not a vague verb for its effect, such as weakening it, and name an object, not a figure of speech for it. Use a verb of a person's intention, knowledge, promise, perception, memory, or feeling for an object, program, model, or quantity only when the field uses that verb for such a subject: a router that turns an adapter on, a model that gives an answer a high probability, not one that knows the answer or finds it natural. Name steps by object and operation at the level explained, not a hidden substep.
 
 Describe special cases by conditions and effects, and state when a claim holds, not the author's act of assuming it. Do not invent a domain explanation for an implementation condition without evidence connecting them. Join statements with an explicit conjunction when their relationship matters, a contrast or turn included.
 
@@ -114,29 +114,29 @@ When a sentence states a cost or trade-off, name what grows, such as computation
 
 Before reusing a heading, definition, label, or caption, read the whole clause with its figure to identify participants, action or state, and relation, and rewrite unclear clauses and connected uses, not only the flagged word.
 
-4.3 Define unfamiliar terms and symbols, including ordinary words used technically, at first use by their kind and what they represent or do, in established vocabulary. The abstract is read first and on its own: it uses no internal name or symbol that it does not define. For a quantity, first identify what it counts or measures, using an established term when one fits and keeping the object and its interval or unit together. Put needed conditions and how the value is obtained afterwards.
+4.3 **Define unfamiliar terms at first use.** Define unfamiliar terms and symbols, including ordinary words used technically, at first use by their kind and what they represent or do, in established vocabulary. The abstract is read first and on its own: it uses no internal name or symbol that it does not define. For a quantity, first identify what it counts or measures, using an established term when one fits and keeping the object and its interval or unit together. Put needed conditions and how the value is obtained afterwards.
 
 Do not replace or interrupt that meaning with its equation role, another symbol's role, or a demonstrative referring to another symbol. A drawing's appearance or parts do not define it. Leave structure and operation to the figure or equation rather than retelling them in the definition. A specific index of an established symbol is a later use if its meaning is unchanged.
 
 At first use, expand an abbreviation unfamiliar to the reader or confusable within the report as full name followed by the abbreviation in parentheses, including in headings, captions, and tables. Leave routine field abbreviations unexpanded regardless of source. Afterwards use the abbreviation alone unless local clarity requires the full name.
 
-4.4 Use one term and visual notation per meaning. Preserve qualified names when the kind matters or the requester specifies them. Keep distinct names or indices where differences matter, including later uses.
+4.4 **One term and notation per meaning.** Use one term and visual notation per meaning. Preserve qualified names when the kind matters or the requester specifies them. Keep distinct names or indices where differences matter, including later uses.
 
-4.5 Write counts as digits followed by their unit or counter, unless a shared label or header identifies what is counted. Keep each assignment of a value to a symbol visually separate from the next.
+4.5 **Identify quantities by name, counts by digits.** Write counts as digits followed by their unit or counter, unless a shared label or header identifies what is counted. Keep each assignment of a value to a symbol visually separate from the next.
 
 In text, identify quantities and drawn elements by established names or their defining wording, using appearance and position only to locate them. When an equation's form is the subject, name mathematical terms and operations directly. Explain the relation a quantity describes, including needed direction or endpoints.
 
-4.6 Set all mathematical notation with KaTeX, in text and in SVG figures. This covers everything from a single variable or operator in a label to a whole formula or a numeric calculation with its units, including every subscript and superscript. Write each symbol everywhere, including headings and captions, in the form its definition gives, never a simplified variant. Reserve mathematical symbols for mathematics. Write words inside mathematical expressions in English, keeping surrounding explanations in the report's language.
+4.6 **Set all math notation with KaTeX.** Set all mathematical notation with KaTeX, in text and in SVG figures. This covers everything from a single variable or operator in a label to a whole formula or a numeric calculation with its units, including every subscript and superscript. Write each symbol everywhere, including headings and captions, in the form its definition gives, never a simplified variant. Reserve mathematical symbols for mathematics. Write words inside mathematical expressions in English, keeping surrounding explanations in the report's language.
 
 Use one equation per definition step, numbered when the text refers to it. Give each symbol one role and distinguish assumed from solved values.
 
-4.7 Head sections and subsections with English noun phrases in Title Case naming the subject at the level explained, such as Proxy Dev Sets or Interference-Aware Rank Allocation, not its conclusion, incidental source, or an action used merely to obtain it. Do not use a bare generic word, such as Approach or Plan, as a subsection heading, and do not head a subsection in another language.
+4.7 **Headings are English noun phrases naming subjects.** Head sections and subsections with English noun phrases in Title Case naming the subject at the level explained, such as Proxy Dev Sets or Interference-Aware Rank Allocation, not its conclusion, incidental source, or an action used merely to obtain it. Do not use a bare generic word, such as Approach or Plan, as a subsection heading, and do not head a subsection in another language.
 
 ## Article 5. Figures and tables
 
-5.1 Plan figures before prose for mechanisms, arrangements, sequences, branches, merges, loops, comparisons, and changes. Draw essential relationships, not just objects. Use an equation or a paragraph when a figure adds nothing. Draw a figure at the column's width when it reads there, and use a figure across both columns only when its content needs that width. If a needed relationship cannot yet be drawn, report what is missing and continue independent sections.
+5.1 **Plan figures before prose for relationships.** Plan figures before prose for mechanisms, arrangements, sequences, branches, merges, loops, comparisons, and changes. Draw essential relationships, not just objects. Use an equation or a paragraph when a figure adds nothing. Draw a figure at the column's width when it reads there, and use a figure across both columns only when its content needs that width. If a needed relationship cannot yet be drawn, report what is missing and continue independent sections.
 
-5.2 Match the form to the relationship.
+5.2 **Match the figure form to the relationship.** Match the form to the relationship.
 
 | Relationship | Form |
 | --- | --- |
@@ -151,55 +151,55 @@ Use one equation per definition step, numbered when the text refers to it. Give 
 
 Draw each operation at the objects it acts on, not apart from them. Label relations not explained by visual convention. Before rejecting an approach because its current drawing falls short, try another form or arrangement that keeps the needed content.
 
-5.3 Default to left to right and top to bottom. Complete independent columns of a figure in reading order and align matching items across comparisons. Put outputs after their producing steps even if reversing that order would shorten a connector.
+5.3 **Lay figures out in reading order.** Default to left to right and top to bottom. Complete independent columns of a figure in reading order and align matching items across comparisons. Put outputs after their producing steps even if reversing that order would shorten a connector.
 
-5.4 Choose connector endpoints, entries, exits, labels, and direction from the represented relationship before routing. For processes read left to right and top to bottom, prefer top or left inputs and bottom or right outputs when sides make no visible difference. Use another side for a visibly simpler route preserving direction, junctions, and reading order. These defaults exclude feedback, return lines, and connections to symbols whose connection points are fixed by convention. Merge only when direction and junctions show which sources reach which targets.
+5.4 **Choose connectors from the represented relationship.** Choose connector endpoints, entries, exits, labels, and direction from the represented relationship before routing. For processes read left to right and top to bottom, prefer top or left inputs and bottom or right outputs when sides make no visible difference. Use another side for a visibly simpler route preserving direction, junctions, and reading order. These defaults exclude feedback, return lines, and connections to symbols whose connection points are fixed by convention. Merge only when direction and junctions show which sources reach which targets.
 
-5.5 Choose pictograms with established meanings for object kinds and roles in conceptual explanations unless standard symbols or the drawing already convey them.
+5.5 **Give each labeled part its own panel.** Choose pictograms with established meanings for object kinds and roles in conceptual explanations unless standard symbols or the drawing already convey them.
 
 Enclose separately labeled diagram parts and stages in separate panels with labels and explanations inside. Put each part or stage label at its block's top left. Only parts compared on shared axes may share a panel. Center a label or formula on the shape, connector, or junction it names, in both directions. Extend or rearrange drawings for additions instead of squeezing them into gaps.
 
 Size content for readability and required relationships. Do not add content or increase its size merely to match panel shapes or fill unused space.
 
-5.6 Explain mechanisms with the smallest set of instances the reader can check by hand, chosen to distinguish the stated rule from a baseline or plausible shortcut when the argument requires that distinction. For general rules, default to generic examples with short placeholder names and simple values. Use real names or measured values when identity or magnitude matters to the claim.
+5.6 **Explain with the smallest hand-checkable instances.** Explain mechanisms with the smallest set of instances the reader can check by hand, chosen to distinguish the stated rule from a baseline or plausible shortcut when the argument requires that distinction. For general rules, default to generic examples with short placeholder names and simple values. Use real names or measured values when identity or magnitude matters to the claim.
 
 Show purpose, operation, and conditions and scope beyond the instance, including an input and its resulting output for a claim about how a system responds. When connecting concepts to code, formats, or records, keep source excerpts limited to the argument's needs and show their correspondence.
 
-5.7 Draw unchanged structure once with changing values unless understanding, comparison, counting, or a later question requires repeated instances. When one procedure repeats per item or per combination of conditions, group each repetition with its inputs and results. Show the direction of any scan, traversal, or variation drawn. Mark abbreviated depictions and give their total. Redraw changed structures with both states and their difference. Show full curves only when shape matters.
+5.7 **Draw unchanged structure once.** Draw unchanged structure once with changing values unless understanding, comparison, counting, or a later question requires repeated instances. When one procedure repeats per item or per combination of conditions, group each repetition with its inputs and results. Show the direction of any scan, traversal, or variation drawn. Mark abbreviated depictions and give their total. Redraw changed structures with both states and their difference. Show full curves only when shape matters.
 
-5.8 Every figure and table is a float with a caption, set at the top of a column or page, and is cited in the text where the argument needs it. Label parts of a figure with (a), (b), (c) in reading order. Give labels, numbers, and captions visible referents, name each plot axis by its quantity and unit, and identify compared cases. Explain visual distinctions through the drawing, a convention, or a legend with actual mark or line samples beside their meanings. Repair unclear relationships and misleading notation in the drawing, not in the caption.
+5.8 **Every figure is a cited, captioned float.** Every figure and table is a float with a caption, set at the top of a column or page, and is cited in the text where the argument needs it. Label parts of a figure with (a), (b), (c) in reading order. Give labels, numbers, and captions visible referents, name each plot axis by its quantity and unit, and identify compared cases. Explain visual distinctions through the drawing, a convention, or a legend with actual mark or line samples beside their meanings. Repair unclear relationships and misleading notation in the drawing, not in the caption.
 
 When a table or plot first shows an unfamiliar computed quantity, define it before the visual by an equation in the report's notation, writing a constant taken from data or a setting as a defined symbol.
 
 A caption names what is shown and its role in the argument. The interpretation of a figure or table, and any worked calculation with its values, go in the paragraph that cites it.
 
-5.9 Use rows for entities or conditions unless transposing clarifies comparison. Rows and columns must belong to their header's set at the same grouping level. A cell holds a short label, a number, or a mark, never a sentence: move explanation into the text. Put conclusions and facts of another kind outside the table. Aggregates computed from member rows or columns may remain if labeled and set apart. Order entries meaningfully, state units once, identify sources of differing measurements, and keep group conditions and needed explanation with results.
+5.9 **Table cells hold labels, numbers, or marks.** Use rows for entities or conditions unless transposing clarifies comparison. Rows and columns must belong to their header's set at the same grouping level. A cell holds a short label, a number, or a mark, never a sentence: move explanation into the text. Put conclusions and facts of another kind outside the table. Aggregates computed from member rows or columns may remain if labeled and set apart. Order entries meaningfully, state units once, identify sources of differing measurements, and keep group conditions and needed explanation with results.
 
 When a column repeats one value in every row, state the value once outside the columns and drop the column. Keep the column when that value is a measured number or when the column is one of several compared columns and another of them varies.
 
 A list of names, such as datasets or models with their sizes or roles, goes in a table, not in a sentence.
 
-5.10 When extending or restyling a report, reuse the palette, line and arrow styles, typography, and panel label placement of its existing figures, use existing visual distinctions before adding new ones, and preserve their meanings when adapting figures.
+5.10 **Reuse the existing figures' visual style.** When extending or restyling a report, reuse the palette, line and arrow styles, typography, and panel label placement of its existing figures, use existing visual distinctions before adding new ones, and preserve their meanings when adapting figures.
 
-5.11 For a plotted quantity with a defined range, show that full range when claiming the value's size, adding a reference line when a stated threshold matters. Crop to show differences between close values when those differences are the claim, and visibly mark the cropped range.
+5.11 **Show a plotted quantity's full range.** For a plotted quantity with a defined range, show that full range when claiming the value's size, adding a reference line when a stated threshold matters. Crop to show differences between close values when those differences are the claim, and visibly mark the cropped range.
 
 ## Article 6. The paper
 
-6.1 Set a report as a paper, a proposal included, beginning with its Introduction rather than with the headings of a funding or research-plan form. Its sections are, in order: Introduction; Background, with related work as its subsection; Proposed Methodology; Experimental Results, opening with an Experimental Setup subsection, or Experimental Plan when no results exist yet; and Conclusion. Leave out a section the argument does not need, and name a section added for a need the argument has under 4.7.
+6.1 **Follow the paper's fixed section order.** Set a report as a paper, a proposal included, beginning with its Introduction rather than with the headings of a funding or research-plan form. Its sections are, in order: Introduction; Background, with related work as its subsection; Proposed Methodology; Experimental Results, opening with an Experimental Setup subsection, or Experimental Plan when no results exist yet; and Conclusion. Leave out a section the argument does not need, and name a section added for a need the argument has under 4.7.
 
-6.2 The abstract states the problem, the method, and the result or expected outcome in one paragraph, under 4.3, with no figure. A figure of the work's main structure belongs in the Introduction.
+6.2 **Abstract states problem, method, and result.** The abstract states the problem, the method, and the result or expected outcome in one paragraph, under 4.3, with no figure. A figure of the work's main structure belongs in the Introduction.
 
-6.3 The Introduction states the problem, its cause, the limit of existing solutions, and the hypothesis in one paragraph, and ends with a short list of contributions, about three. A list of tasks or hypotheses does not go there: detail of hypotheses and their tests belongs in the experimental sections.
+6.3 **Introduction states problem, hypothesis, and contributions.** The Introduction states the problem, its cause, the limit of existing solutions, and the hypothesis in one paragraph, and ends with a short list of contributions, about three. A list of tasks or hypotheses does not go there: detail of hypotheses and their tests belongs in the experimental sections.
 
-6.4 Write each paragraph as one line of thought that every sentence advances. A Korean report uses the plain written style of a paper, ending its sentences in -다, not the polite style.
+6.4 **Each paragraph advances one line of thought.** Write each paragraph as one line of thought that every sentence advances. A Korean report uses the plain written style of a paper, ending its sentences in -다, not the polite style.
 
-6.5 The layout check's errors on text, a short last line, a word space or Korean letters opened too wide, and a head left at a column's foot, are the author's to clear by rewriting the sentences around them, with no meaning lost: cut redundancy, reorder, or choose another established word. Leave approved wording (1.5) unchanged, and report an error that only a change to it would clear.
+6.5 **Clear layout errors by rewriting sentences.** The layout check's errors on text, a short last line, a word space or Korean letters opened too wide, and a head left at a column's foot, are the author's to clear by rewriting the sentences around them, with no meaning lost: cut redundancy, reorder, or choose another established word. Leave approved wording (1.5) unchanged, and report an error that only a change to it would clear.
 
 ## Article 7. Check the rendered report
 
-7.1 Read every rendered page after drafting a new report or for a review of the whole report. After changing content or its underlying system, configuration, or data, read every affected section, including unedited dependents and other explanations of the same point. After deletions or moves, relocate needed prerequisites and update dependents.
+7.1 **Read every affected rendered page.** Read every rendered page after drafting a new report or for a review of the whole report. After changing content or its underlying system, configuration, or data, read every affected section, including unedited dependents and other explanations of the same point. After deletions or moves, relocate needed prerequisites and update dependents.
 
-7.2 Check in this order. Before the next step, repair what steps 1 to 3 find under 8.3, and repair what steps 4 and 5 find directly.
+7.2 **Check the chain before form and layout.** Check in this order. Before the next step, repair what steps 1 to 3 find under 8.3, and repair what steps 4 and 5 find directly.
 
 1. Chain. Read each rendered section as its reader, in reading order, using only the reader knowledge recorded under 2.1 and 2.5 and earlier sections. Write the answer it leaves beside its planned answer. Check that each value or claim the answer rests on follows from those alone. The author's knowledge, records, and sources make missing steps look present, so consult them only to fill a gap the report shows.
 2. Outcome. Check that these answers establish the required outcome, connecting the needed problem, premises, method, and effect.
@@ -207,11 +207,11 @@ A list of names, such as datasets or models with their sizes or roles, goes in a
 4. Form. Check rendered content against Articles 2 to 6, including 4.5, 4.6, and figures and tables under 5.8 and 5.9. Compare it with requested references.
 5. Layout. Run the layout check and clear its errors under 6.5.
 
-7.3 A successful build, preserved edits, clean layout, or an independent review's pass does not establish an understandable argument.
+7.3 **Passing checks do not prove understandability.** A successful build, preserved edits, clean layout, or an independent review's pass does not establish an understandable argument.
 
 ## Article 8. Respond to a comment or review request
 
-8.1 Before responding:
+8.1 **Read all related comments before responding.** Before responding:
 
 1. Read the comments that bear on the same request and the material they point to, and decide from all of them together what each refers to.
 2. For a supplied rewrite, identify the failure it corrects and apply the underlying requirement to other affected passages.
@@ -219,11 +219,11 @@ A list of names, such as datasets or models with their sizes or roles, goes in a
 4. After moves or removals, read connected instructions together, preserving distinctions and excluding rejected content.
 5. If materially different readings remain, ask one focused question.
 
-8.2 Answer each question in its thread. A question about what any part of the report means also reports that it confuses its reader, and a thread answer does not repair the report. Within the editing scope, repair the report under 8.3. Outside it, answer without editing, reassess in the order of 8.3, and propose the repair or report the defect.
+8.2 **A question about meaning reports confusion.** Answer each question in its thread. A question about what any part of the report means also reports that it confuses its reader, and a thread answer does not repair the report. Within the editing scope, repair the report under 8.3. Outside it, answer without editing, reassess in the order of 8.3, and propose the repair or report the defect.
 
 Comments written on the report's review page come from the requester unless the requester says otherwise. Findings from an independent reviewer, or from any reviewer without delegated authority, are proposals, not requester decisions (1.5). Hold one that conflicts with an active requirement under 1.6 rather than applying it.
 
-8.3 When the requester states the understanding they want, rebuild around it. For a report of confusion, a defect found in steps 1 to 3 of 7.2, or a reconstruction, repair in this order:
+8.3 **Repair premises and structure before rewording.** When the requester states the understanding they want, rebuild around it. For a report of confusion, a defect found in steps 1 to 3 of 7.2, or a reconstruction, repair in this order:
 
 1. Reassess which claims and explanation the requested outcome needs, under 1.4 and 2.9. Replan a wrong question, evidence chain, or claim ownership rather than patching wording.
 2. Reassess the section map under 2.6.
@@ -234,8 +234,8 @@ Comments written on the report's review page come from the requester unless the 
 
 If the same question returns, start again at step 1, reconsidering structure, premises, and interpretation. Do not add notes that document the review response.
 
-8.4 After a repair, read the revision against every active requirement gathered under 8.1, including earlier requests the fix affects, and identify where each is satisfied. Repair the same defect in every affected section within the editing scope, report it in sections outside that scope, then check again under Article 7.
+8.4 **Recheck every active requirement after repair.** After a repair, read the revision against every active requirement gathered under 8.1, including earlier requests the fix affects, and identify where each is satisfied. Repair the same defect in every affected section within the editing scope, report it in sections outside that scope, then check again under Article 7.
 
 ## Article 9. Report
 
-9.1 Report changes, remaining defects, and unfinished or unchecked scope. State a confirmed error before explaining its correction. Report content findings separately from production checks, and unrelated defects with the rule and sections checked. For a review of defects across the report, inspect every rendered page and report counts by defect type. Omit search mechanics and details not needed to assess the change or decide the next step.
+9.1 **Report changes, defects, and unchecked scope.** Report changes, remaining defects, and unfinished or unchecked scope. State a confirmed error before explaining its correction. Report content findings separately from production checks, and unrelated defects with the rule and sections checked. For a review of defects across the report, inspect every rendered page and report counts by defect type. Omit search mechanics and details not needed to assess the change or decide the next step.
