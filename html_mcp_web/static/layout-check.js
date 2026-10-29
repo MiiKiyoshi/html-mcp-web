@@ -1160,6 +1160,11 @@ export function createLayoutChecks(dependencies) {
           .filter((shape) => shape.closest("defs, symbol, clipPath, mask, pattern, marker") === null)
           .map((shape) => inViewport(shape))
           .filter((box) => box !== null);
+        const drawings = Array.from(svg.element.querySelectorAll(
+          "path, line, polyline, polygon, rect, circle, ellipse, image, use"))
+          .filter((shape) => shape.closest("defs, symbol, clipPath, mask, pattern, marker") === null)
+          .map((shape) => inViewport(shape))
+          .filter((box) => box !== null);
         const inked = labels.filter((label) => label.text.querySelector("tspan") === null).map((label) => {
           const style = doc.defaultView.getComputedStyle(label.text);
           const size = parseFloat(style.fontSize);
@@ -1205,8 +1210,18 @@ export function createLayoutChecks(dependencies) {
             .filter((shape) => shape.left <= label.x && label.x <= shape.right && shape.top <= label.y && label.y <= shape.bottom)
             .sort((a, b) => (a.right - a.left) * (a.bottom - a.top) - (b.right - b.left) * (b.bottom - b.top))[0];
           if (holder === undefined || holder.bottom - holder.top > label.height * 5) continue;
-          const alone = inked.filter((other) => holder.left <= other.x && other.x <= holder.right
-            && holder.top <= other.y && other.y <= holder.bottom).length === 1;
+          // A shape that holds a second label, a subscripted one included, or a drawing of
+          // its own, such as an icon a label stands beside, has its label off its middle on
+          // purpose: a box of "driver D (root)" over "C" with a subscript D, and a box with
+          // a waveform icon left of its words, were read as labels set off centre. A
+          // formula's slot, where a foreignObject's HTML is lifted, is such a drawing.
+          const middleIn = (box) => holder.left <= (box.left + box.right) / 2 && (box.left + box.right) / 2 <= holder.right
+            && holder.top <= (box.top + box.bottom) / 2 && (box.top + box.bottom) / 2 <= holder.bottom;
+          const same = (box) => Math.abs(box.left - holder.left) < 1 && Math.abs(box.right - holder.right) < 1
+            && Math.abs(box.top - holder.top) < 1 && Math.abs(box.bottom - holder.bottom) < 1;
+          const alone = labels.filter((other) => middleIn(other.box)).length === 1
+            && !drawings.some((box) => !same(box) && holder.left - 0.5 <= box.left && box.right <= holder.right + 0.5
+              && holder.top - 0.5 <= box.top && box.bottom <= holder.bottom + 0.5);
           if (!alone) continue;
           const dx = label.x - (holder.left + holder.right) / 2;
           const dy = label.y - (holder.top + holder.bottom) / 2;

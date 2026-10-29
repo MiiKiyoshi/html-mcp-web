@@ -144,6 +144,16 @@ x</pre>
       <rect x="150" y="2" width="140" height="116" fill="none" stroke="#333"/>
       <text x="220" y="110" font-size="12" text-anchor="middle">caption</text>
     </svg>
+    <!-- Labels set off their box's middle on purpose: the first of two lines, the second
+         with a subscript, and words beside an icon. -->
+    <svg id="beside" viewBox="0 0 300 40" width="300" height="40">
+      <rect x="2" y="2" width="130" height="36" fill="none" stroke="#333"/>
+      <text x="67" y="17" font-size="11" text-anchor="middle">driver D</text>
+      <text x="67" y="32" font-size="11" text-anchor="middle">C<tspan dy="3" font-size="9">D</tspan></text>
+      <rect x="150" y="2" width="140" height="30" fill="none" stroke="#333"/>
+      <path d="M156,10 L170,10 L170,24" fill="none" stroke="#333"/>
+      <text x="235" y="21" font-size="12" text-anchor="middle">beside an icon</text>
+    </svg>
     <!-- A panel whose arrow runs down a band 90 units tall to the box below, where its
          head and a short line need 8: the band is reported. The same arrow over a 14-unit
          band is snug and is not. -->
@@ -903,6 +913,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         # A label set on a shape stands with its letters' middle at the shape's middle.
         off = [error for error in errors if "svg#ondot>" in error]
         assert len(off) == 1 and "stands off the middle of its shape by 0.0px across and -" in off[0], off
+        assert not any("svg#beside>" in error and "middle of its shape" in error for error in errors), errors
         # A band only a connector crosses, taller than the connector and the panel's
         # usual gap need, is a warning, and a snug one is not.
         warnings = get_json(f"{base}/state")["artifacts"]["slides"]["layout_check"]["warnings"]
