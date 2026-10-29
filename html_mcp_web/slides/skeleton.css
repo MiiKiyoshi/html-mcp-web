@@ -206,16 +206,24 @@
   position: absolute;
   left: 0;
   top: 0;
+  /* The ring's size and line, which a skin sets here rather than in width and border. */
+  --ring: 42px;
+  --ring-line: 1px;
   box-sizing: border-box;
-  width: 42px;
-  height: 42px;
-  border: 1px solid var(--accent);
+  width: var(--ring);
+  height: var(--ring);
+  border: var(--ring-line) solid var(--accent);
   border-radius: 50%;
   color: var(--accent);
   font-size: 17px;
   font-weight: 650;
-  /* Centred in the ring by the digits' own height, as in the footer bar. */
+  /* Centred in the ring by the digits' own height, as in the footer bar. The padding
+     leaves the trimmed line exactly the digits' height in the middle: Safari ignores
+     align-content in a block inside a multicol container, which a contents list in
+     columns is, and set the digits at the top of the ring. align-content still centres
+     them in a ring a skin sized by width and height. */
   display: block;
+  padding-block: calc((var(--ring) - 1cap) / 2 - var(--ring-line));
   align-content: center;
   text-align: center;
   line-height: 1;
