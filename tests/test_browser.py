@@ -928,6 +928,21 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#main-file").textContent === "paper/report.html"'))
         assert browser.execute_script('return document.title') == "report.html"
+        # The PDF button is busy while the server prints and takes no second press, so
+        # pressing it again before the file arrives downloads one copy.
+        browser.execute_script('''
+          const stub = document.createElement("script");
+          stub.textContent = 'HTMLAnchorElement.prototype.click = function () { document.body.dataset.downloads = (document.body.dataset.downloads || "") + this.download + " "; };';
+          document.head.appendChild(stub);
+          const button = document.querySelector("#download-pdf-btn");
+          button.click();
+          button.click();
+          return true;
+        ''')
+        assert browser.execute_script(
+            'const b = document.querySelector("#download-pdf-btn"); return [b.disabled, b.textContent];') == [True, "PDF…"]
+        wait_until(lambda: browser.execute_script('return !document.querySelector("#download-pdf-btn").disabled'), timeout=120)
+        assert browser.execute_script('return [document.body.dataset.downloads, document.querySelector("#download-pdf-btn").textContent]') == ["report.pdf ", "PDF"]
         browser.find_element("css selector", "#fullscreen-btn").click()
         wait_until(lambda: browser.execute_script('return document.fullscreenElement !== null'))
         assert browser.execute_script('''

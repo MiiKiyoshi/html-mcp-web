@@ -195,36 +195,37 @@ function updateArtifactLinks() {
   // The tab carries the file being reviewed, so several projects open at once stay
   // apart in the browser's tab strip.
   document.title = state.artifact.main_file.split("/").pop();
-  $("#download-pdf-btn").href = `${artifactBase()}/download/pdf`;
   $("#download-pptx-btn").hidden = state.artifact.layout !== "slides";
 }
 
-// The pptx is built on the server while the button shows it is busy; the file then
-// downloads like the PDF does. A plain link would leave the button silent for the
-// half minute the export takes.
-async function downloadPptx() {
-  const button = $("#download-pptx-btn");
+// The PDF and the pptx are built on the server while their button shows it is busy and
+// takes no second press; the file then downloads. A plain link would leave the button
+// silent for the seconds the export takes, and each further press would start another
+// export and download another copy.
+async function download(button, format) {
   if (button.disabled) return;
+  const label = format.toUpperCase();
+  const title = button.dataset.title ??= button.title;
   button.disabled = true;
   button.classList.add("busy");
-  button.textContent = "PPTX\u2026";
+  button.textContent = `${label}\u2026`;
   try {
-    const response = await fetch(`${artifactBase()}/download/pptx`);
+    const response = await fetch(`${artifactBase()}/download/${format}`);
     if (!response.ok) throw new Error(await response.text());
     const blob = await response.blob();
-    const name = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") || "")?.[1] || "slides.pptx";
+    const name = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") || "")?.[1] || `${format}.${format}`;
     const url = URL.createObjectURL(blob);
     const link = h("a", { href: url, download: name });
     document.body.appendChild(link);
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
-    button.textContent = "PPTX";
+    button.textContent = label;
   } catch (error) {
-    // A 404 here means the review server predates the export: restart the MCP process.
-    button.textContent = "PPTX failed";
+    // A 404 on the pptx means the review server predates its export: restart the MCP process.
+    button.textContent = `${label} failed`;
     button.title = String(error.message || error);
-    setTimeout(() => { button.textContent = "PPTX"; button.title = "Export the deck as an editable pptx"; }, 6000);
+    setTimeout(() => { button.textContent = label; button.title = title; }, 6000);
   } finally {
     button.disabled = false;
     button.classList.remove("busy");
@@ -2342,7 +2343,8 @@ function attachControls() {
   });
   $("#artifact-comment-btn").addEventListener("click", () => openCompose({ kind: "artifact" }));
   $("#print-btn").addEventListener("click", printArtifact);
-  $("#download-pptx-btn").addEventListener("click", downloadPptx);
+  $("#download-pdf-btn").addEventListener("click", (event) => download(event.currentTarget, "pdf"));
+  $("#download-pptx-btn").addEventListener("click", (event) => download(event.currentTarget, "pptx"));
   $("#fullscreen-btn").addEventListener("click", () => {
     // The slide show sizes the current page itself; a reader's zoom held from browsing
     // would put the show off screen.
