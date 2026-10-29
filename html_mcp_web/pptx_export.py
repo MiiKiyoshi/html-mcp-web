@@ -272,6 +272,12 @@ const runsOf = (node, out, base) => {
       // code chip, or a span coloured in place. Only code carried it before, and a table's
       // marked cells came out plain.
       const chipBg = (painted && s.display.startsWith('inline')) ? s.backgroundColor : base.chip;
+      // A block inside a run of text, such as a header cell's two lines written as two
+      // spans with display: block, sets its words on lines of their own. Joined into one
+      // run, "Parameter" and "change" read "Parameterchange" and wrapped where the cell
+      // ran out of width.
+      const block = !s.display.startsWith('inline') && s.display !== 'contents';
+      if (block && out.length > 0 && out[out.length - 1].text !== '\v') out.push(Object.assign({}, base, {text: '\v'}));
       const b = Object.assign({}, base, {
         bold: (parseInt(s.fontWeight) >= 600) || base.bold,
         italic: s.fontStyle === 'italic' || base.italic,
@@ -282,6 +288,7 @@ const runsOf = (node, out, base) => {
         sup: tg === 'sup' || base.sup, sub: tg === 'sub' || base.sub,
       });
       runsOf(n, out, b);
+      if (block && out.length > 0 && out[out.length - 1].text !== '\v') out.push(Object.assign({}, base, {text: '\v'}));
     }
   }
 };
@@ -293,7 +300,8 @@ const paraOf = (el, level, marginTop) => {
                     spacing: s.letterSpacing === 'normal' ? 0 : (parseFloat(s.letterSpacing) || 0), chip: null,
                     link: null, sup: false, sub: false});
   while (runs.length && runs[0].text.trim() === '' && runs[0].text !== '\v') runs.shift();
-  while (runs.length && runs[runs.length - 1].text.trim() === '' && runs[runs.length - 1].text !== '\v') runs.pop();
+  // A break the last block left behind ends nothing, and would end the cell in an empty line.
+  while (runs.length && runs[runs.length - 1].text.trim() === '') runs.pop();
   return {level, runs, size: parseFloat(s.fontSize),
           lh: parseFloat(s.lineHeight) / parseFloat(s.fontSize) || 1.2,
           align: s.textAlign, marginTop: marginTop || 0,

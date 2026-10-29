@@ -24,7 +24,7 @@ CONTENT = '''<!doctype html>
   <ol><li>Step one</li><li>Step two</li></ol>
   <table><thead>
       <tr><th rowspan="2">Name</th><th colspan="2" style="border-left:1px solid #888">Group</th></tr>
-      <tr><th style="border-left:1px solid #888">Value</th><th>Share</th></tr></thead>
+      <tr><th style="border-left:1px solid #888">Value</th><th><span style="display:block">Share</span><span style="display:block">(%)</span></th></tr></thead>
     <tbody><tr><td>alpha</td><td style="border-left:1px solid #888">1</td><td>10%</td></tr>
       <tr><td>beta</td><td style="border-left:1px solid #888">2</td><td>20%</td></tr></tbody></table>
   <div class="card"><h3>Card title</h3><p>Card body text.</p></div>
@@ -111,7 +111,8 @@ def test_export_bakes_chrome_into_background_and_keeps_body_editable(tmp_path: P
     # and the row under it started one column too far left.
     assert table.cell(0, 0).span_height == 2   # "Name" reaches down past the second header row
     assert table.cell(0, 1).span_width == 2    # and "Group" reaches across both of its columns
-    assert table.cell(1, 1).text == "Value" and table.cell(1, 2).text == "Share"
+    # A header written as two block spans keeps its two lines, not one run of both words.
+    assert table.cell(1, 1).text == "Value" and table.cell(1, 2).text == "Share\v(%)"
     # A cell as tall as the two rows it spans is not the height of the row it starts in. Taking
     # it for one stretched the table past where the page ends it, over the block underneath.
     card_title = next(shape for shape in kinds["TEXT_BOX"] if shape.text_frame.text == "Card title")
