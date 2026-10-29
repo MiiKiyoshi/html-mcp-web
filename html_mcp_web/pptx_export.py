@@ -51,6 +51,9 @@ DPR = 3
 PAGE_WIDTH_PX = 1280
 PAGE_HEIGHT_PX = 720
 PT_PER_PX = 0.75
+# How much more room than the page measured a one-line table cell gives its words: a share
+# of their width and a few pixels, for PowerPoint's slightly wider setting of the same face.
+TEXT_SLACK = (1.08, 2.0)
 DEFAULT_FONT = "Arial"
 MONO_FONT = "Consolas"
 BULLETS = ["•", "◦", "▪"]
@@ -400,15 +403,17 @@ const emit = (el) => {
         // A subscript sits lower than its line but overlaps it, so a line ends only where the
         // next box starts below the bottom of the boxes before it.
         let lines = 0, bottom = -Infinity;
-        for (const b of [...range.getClientRects()].filter((b) => b.width > 0).sort((a, b) => a.top - b.top)) {
+        const boxes = [...range.getClientRects()].filter((b) => b.width > 0);
+        for (const b of [...boxes].sort((a, b) => a.top - b.top)) {
           if (b.top >= bottom - 1) lines += 1;
           bottom = Math.max(bottom, b.bottom);
         }
+        const textWidth = boxes.length ? Math.max(...boxes.map((b) => b.right)) - Math.min(...boxes.map((b) => b.left)) : 0;
         cells.push({rect: rel(td.getBoundingClientRect()), header: td.tagName.toLowerCase() === 'th',
                     colSpan: td.colSpan || 1, rowSpan: td.rowSpan || 1,
                     padding: [parseFloat(s2.paddingLeft) || 0, parseFloat(s2.paddingTop) || 0,
                               parseFloat(s2.paddingRight) || 0, parseFloat(s2.paddingBottom) || 0],
-                    oneLine: lines <= 1,
+                    oneLine: lines <= 1, textWidth,
                     align: s2.textAlign, bg: s2.backgroundColor, para: paraOf(td, 0, 0),
                     borderBottom: [s2.borderBottomColor, parseFloat(s2.borderBottomWidth) || 0, s2.borderBottomStyle],
                     borderTop: [s2.borderTopColor, parseFloat(s2.borderTopWidth) || 0, s2.borderTopStyle],
@@ -853,6 +858,7 @@ def _add_table(slide, item: dict[str, Any], font: str) -> None:
         table.rows[row_index].height = _px(row["rect"][3])
     reach = {(row_index, col): (reach_rows, reach_cols)
              for row_index, col, reach_rows, reach_cols, _ in placed}
+    span_width = {id(source): sum(widths[col:col + reach_cols]) for _, col, _, reach_cols, source in placed}
     for row_index, col, reach_rows, reach_cols, source in placed:
         if reach_rows > 1 or reach_cols > 1:
             table.cell(row_index, col).merge(
@@ -865,6 +871,17 @@ def _add_table(slide, item: dict[str, Any], font: str) -> None:
             cell = table.cell(row_index, col)
             if source is not None:
                 left, top, right, bottom = source["padding"]
+                # A table the page sets to its contents leaves a one-line cell no room past its
+                # words: a column of "12" was 16.7px inside its padding for 16.7px of digits,
+                # and PowerPoint, whose words run a little wider, broke it into "1" over "2".
+                # Such a cell lends its words up to most of its side padding, so they have
+                # TEXT_SLACK more room than the page measured.
+                if source["oneLine"]:
+                    inside = span_width[id(source)] - left - right
+                    short = source["textWidth"] * TEXT_SLACK[0] + TEXT_SLACK[1] - inside
+                    if short > 0:
+                        give = min(short, (left + right) * 0.8)
+                        left, right = left - give / 2, right - give / 2
                 cell.margin_left, cell.margin_top = Emu(int(left * EMU_PER_PX)), Emu(int(top * EMU_PER_PX))
                 cell.margin_right, cell.margin_bottom = Emu(int(right * EMU_PER_PX)), Emu(int(bottom * EMU_PER_PX))
             cell.vertical_anchor = MSO_ANCHOR.MIDDLE

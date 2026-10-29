@@ -417,6 +417,7 @@ def test_the_page_is_carried_over_as_it_is_laid_out(tmp_path: Path) -> None:
   <div><svg viewBox="0 0 200 100" width="200" height="100"><rect x="5" y="5" width="190" height="90" fill="none" stroke="#333"/><text x="10" y="60" font-size="12">axis label</text></svg></div>
   <p>step <span style="display:inline-block;min-width:1.25em;height:1.25em;text-align:center;border-radius:50%;background:#243943;color:#fff;font-size:13px">2</span> then <code>chip</code></p>
   <table><tr><td><mark data-hl="2">marked</mark></td><td><span style="background:#f6dfc9">painted</span></td></tr></table>
+  <div class="table-fit"><table><tr><td>12</td><td>aes_cipher_top</td></tr></table></div>
 </section>
 </body>
 ''', encoding="utf-8")
@@ -464,6 +465,13 @@ def test_the_page_is_carried_over_as_it_is_laid_out(tmp_path: Path) -> None:
     for cell, colour in ((table.cell(0, 0), "FBDCC3"), (table.cell(0, 1), "F6DFC9")):
         highlight = cell.text_frame.paragraphs[0].runs[0]._r.find(qn("a:rPr")).find(qn("a:highlight"))
         assert highlight is not None and highlight.find(qn("a:srgbClr")).get("val") == colour
+
+    # A table set to its contents leaves a one-line cell no room past its words, and
+    # PowerPoint, setting them a little wider, broke "12" into "1" over "2". Such a cell
+    # lends its words part of its side padding; a cell with room keeps all of it.
+    loose = table.cell(0, 0)
+    for cell in (kinds["TABLE"][1].table.cell(0, 0), kinds["TABLE"][1].table.cell(0, 1)):
+        assert cell.margin_left + cell.margin_right < loose.margin_left + loose.margin_right
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
