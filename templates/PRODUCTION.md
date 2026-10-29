@@ -67,3 +67,7 @@ After the independent reviewer records findings for all rendered pages, give any
 4.3 Record the independent reviewer's comprehension blockers, then its incidental form observations, in two separate tables, one row per finding, with columns `Page`, `Finding as stated`, `Kind`, `Decision`, and `Action or reason`. Use `missing`, `wording`, `logic`, `inconsistency`, `unneeded`, or `layout` for kind and `adopt`, `reject`, or `hold` for decision.
 
 Decide each finding that adds or removes content by neutral clause 1.4 at the audience's knowledge, recording what only the presenter needs as presenter notes under neutral clause 2.8. Repair adopted findings in the order of neutral clause 8.3. Besides findings held under neutral clause 8.2, hold for the requester's decision one whose fix would change a claim's meaning or exceed the editing scope of neutral clause 1.5. Regrouping pages alone is not held. Rerun your content and layout checks on affected pages, and include both tables in the handoff report.
+
+## Article 5. Hand a figure to a paper
+
+5.1 `figure(artifact=..., number=N, out=...)` writes figure N of a report, as its caption numbers it, to the project-relative path `out` as a PDF of one sheet the size of its drawing. The sheet holds the drawing alone, without its caption or any other text of the page, and its labels and formulas are vector text in the report's embedded faces, so `\includegraphics[width=\textwidth]{...}` in a LaTeX paper takes it as it is and a reader copies its words as written. Export it again after the figure changes.

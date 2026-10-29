@@ -443,3 +443,37 @@ return Array.from(document.querySelectorAll("text[data-wrap]")).map((text) =>
     assert len(lines) == len(sentences), lines
     for shown, sentence in zip(lines, sentences):
         assert len(shown) >= 2 and " ".join(shown) == sentence, (shown, sentence)
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_a_figure_prints_alone_on_a_sheet_of_its_size_with_its_text(tmp_path: Path) -> None:
+    """Figure N of a report prints as a one-sheet PDF the size of its drawing, with its
+    labels and its formula as text a reader copies as written, and nothing of the page
+    around it, the caption included. A figure the report does not have is named."""
+    import pymupdf
+
+    from html_mcp_web.pdf_export import print_figure_pdf
+
+    html = content_html().replace(
+        "<figure>",
+        '<figure><svg viewBox="0 0 300 100" width="300" height="100">'
+        '<rect x="1" y="1" width="298" height="98" fill="none" stroke="#000"/>'
+        '<text x="10" y="30" font-size="12">Question: (of) office fit flow</text>'
+        '<foreignObject x="10" y="50" width="120" height="30"><div>$x^2$</div></foreignObject></svg>'
+        "<figcaption>Caption words.</figcaption></figure>\n<figure>", 1)
+    content = tmp_path / "content.html"
+    content.write_text(html, encoding="utf-8")
+    report = tmp_path / "report.html"
+    subprocess.run([sys.executable, str(BUILDER), str(content), str(report)], check=True, capture_output=True,
+                   env={"PYTHONPATH": str(REPO), "PATH": os.environ["PATH"]})
+    with pymupdf.open(stream=print_figure_pdf(report.as_uri(), 1), filetype="pdf") as pdf:
+        assert pdf.page_count == 1
+        sheet = pdf[0]
+        assert abs(sheet.rect.width - 300 * 0.75) < 0.5 and abs(sheet.rect.height - 100 * 0.75) < 0.5, sheet.rect
+        text = sheet.get_text()
+        fonts = [font[3] for font in sheet.get_fonts()]
+    assert "Question: (of) office fit flow" in text, text
+    assert "x" in text and "2" in text and any("KaTeX" in font for font in fonts), (text, fonts)
+    assert "Caption" not in text and "router" not in text, text
+    with pytest.raises(ValueError, match='no figure is captioned "Figure 3:"'):
+        print_figure_pdf(report.as_uri(), 3)

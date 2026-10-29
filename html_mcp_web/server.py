@@ -45,7 +45,7 @@ from .config import (
     get_template_dir,
     load_config,
 )
-from .pdf_export import print_artifact_pdf
+from .pdf_export import print_artifact_pdf, print_figure_pdf
 from .pptx_export import export_pptx
 from .space import (
     intersection,
@@ -850,6 +850,28 @@ class HtmlReviewServer:
         if "save" not in request.query:
             return web.Response(body=png, content_type="image/png")
         return web.json_response({"path": str(self._save_render(request.query["save"], png))})
+
+    async def render_figure(self, request: web.Request) -> web.Response:
+        """One figure of a report as a vector PDF of the drawing's own size, for a paper
+        that includes it as a graphic."""
+        runtime = self.runtime(request)
+        if runtime.config.layout != "report":
+            raise web.HTTPBadRequest(text="a figure is exported from a report artifact")
+        try:
+            number = int(request.query["number"])
+        except (KeyError, ValueError) as error:
+            raise web.HTTPBadRequest(text="number must be an integer") from error
+        url = f"http://127.0.0.1:{self.config.port}/artifacts/{runtime.artifact_id}/artifact?print=1"
+        try:
+            async with self.pdf_lock:
+                pdf = await asyncio.get_running_loop().run_in_executor(None, print_figure_pdf, url, number)
+        except ValueError as error:
+            raise web.HTTPNotFound(text=str(error)) from error
+        except Exception as error:
+            raise web.HTTPServiceUnavailable(text=f"PDF export failed: {error}") from error
+        if "save" not in request.query:
+            return web.Response(body=pdf, content_type="application/pdf")
+        return web.json_response({"path": str(self._save_render(request.query["save"], pdf))})
 
     async def project_file(self, request: web.Request) -> web.StreamResponse:
         relative = request.match_info["path"]
@@ -1699,6 +1721,7 @@ class HtmlReviewServer:
         app.router.add_get(f"{base}/download/pptx", self.download_pptx)
         app.router.add_get(f"{base}/render/page", self.render_page)
         app.router.add_get(f"{base}/render/pages", self.render_pages)
+        app.router.add_get(f"{base}/render/figure", self.render_figure)
         app.router.add_post(f"{base}/layout", self.update_layout)
         app.router.add_get(f"{base}/space", self.measure_space)
         app.router.add_get(f"{base}/layout", self.layout_state)

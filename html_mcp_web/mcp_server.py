@@ -389,6 +389,20 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
 
     @mcp.tool(structured_output=False)
     @_compact
+    async def figure(
+        artifact: str,
+        number: Annotated[int, Field(ge=1, description="The figure's number, as its caption reads it.")],
+        out: Annotated[str, Field(description="The project-relative path of the PDF.")],
+    ) -> str:
+        """Write one figure of a report as a vector PDF the size of its drawing, without
+        its caption, for \\includegraphics in a paper."""
+        client = binding.require_client()
+        saved = await client.request_json(
+            "GET", f"/artifacts/{artifact}/render/figure?number={number}&save={quote(out)}", timeout=300.0)
+        return saved["path"]
+
+    @mcp.tool(structured_output=False)
+    @_compact
     async def layout(
         artifact: str,
         page: Annotated[int | None, Field(ge=1, description="Add this page's blocks and free space, in page pixels.")] = None,
