@@ -130,10 +130,6 @@ export function createLayoutChecks(dependencies) {
   // a numerical tolerance. Sizes and matrices here are unrounded, so an even scale or a
   // rotation comes out at 1 within float error.
   const STRETCH_TOLERANCE = 0.01;
-  // How much of a band in a figure panel only connectors cross may go spare, in font sizes.
-  const BAND_SLACK = 0.8;
-  // How far, in its font size, a figure label stays from the border of the panel it is in.
-  const PANEL_INSET = 0.4;
   // How far, in its font size, an arrowhead's tip stays from a label.
   const HEAD_CLEARANCE = 0.2;
 
@@ -703,139 +699,6 @@ export function createLayoutChecks(dependencies) {
             + `${describeElement(visual)} but is not in the list directly below it. ${INTERPRETATION_ADVICE}`, item);
         }
       }
-      // A plot axis numbered without a name. A reader reads the axes first, and numbers alone
-      // do not say what is counted or in what unit. An axis is three or more numbers in a row
-      // or a column, in order and evenly spaced, beside a line drawn along them, which keeps a
-      // column of figures in a drawn table out. A filled shape is a panel's background, not a
-      // line. Its name is other text or a foreignObject just past the numbers on the far side
-      // from the line, or just past the axis's far end, above a column or right of a row, where
-      // the name of a value axis often sits, or for a row a plot title above it. A title
-      // outside the drawing, in a caption, is not seen, so this is a warning. Also a rule of the
-      // neutral guideline.
-      for (const svg of neutral ? page.querySelectorAll("[data-layout-guard] svg") : []) {
-        if (svg.parentElement.closest("svg") !== null || !seen(svg)) continue;
-        const numbers = [];
-        const words = [];
-        for (const text of svg.querySelectorAll("text")) {
-          const content = text.textContent.trim();
-          if (content === "" || !seen(text)) continue;
-          const box = text.getBoundingClientRect();
-          const number = content.match(/^([-+−]?(?:\d[\d,]*(?:\.\d+)?|\.\d+))\s*%?$/);
-          if (number === null) words.push(box);
-          else numbers.push({ box, value: parseFloat(number[1].replace(/,/g, "").replace("−", "-")) });
-        }
-        if (numbers.length < 3) continue;
-        for (const object of svg.querySelectorAll("foreignObject")) {
-          if (seen(object)) words.push(object.getBoundingClientRect());
-        }
-        const strokes = Array.from(svg.querySelectorAll("line, polyline, path, rect")).filter((shape) => {
-          if (!seen(shape)) return false;
-          const box = shape.getBoundingClientRect();
-          const fill = frameWindow().getComputedStyle(shape).fill;
-          return shape.matches("line, polyline") || Math.min(box.width, box.height) <= 3
-            || fill === "none" || fill === "transparent" || /^rgba\(.*,\s*0\)$/.test(fill);
-        }).map((shape) => shape.getBoundingClientRect());
-        const sizes = numbers.map(({ box }) => box.height).sort((a, b) => a - b);
-        const size = sizes[Math.floor(sizes.length / 2)];
-        // A box in the axis's own terms: along it from a0 to a1, across it from c0 to c1. A row's
-        // numbers share their middle, a column's their right or their left edge.
-        const rowOf = (box) => ({ a0: box.left, a1: box.right, c0: box.top, c1: box.bottom });
-        const columnOf = (box) => ({ a0: box.top, a1: box.bottom, c0: box.left, c1: box.right });
-        const axes = [
-          { name: "horizontal", of: rowOf, key: (box) => (box.top + box.bottom) / 2 },
-          { name: "vertical", of: columnOf, key: (box) => box.right },
-          { name: "vertical", of: columnOf, key: (box) => box.left },
-        ];
-        const middle = (place) => (place.a0 + place.a1) / 2;
-        const used = new Set();
-        // Panels repeating one axis are reported once, with how many there are.
-        const unnamed = new Map();
-        for (const axis of axes) {
-          const sorted = numbers.filter((number) => !used.has(number))
-            .sort((a, b) => axis.key(a.box) - axis.key(b.box));
-          const groups = [];
-          for (const number of sorted) {
-            const last = groups[groups.length - 1];
-            if (last && axis.key(number.box) - axis.key(last[0].box) <= size / 2) last.push(number);
-            else groups.push([number]);
-          }
-          // Panels side by side put their axes in one row: an axis ends where the spacing
-          // jumps or the numbers turn back.
-          const runs = [];
-          for (const group of groups) {
-            const at = (number) => middle(axis.of(number.box));
-            group.sort((a, b) => at(a) - at(b));
-            let run = [];
-            for (const number of group) {
-              const [before, last] = run.slice(-2);
-              if (last !== undefined) {
-                const step = number.value - last.value;
-                const gap = at(number) - at(last);
-                const turned = before !== undefined && (Math.sign(step) !== Math.sign(last.value - before.value)
-                  || gap > 1.5 * (at(last) - at(before)) || 1.5 * gap < at(last) - at(before));
-                if (step === 0 || gap <= 0 || turned) {
-                  runs.push(run);
-                  run = [];
-                }
-              }
-              run.push(number);
-            }
-            runs.push(run);
-          }
-          for (const run of runs) {
-            if (run.length < 3) continue;
-            // Tick numbers step evenly, by a sum on a linear axis or a factor on a logarithmic
-            // one. Values printed beside marks do not, though they may happen to stand in a line.
-            const values = run.map(({ value }) => value);
-            const steadily = (changes) => changes.every((change) => Math.abs(change - changes[0]) <= 0.01 * Math.abs(changes[0]));
-            const factors = values.every((value) => value > 0) || values.every((value) => value < 0)
-              ? values.slice(1).map((value, at) => value / values[at]) : null;
-            if (!steadily(values.slice(1).map((value, at) => value - values[at]))
-              && !(factors !== null && steadily(factors))) continue;
-            const places = run.map(({ box }) => axis.of(box));
-            const c0 = Math.min(...places.map((place) => place.c0));
-            const c1 = Math.max(...places.map((place) => place.c1));
-            const a0 = Math.min(...places.map((place) => place.a0));
-            const a1 = Math.max(...places.map((place) => place.a1));
-            const from = middle(places[0]);
-            const to = middle(places[places.length - 1]);
-            // The line the numbers mark runs along most of them, its near edge close to them.
-            // The name goes past the numbers on its other side.
-            const sides = new Set();
-            for (const stroke of strokes.map((box) => axis.of(box))) {
-              if (Math.min(stroke.a1, to) - Math.max(stroke.a0, from) < 0.8 * (to - from)) continue;
-              if (stroke.c1 <= c0 + size / 2 && c0 - stroke.c1 <= 2 * size) sides.add("past");
-              else if (stroke.c0 >= c1 - size / 2 && stroke.c0 - c1 <= 2 * size) sides.add("before");
-            }
-            if (sides.size === 0) continue;
-            run.forEach((number) => used.add(number));
-            const named = words.map((box) => axis.of(box)).some((word) => {
-              // Past the numbers anywhere along them, so one title shared by a row of panels
-              // names each panel's axis.
-              const past = sides.has("past") && word.c0 >= c1 - size / 3 && word.c0 - c1 <= 3 * size;
-              const before = sides.has("before") && word.c1 <= c0 + size / 3 && c0 - word.c1 <= 3 * size;
-              // The far end: within half a number's height above a column's top number and over
-              // the column, where a panel's own title, set further up, does not sit. A name there
-              // may start a little left of the numbers. Right of a row's last number.
-              const end = axis.name === "vertical"
-                ? word.a1 <= a0 + size / 3 && a0 - word.a1 <= size / 2 && word.c1 >= c0 && word.c0 <= c1 + 2 * size
-                : word.a0 >= a1 - size / 3 && word.a0 - a1 <= 2 * size && word.c1 >= c0 - 2 * size && word.c0 <= c1 + 2 * size;
-              // A row's quantity is often stated by the title of the plot above it.
-              const over = axis.name === "horizontal" && word.c1 <= c0 && word.a1 >= from && word.a0 <= to;
-              return past || before || end || over;
-            });
-            if (named) continue;
-            const key = `${axis.name} axis ${values.join(", ")}`;
-            unnamed.set(key, (unnamed.get(key) ?? 0) + 1);
-          }
-        }
-        for (const [key, count] of unnamed) {
-          const [kind, numbered] = key.split(" axis ");
-          addWarning(`page ${index + 1} ${describeElement(svg)} numbers `
-            + (count === 1 ? `its ${kind} axis ${numbered} without naming it` : `${count} ${kind} axes ${numbered} without naming them`)
-            + ". Name the axis by its quantity and unit in the drawing (neutral 5.8)", svg);
-        }
-      }
       // An image drawn in another shape than its source's. Inside its box, object-fit fill
       // stretches the picture to the content box, and every other value keeps its
       // proportions, so letterboxing and a frame of padding or border are not stretching.
@@ -1080,10 +943,57 @@ export function createLayoutChecks(dependencies) {
             top: Math.min(...corners.map(([, y]) => y)), bottom: Math.max(...corners.map(([, y]) => y)),
           };
         };
+        // The box of the letters a label draws, read letter by letter in each letter's own
+        // font: a canvas measureText at a hundred times the size, round the point svg set
+        // the letter at on its alphabetic baseline. A label's box holds its face's whole
+        // ascent, and with a subscript in a tspan it held the room over the subscript too:
+        // an arrow stopped under "Implement πi" ran over that box, and one stopped 4 units
+        // left of a "di" stood 0.3 from it. The letters are those svg keeps, its spaces
+        // collapsed; a label whose count of them differs from svg's is read by its box.
+        const inkRuler = doc.createElement("canvas").getContext("2d");
+        const inkOf = (text) => {
+          const ctm = text.getCTM();
+          const count = text.getNumberOfChars();
+          if (ctm === null || count === 0) return null;
+          const letters = [];
+          const walker = doc.createTreeWalker(text, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+            for (const letter of node.nodeValue.replace(/[\t\n\r]/g, " ")) {
+              if (letter === " " && (letters.length === 0 || letters[letters.length - 1].letter === " ")) continue;
+              letters.push({ letter, element: node.parentElement });
+            }
+          }
+          if (letters.length > 0 && letters[letters.length - 1].letter === " ") letters.pop();
+          if (letters.reduce((sum, { letter }) => sum + letter.length, 0) !== count) return null;
+          const written = text.style.dominantBaseline;
+          text.style.dominantBaseline = "alphabetic";
+          const corners = [];
+          let at = 0;
+          for (const { letter, element } of letters) {
+            if (letter !== " ") {
+              const style = doc.defaultView.getComputedStyle(element);
+              inkRuler.font = `${style.fontStyle} ${style.fontWeight} ${parseFloat(style.fontSize) * 100}px ${style.fontFamily}`;
+              const ink = inkRuler.measureText(letter);
+              const start = text.getStartPositionOfChar(at);
+              corners.push([start.x - ink.actualBoundingBoxLeft / 100, start.y - ink.actualBoundingBoxAscent / 100],
+                [start.x + ink.actualBoundingBoxRight / 100, start.y + ink.actualBoundingBoxDescent / 100]);
+            }
+            at += letter.length;
+          }
+          text.style.dominantBaseline = written;
+          if (corners.length === 0) return null;
+          const placed = [[Math.min(...corners.map(([x]) => x)), Math.min(...corners.map(([, y]) => y))],
+            [Math.max(...corners.map(([x]) => x)), Math.max(...corners.map(([, y]) => y))]];
+          const points = [[placed[0][0], placed[0][1]], [placed[1][0], placed[0][1]], [placed[0][0], placed[1][1]], [placed[1][0], placed[1][1]]]
+            .map(([x, y]) => [ctm.a * x + ctm.c * y + ctm.e, ctm.b * x + ctm.d * y + ctm.f]);
+          return { left: Math.min(...points.map(([x]) => x)), right: Math.max(...points.map(([x]) => x)),
+                   top: Math.min(...points.map(([, y]) => y)), bottom: Math.max(...points.map(([, y]) => y)) };
+        };
         const labels = Array.from(svg.element.querySelectorAll("text"))
           .filter((text) => text.closest("defs, symbol, clipPath, mask, pattern, marker") === null)
           .map((text) => ({ text, box: inViewport(text) }))
-          .filter((label) => label.box !== null);
+          .filter((label) => label.box !== null)
+          .map((label) => ({ ...label, ink: inkOf(label.text) ?? label.box }));
         const printedOver = (a, b) => {
           const across = Math.min(a.right, b.right) - Math.max(a.left, b.left);
           const down = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
@@ -1196,12 +1106,7 @@ export function createLayoutChecks(dependencies) {
             baseline + (ink.actualBoundingBoxDescent - ink.actualBoundingBoxAscent) * k / 2);
           const height = (ink.actualBoundingBoxAscent + ink.actualBoundingBoxDescent) * k * Math.abs(ctm.d);
           const centred = style.textAnchor === "middle" || label.text.hasAttribute("data-center");
-          const corners = [[left, baseline - ink.actualBoundingBoxAscent * k],
-                           [right, baseline + ink.actualBoundingBoxDescent * k]]
-            .map(([cx, cy]) => at(cx, cy));
-          const box = { left: Math.min(...corners.map(([cx]) => cx)), right: Math.max(...corners.map(([cx]) => cx)),
-                        top: Math.min(...corners.map(([, cy]) => cy)), bottom: Math.max(...corners.map(([, cy]) => cy)) };
-          return { text: label.text, x, y, height, centred, box };
+          return { text: label.text, x, y, height, centred };
         }).filter((label) => label !== null);
         let offCentre = 0;
         for (const label of inked) {
@@ -1497,7 +1402,7 @@ export function createLayoutChecks(dependencies) {
               const along = (stretch * step) / 12;
               approach.push(at(connector.line, connector.line.getPointAtLength(end === 1 ? connector.total - along : along)));
             }
-            const label = labels.find(({ box }) => approach.some((point) => box.left < point.x && point.x < box.right
+            const label = labels.find(({ ink: box }) => approach.some((point) => box.left < point.x && point.x < box.right
               && box.top < point.y && point.y < box.bottom));
             let crossed = null;
             const tip = connector.ends[end];
@@ -1537,7 +1442,7 @@ export function createLayoutChecks(dependencies) {
           for (const end of [0, 1]) {
             if (connector.heads[end] === 0 || touching >= 3) continue;
             const tip = connector.ends[end];
-            for (const { text, box } of labels) {
+            for (const { text, ink: box } of labels) {
               const across = Math.max(box.left - tip.x, 0, tip.x - box.right);
               const down = Math.max(box.top - tip.y, 0, tip.y - box.bottom);
               if (within(tip, box)) continue;
@@ -1677,177 +1582,6 @@ export function createLayoutChecks(dependencies) {
                 : `enters ${panelName(box)} by its ${join.side} side after turning ${Math.round(stubLength)} units short of it from beyond its ${other} side. Enter by the ${other} side`),
               connector.line);
             break;
-          }
-        }
-        // A band across a panel that only connectors cross is room the figure spends on
-        // them: a return arrow dropped 26 units under a row of labels and ran back along
-        // the bottom, where 14 units held its head and a visible line, and a branch ran 46
-        // units down to a label set level with a box in the next panel, leaving 23 empty
-        // units under the box above it. A panel is a painted rect that holds three or more
-        // drawn things. Its things, and connector runs along the band's direction, fill
-        // the rows (or columns) of the panel, and a gap between two of them that a
-        // connector run crosses is a band. The band keeps the panel's typical gap, the
-        // median of its gaps no connector crosses, and each crossing run that ends inside
-        // it keeps its head and the half head of line shown behind it, as above, or two
-        // stroke widths without a head. What it could lose beyond those is reported when
-        // it reaches that typical gap and BAND_SLACK of the figure's font size, so a dense
-        // figure, whose gaps are all small, is left alone. Read in viewBox units.
-        {
-          const placed = placeViewBox(svg.element, svg.view, svg.element.getBoundingClientRect());
-          const unit = placed.scale;
-          const things = [];
-          const runs = [];
-          const painted = (element) => {
-            const paint = doc.defaultView.getComputedStyle(element);
-            return paint.visibility !== "hidden" && (paint.fill !== "none" || paint.stroke !== "none");
-          };
-          for (const element of svg.element.querySelectorAll("circle, ellipse, polygon, path, image, use, rect[data-html-slot]")) {
-            if (element.closest("defs, symbol, clipPath, mask, pattern, marker") !== null) continue;
-            if (connectors.some((connector) => connector.line === element)) continue;
-            if (!element.matches("rect, image, use") && !painted(element)) continue;
-            const box = inViewport(element);
-            if (box !== null) things.push(box);
-          }
-          things.push(...drawnRects.map((entry) => entry.box), ...labels.map((label) => label.box));
-          // A connector here is an arrow and the lines that lead into it, a headless line
-          // counted when an end of it lies on one already counted, as a branch drawn from
-          // an arrow's line does. An axis, a tick or a grid line meets no arrow.
-          const traces = new Map(connectors.map((connector) => [connector, cornersOf(connector.line)]));
-          const onTrace = (point, connector) => {
-            const corners = traces.get(connector);
-            if (corners === null || corners.length < 2) return false;
-            return corners.slice(1).some((to, spot) => {
-              const from = corners[spot];
-              const length = Math.hypot(to.x - from.x, to.y - from.y) || 1;
-              const along = Math.max(0, Math.min(1, ((point.x - from.x) * (to.x - from.x) + (point.y - from.y) * (to.y - from.y)) / length ** 2));
-              return Math.hypot(from.x + along * (to.x - from.x) - point.x, from.y + along * (to.y - from.y) - point.y) <= 1.5;
-            });
-          };
-          const wired = new Set(connectors.filter((connector) => connector.heads[0] > 0 || connector.heads[1] > 0));
-          for (let grown = true; grown;) {
-            grown = false;
-            for (const connector of connectors) {
-              if (wired.has(connector) || connector.guide) continue;
-              if (!connector.ends.some((point) => Array.from(wired).some((other) => onTrace(point, other)))) continue;
-              wired.add(connector);
-              grown = true;
-            }
-          }
-          for (const connector of connectors) {
-            if (connector.guide) continue;
-            const corners = traces.get(connector);
-            if (corners === null || corners.length < 2 || !wired.has(connector)) {
-              const box = inViewport(connector.line);
-              if (box !== null) things.push(box);
-              continue;
-            }
-            const ctm = connector.line.getCTM();
-            const scale = Math.hypot(ctm.a, ctm.b);
-            const stroke = connector.strokeWidth * scale;
-            for (let spot = 1; spot < corners.length; spot++) {
-              const [from, to] = [corners[spot - 1], corners[spot]];
-              const head = (spot === 1 ? connector.heads[0] : 0) || (spot === corners.length - 1 ? connector.heads[1] : 0);
-              const run = { from, to, stroke, head: head * scale };
-              if (Math.abs(from.x - to.x) < 0.05) runs.push({ ...run, across: "y" });
-              else if (Math.abs(from.y - to.y) < 0.05) runs.push({ ...run, across: "x" });
-              else things.push({ left: Math.min(from.x, to.x), right: Math.max(from.x, to.x),
-                                 top: Math.min(from.y, to.y), bottom: Math.max(from.y, to.y) });
-            }
-          }
-          const median = (values) => {
-            const sorted = [...values].sort((a, b) => a - b);
-            const middle = sorted.length >> 1;
-            return sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-          };
-          const sizes = labels.map((label) => parseFloat(doc.defaultView.getComputedStyle(label.text).fontSize)
-            * Math.hypot(label.text.getCTM().a, label.text.getCTM().b));
-          const em = sizes.length > 0 ? median(sizes) : 10 * unit;
-          const holds = (outer, inner) => inner !== outer && inner.left >= outer.left - 0.5 && inner.right <= outer.right + 0.5
-            && inner.top >= outer.top - 0.5 && inner.bottom <= outer.bottom + 0.5;
-          let bands = 0;
-          for (const panel of drawnRects.map((entry) => entry.box)) {
-            const inside = things.filter((thing) => holds(panel, thing));
-            if (inside.length < 3) continue;
-            for (const [axis, low, high, side, sideLow, sideHigh] of [["y", "top", "bottom", "x", "left", "right"],
-                                                                       ["x", "left", "right", "y", "top", "bottom"]]) {
-              const mine = runs.filter((run) => Math.min(run.from[side], run.to[side]) < panel[sideHigh]
-                && Math.max(run.from[side], run.to[side]) > panel[sideLow]
-                && Math.max(run.from[axis], run.to[axis]) > panel[low] && Math.min(run.from[axis], run.to[axis]) < panel[high]);
-              const spans = inside.map((thing) => [thing[low], thing[high]]);
-              for (const run of mine.filter((entry) => entry.across !== axis)) {
-                const half = Math.max(run.stroke, run.head) / 2;
-                spans.push([run.from[axis] - half, run.from[axis] + half]);
-              }
-              spans.sort((a, b) => a[0] - b[0]);
-              const rows = [];
-              for (const [start, end] of spans) {
-                if (rows.length > 0 && start <= rows[rows.length - 1][1]) rows[rows.length - 1][1] = Math.max(rows[rows.length - 1][1], end);
-                else rows.push([start, end]);
-              }
-              const gaps = rows.slice(1).map((row, spot) => [rows[spot][1], row[0]]);
-              const crossing = ([start, end]) => mine.filter((run) => run.across === axis
-                && Math.min(run.from[axis], run.to[axis]) < end - 0.5 && Math.max(run.from[axis], run.to[axis]) > start + 0.5);
-              const open = gaps.filter((gap) => crossing(gap).length === 0).map(([start, end]) => end - start);
-              const typical = median(open.length > 0 ? open : gaps.map(([start, end]) => end - start));
-              for (const gap of gaps) {
-                const [start, end] = gap;
-                const runsIn = crossing(gap);
-                if (runsIn.length === 0) continue;
-                let spare = end - start - typical;
-                for (const run of runsIn) {
-                  const near = Math.min(run.from[axis], run.to[axis]);
-                  const far = Math.max(run.from[axis], run.to[axis]);
-                  if (near < start - 1 && far > end + 1) continue;
-                  const least = run.head > 0 ? run.head + Math.max(run.head / 2, 2 * run.stroke) : 2 * run.stroke;
-                  spare = Math.min(spare, Math.min(far, end) - Math.max(near, start) - least);
-                }
-                if (spare < Math.max(typical, BAND_SLACK * em) || bands >= 3) continue;
-                bands += 1;
-                const at = (value, along) => Math.round(((value - placed[along]) / unit + svg.view[along]));
-                addWarning(
-                  `page ${index + 1} ${describeElement(svg.element)} panel at (${at(panel.left, "x")},${at(panel.top, "y")}) `
-                  + `leaves a band ${Math.round((end - start) / unit)} units ${axis === "y" ? "tall" : "wide"} from ${axis} `
-                  + `${at(start, axis)} to ${at(end, axis)} that only connectors cross, ${Math.round(spare / unit)} units more `
-                  + "than they and the panel's usual gap need. Close the band up",
-                  svg.element);
-              }
-            }
-          }
-          // A label or a line of a figure's HTML set against its panel's border reads as
-          // cut: a bottom line drawn 0.3 units above the panel's lower edge. Each is held by
-          // the smallest panel around its middle and keeps PANEL_INSET of its font size from
-          // every side, measured from its letters: a label's ink, read as for its middle
-          // above, since its box holds the face's whole ascent and put a 16px title whose
-          // letters stood 10 units below the border at 4, and the box of a line of HTML.
-          const centred = (outer, inner) => inner !== outer && outer.left < (inner.left + inner.right) / 2
-            && (inner.left + inner.right) / 2 < outer.right && outer.top < (inner.top + inner.bottom) / 2
-            && (inner.top + inner.bottom) / 2 < outer.bottom;
-          const panelsHeld = drawnRects.map((entry) => entry.box)
-            .filter((panel) => things.filter((thing) => centred(panel, thing)).length >= 3);
-          const written = labels.map((label) => ({ box: inked.find((entry) => entry.text === label.text)?.box ?? label.box, words: labelWords(label.text),
-            size: parseFloat(doc.defaultView.getComputedStyle(label.text).fontSize)
-              * Math.hypot(label.text.getCTM().a, label.text.getCTM().b) }));
-          if (fromScreen !== undefined) {
-            for (const lifted of liftedBoxes) {
-              const { lines, fontSize } = liftedLines(lifted);
-              const words = readableText(lifted).slice(0, 30);
-              written.push(...lines.map((box) => ({ box, words, size: fontSize * Math.hypot(fromScreen.a, fromScreen.b) })));
-            }
-          }
-          let tight = 0;
-          for (const { box, words, size } of written) {
-            const panel = panelsHeld.filter((candidate) => centred(candidate, box))
-              .sort((a, b) => (a.right - a.left) * (a.bottom - a.top) - (b.right - b.left) * (b.bottom - b.top))[0];
-            if (panel === undefined || tight >= 3) continue;
-            const [side, gap] = Object.entries({ left: box.left - panel.left, right: panel.right - box.right,
-              top: box.top - panel.top, bottom: panel.bottom - box.bottom }).sort((a, b) => a[1] - b[1])[0];
-            if (gap >= PANEL_INSET * size) continue;
-            tight += 1;
-            addWarning(
-              `page ${index + 1} ${describeElement(svg.element)} "${words}" sits ${(gap / unit).toFixed(1)} units from the `
-              + `${side} border of its panel at (${Math.round((panel.left - placed.x) / unit + svg.view.x)},`
-              + `${Math.round((panel.top - placed.y) / unit + svg.view.y)}), under ${PANEL_INSET} of its font size. Move it in`,
-              svg.element);
           }
         }
         // A label the deck wrapped (data-wrap) records its line count in data-lines; one

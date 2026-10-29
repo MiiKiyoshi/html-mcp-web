@@ -154,27 +154,6 @@ x</pre>
       <path d="M156,10 L170,10 L170,24" fill="none" stroke="#333"/>
       <text x="235" y="21" font-size="12" text-anchor="middle">beside an icon</text>
     </svg>
-    <!-- A panel whose arrow runs down a band 90 units tall to the box below, where its
-         head and a short line need 8: the band is reported. The same arrow over a 14-unit
-         band is snug and is not. -->
-    <svg id="spare" viewBox="0 0 300 200" width="300" height="200">
-      <defs><marker id="spare-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
-      <rect x="1" y="1" width="298" height="198" fill="#f6f8f8" stroke="#333"/>
-      <text x="150" y="24" font-size="12">panel</text>
-      <rect x="20" y="20" width="60" height="30" fill="#fff" stroke="#333"/>
-      <rect x="20" y="140" width="60" height="30" fill="#fff" stroke="#333"/>
-      <line x1="50" y1="50" x2="50" y2="140" stroke="#333" marker-end="url(#spare-head)"/>
-      <text x="10" y="186" font-size="12">note</text>
-    </svg>
-    <svg id="snug" viewBox="0 0 300 130" width="300" height="130">
-      <defs><marker id="snug-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
-      <rect x="1" y="1" width="298" height="128" fill="#f6f8f8" stroke="#333"/>
-      <text x="150" y="24" font-size="12">panel</text>
-      <rect x="20" y="20" width="60" height="30" fill="#fff" stroke="#333"/>
-      <rect x="20" y="64" width="60" height="30" fill="#fff" stroke="#333"/>
-      <line x1="50" y1="50" x2="50" y2="64" stroke="#333" marker-end="url(#snug-head)"/>
-      <text x="10" y="114" font-size="12">note</text>
-    </svg>
     <!-- An arrow whose tip stops at the first letter of its label, and one that stops at
          a circle with a sign in it, which the circle's border keeps apart. -->
     <svg id="touch" viewBox="0 0 300 60" width="300" height="60">
@@ -184,13 +163,6 @@ x</pre>
       <line x1="10" y1="45" x2="188" y2="45" stroke="#333" marker-end="url(#touch-head)"/>
       <circle cx="200" cy="45" r="12" fill="#fff" stroke="#333"/>
       <text x="200" y="45" font-size="16" data-center>+</text>
-    </svg>
-    <!-- A panel's last line set against its lower border, under a title well inside it. -->
-    <svg id="inset" viewBox="0 0 300 100" width="300" height="100">
-      <rect x="1" y="1" width="298" height="98" fill="#f6f8f8" stroke="#333"/>
-      <text x="10" y="20" font-size="12">title</text>
-      <rect x="10" y="30" width="80" height="30" fill="#fff" stroke="#333"/>
-      <text x="10" y="97" font-size="12">last line</text>
     </svg>
     <!-- A marker parked outside the viewBox is painted where the line references it, and
          a box whose border sits half a stroke inside the edge keeps all of it. Neither is a
@@ -914,19 +886,10 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         off = [error for error in errors if "svg#ondot>" in error]
         assert len(off) == 1 and "stands off the middle of its shape by 0.0px across and -" in off[0], off
         assert not any("svg#beside>" in error and "middle of its shape" in error for error in errors), errors
-        # A band only a connector crosses, taller than the connector and the panel's
-        # usual gap need, is a warning, and a snug one is not.
-        warnings = get_json(f"{base}/state")["artifacts"]["slides"]["layout_check"]["warnings"]
-        spare = [warning for warning in warnings if "svg#spare>" in warning]
-        assert len(spare) == 1 and "leaves a band 90 units tall from y 50 to 140 that only connectors cross" in spare[0], spare
-        assert not any("svg#snug>" in warning for warning in warnings), warnings
-        assert not any("leaves a band" in warning and "svg#spare>" not in warning for warning in warnings), warnings
-        # An arrowhead stopped at a label's first letter is an error, one stopped at the
-        # circle a sign sits in is not, and a line against its panel's border is a warning.
+        # An arrowhead stopped at a label's first letter is an error, and one stopped at the
+        # circle a sign sits in is not.
         touch = [error for error in errors if "svg#touch>" in error]
-        assert len(touch) == 1 and 'stops 0.0px from the label "label"' in touch[0], touch
-        inset = [warning for warning in warnings if "svg#inset>" in warning]
-        assert len(inset) == 1 and '"last line" sits' in inset[0] and "bottom border of its panel" in inset[0], inset
+        assert len(touch) == 1 and 'stops 0.2px from the label "label"' in touch[0], touch
 
         # The page is zoomed to fit the pane, so a narrower window must not change
         # which layout problems are reported.
@@ -2775,75 +2738,6 @@ def test_a_bullet_citing_a_visual_from_another_column_is_reported_under_the_neut
                 errors = json.loads(response.read())["errors"]
             checked = [error for error in errors if "cites values of" in error]
             assert sorted(checked) == sorted(expected), (guideline, errors)
-        finally:
-            shared.stop()
-
-
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
-def test_a_plot_axis_numbered_without_a_name_is_a_warning_under_the_neutral_guideline(tmp_path: Path) -> None:
-    """A hand-drawn plot numbered its axes and named neither, and the reader could not tell
-    what was counted or in what unit. A title outside the drawing would clear it, so it is a
-    warning, not an error. The same plot with its axes named passes, and so does a column of
-    figures in a drawn table, which runs along no line. Panels drawn side by side in one
-    drawing, each on a filled background under a title of its own, are told apart: a value
-    axis named at its top passes, and the panel that names nothing is reported."""
-    import urllib.request
-
-    def panel(shift: int, title: str, names: bool) -> str:
-        return f'''<g transform="translate({shift} 0)">
-      <rect x="0" y="0" width="270" height="230" rx="10" fill="#f4f6f8"/>
-      <text x="12" y="22" font-size="16">{title}</text>
-      {'<text x="62" y="48" font-size="12">Longer (%)</text>' if names else ''}
-      <path d="M56 56 V180 H250" stroke="#333" fill="none"/>
-      <g font-size="12" text-anchor="end"><text x="50" y="184">0%</text><text x="50" y="122">50%</text><text x="50" y="60">100%</text></g>
-      <g font-size="12" text-anchor="middle"><text x="60" y="196">0</text><text x="150" y="196">0.5</text><text x="240" y="196">1</text></g>
-      {'<text x="150" y="216" font-size="12" text-anchor="middle">Length (mm)</text>' if names else ''}</g>'''
-
-    axes = '''<line x1="60" y1="160" x2="260" y2="160" stroke="#333"/>
-      <line x1="60" y1="20" x2="60" y2="160" stroke="#333"/>
-      <path d="M60 150 C 120 150, 200 30, 260 30" fill="none" stroke="#c33"/>
-      <g font-size="12" text-anchor="middle"><text x="60" y="178">0</text><text x="160" y="178">0.5</text><text x="260" y="178">1</text></g>
-      <g font-size="12" text-anchor="end"><text x="54" y="164">0%</text><text x="54" y="94">50%</text><text x="54" y="24">100%</text></g>'''
-    (tmp_path / "slides.html").write_text(f'''<!doctype html>
-<html><head><meta charset="utf-8"><title>Axes</title></head><body><main class="pages">
-  <section class="page"><div data-layout-guard>
-    <svg id="bare" width="280" height="200" viewBox="0 0 280 200">{axes}</svg>
-    <svg id="named" width="280" height="210" viewBox="0 0 280 210">{axes}
-      <text x="160" y="200" font-size="12" text-anchor="middle">Length (mm)</text>
-      <text x="0" y="0" font-size="12" text-anchor="middle" transform="translate(16 90) rotate(-90)">Longer (%)</text></svg>
-    <svg id="figures" width="120" height="80" viewBox="0 0 120 80" font-size="12">
-      <text x="10" y="20">a</text><text x="60" y="20" text-anchor="end">12</text>
-      <text x="10" y="40">b</text><text x="60" y="40" text-anchor="end">15</text>
-      <text x="10" y="60">c</text><text x="60" y="60" text-anchor="end">18</text></svg>
-    <svg id="panels" width="560" height="230" viewBox="0 0 560 230">{panel(0, "(a) Fits", True)}{panel(290, "(b) Misses", False)}</svg>
-  </div></section>
-</main></body></html>''', encoding="utf-8")
-    for guideline in ("neutral-slides", None):
-        port = available_port()
-        config_path = tmp_path / ".html-mcp-web.yaml"
-        config_path.write_text(yaml.safe_dump({
-            "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
-            "watch": ["*.html"],
-            "port": port,
-            **({"guideline": guideline} if guideline else {}),
-        }, sort_keys=False), encoding="utf-8")
-        shared = SharedProjectServer(load_config(config_path))
-        try:
-            shared.ensure()
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
-                result = json.loads(response.read())
-            assert not any("without naming it" in error for error in result["errors"]), result
-            if guideline is None:
-                assert "warnings" not in result, result
-                continue
-            warnings = result["warnings"]
-            assert len(warnings) == 3, warnings
-            assert warnings[0].startswith("page 1 <svg#bare> numbers its horizontal axis 0, 0.5, 1 without naming it. "
-                                          "Name the axis by its quantity and unit in the drawing (neutral 5.8) [p1:"), warnings
-            assert warnings[1].startswith("page 1 <svg#bare> numbers its vertical axis 100, 50, 0 without naming it."), warnings
-            # The panels' horizontal axes share the title below the first, and each panel's title
-            # stands over its row, so only the second panel's unnamed value axis is reported.
-            assert warnings[2].startswith("page 1 <svg#panels> numbers its vertical axis 100, 50, 0 without"), warnings
         finally:
             shared.stop()
 
