@@ -271,7 +271,8 @@ def post_json(url: str, payload: dict) -> dict:
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_browser_review_contract(tmp_path: Path) -> None:
     slides = tmp_path / "slides.html"
-    report = tmp_path / "report.html"
+    report = tmp_path / "paper" / "report.html"
+    report.parent.mkdir()
     slides.write_text(slides_html(), encoding="utf-8")
     report.write_text(report_html(), encoding="utf-8")
     port = available_port()
@@ -279,7 +280,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
     config_path.write_text(yaml.safe_dump({
         "artifacts": {
             "slides": {"label": "Slides", "layout": "slides", "main": "slides.html"},
-            "report": {"label": "Report", "layout": "report", "main": "report.html"},
+            "report": {"label": "Report", "layout": "report", "main": "paper/report.html"},
         },
         "watch": ["*.html"],
         "port": port,
@@ -925,7 +926,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert browser.execute_script('return document.title') == "slides.html"
         browser.find_element("css selector", '.artifact-tab:nth-child(2)').click()
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#main-file").textContent === "report.html"'))
+            'return document.querySelector("#main-file").textContent === "paper/report.html"'))
         assert browser.execute_script('return document.title') == "report.html"
         browser.find_element("css selector", "#fullscreen-btn").click()
         wait_until(lambda: browser.execute_script('return document.fullscreenElement !== null'))
@@ -983,7 +984,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         config_path.write_text(yaml.safe_dump({
             "artifacts": {
                 "slides": {"label": "Updated Slides", "layout": "slides", "main": "slides.html"},
-                "report": {"label": "Updated Report", "layout": "report", "main": "report.html"},
+                "report": {"label": "Updated Report", "layout": "report", "main": "paper/report.html"},
             },
             "watch": ["*.html"],
             "port": port,
@@ -5184,13 +5185,14 @@ def test_a_short_last_line_is_a_fault_on_a_slide_and_a_page(tmp_path: Path) -> N
         "</div></section></main></body></html>"
     )
     (tmp_path / "deck.html").write_text(page, encoding="utf-8")
-    (tmp_path / "paper.html").write_text(paper, encoding="utf-8")
+    (tmp_path / "paper").mkdir()
+    (tmp_path / "paper" / "paper.html").write_text(paper, encoding="utf-8")
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
         "artifacts": {
             "deck": {"label": "Deck", "layout": "slides", "main": "deck.html"},
-            "paper": {"label": "Paper", "layout": "report", "main": "paper.html"},
+            "paper": {"label": "Paper", "layout": "report", "main": "paper/paper.html"},
         },
         "watch": ["*.html"],
         "port": port,
@@ -5733,13 +5735,14 @@ def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
     left, scrolled and zoomed as it was; a tab never visited opens at the top at the
     natural size."""
     (tmp_path / "first.html").write_text(slides_html("First deck."), encoding="utf-8")
-    (tmp_path / "second.html").write_text(slides_html("Second deck."), encoding="utf-8")
+    (tmp_path / "second").mkdir()
+    (tmp_path / "second" / "second.html").write_text(slides_html("Second deck."), encoding="utf-8")
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
         "artifacts": {
             "first": {"label": "First", "layout": "slides", "main": "first.html"},
-            "second": {"label": "Second", "layout": "slides", "main": "second.html"},
+            "second": {"label": "Second", "layout": "slides", "main": "second/second.html"},
         },
         "watch": ["*.html"],
         "port": port,

@@ -755,11 +755,12 @@ def test_guide_gives_each_artifact_the_neutral_guideline_of_its_layout(tmp_path:
     meeting.write_text("---\nextends: neutral-slides\n---\n# Team meeting\n", encoding="utf-8")
     monkeypatch.setattr(config_module, "USER_CONFIG_DIR", user_config)
     config = project(tmp_path)
-    (tmp_path / "report.html").write_text(
+    (tmp_path / "paper").mkdir()
+    (tmp_path / "paper" / "report.html").write_text(
         '<!doctype html><html><body><main class="pages"><section class="page"></section></main></body></html>',
         encoding="utf-8")
     data = yaml.safe_load(config.config_path.read_text(encoding="utf-8"))
-    data["artifacts"]["report"] = {"label": "Report", "layout": "report", "main": "report.html"}
+    data["artifacts"]["report"] = {"label": "Report", "layout": "report", "main": "paper/report.html"}
     data["guideline"] = "team-meeting"
     config.config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     built_in = Path(config_module.__file__).resolve().parent.parent / "guidelines"

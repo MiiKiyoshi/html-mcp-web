@@ -77,12 +77,22 @@ def test_template_content_must_differ_from_main() -> None:
 
 def test_multiple_artifacts_round_trip() -> None:
     config = Config.from_dict({"artifacts": {
-        "slides": artifact(main="slides.html", template="neutral-slides", content="slides-content.html"),
-        "report": artifact("report", "report.html", template="neutral-report", content="report-content.html"),
+        "slides": artifact(main="deck/slides.html", template="neutral-slides", content="deck/content.html"),
+        "report": artifact("report", "paper/report.html", template="neutral-report", content="paper/content.html"),
     }})
     data = config.to_dict()
     assert list(data["artifacts"]) == ["slides", "report"]
     assert Config.from_dict(data).artifacts["report"].template == "neutral-report"
+
+
+def test_two_artifacts_never_share_a_folder() -> None:
+    """Decks whose files shared a folder were taken for one another, so two artifacts with a
+    content or main file in one folder stop the configuration, naming both and the folder."""
+    with pytest.raises(ValueError, match="artifacts 'first' and 'second' keep their files in one folder, 'decks'"):
+        Config.from_dict({"artifacts": {
+            "first": artifact(main="decks/first.html"),
+            "second": artifact(main="other/second.html", template="neutral-slides", content="decks/second.html"),
+        }})
 
 
 def test_unknown_keys_fail() -> None:

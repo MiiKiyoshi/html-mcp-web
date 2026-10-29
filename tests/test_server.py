@@ -743,7 +743,8 @@ async def test_control_data_is_not_served(client) -> None:
 
 
 async def test_config_change_adds_artifact_and_invalid_config_keeps_current_state(tmp_path: Path) -> None:
-    for name in ("slides.html", "slides-v2.html", "report.html"):
+    (tmp_path / "paper").mkdir()
+    for name in ("slides.html", "slides-v2.html", "paper/report.html"):
         (tmp_path / name).write_text(
             '<!doctype html><html><body><main class="pages"><section class="page"></section></main></body></html>',
             encoding="utf-8",
@@ -764,7 +765,7 @@ async def test_config_change_adds_artifact_and_invalid_config_keeps_current_stat
         updated = {
             "artifacts": {
                 **initial["artifacts"],
-                "report": {"label": "Report", "layout": "report", "main": "report.html"},
+                "report": {"label": "Report", "layout": "report", "main": "paper/report.html"},
             },
             "port": 8765,
         }
@@ -795,13 +796,14 @@ async def test_config_change_adds_artifact_and_invalid_config_keeps_current_stat
 
 
 async def test_artifact_content_change_does_not_invalidate_sibling(tmp_path: Path) -> None:
-    for name in ("slides.html", "report.html", "report-content.html"):
+    (tmp_path / "paper").mkdir()
+    for name in ("slides.html", "paper/report.html", "paper/content.html"):
         (tmp_path / name).write_text("<p>artifact</p>", encoding="utf-8")
     config = Config.from_dict({"artifacts": {
         "slides": {"label": "Slides", "layout": "slides", "main": "slides.html"},
         "report": {
-            "label": "Report", "layout": "report", "main": "report.html",
-            "template": "neutral-report", "content": "report-content.html",
+            "label": "Report", "layout": "report", "main": "paper/report.html",
+            "template": "neutral-report", "content": "paper/content.html",
         },
     }}, config_path=tmp_path / ".html-mcp-web.yaml")
     review = HtmlReviewServer(config)
@@ -809,14 +811,14 @@ async def test_artifact_content_change_does_not_invalidate_sibling(tmp_path: Pat
 
     # A watcher event follows a change on disk; a file that reads as it was noted has
     # been taken already, by the state read, and is not taken twice.
-    (tmp_path / "report-content.html").write_text("<p>artifact, edited</p>", encoding="utf-8")
-    await review.on_project_change(str(tmp_path / "report-content.html"))
+    (tmp_path / "paper" / "content.html").write_text("<p>artifact, edited</p>", encoding="utf-8")
+    await review.on_project_change(str(tmp_path / "paper" / "content.html"))
 
     assert review.artifacts["slides"].revision == 1
     assert review.artifacts["report"].revision == 2
 
-    review.generated_paths.add((tmp_path / "report.html").resolve())
-    await review.on_project_change(str(tmp_path / "report.html"))
+    review.generated_paths.add((tmp_path / "paper" / "report.html").resolve())
+    await review.on_project_change(str(tmp_path / "paper" / "report.html"))
     assert review.artifacts["report"].revision == 2
 
 

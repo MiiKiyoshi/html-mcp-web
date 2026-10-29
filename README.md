@@ -122,7 +122,7 @@ port: 8765
 |---|---|
 | `artifacts.<id>.label` | Name the review page shows for the artifact. |
 | `artifacts.<id>.layout` | `slides` (16:9) or `report` (A4). |
-| `artifacts.<id>.main` | The HTML file the page shows. |
+| `artifacts.<id>.main` | The HTML file the page shows. Each artifact keeps its `main` and `content` in a folder of its own, and two artifacts with either file in one folder stop the configuration with an error naming both. |
 | `artifacts.<id>.template`, `.content` | A template name and the content file it builds `main` from. |
 | `guideline` | A writing guideline the agent follows, such as the built-in `neutral-slides` or `neutral-report`. A guideline built on the neutral guideline of one layout applies to that layout's artifacts, and an artifact of the other layout follows its own neutral guideline. |
 | `watch` | Files whose saves refresh the page. |

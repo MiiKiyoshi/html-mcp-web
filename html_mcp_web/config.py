@@ -2,7 +2,7 @@
 
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
 import yaml
@@ -91,6 +91,20 @@ class Config:
         main_files = [artifact.main for artifact in artifacts.values()]
         if len(set(main_files)) != len(main_files):
             raise ValueError("artifact main files must be unique")
+        # Each artifact keeps its content and main files in a folder of its own: decks whose
+        # files shared one folder were taken for one another, an edit made in the wrong deck's
+        # file. Two artifacts with a file in one folder stop the configuration.
+        folders: dict[str, str] = {}
+        for artifact_id, artifact in artifacts.items():
+            for name in (artifact.main, artifact.content):
+                if name is None:
+                    continue
+                folder = PurePosixPath(name).parent.as_posix()
+                other = folders.setdefault(folder, artifact_id)
+                if other != artifact_id:
+                    raise ValueError(
+                        f"artifacts {other!r} and {artifact_id!r} keep their files in one folder, "
+                        f"{folder!r}. Give each artifact a folder of its own for its content and main files")
         guideline = data.get("guideline")
         if guideline is not None and (
             not isinstance(guideline, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", guideline)
