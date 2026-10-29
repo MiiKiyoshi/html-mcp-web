@@ -655,7 +655,10 @@ export function createLayoutChecks(dependencies) {
         for (const [column, cells] of columns.entries()) {
           if (cells.some((cell) => cell === undefined)) continue;
           const value = texts[column][0];
-          if (value === "" || /^[-+−±~≈<>]?\d/.test(value) || texts[column].some((text) => text !== value)) continue;
+          // A dash is no value but the place of one not yet measured: a run's column of
+          // dashes, keyed "-: pending" above the table, fills in as the runs finish and is kept.
+          if (value === "" || /^[-–—−]+$/.test(value) || /^[-+−±~≈<>]?\d/.test(value)
+            || texts[column].some((text) => text !== value)) continue;
           if (texts.some((other, at) => at !== column && other.includes(value) && other.some((text) => text !== value))) continue;
           const name = header?.line[column] ? readableText(header.line[column]) : "";
           addError(`page ${index + 1} ${describeElement(table)} column ${name === "" ? column + 1 : `"${name}"`} `

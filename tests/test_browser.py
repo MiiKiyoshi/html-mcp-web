@@ -2621,14 +2621,14 @@ def test_a_table_column_saying_the_same_in_every_row_is_reported_under_the_neutr
 <html><head><meta charset="utf-8"><title>Tables</title></head><body><main class="pages">
   <section class="page"><div data-layout-guard>
     <table id="results">
-      <thead><tr><th>Method</th><th>Condition</th><th>Error</th><th>Runtime</th></tr></thead>
+      <thead><tr><th>Method</th><th>Condition</th><th>Error</th><th>Runtime</th><th>Run 2</th></tr></thead>
       <tbody>
-        <tr><td>A</td><td>No correction</td><td>1.2</td><td>1.0</td></tr>
-        <tr><td>B</td><td>No correction</td><td>0.8</td><td>1.0</td></tr>
-        <tr><td>C</td><td>No correction</td><td>0.5</td><td>1.0</td></tr>
-        <tr><td>D</td><td>No correction</td><td>0.3</td><td>1.0</td></tr>
+        <tr><td>A</td><td>No correction</td><td>1.2</td><td>1.0</td><td>-</td></tr>
+        <tr><td>B</td><td>No correction</td><td>0.8</td><td>1.0</td><td>-</td></tr>
+        <tr><td>C</td><td>No correction</td><td>0.5</td><td>1.0</td><td>-</td></tr>
+        <tr><td>D</td><td>No correction</td><td>0.3</td><td>1.0</td><td>-</td></tr>
       </tbody>
-      <tfoot><tr><td>Mean</td><td>All</td><td>0.7</td><td>1.0</td></tr></tfoot>
+      <tfoot><tr><td>Mean</td><td>All</td><td>0.7</td><td>1.0</td><td>-</td></tr></tfoot>
     </table>
   </div></section>
   <section class="page"><div data-layout-guard>
