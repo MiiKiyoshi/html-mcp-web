@@ -146,7 +146,7 @@ def load_config(path: Path | None = None) -> Config:
     if config_path is None:
         raise FileNotFoundError(
             f"{DEFAULT_CONFIG_NAME} was not found. In the project directory, run: "
-            "html-mcp-web init --layout slides --main artifact.html --port 8765 "
+            "html-mcp-web init --layout slides --main artifacts/talk/slides.html --port 8765 "
             "(use report for A4 and replace the file and port with the requested values)"
         )
     loaded = yaml.safe_load(config_path.read_text(encoding="utf-8"))

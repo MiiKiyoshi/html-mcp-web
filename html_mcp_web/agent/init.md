@@ -8,7 +8,10 @@ discovered config and an existing binding may differ. A successful binding is re
 the MCP process is restarted.
 
 A subfolder requested for the document belongs in main and content, which are resolved
-relative to the config's directory. Inspect first and confirm any choices the user has not
+relative to the config's directory. When the user names none, put each artifact in a folder of
+its own under an `artifacts` folder of the project, `artifacts/<name>/`, which holds its main,
+its content and its floorplan. Two artifacts never keep their main or content in one folder:
+the configuration stops on it. Inspect first and confirm any choices the user has not
 already authorized. Setup is complete only when the current MCP connection resolves the
 intended document.
 
@@ -49,7 +52,7 @@ this form:
                 neutral-report, a two-column paper (report default)
     Guideline : neutral-slides, writing rules the agent follows for slides (slide default)
                 neutral-report, writing rules the agent follows for a paper (report default)
-    File      : slides.html (to be created)
+    File      : artifacts/talk/slides.html (to be created)
 
 Adapt the selected choices and filename to the user's request and existing files. Show whether
 the document file will be created or reused. Include available user templates and guidelines
@@ -81,7 +84,7 @@ MCP process's startup directory.
     html-mcp-web init --layout <slides|report> --main <file> --port <port> \
       [--template <name> --content <file>] [--guideline <name>]
 
-For example, `--main talk2/html/slides.html --content talk2/html/content.html`.
+For example, `--main artifacts/talk/slides.html --content artifacts/talk/content.html`.
 
 ## 4. Verify
 

@@ -10,7 +10,7 @@ Consult references in `consult`, including [KITS.md](KITS.md), only by the artic
 
 ## With a template
 
-`init --template <name> --content content.html --main slides.html` creates missing source files and builds the output. Edit the content file. The template rebuilds the main file on save. Build failures appear as `build_error` in `layout()`.
+`init --template <name> --content artifacts/talk/content.html --main artifacts/talk/slides.html` creates missing source files and builds the output. Edit the content file. The template rebuilds the main file on save. Build failures appear as `build_error` in `layout()`.
 
 ```html
 <!doctype html>
