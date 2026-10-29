@@ -34,7 +34,11 @@
   font-size: var(--size);
   line-height: var(--pitch);
   font-kerning: normal;
-  font-variant-ligatures: common-ligatures;
+  /* No ligature and no contextual alternate. Firefox writes such a glyph, which no
+     character maps to, into the PDF under a wrong character, and the printed text read
+     "onice" for "office", "Ýuestion" for "Question" and "(om)" for "(of)" when copied or
+     searched. The page is set in the glyphs it prints. */
+  font-variant-ligatures: none;
 }
 
 /* Hangul fills its em more than Latin letters do, and on the papers' pitch a Korean page

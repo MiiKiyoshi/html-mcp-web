@@ -40,7 +40,7 @@ Artifact Kits are what every artifact is built from, whatever its template, skin
 
 3.5 `p.hl-legend` names the roles with the same marks, each holding its role's name, as in `<p class="hl-legend"><mark data-hl="1">key</mark> <mark data-hl="2">value</mark></p>`. It also works inside a `<foreignObject>`.
 
-3.6 The builder sets every `font-family`, in an attribute of an SVG element or in a `style`, in a face the layout embeds, chosen by the first generic family in the list: `monospace` in Deck Mono, and in a report `serif` and `sans-serif` in the report's text and heading faces, in a deck `sans-serif` in the deck's face. A list of named faces only, such as the mathtext of an SVG matplotlib saves with its text kept as text, takes the `sans-serif` face. So a figure label measures the same in the layout check and in every browser. A generic family the layout does not embed, such as `serif` in a deck, stops the build.
+3.6 The builder sets every `font-family`, in an attribute of an SVG element or in a `style`, in a face the layout embeds, chosen by the first generic family in the list: `monospace` in Deck Mono, and in a report `serif` and `sans-serif` in the report's text and heading faces, in a deck `sans-serif` in the deck's face. A list of named faces only, such as the mathtext of an SVG matplotlib saves with its text kept as text, takes the `sans-serif` face. So a figure label measures the same in the layout check and in every browser. A generic family the layout does not embed, such as `serif` in a deck, stops the build. A report sets its text without ligatures or contextual alternates: a PDF printed from it carries such a glyph under a wrong character, and the words it is in are copied and searched wrongly.
 
 ## Article 4. Tables and units
 
