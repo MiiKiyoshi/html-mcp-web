@@ -1658,6 +1658,17 @@ export function createLayoutChecks(dependencies) {
     renderProblems(checked, errors, warnings);
   }
 
+  // What a layout problem is about, read from its message, so the reader can tell a
+  // drawing's fault from a page that overflows or a line set badly: each kind has its own
+  // colour and name in the list. A warning keeps its kind and takes a pale ground.
+  const PROBLEM_KINDS = [
+    ["figure", /<svg|<img|arrowhead|HTML "/],
+    ["table", /<table/],
+    ["overflow", /exceeds|overflow|clipped|outside|over an image|runs past|beyond/],
+    ["text", /wastes|word space|last line|column|stands at|letters past|head /],
+  ];
+  const problemKind = (text) => PROBLEM_KINDS.find(([, pattern]) => pattern.test(text))?.[0] ?? "other";
+
   // The Problems tab mirrors what the agent sees in layout(): the artifact error and the
   // build error, then the layout errors and warnings for the current revision.
   function renderProblems(checked, errors, warnings) {
@@ -1671,18 +1682,18 @@ export function createLayoutChecks(dependencies) {
     // A check that cannot be reported is worse than one that finds something: the tab said
     // only that nothing had been checked yet, which reads as "wait a moment" forever.
     if (state.layoutCheckError) problems.push({ kind: "check", text: state.layoutCheckError });
-    for (const error of errors) problems.push({ kind: "layout", text: error });
-    for (const warning of warnings) problems.push({ kind: "warning", text: warning });
+    for (const error of errors) problems.push({ kind: problemKind(error), text: error, layout: true });
+    for (const warning of warnings) problems.push({ kind: problemKind(warning), text: warning, layout: true, warning: true });
     if (!checked && !state.artifact.build_error && problems.length === 0) {
       list.appendChild(h("p", { class: "placeholder", text: "Layout not checked yet for the current revision." }));
     } else if (problems.length === 0) {
       list.appendChild(h("p", { class: "placeholder", text: "No problems." }));
     } else {
       for (const problem of problems) {
-        const item = h("div", { class: "problem" });
-        item.appendChild(h("span", { class: "problem-kind", text: problem.kind }));
+        const item = h("div", { class: `problem kind-${problem.layout ? problem.kind : "build"}${problem.warning ? " warning" : ""}` });
+        item.appendChild(h("span", { class: "problem-kind", text: problem.warning ? `${problem.kind} warning` : problem.kind }));
         item.appendChild(h("span", { text: problem.text }));
-        if (problem.kind === "layout" || problem.kind === "warning") {
+        if (problem.layout) {
           item.classList.add("clickable");
           item.addEventListener("click", () => revealProblem(problem.text));
         }

@@ -326,6 +326,14 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 }
 .problem.clickable { cursor: pointer; }
 .problem.clickable:hover { border-color: #c87869; background: #fbeae6; }
+/* Each kind of problem has its chip's colour, and a warning a pale amber ground. */
+.problem.kind-figure .problem-kind { background: #6f4aa8; }
+.problem.kind-table .problem-kind { background: #2c7a52; }
+.problem.kind-overflow .problem-kind { background: #c2561c; }
+.problem.kind-text .problem-kind { background: #2f63a8; }
+.problem.kind-other .problem-kind { background: #5f5b55; }
+.problem.warning { border-color: #e6d39c; background: #fffaeb; color: #4a3f22; }
+.problem.warning.clickable:hover { border-color: #cdb15c; background: #fff3d1; }
 
 #tab-pages { overflow-y: auto; padding: 6px; }
 #pages-list { display: flex; flex-direction: column; gap: 2px; }
