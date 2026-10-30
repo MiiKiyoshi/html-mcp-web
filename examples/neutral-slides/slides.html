@@ -107,7 +107,16 @@ pre code { padding: 0; border-radius: 0; background: none; font-family: inherit;
 /* The HTML of a foreignObject stands in the middle of its box from top to bottom, as a
    label sits in the shape drawn for it. */
 .svg-html-box { position: absolute; pointer-events: auto; display: flex; flex-direction: column; justify-content: center; }
+/* A centred one has its HTML in the middle across as well, so what is left to move is
+   the difference of its ink from its advance: moved by the whole space a left-set line
+   left beside it, a box as wide as its figure ran off the page. */
+.svg-html-box[data-center] { align-items: center; }
 .svg-html-box .katex-display { margin: 0; }
+/* A figure's HTML is a label, set at a figure's leading, the step a wrapped label takes
+   (KITS 5.3), in its own font size: the body's leading came down to it in pixels, and two
+   8px lines were drawn 14.6px apart. Its blocks stack without the page's paragraph space. */
+.svg-html-box { line-height: 1.35; }
+.svg-html-box :is(p, ul, ol, div) + :is(p, ul, ol, div) { margin-top: 0; }
 
 /* A highlight colours the box the letters already take and adds nothing around them, so
    the letters of a monospaced line keep their columns and a check of the text covers its
@@ -161,7 +170,8 @@ table thead th[colspan] { text-align: center; }
 :root {
   /* --font names a skin's faces. The CJK face the builder embeds for a CJK document follows
      them, so a Korean deck is set in one face on every machine. */
-  font-family: var(--font, Inter), "Kit Sans CJK", system-ui, sans-serif;
+  font-family: var(--sans);
+  --sans: var(--font, Inter), "Kit Sans CJK", system-ui, sans-serif;
   color: var(--ink);
 
   --ink: #22282c;
@@ -360,16 +370,24 @@ table thead th[colspan] { text-align: center; }
   position: absolute;
   left: 0;
   top: 0;
+  /* The ring's size and line, which a skin sets here rather than in width and border. */
+  --ring: 42px;
+  --ring-line: 1px;
   box-sizing: border-box;
-  width: 42px;
-  height: 42px;
-  border: 1px solid var(--accent);
+  width: var(--ring);
+  height: var(--ring);
+  border: var(--ring-line) solid var(--accent);
   border-radius: 50%;
   color: var(--accent);
   font-size: 17px;
   font-weight: 650;
-  /* Centred in the ring by the digits' own height, as in the footer bar. */
+  /* Centred in the ring by the digits' own height, as in the footer bar. The padding
+     leaves the trimmed line exactly the digits' height in the middle: Safari ignores
+     align-content in a block inside a multicol container, which a contents list in
+     columns is, and set the digits at the top of the ring. align-content still centres
+     them in a ring a skin sized by width and height. */
   display: block;
+  padding-block: calc((var(--ring) - 1cap) / 2 - var(--ring-line));
   align-content: center;
   text-align: center;
   line-height: 1;

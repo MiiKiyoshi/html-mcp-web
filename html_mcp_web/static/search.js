@@ -101,6 +101,7 @@ export function createSearch(state, dependencies) {
       style.id = "html-mcp-search-style";
       style.textContent = `
         .html-mcp-search-layer { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; z-index: 2147483645; pointer-events: none; }
+        .html-mcp-search-layer, .html-mcp-search-layer * { margin: 0; }
         .html-mcp-search-mark { position: absolute; border-radius: 2px; background: rgba(255, 214, 10, .45); }
         .html-mcp-search-mark.current { background: rgba(255, 140, 0, .55); box-shadow: 0 0 0 1px rgba(196, 98, 0, .85); }
       `;

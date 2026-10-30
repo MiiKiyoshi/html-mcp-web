@@ -758,6 +758,21 @@ def test_browser_review_contract(tmp_path: Path) -> None:
           return document.querySelector("#artifact-frame").contentDocument
             .querySelectorAll(".html-mcp-highlight").length > 0;
         '''))
+        # A page's own spacing between blocks, as a report's div + div sets it, does not
+        # move the marks laid over its letters: the layer and its marks are divs too.
+        shift = browser.execute_script('''
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const style = doc.createElement("style");
+          style.textContent = "* + div { margin-top: 20px; }";
+          doc.head.appendChild(style);
+          const range = doc.createRange();
+          range.selectNodeContents(doc.querySelector("#target"));
+          const letters = range.getClientRects()[0];
+          const mark = doc.querySelector(".html-mcp-highlight").getBoundingClientRect();
+          style.remove();
+          return [mark.left - letters.left, mark.top - letters.top];
+        ''')
+        assert all(abs(value) <= 1 for value in shift), shift
 
         browser.execute_script(f'''
           document.querySelector("[data-comment-id=\\"{comment["id"]}\\"] .comment-summary").click();

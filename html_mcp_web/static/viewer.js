@@ -1490,6 +1490,7 @@ function ensureHighlightLayer(page) {
     style.id = "html-mcp-highlight-style";
     style.textContent = `
       .html-mcp-highlight-layer { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; z-index: 2147483646; pointer-events: none; }
+      .html-mcp-highlight-layer, .html-mcp-highlight-layer * { margin: 0; }
       .html-mcp-highlight { position: absolute; border-radius: 2px; background: rgba(246, 216, 74, .42); box-shadow: inset 0 -1px rgba(171, 139, 0, .28); }
       .html-mcp-highlight-badge { position: absolute; min-width: 18px; height: 18px; padding: 0 4px; border: 1px solid #8b7413; border-radius: 9px; color: #302900; background: #ffe77a; font: 11px/16px system-ui, sans-serif; pointer-events: auto; cursor: pointer; }
       .html-mcp-highlight.flash { background: rgba(255, 177, 60, .68); }
