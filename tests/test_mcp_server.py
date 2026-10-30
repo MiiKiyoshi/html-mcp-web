@@ -534,6 +534,17 @@ def test_read_new_hands_over_what_is_unread_and_unanswered(tmp_path: Path) -> No
         binding.stop()
 
 
+def test_pages_name_single_pages_and_ranges_in_order_each_once() -> None:
+    from aiohttp import web
+    from html_mcp_web.server import page_numbers
+
+    assert page_numbers("47-52,57,62-63", 78) == [47, 48, 49, 50, 51, 52, 57, 62, 63]
+    assert page_numbers("3, 1-3", 5) == [3, 1, 2]
+    for spec in ("0-2", "4-9", "5-3", "a", ""):
+        with pytest.raises(web.HTTPBadRequest):
+            page_numbers(spec, 8)
+
+
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_image_save_writes_a_png_and_returns_its_path(tmp_path: Path) -> None:
     # save exists so a page can be handed to the user without the image entering the
@@ -558,6 +569,16 @@ def test_image_save_writes_a_png_and_returns_its_path(tmp_path: Path) -> None:
         written = sorted(path.name for path in (tmp_path / "pages").iterdir())
         assert every[0].text == f"{tmp_path / 'pages'}: p1.png to p{len(written)}.png" and len(every) == 1
         assert written == [f"p{number}.png" for number in sorted(range(1, len(written) + 1), key=lambda n: f"p{n}.png")]
+        # The pages named go into a folder of the caller's choosing, outside the project too.
+        outside = tmp_path.parent / f"{tmp_path.name}-renders"
+        chosen = asyncio.run(mcp.call_tool(
+            "image", {"artifact": "slides", "save": True, "grayscale": False, "pages": "1", "out": str(outside)}))
+        assert chosen[0].text == f"{outside}: p<N>.png for pages 1" and len(chosen) == 1
+        assert sorted(path.name for path in outside.iterdir()) == ["p1.png"]
+        with pytest.raises(Exception, match=r"'1-2' is not within 1\.\.1"):
+            asyncio.run(mcp.call_tool("image", {"artifact": "slides", "save": True, "pages": "1-2"}))
+        with pytest.raises(Exception, match="goes without page"):
+            asyncio.run(mcp.call_tool("image", {"artifact": "slides", "page": 1, "save": True, "pages": "1"}))
         with pytest.raises(Exception, match="page is needed unless save"):
             asyncio.run(mcp.call_tool("image", {"artifact": "slides"}))
         shown = asyncio.run(mcp.call_tool("image", {"artifact": "slides", "page": 1}))

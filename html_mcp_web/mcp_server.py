@@ -350,12 +350,13 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     @_compact
     async def image(
         artifact: str,
-        page: Annotated[int | None, Field(ge=1, description="Omit with save to write every page, p1.png on, into out as a folder.")] = None,
+        page: Annotated[int | None, Field(ge=1, description="Omit with save to write every page, or the pages named, as p<N>.png into out as a folder.")] = None,
+        pages: Annotated[str | None, Field(description='With save and no page: the pages to write, as "47-69" or "47-52,57,62-63".')] = None,
         target: Annotated[str | None, Field(description="A block ref from layout() (e.g. p8:1.1.0.2): render just that block, for fewer tokens.")] = None,
         dpi: Annotated[int, Field(ge=36, le=300, description="96 reads text. 150 or more shows fine detail at more tokens.")] = 96,
         grayscale: Annotated[bool, Field(description="Set false when colour itself is being checked.")] = True,
         save: Annotated[bool, Field(description="Write a png and return its path, to show the user without spending image tokens.")] = False,
-        out: Annotated[str | None, Field(description="With save: the project-relative png path.")] = None,
+        out: Annotated[str | None, Field(description="With save: the png path, or the folder of pages. Relative to the project, or absolute or from ~ for a place outside it.")] = None,
     ) -> "Image":
         """Render one page, or one block of it, as an image."""
         client = binding.require_client()
@@ -366,12 +367,16 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             # Pages handed to a reader one call each spent an answer per page in the
             # transcript; one call writes them all from one print.
             if not save or target is not None:
-                raise ValueError("page is needed unless save writes every page")
+                raise ValueError("page is needed unless save writes every page or the pages named")
             folder = out if out is not None else f".html-mcp-web/renders/{artifact}"
+            chosen = f"&pages={quote(pages)}" if pages is not None else ""
             saved = await client.request_json(
-                "GET", f"/artifacts/{artifact}/render/pages?{colour}&save={quote(folder)}", timeout=600.0)
-            written = f"{saved['path']}: p1.png to p{saved['pages']}.png"
+                "GET", f"/artifacts/{artifact}/render/pages?{colour}&save={quote(folder)}{chosen}", timeout=600.0)
+            written = (f"{saved['path']}: p<N>.png for pages {pages}" if pages is not None
+                       else f"{saved['path']}: p1.png to p{len(saved['pages'])}.png")
             return [written, grey] if grayscale else written
+        if pages is not None:
+            raise ValueError("pages names the pages save writes, so it goes without page")
         params = f"?page={page}&{colour}"
         if target is not None:
             params += f"&target={quote(target)}"
@@ -392,7 +397,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     async def figure(
         artifact: str,
         number: Annotated[int, Field(ge=1, description="The figure's number, as its caption reads it.")],
-        out: Annotated[str, Field(description="The project-relative path of the PDF.")],
+        out: Annotated[str, Field(description="The path of the PDF, relative to the project, or absolute or from ~ for a place outside it.")],
     ) -> str:
         """Write one figure of a report as a vector PDF the size of its drawing, without
         its caption, for \\includegraphics in a paper."""

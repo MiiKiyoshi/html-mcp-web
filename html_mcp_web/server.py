@@ -229,6 +229,23 @@ def pdf_reader():
     return pymupdf
 
 
+def page_numbers(spec: str, count: int) -> list[int]:
+    """The pages a spec such as "47-69" or "47-52,57,62-63" names, in order, each once."""
+    numbers: list[int] = []
+    for part in spec.split(","):
+        first, _, last = part.strip().partition("-")
+        try:
+            span = range(int(first), int(last or first) + 1)
+            if not span:
+                raise ValueError
+        except ValueError as error:
+            raise web.HTTPBadRequest(text=f"pages {spec!r}: {part.strip()!r} is not a page or a range like 47-69") from error
+        if span[0] < 1 or span[-1] > count:
+            raise web.HTTPBadRequest(text=f"pages {spec!r}: {part.strip()!r} is not within 1..{count}")
+        numbers.extend(number for number in span if number not in numbers)
+    return numbers
+
+
 @dataclass
 class ArtifactRuntime:
     artifact_id: str
@@ -767,11 +784,20 @@ class HtmlReviewServer:
             raise web.HTTPBadRequest(text="gray must be 0 or 1")
         return dpi, gray_value == "1"
 
-    def _save_render(self, relative: str, png: bytes) -> Path:
-        # Saved here rather than by the caller, so the server knows the file as its own.
-        out = (self.project_dir / relative).resolve()
+    def _render_path(self, written: str) -> Path:
+        # A relative path is the project's and stays inside it. An absolute one, or one
+        # from ~, is a place the caller chose outside the project, such as a scratch folder.
+        path = Path(written).expanduser()
+        if path.is_absolute():
+            return path.resolve()
+        out = (self.project_dir / path).resolve()
         if not out.is_relative_to(self.project_dir):
-            raise web.HTTPBadRequest(text="save must stay inside the project directory")
+            raise web.HTTPBadRequest(text="a relative save must stay inside the project directory")
+        return out
+
+    def _save_render(self, written: str, png: bytes) -> Path:
+        # Saved here rather than by the caller, so the server knows the file as its own.
+        out = self._render_path(written)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_bytes(png)
         state = out.stat()
@@ -785,21 +811,23 @@ class HtmlReviewServer:
             raise web.HTTPServiceUnavailable(text=f"PDF export failed: {error}") from error
 
     async def render_pages(self, request: web.Request) -> web.Response:
-        """Every page as a png in one folder, from one print: a reviewer handed a deck's
-        pages took one call per page, each answer spent in the transcript."""
+        """Every page, or the pages named, as pngs in one folder from one print: a reviewer
+        handed a deck's pages took one call per page, each answer spent in the transcript."""
         runtime = self.runtime(request)
         dpi, gray = self._render_options(request)
         if "save" not in request.query:
             raise web.HTTPBadRequest(text="save names the folder the pages go into")
-        folder = request.query["save"]
+        folder = self._render_path(request.query["save"])
         pdf = await self._printed(runtime)
         pymupdf = pdf_reader()
         with pymupdf.open(stream=pdf, filetype="pdf") as doc:
+            numbers = (page_numbers(request.query["pages"], doc.page_count)
+                       if "pages" in request.query else range(1, doc.page_count + 1))
             colorspace = pymupdf.csGRAY if gray else pymupdf.csRGB
-            for number, page in enumerate(doc, 1):
-                self._save_render(f"{folder}/p{number}.png", page.get_pixmap(dpi=dpi, colorspace=colorspace).tobytes("png"))
-            pages = doc.page_count
-        return web.json_response({"path": str((self.project_dir / folder).resolve()), "pages": pages})
+            for number in numbers:
+                png = doc[number - 1].get_pixmap(dpi=dpi, colorspace=colorspace).tobytes("png")
+                self._save_render(str(folder / f"p{number}.png"), png)
+        return web.json_response({"path": str(folder), "pages": list(numbers)})
 
     async def render_page(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
