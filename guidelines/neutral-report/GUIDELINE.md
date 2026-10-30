@@ -57,7 +57,8 @@ If the needed explanation exceeds a page limit, reduce the scope within authoriz
 3. the source locations and chain trace of 2.5,
 4. the section map of 2.6,
 5. a term table giving each unfamiliar term's definition and the section where it is first defined,
-6. revision history, and each decision with its authority, scope, reason, and status as active, replaced, or withdrawn, recording the author's implementation of a requester's instruction as an author choice.
+6. revision history, and each decision with its authority, scope, reason, and status as active, replaced, or withdrawn, recording the author's implementation of a requester's instruction as an author choice,
+7. the answers the rendered sections leave under step 1 of 7.2, and the missing idea a repeated confusion report names under 8.3.
 
 2.9 **Revise the plan from the required outcome.** The plan is provisional. When research or drafting reveals missing explanation or contradicts planned claims:
 
@@ -161,7 +162,7 @@ Enclose separately labeled diagram parts and stages in separate panels with labe
 
 Size content for readability and required relationships. Do not add content or increase its size merely to match panel shapes or fill unused space.
 
-5.6 **Explain with the smallest hand-checkable instances.** Explain mechanisms with the smallest set of instances the reader can check by hand, chosen to distinguish the stated rule from a baseline or plausible shortcut when the argument requires that distinction. For general rules, default to generic examples with short placeholder names and simple values. Use real names or measured values when identity or magnitude matters to the claim.
+5.6 **Explain with the smallest hand-checkable instances.** Explain mechanisms with the smallest set of instances the reader can check by hand, chosen to distinguish the stated rule from a baseline or plausible shortcut when the argument requires that distinction. Give quantities the rule keeps distinct different values in the instance, so that no step reads as a shortcut that equates them: a fitted output that differs from the target it was fitted to, not one equal to it. For general rules, default to generic examples with short placeholder names and simple values. Use real names or measured values when identity or magnitude matters to the claim.
 
 Show purpose, operation, and conditions and scope beyond the instance, including an input and its resulting output for a claim about how a system responds. When connecting concepts to code, formats, or records, keep source excerpts limited to the argument's needs and show their correspondence.
 
@@ -201,7 +202,7 @@ A list of names, such as datasets or models with their sizes or roles, goes in a
 
 7.2 **Check the chain before form and layout.** Check in this order. Before the next step, repair what steps 1 to 3 find under 8.3, and repair what steps 4 and 5 find directly.
 
-1. Chain. Read each rendered section as its reader, in reading order, using only the reader knowledge recorded under 2.1 and 2.5 and earlier sections. Write the answer it leaves beside its planned answer. Check that each value or claim the answer rests on follows from those alone. The author's knowledge, records, and sources make missing steps look present, so consult them only to fill a gap the report shows.
+1. Chain. Read each rendered section as its reader, in reading order, using only the reader knowledge recorded under 2.1 and 2.5 and earlier sections. Write the answer it leaves beside its planned answer in the planning records. Check that each value or claim the answer rests on follows from those alone. The author's knowledge, records, and sources make missing steps look present, so consult them only to fill a gap the report shows.
 2. Outcome. Check that these answers establish the required outcome, connecting the needed problem, premises, method, and effect.
 3. Structure. Find answers that differ from the plan, missing connections, relations 5.1 calls for drawing that are only stated, and elements that fail 1.4. Check the section order and headings against Article 6.
 4. Form. Check rendered content against Articles 2 to 6, including 4.2, 4.5, 4.6, and figures and tables under 5.8 and 5.9. Compare it with requested references.
@@ -232,7 +233,7 @@ Comments written on the report's review page come from the requester unless the 
 5. Only then cut, reword, or move content, keeping established terms and explicit relationships under 4.1, 4.2, and 4.5.
 6. Adjust layout last.
 
-If the same question returns, start again at step 1, reconsidering structure, premises, and interpretation. Do not add notes that document the review response.
+A second report of confusion about the same section, in any words, means the last repair missed what the reader lacks. Before editing again, read every question about that section together and write in the planning records the one idea they circle around: the relation, premise, or distinction the section does not show. Then start again at step 1 and rebuild the section around that idea, reconsidering structure, premises, and interpretation, rather than rewording the element the latest question names. Do not add notes that document the review response.
 
 8.4 **Recheck every active requirement after repair.** After a repair, read the revision against every active requirement gathered under 8.1, including earlier requests the fix affects, and identify where each is satisfied. Repair the same defect in every affected section within the editing scope, report it in sections outside that scope, then check again under Article 7.
 

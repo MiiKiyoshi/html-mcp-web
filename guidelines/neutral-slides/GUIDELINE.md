@@ -59,7 +59,8 @@ A progress update starts from what its audience last saw, covers only what chang
 5. each page's element list of 3.1,
 6. a term table giving each unfamiliar term's definition and the page and element where it is first defined,
 7. revision history, and each decision with its authority, scope, reason, and status as active, replaced, or withdrawn, recording the author's implementation of a requester's instruction as an author choice,
-8. presenter notes, when the presenter's knowledge differs, on what the presenter needs beyond page and script to explain each answer and its evidence and to answer likely questions.
+8. presenter notes, when the presenter's knowledge differs, on what the presenter needs beyond page and script to explain each answer and its evidence and to answer likely questions,
+9. the answers the rendered pages leave under step 1 of 7.2, and the missing idea a repeated confusion report names under 8.3.
 
 Presenter notes hold only what the presenter lacks and the page need not show, because the audience already knows it or the answer does not need it. No step of an answer moves from the page into the notes.
 
@@ -169,7 +170,7 @@ Enclose separately labeled diagram parts and stages in separate panels with labe
 
 Size content for readability and required relationships. Do not add content or increase its width, height, spacing, font size, or padding merely to match panel shapes or fill unused space. Center compact content groups horizontally and vertically in their available area by default, preserving reading order and comparison alignment.
 
-5.6 **Explain mechanisms with hand-checkable instances.** Explain mechanisms with the smallest set of instances the audience can check by hand, chosen to distinguish the stated rule from a baseline or plausible shortcut through visible steps or results when the answer requires that distinction. For general rules, default to generic examples with short placeholder names and simple values the audience can interpret without project context, giving each value a part in the example. Use real names or measured values when identity or magnitude matters to the claim.
+5.6 **Explain mechanisms with hand-checkable instances.** Explain mechanisms with the smallest set of instances the audience can check by hand, chosen to distinguish the stated rule from a baseline or plausible shortcut through visible steps or results when the answer requires that distinction. Give quantities the rule keeps distinct different values in the instance, so that no step reads as a shortcut that equates them: a fitted output that differs from the target it was fitted to, not one equal to it. For general rules, default to generic examples with short placeholder names and simple values the audience can interpret without project context, giving each value a part in the example. Use real names or measured values when identity or magnitude matters to the claim.
 
 Show purpose, operation, and conditions and scope beyond the instance, including an input and its resulting output for a claim about how a system responds. When connecting concepts to code, formats, or records, keep source excerpts limited to the answer's needs and show their correspondence.
 
@@ -219,7 +220,7 @@ Let speaking time follow the needed explanation. For a specified duration, check
 
 7.2 **Check rendered pages from chain to scripts.** Check in this order. Before the next step, repair what steps 1 to 4 find under 8.3, and repair what steps 5 and 6 find directly.
 
-1. Chain. Read each rendered page as its audience, in reading order and, for a live talk, at speaking pace, using only the audience knowledge recorded under 2.1 and 2.5, earlier pages, and preceding elements. Write the one answer it leaves beside its planned answer. Check that each value or claim the answer rests on follows from those alone. The author's knowledge, records, and sources make missing steps look present, so consult them only to fill a gap the pages show.
+1. Chain. Read each rendered page as its audience, in reading order and, for a live talk, at speaking pace, using only the audience knowledge recorded under 2.1 and 2.5, earlier pages, and preceding elements. Write the one answer it leaves beside its planned answer in the planning records. Check that each value or claim the answer rests on follows from those alone. The author's knowledge, records, and sources make missing steps look present, so consult them only to fill a gap the pages show.
 2. Outcome. Check that these answers establish the required outcome, connecting the needed problem, premises, method, and effect.
 3. Presenter. When the presenter's knowledge differs, read each page as the presenter, who must find its question and answer on the page and explain each element with the presenter notes.
 4. Structure. Find answers that differ from the plan, missing connections, relations 5.1 calls for drawing that are only stated, places where the eye must backtrack under 5.3, and elements that fail 1.4. Count only content carrying the answer as occupied space. When a page looks half empty, check that it is complete, and otherwise supply missing content, merge without repetition, or remove it.
@@ -251,7 +252,7 @@ Comments written on the deck's review page come from the requester unless the re
 5. Only then cut, reword, or move content, keeping established terms and explicit relationships under 4.1, 4.2, and 4.5.
 6. Adjust layout last.
 
-If the same question returns, start again at step 1, reconsidering structure, premises, and interpretation. Do not add notes that document the review response.
+A second report of confusion about the same page, in any words, means the last repair missed what the audience lacks. Before editing again, read every question about that page together and write in the planning records the one idea they circle around: the relation, premise, or distinction the page does not show. Then start again at step 1 and rebuild the page around that idea, reconsidering structure, premises, and interpretation, rather than rewording the element the latest question names. Do not add notes that document the review response.
 
 8.4 **Recheck every active requirement after a repair.** After a repair, read the revision against every active requirement gathered under 8.1, including earlier requests the fix affects, and identify where each is satisfied. Repair the same defect on every affected page within the editing scope, report it on pages outside that scope, then check again under Article 7.
 
