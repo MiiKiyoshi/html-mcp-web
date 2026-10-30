@@ -104,6 +104,8 @@ Ground relationships implied by conceptual drawings, including ordering, crossin
 
 To justify a model over a simpler one, show what the simpler model misses, why it matters, and how the chosen model accounts for it, comparing under conditions that isolate that difference.
 
+3.7 **Justify a design choice by the field's finding.** Justify a design choice by the field's accepted finding, cited, and by showing that the setting meets the conditions the finding is about. Add no measurement, count, or criterion of the author's own to pre-empt an objection the audience has not raised, and no number the audience has no reference to judge.
+
 ## Article 4. Words and notation
 
 4.1 **Use the audience's established field terms.** Think and draft each text in its audience's language rather than translating it. Name each object or action as the audience and field name it in the deck's language, including established loanwords, with expressions of clear meaning and actual common use, in titles, labels, and takeaways too. Do not form them by literally translating internal code names or foreign words, or replace established terms with paraphrases or coinages to sound plainer. Avoid rarely used words and word pairings, and common words in a part of speech unusual for them, even when their dictionary meanings fit.

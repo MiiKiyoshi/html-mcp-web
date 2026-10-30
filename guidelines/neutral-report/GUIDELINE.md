@@ -101,6 +101,8 @@ Ground relationships implied by conceptual drawings, including ordering, crossin
 
 To justify a model over a simpler one, show what the simpler model misses, why it matters, and how the chosen model accounts for it, comparing under conditions that isolate that difference.
 
+3.7 **Justify a design choice by the field's finding.** Justify a design choice by the field's accepted finding, cited, and by showing that the setting meets the conditions the finding is about. Add no measurement, count, or criterion of the author's own to pre-empt an objection the reader has not raised, and no number the reader has no reference to judge.
+
 ## Article 4. Words and notation
 
 4.1 **Use established field terms, never coinages.** Think and draft each text in its reader's language rather than translating it. Name each object or action as the reader and field name it in the report's language, including established loanwords, with expressions of clear meaning and actual common use, in headings, captions, and labels too. Where the field uses an English term, write the English term, such as baseline, backbone, adapter, retention, or word problem, not a translation of it. Do not form names by literally translating internal code names or foreign words, or replace established terms with paraphrases or coinages to sound plainer. Avoid rarely used words and word pairings, and common words in a part of speech unusual for them, even when their dictionary meanings fit.
