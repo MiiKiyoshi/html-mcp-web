@@ -106,6 +106,8 @@ NOTES_SPREAD_SCRIPT = """<script>
   const BOXES = ".body > .rest, .two > div";
   // An item's own gap, as its author set it, which the spread adds to and goes back to.
   const authored = new WeakMap();
+  // The gap each list was last given beyond its items' own.
+  const given = new WeakMap();
   const spread = (box) => {
     const lists = Array.from(box.children).filter((child) => child.matches("ul.notes"));
     const items = lists.map((list) => Array.from(list.children).filter((child) => child.tagName === "LI"));
@@ -125,12 +127,22 @@ NOTES_SPREAD_SCRIPT = """<script>
       if (own.display === "none" || own.position === "absolute" || own.position === "fixed") continue;
       used += child.getBoundingClientRect().height / scale + parseFloat(own.marginTop) + parseFloat(own.marginBottom);
     }
-    const room = box.clientHeight - used;
-    if (room <= 0) return;
+    // The room is read from the box's height as laid out, less its borders, and kept to whole
+    // pixels below it. Two columns of a row that both spread notes took turns without end on
+    // a reader's screen, the items moving every frame: clientHeight rounds the height to a
+    // whole pixel, a column that filled the rounded room made the row up to half a pixel
+    // taller, and the other column spread into that. A gap that would move by less than half
+    // a pixel keeps the one it was given, so no such step is taken again.
+    const inner = box.getBoundingClientRect().height / scale
+      - parseFloat(style.borderTopWidth) - parseFloat(style.borderBottomWidth);
+    const room = Math.floor(inner - used);
     lists.forEach((list, at) => {
       const own = getComputedStyle(list);
       const line = parseFloat(own.lineHeight) || parseFloat(own.fontSize) * 1.2;
-      const extra = Math.min(line, room / gaps);
+      let extra = room > 0 ? Math.min(line, room / gaps) : 0;
+      if (Math.abs(extra - (given.get(list) ?? 0)) < 0.5) extra = given.get(list) ?? 0;
+      given.set(list, extra);
+      if (extra === 0) return;
       for (const item of items[at].slice(0, -1)) {
         item.style.marginBottom = `${parseFloat(getComputedStyle(item).marginBottom) + extra}px`;
       }

@@ -1172,6 +1172,10 @@ def test_a_short_column_spreads_over_the_height_of_the_tall_one(tmp_path: Path) 
         '<div><ul class="notes" id="full-notes"><li>one</li><li>two</li></ul><div style="height: 380px"></div></div>'
         '<div style="height: 400px; background: #eee"></div>'
         '</div></section>\n'
+        '<section data-title="Near"><div class="two">'
+        '<div><h3>Heading</h3><ul class="notes" id="near-notes"><li>one</li><li>two</li><li>three</li></ul></div>'
+        '<div id="near-tall" style="height: 40px; background: #eee"></div>'
+        '</div></section>\n'
         '<section data-title="Math notes"><ul class="notes" id="math-notes">'
         '<li id="math-item">$x_t = y_t - y_{t-1}$<br>$z_t = x_t - x_0$<br>$w_t = z_t + x_t$</li>'
         '<li id="plain-item">plain words that run on</li></ul></section>\n'
@@ -1227,6 +1231,27 @@ return [items.slice(1).map((item, at) => item.top - items[at].bottom), parseFloa
                 assert all(abs(gap - (3 + line)) < 1 for gap in gaps), (notes, gaps, line)
             else:
                 assert all(abs(gap - 3) < 1 for gap in gaps), (notes, gaps, line)
+        # The room between items is whole pixels below the column's height, and a gap that would
+        # move by less than half a pixel stays: two columns spreading notes side by side took
+        # turns filling the half pixel a rounded height gave them, and the items moved every frame.
+        def near(height: float | None) -> dict:
+            if height is not None:
+                browser.execute_script(f"document.getElementById('near-tall').style.height = '{height}px'")
+                time.sleep(0.3)
+            return browser.execute_script("""
+const list = document.getElementById('near-notes');
+const items = Array.from(list.children).map((item) => item.getBoundingClientRect());
+return {gaps: items.slice(1).map((item, at) => item.top - items[at].bottom),
+        column: list.parentElement.getBoundingClientRect().height,
+        bottom: list.parentElement.getBoundingClientRect().bottom - items[items.length - 1].bottom};
+""")
+        natural = near(None)
+        assert all(abs(gap - 3) < 0.01 for gap in natural["gaps"]), natural
+        filled = near(natural["column"] + 4)
+        assert all(abs(gap - 5) < 0.01 for gap in filled["gaps"]), (natural, filled)
+        assert filled["bottom"] >= -0.01, filled
+        assert near(natural["column"] + 4.4)["gaps"] == filled["gaps"]
+        assert all(abs(gap - 8) < 0.01 for gap in near(natural["column"] + 10)["gaps"]), natural
         # Inline math is drawn larger than the text, and lines of it in one item touched: an
         # item holding math leaves the lines of math apart, and a plain item keeps its pitch.
         wait_until(lambda: browser.execute_script("return !!document.querySelector('#math-item .katex')"))
