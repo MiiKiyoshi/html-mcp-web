@@ -104,7 +104,7 @@ Ground relationships implied by conceptual drawings, including ordering, crossin
 
 To justify a model over a simpler one, show what the simpler model misses, why it matters, and how the chosen model accounts for it, comparing under conditions that isolate that difference.
 
-3.7 **Justify a design choice by the field's finding.** Justify a design choice by the field's accepted finding, cited, and by showing that the setting meets the conditions the finding is about. Add no measurement, count, or criterion of the author's own to pre-empt an objection the audience has not raised, and no number the audience has no reference to judge.
+3.7 **Justify a design choice by a widely accepted finding.** Justify a design choice by a widely accepted finding, cited, and by showing that the setting meets the conditions the finding is about. Add no measurement, count, or criterion of the author's own to pre-empt an objection the audience has not raised, and no number the audience has no reference to judge.
 
 ## Article 4. Words and notation
 
