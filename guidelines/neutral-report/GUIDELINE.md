@@ -160,6 +160,8 @@ Draw each operation at the objects it acts on, not apart from them. Label relati
 
 Enclose separately labeled diagram parts and stages in separate panels with labels and explanations inside. Put each part or stage label at its block's top left. Only parts compared on shared axes may share a panel. Center a label or formula on the shape, connector, or junction it names, in both directions. Extend or rearrange drawings for additions instead of squeezing them into gaps.
 
+Write an explanation under a drawn object as one chain from the drawing: first the property of the object the drawing makes visible, then the effect that property causes, named by the field's term. Under a tree drawn with many small leaves, write that each leaf holds few samples, so the tree overfits noise, not that the tree chases chance errors.
+
 Size content for readability and required relationships. Do not add content or increase its size merely to match panel shapes or fill unused space.
 
 5.6 **Explain with the smallest hand-checkable instances.** Explain mechanisms with the smallest set of instances the reader can check by hand, chosen to distinguish the stated rule from a baseline or plausible shortcut when the argument requires that distinction. Give quantities the rule keeps distinct different values in the instance, so that no step reads as a shortcut that equates them: a fitted output that differs from the target it was fitted to, not one equal to it. For general rules, default to generic examples with short placeholder names and simple values. Use real names or measured values when identity or magnitude matters to the claim.
