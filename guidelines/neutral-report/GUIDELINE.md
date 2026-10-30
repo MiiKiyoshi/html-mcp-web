@@ -99,6 +99,8 @@ Ground relationships implied by conceptual drawings, including ordering, crossin
 
 3.6 **Show the mechanism before naming it.** For an unfamiliar mechanism, show what happens to named objects, what changes, what stays fixed, and what follows before attaching its name and definition. Establish its referent and defining rule at the section's level, then build the formal explanation on those relationships. Accept introductory simplifications that preserve the relationships and agree with the formal explanation and with grounded drawings (3.2).
 
+Introduce an unfamiliar general concept through an instance of it familiar outside the work, the one commonly used to teach it, such as a table of house prices for tabular data, then state in one line that the work's setting has the same form.
+
 To justify a model over a simpler one, show what the simpler model misses, why it matters, and how the chosen model accounts for it, comparing under conditions that isolate that difference.
 
 3.7 **Justify a design choice by a widely accepted finding.** Justify a design choice by a widely accepted finding, cited, and by showing that the setting meets the conditions the finding is about. Add no measurement, count, or criterion of the author's own to pre-empt an objection the reader has not raised, and no number the reader has no reference to judge.

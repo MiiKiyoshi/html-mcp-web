@@ -74,13 +74,14 @@ Presenter notes hold only what the presenter lacks and the page need not show, b
 
 ## Article 3. Draft pages
 
-3.1 **Draft each element in reading order.** Draft one element at a time in reading order, applying 1.4 to each and establishing missing prerequisites and relationships before dependent content. This order, not source order or available panel space, determines what comes next. Record only the elements each page needs, their reading order, and where their prerequisites are established.
+3.1 **Draft each page by these steps, in this order.** Draft one element at a time in reading order, applying 1.4 to each and establishing missing prerequisites and relationships before dependent content. This order, not source order or available panel space, determines what comes next. Record only the elements each page needs, their reading order, and where their prerequisites are established. The steps put the clauses they name to work while the page is drafted, so that the first draft already meets them.
 
-1. From audience knowledge and preceding pages, state the next question needed, the one answer to establish, and the chain it rests on with a method's need and intended effect. Before choosing page elements, select evidence the audience can check.
-2. Name each object or action and place needed definitions before use. Construct the answer's relationship under Article 5 with the needed objects, operations, conditions, and evidence.
-3. Add words for what the visual and established context leave unsaid, including goals or constraints that explain a choice or omission.
-4. Title the page and, if using a lead, name its problem. Derive the takeaway from the visible explanation.
-5. Render the page, then write its script.
+1. From audience knowledge and preceding pages, state the next question needed, the one answer to establish as one sentence in the audience's words, and the chain it rests on with a method's need and intended effect. Before choosing page elements, select evidence the audience can check.
+2. Open the sources' figures and their captions. Where a source's figure already shows the answer, reuse it under 2.3 rather than redrawing or restating it.
+3. Name each object or action and place needed definitions before use, introducing an unfamiliar general concept under 3.6. Draw the answer's relationship under Article 5 before writing about it, with the needed objects, operations, conditions, and evidence.
+4. Add words for what the visual and established context leave unsaid, including goals or constraints that explain a choice or omission. Write what is computed under 4.2, keep prose and math apart under 4.9, and pass every label, number, unit, and note through 1.4 on its own.
+5. Title the page and, if using a lead, name its problem. Derive the takeaway from the visible explanation.
+6. Render the page. Before showing a new or rebuilt page to the requester, have a reader who did not build it read the rendered page cold and list every place whose meaning it cannot tell, and repair those first. Then write the page's script.
 
 3.2 **Assert only what the evidence supports.** Before writing a claim, distinguish fact, definition, observation, inference, assumption, proposal, decision, and unknown, provisional values from final ones, and external examples and proposed components from existing work. Establish the cause of an observed result with evidence that distinguishes it from plausible alternatives, and name the source. Otherwise state the observation and label the explanation as proposed.
 
@@ -101,6 +102,8 @@ Ground relationships implied by conceptual drawings, including ordering, crossin
 3.5 **Establish each claim once.** Establish each claim once. Where a claim recurs beyond such local context (3.4), add a consequence or interpretation. Expand an overview by answering a further question, not repeating the topic. Combine subjects only through a real connection. Resolve or report contradictions with earlier pages.
 
 3.6 **Show an unfamiliar mechanism before naming it.** For an unfamiliar mechanism, show what happens to named objects, what changes, what stays fixed, and what follows before attaching its name and definition. Establish its referent and defining rule at the page's level, then build the formal explanation on those relationships. In drafting and review, accept introductory simplifications that preserve the relationships and agree with the formal explanation and with grounded drawings (3.2).
+
+Introduce an unfamiliar general concept through an instance of it familiar outside the work, the one commonly used to teach it, such as a table of house prices for tabular data, then state in one line that the work's setting has the same form.
 
 To justify a model over a simpler one, show what the simpler model misses, why it matters, and how the chosen model accounts for it, comparing under conditions that isolate that difference.
 
