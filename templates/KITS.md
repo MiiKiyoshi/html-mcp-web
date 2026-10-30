@@ -50,9 +50,11 @@ Artifact Kits are what every artifact is built from, whatever its template, skin
 
 4.3 **div.table-fit sizes a table to its contents.** `div.table-fit` sizes a compact table to its contents and centres it, as in `<div class="table-fit"><p class="units">…</p><table>…</table></div>`. The table's `p.units` goes inside the same wrapper, before the table, so it ends at the table's right edge, and a key longer than the table wraps to its width.
 
-4.4 **Top th rows form the table head.** The rows of `th` cells at the top of a table are its head, written in a `thead` or not. Rows after it may be split into several `tbody` groups, such as a row of averages after the designs.
+4.4 **p.table-head names a slide table.** `p.table-head` carries a slide table's heading, set bold at the table's top left. It stands first, before the table's `p.units`, in one wrapper with the table, a `div.table-fit` or a plain `div`, so that the spreading of 9.5 moves heading and table as one block: `<div><p class="table-head">Load features</p><p class="units">…</p><table>…</table></div>`. A report table is named by its caption instead (10.4).
 
-4.5 **Wide tables share width as tabularx does.** A table too wide for its place shares the width as LaTeX's tabularx does. A column whose longest line fits in an even share of the width left keeps that line whole, and the columns of longer text divide the rest and wrap.
+4.5 **Top th rows form the table head.** The rows of `th` cells at the top of a table are its head, written in a `thead` or not. Rows after it may be split into several `tbody` groups, such as a row of averages after the designs.
+
+4.6 **Wide tables share width as tabularx does.** A table too wide for its place shares the width as LaTeX's tabularx does. A column whose longest line fits in an even share of the width left keeps that line whole, and the columns of longer text divide the rest and wrap.
 
 ## Article 5. Figures
 

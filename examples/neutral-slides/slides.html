@@ -487,6 +487,8 @@ ul.notes li { margin-bottom: 3px; }
    math takes a pitch that leaves the math the gap text has. */
 ul.notes li:has(.katex) { line-height: 1.8; }
 .units { margin: 0 0 4px; color: var(--muted); font-size: 13px; text-align: right; }
+/* A slide table's heading: the name of the set its rows belong to, at the table's top left. */
+.table-head { margin: 0 0 2px; color: var(--primary); font-size: 14px; font-weight: 700; text-align: left; }
 .feedback { margin-top: 16px; padding: 10px 0 10px 16px; border-left: 3px solid var(--accent); color: var(--ink-soft); font-size: 17px; }
 .feedback b { margin-right: 8px; }
 /* A labelled block of points raised about the work: the label on its own line, then the
@@ -681,15 +683,18 @@ pre { margin: 12px 0; padding: 14px 18px; border-radius: 6px; background: var(--
       <text x="331" y="346" text-anchor="middle" fill="#6d777c" font-size="13">runner</text>
     </svg>
     <div>
-      <table class="num">
-        <thead><tr><th></th><th>File name</th><th>Duration</th></tr></thead>
-        <tbody>
-          <tr><td>Slowest runner</td><td>74 min</td><td class="pos">47 min</td></tr>
-          <tr><td>Fastest runner</td><td>18 min</td><td>45 min</td></tr>
-          <tr><td>Runners</td><td>8</td><td>8</td></tr>
-          <tr><td>Tests</td><td>2,140</td><td>2,140</td></tr>
-        </tbody>
-      </table>
+      <div>
+        <p class="table-head">Nightly suite</p>
+        <table class="num">
+          <thead><tr><th></th><th>File name</th><th>Duration</th></tr></thead>
+          <tbody>
+            <tr><td>Slowest runner</td><td>74 min</td><td class="pos">47 min</td></tr>
+            <tr><td>Fastest runner</td><td>18 min</td><td>45 min</td></tr>
+            <tr><td>Runners</td><td>8</td><td>8</td></tr>
+            <tr><td>Tests</td><td>2,140</td><td>2,140</td></tr>
+          </tbody>
+        </table>
+      </div>
       <p class="note">Each test's duration is its median over the last seven nightly runs.</p>
     </div>
   </div>

@@ -188,7 +188,7 @@ Place a plot's or diagram's interpretation and a table's quantitative interpreta
 
 Figure titles are optional and name what is drawn without repeating the lead or asserting an undrawn conclusion or shape metaphor. Captions name the figure's argumentative role.
 
-5.9 **Put entities or conditions in table rows.** Use rows for entities or conditions unless transposing clarifies comparison. Rows and columns must belong to their header's set at the same grouping level. Put conclusions and facts of another kind outside the table. Aggregates computed from member rows or columns may remain if labeled and visually set apart. Order entries meaningfully, state units once, identify sources of differing measurements, and keep group conditions and needed explanation with results. A full-page table must complete its comparison.
+5.9 **Head every table and put entities in its rows.** Give every table a short heading at its top left naming what its rows are, as concise as Load features. Use rows for entities or conditions unless transposing clarifies comparison. Rows and columns must belong to their header's set at the same grouping level. Put conclusions and facts of another kind outside the table. Aggregates computed from member rows or columns may remain if labeled and visually set apart. Order entries meaningfully, state units once, identify sources of differing measurements, and keep group conditions and needed explanation with results. A full-page table must complete its comparison.
 
 When a column repeats one value in every row, state the value once outside the columns and drop the column. Keep the column when that value is a measured number or when the column is one of several compared columns and another of them varies.
 

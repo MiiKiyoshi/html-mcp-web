@@ -323,6 +323,8 @@ ul.notes li { margin-bottom: 3px; }
    math takes a pitch that leaves the math the gap text has. */
 ul.notes li:has(.katex) { line-height: 1.8; }
 .units { margin: 0 0 4px; color: var(--muted); font-size: 13px; text-align: right; }
+/* A slide table's heading: the name of the set its rows belong to, at the table's top left. */
+.table-head { margin: 0 0 2px; color: var(--primary); font-size: 14px; font-weight: 700; text-align: left; }
 .feedback { margin-top: 16px; padding: 10px 0 10px 16px; border-left: 3px solid var(--accent); color: var(--ink-soft); font-size: 17px; }
 .feedback b { margin-right: 8px; }
 /* A labelled block of points raised about the work: the label on its own line, then the
