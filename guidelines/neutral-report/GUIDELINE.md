@@ -68,6 +68,8 @@ If the needed explanation exceeds a page limit, reduce the scope within authoriz
 4. Update the affected records, then the needed prerequisites, steps, conditions, and evidence.
 5. Reassess the section map before placing content.
 
+2.10 **Keep each section to its role.** A section holds only the content of its role: background the method needs in the background, the method's rules, steps, inputs, and outputs in the method, the conditions, settings, and benchmarks in the setup, and measured values with their interpretation in the results. Outside the results, show no measured value, result, or instance taken from a particular run, under 5.6. Where such a section must show the form of an output or record, read several real ones and show the form they share, with placeholders for their values and names.
+
 ## Article 3. Draft sections
 
 3.1 **Draft in reading order, not source order.** Draft in reading order, applying 1.4 to each paragraph, figure, table, and equation and establishing missing prerequisites and relationships before dependent content. This order, not source order, determines what comes next.
@@ -212,7 +214,7 @@ A list of names, such as datasets or models with their sizes or roles, goes in a
 
 1. Chain. Read each rendered section as its reader, in reading order, using only the reader knowledge recorded under 2.1 and 2.5 and earlier sections. Write the answer it leaves beside its planned answer in the planning records. Check that each value or claim the answer rests on follows from those alone. The author's knowledge, records, and sources make missing steps look present, so consult them only to fill a gap the report shows.
 2. Outcome. Check that these answers establish the required outcome, connecting the needed problem, premises, method, and effect.
-3. Structure. Find answers that differ from the plan, missing connections, relations 5.1 calls for drawing that are only stated, and elements that fail 1.4, asking of each label, number, unit, and note what it gives that the names, figures, and earlier content do not. Check the section order and headings against Article 6.
+3. Structure. Find content outside its section's role under 2.10. Find answers that differ from the plan, missing connections, relations 5.1 calls for drawing that are only stated, and elements that fail 1.4, asking of each label, number, unit, and note what it gives that the names, figures, and earlier content do not. Check the section order and headings against Article 6.
 4. Form. Read the verb of every sentence, title, and label whose subject is not a person, and rewrite each that 4.2 forbids. Check rendered content against Articles 2 to 6, including 4.5, 4.6, and figures and tables under 5.8 and 5.9. Compare it with requested references.
 5. Layout. Run the layout check and clear its errors under 6.5.
 
