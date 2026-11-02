@@ -397,8 +397,11 @@ pre { margin: 12px 0; padding: 14px 18px; border-radius: 6px; background: var(--
 
 /* ---- Speaker script: follows its page in the flow ---- */
 .script-block { width: 1280px; height: 164px; padding: 10px 16px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; background: #f8f9f8; }
-.script-text { color: #2c3439; font-size: 16px; line-height: 24px; }
-.script-text p { margin: 0; font-size: 16px; line-height: 24px; }
+/* The line pitch follows the letters: a reader that holds small text at a minimum size
+   keeps a zoomed script's letters at that floor, and a fixed pitch laid the lines over one
+   another. */
+.script-text { color: #2c3439; font-size: 16px; line-height: 1.5; }
+.script-text p { margin: 0; font-size: 16px; line-height: 1.5; }
 
 @media screen {
   main.pages section.page { border-radius: 10px; box-shadow: 0 2px 14px rgba(25, 35, 42, .09); }
@@ -408,13 +411,15 @@ pre { margin: 12px 0; padding: 14px 18px; border-radius: 6px; background: var(--
      content, so the slide came out stretched sideways. The viewer sets the attribute below
      and states the size itself, and the pptx export states it again, so this is for the
      file on its own. --deck-fit is the shrink that keeps a page inside a narrower window;
-     the negative margins give back the room the unscaled box would still hold. */
+     the negative margins give back the room the unscaled box would still hold. A script
+     is as tall as its text and laid out smaller with zoom, so the flow holds only the room
+     it shows, and it sits half the gap between pages below its own page. */
   html:not([data-html-mcp-layout]) body { margin: 0; }
   html:not([data-html-mcp-layout]) main.pages {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 24px;
+    gap: calc(24px * var(--deck-fit, 1));
     padding: 24px 0;
   }
   html:not([data-html-mcp-layout]) main.pages > section.page {
@@ -429,9 +434,10 @@ pre { margin: 12px 0; padding: 14px 18px; border-radius: 6px; background: var(--
   }
   html:not([data-html-mcp-layout]) main.pages > .script-block {
     width: 1280px;
-    transform: scale(var(--deck-fit, 1));
-    transform-origin: top center;
-    margin: 0 calc(1280px * (var(--deck-fit, 1) - 1) / 2);
+    height: auto;
+    overflow: visible;
+    zoom: var(--deck-fit, 1);
+    margin: -12px 0 0;
   }
 }
 @media print {
