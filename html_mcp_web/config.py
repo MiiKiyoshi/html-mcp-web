@@ -105,6 +105,16 @@ class Config:
                     raise ValueError(
                         f"artifacts {other!r} and {artifact_id!r} keep their files in one folder, "
                         f"{folder!r}. Give each artifact a folder of its own for its content and main files")
+        # The review server serves and watches only the config's folder.
+        if config_path is not None:
+            root = config_path.parent.resolve()
+            for artifact_id, artifact in artifacts.items():
+                for name in (artifact.main, artifact.content):
+                    if name is not None and not (root / name).resolve().is_relative_to(root):
+                        raise ValueError(
+                            f"artifact {artifact_id!r} names {name!r} outside {root}. An artifact's files sit in "
+                            f"the config's folder or a subfolder, and a config is found from every folder below "
+                            f"it, so a config in a folder that holds the document serves it")
         guideline = data.get("guideline")
         if guideline is not None and (
             not isinstance(guideline, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", guideline)

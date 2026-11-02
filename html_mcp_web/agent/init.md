@@ -8,7 +8,9 @@ discovered config and an existing binding may differ. A successful binding is re
 the MCP process is restarted.
 
 A subfolder requested for the document belongs in main and content, which are resolved
-relative to the config's directory. The artifact's folder is the user's to choose, and setup
+relative to the config's directory and name files in it or its subfolders. A document outside
+the startup directory is served by a config in a folder that holds both, found from the
+startup directory as its parent. The artifact's folder is the user's to choose, and setup
 asks for it unless the user already named it. The recommended place is a folder of its own
 under an `artifacts` folder of the project, `artifacts/<name>/`, holding its main, its content
 and its floorplan. Two artifacts never keep their main or content in one folder: the

@@ -97,7 +97,8 @@ class ProjectBinding:
         if client is None:
             raise RuntimeError(
                 f"this folder is not set up for review: {DEFAULT_CONFIG_NAME} was not found from "
-                f"{self.start_dir}. Ask the user whether to set it up now; if they agree, follow {INIT_GUIDE} with {CLI}."
+                f"{self.start_dir}. A config written here serves the HTML files in this folder and its subfolders. "
+                f"Ask the user whether to set it up now; if they agree, follow {INIT_GUIDE} with {CLI}."
             )
         return client
 

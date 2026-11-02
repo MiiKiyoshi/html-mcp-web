@@ -110,6 +110,16 @@ def test_artifact_main_files_are_unique() -> None:
         }})
 
 
+def test_artifact_files_sit_under_the_config_folder(tmp_path: Path) -> None:
+    config_path = tmp_path / "project" / ".html-mcp-web.yaml"
+    config = Config.from_dict({"artifacts": {"slides": artifact(main="decks/talk/slides.html")}}, config_path)
+    assert get_main_file(config, "slides") == tmp_path / "project" / "decks" / "talk" / "slides.html"
+    for files in ({"main": "../elsewhere/slides.html"},
+                  {"template": "neutral", "content": "/elsewhere/content.html"}):
+        with pytest.raises(ValueError, match="config's folder or a subfolder"):
+            Config.from_dict({"artifacts": {"slides": artifact(**files)}}, config_path)
+
+
 def test_template_name_is_validated() -> None:
     with pytest.raises(ValueError, match="directory name"):
         Config.from_dict({"artifacts": {"slides": artifact(template="../evil", content="content.html")}})
