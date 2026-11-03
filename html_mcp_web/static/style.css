@@ -43,6 +43,9 @@ button:disabled { cursor: default; opacity: .6; }
      button. */
   flex-wrap: wrap;
   gap: 1rem;
+  /* The same height as the workspace's toolbar under it, whose view tabs carry a border
+     more than these tabs do, so that neither row's faces set it. */
+  min-height: 2.2rem;
   padding: .2rem .8rem;
   border-bottom: 1px solid var(--line);
   background: var(--paper);
@@ -100,6 +103,7 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
   display: flex;
   align-items: center;
   gap: 1rem;
+  min-height: 2.2rem;
   padding: .2rem .8rem;
   border-bottom: 1px solid var(--line);
   background: var(--paper);

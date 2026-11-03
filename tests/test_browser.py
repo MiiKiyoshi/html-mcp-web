@@ -3390,6 +3390,10 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
           const doc = frame.contentDocument;
           const view = frame.contentWindow;
           const first = doc.querySelector("#svg-l1"), second = doc.querySelector("#svg-l2");
+          // In the pane's middle, wherever the faces this host has leave the drawing, and
+          // back where it was once these lines are measured.
+          const scrolled = [doc.scrollingElement.scrollTop, document.querySelector("#artifact-pane").scrollTop];
+          doc.querySelector("#svg-lines").scrollIntoView({block: "center"});
           const selection = view.getSelection();
           selection.removeAllRanges();
           const range = doc.createRange();
@@ -3414,7 +3418,7 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
                   top: at(upper.x, upper.y)[1],
                   bottom: at(lastIncluded.x, lastIncluded.y + lastIncluded.height)[1],
                   upperWidth: width(6, secondStart),
-                  lowerWidth: width(secondStart, secondStart + 6)};
+                  lowerWidth: width(secondStart, secondStart + 6), scrolled};
         ''')
         wait_until(lambda: browser.execute_script(
             'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
@@ -3450,6 +3454,11 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
         assert len(bands) == 2, bands
         assert abs(bands[0] - spanned["upperWidth"]) <= 3, (bands, spanned)
         assert abs(bands[1] - spanned["lowerWidth"]) <= 3, (bands, spanned)
+        browser.execute_script('''
+          const [inside, pane] = arguments[0];
+          document.querySelector("#artifact-frame").contentDocument.scrollingElement.scrollTop = inside;
+          document.querySelector("#artifact-pane").scrollTop = pane;
+        ''', script_args=[spanned["scrolled"]])
 
         # Chromium hands a character's extent back divided by the scale the page is drawn
         # at, while the screen matrix carries that scale; a label on a page drawn at 0.76 was
@@ -5210,7 +5219,9 @@ def test_a_label_given_a_box_takes_the_size_the_box_holds(tmp_path: Path) -> Non
     smallest and reported as not fitting."""
     from html_mcp_web.slides import build
 
-    short = "a card with a few words on it"
+    # One line in any face at the largest size, so whether its spaces open past the
+    # doubling never turns on where a host's face breaks it.
+    short = "a few words"
     long_words = ("a card whose sentence keeps going for long enough to want four or five "
                   "lines of its own inside the very same box")
     content = tmp_path / "content.html"
@@ -5309,7 +5320,7 @@ return {short: read("short"), long: read("long"), loose: read("loose"), cramped:
         errors = [error for error in state["layout_check"]["errors"] if "svg#fitted" in error]
         assert any(f'is loose in 188x80 at {seen["loose"]["size"]}px' in error for error in errors), errors
         assert any("does not fit 100x40 at 12px" in error for error in errors), errors
-        assert not any('"a card with a few words on it"' in error for error in errors), errors
+        assert not any(f'"{short}"' in error for error in errors), errors
     finally:
         if browser is not None:
             try:
