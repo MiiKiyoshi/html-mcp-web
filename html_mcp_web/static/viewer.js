@@ -353,6 +353,18 @@ function syncSourceCommentMarkers() {
   }
 }
 
+// The editor's type size, kept for next time. Stepped by a pixel between 10 and 28.
+function sourceFontSize() {
+  const stored = Number(localStorage.getItem("htmlMcpSourceFontSize"));
+  return stored >= 10 && stored <= 28 ? stored : 13;
+}
+
+function stepSourceFontSize(step) {
+  const size = Math.min(28, Math.max(10, sourceFontSize() + step));
+  localStorage.setItem("htmlMcpSourceFontSize", String(size));
+  state.editor?.setFontSize(`${size}px`);
+}
+
 async function initializeSourceEditor() {
   if (state.editor !== null) return;
   if (window.ace === undefined) throw new Error("The source editor did not load");
@@ -363,7 +375,7 @@ async function initializeSourceEditor() {
   editor.session.setMode("ace/mode/html");
   editor.session.setUseWrapMode(true);
   editor.setShowPrintMargin(false);
-  editor.setOptions({ fontSize: "13px", scrollPastEnd: 0.25 });
+  editor.setOptions({ fontSize: `${sourceFontSize()}px`, scrollPastEnd: 0.25 });
   editor.session.on("change", () => {
     if (!state.sourceLoading) setSourceDirty(true);
   });
@@ -2333,6 +2345,8 @@ function attachControls() {
   $("#source-reload-btn").addEventListener("click", () => {
     loadSource(true).catch((error) => alert(`Could not reload: ${error.message}`));
   });
+  $("#source-font-smaller-btn").addEventListener("click", () => stepSourceFontSize(-1));
+  $("#source-font-larger-btn").addEventListener("click", () => stepSourceFontSize(1));
   $("#source-comment-btn").addEventListener("click", openSourceCommentCompose);
   for (const button of document.querySelectorAll(".view-tab")) {
     button.addEventListener("click", () => {

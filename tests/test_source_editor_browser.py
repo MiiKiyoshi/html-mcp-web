@@ -126,6 +126,14 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         wait_until(lambda: browser.execute_script(
             'const page = window.wrappedJSObject || window;'
             'return page.ace && page.ace.edit("source-editor").getValue().includes("SELECT START")'))
+        # A− and A+ step the editor's type by a pixel and keep the size for the next visit.
+        font_size = 'return (window.wrappedJSObject || window).ace.edit("source-editor").getFontSize();'
+        assert browser.execute_script(font_size) == "13px"
+        for button in ("larger", "larger", "smaller"):
+            browser.execute_script(f'document.querySelector("#source-font-{button}-btn").click()')
+        assert browser.execute_script(font_size) == "14px"
+        assert browser.execute_script('return localStorage.getItem("htmlMcpSourceFontSize")') == "14"
+        browser.execute_script('document.querySelector("#source-font-smaller-btn").click()')
         assert browser.execute_script(
             'return document.querySelector("#source-file").textContent') == "slides.html"
         selected = browser.execute_script('''
