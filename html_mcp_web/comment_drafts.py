@@ -53,6 +53,9 @@ def _anchor_line(anchor: dict) -> str:
                 f"{' (stale)' if anchor['stale'] else ''} «{anchor['quote']}»")
     if anchor["kind"] == "page":
         return f"Anchor: page {anchor['number']}, {anchor['title']}"
+    if anchor["kind"] == "area":
+        x1, y1, x2, y2 = anchor["bbox"]
+        return f"Anchor: page {anchor['number']}, {anchor['title']}, the box {x1:g},{y1:g} to {x2:g},{y2:g} in page pixels"
     return "Anchor: the whole artifact"
 
 

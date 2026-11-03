@@ -91,6 +91,21 @@ class PageAnchor:
 
 
 @dataclass
+class AreaAnchor:
+    """A box drawn on a page, for what has no text to select, such as part of a figure.
+    The box is in page pixels, the unit layout() measures blocks in, and it keeps its page
+    by number as a page comment does."""
+
+    number: int
+    title: str
+    bbox: tuple[float, float, float, float]
+    kind: Literal["area"] = "area"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"kind": self.kind, "number": self.number, "title": self.title, "bbox": list(self.bbox)}
+
+
+@dataclass
 class SourceAnchor:
     """Exact selected source characters with enough context to reattach after edits."""
 
@@ -120,7 +135,7 @@ class SourceAnchor:
         }
 
 
-Anchor = TextAnchor | ArtifactAnchor | PageAnchor | SourceAnchor
+Anchor = TextAnchor | ArtifactAnchor | PageAnchor | AreaAnchor | SourceAnchor
 
 
 def anchor_from_dict(data: dict[str, Any]) -> Anchor:
@@ -144,6 +159,14 @@ def anchor_from_dict(data: dict[str, Any]) -> Anchor:
         if number < 1:
             raise ValueError("page anchor number must be 1 or greater")
         return PageAnchor(number=number, title=str(data["title"]))
+    if kind == "area":
+        number = int(data["number"])
+        if number < 1:
+            raise ValueError("area anchor number must be 1 or greater")
+        x1, y1, x2, y2 = (round(float(value), 1) for value in data["bbox"])
+        if not (0 <= x1 < x2 and 0 <= y1 < y2):
+            raise ValueError("area anchor bbox must be x1, y1, x2, y2 with x1 < x2 and y1 < y2, from 0")
+        return AreaAnchor(number=number, title=str(data["title"]), bbox=(x1, y1, x2, y2))
     if kind == "source":
         anchor = SourceAnchor(
             file=str(data["file"]),

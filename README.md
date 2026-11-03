@@ -66,6 +66,9 @@ to handle your comments when you press **Call agent**. Open that address in your
 
 - Select text on the rendered page and press the **Comment** button beside it. **+ Note**
   comments on the whole artifact.
+- The box tool, beside the search button over the artifact, turns a drag on a page into a
+  box to comment on what has no text to select, such as part of a figure. The agent reads
+  the box in page pixels and can look at just that part.
 - Press **Call agent** when your comments are ready. The agent edits the source and replies
   in the same thread.
 - **Resolve** a thread whose edit satisfies you, or **Reply** in it when it does not.

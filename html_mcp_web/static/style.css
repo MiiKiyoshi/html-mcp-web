@@ -186,10 +186,14 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 /* Find in the artifact: the button past the view tabs at the toolbar's right end, and the bar
    it opens at the artifact's top right, over the deck rather than pushing it down. The button
    keeps its place in the source view, where the editor has a find of its own. */
-#search-btn { display: inline-flex; align-items: center; padding: .1rem .4rem; line-height: 1; }
-#search-btn svg { display: block; }
-#search-btn.active { background: var(--accent-soft); border-color: var(--accent); }
-.layout.view-source #search-btn { visibility: hidden; }
+#search-btn,
+#area-btn { display: inline-flex; align-items: center; padding: .1rem .4rem; line-height: 1; }
+#search-btn svg,
+#area-btn svg { display: block; }
+#search-btn.active,
+#area-btn.active { background: var(--accent-soft); border-color: var(--accent); }
+.layout.view-source #search-btn,
+.layout.view-source #area-btn { visibility: hidden; }
 .search-bar {
   position: absolute; z-index: 35; top: 8px; right: 18px; max-width: calc(100% - 36px);
   display: flex; align-items: center; gap: 4px; padding: 4px 6px;

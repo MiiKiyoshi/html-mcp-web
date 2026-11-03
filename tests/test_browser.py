@@ -1864,6 +1864,106 @@ return {paragraph: size(page.querySelector('p')),
         shutil.rmtree(profile, ignore_errors=True)
 
 
+def test_the_area_button_draws_a_box_to_comment_on(tmp_path: Path) -> None:
+    """With the box tool on, a drag on a page draws a box even where it starts on text. The box is
+    stored in page pixels, drawn back on its page, and cropped by the render as image(bbox)
+    asks, and the button comes up again once it is drawn."""
+    import struct
+
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_area_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        base = f"http://127.0.0.1:{port}"
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=1400, height=900)
+        browser.navigate(base)
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        page = browser.execute_script('''
+          const frame = document.querySelector("#artifact-frame");
+          const page = frame.contentDocument.querySelector("main.pages > section.page");
+          const outer = frame.getBoundingClientRect();
+          const rect = page.getBoundingClientRect();
+          return [outer.left + rect.left, outer.top + rect.top, rect.width / page.offsetWidth];
+        ''')
+
+        def at(x, y):
+            return int(page[0] + x * page[2]), int(page[1] + y * page[2])
+
+        browser.find_element("css selector", "#area-btn").click()
+        assert browser.execute_script(
+            'return document.querySelector("#area-btn").getAttribute("aria-pressed")') == "true"
+        start, end = at(30, 40), at(430, 240)   # from the heading's words into empty page
+        marionette.ActionSequence(browser, "pointer", "mouse", {"pointerType": "mouse"}) \
+            .pointer_move(*start).pointer_down() \
+            .pointer_move(end[0], end[1], duration=300).pointer_up().perform()
+        wait_until(lambda: browser.execute_script('return document.querySelector("#compose-dialog").open'))
+        assert browser.execute_script(
+            'return document.querySelector("#compose-anchor").textContent') == "A box on page 1: First"
+        assert browser.execute_script('''
+          return document.querySelector("#area-btn").getAttribute("aria-pressed") === "false"
+            && !document.querySelector("#artifact-frame").contentDocument.documentElement
+                 .classList.contains("html-mcp-area-mode")
+            && document.querySelector("#artifact-frame").contentWindow.getSelection().isCollapsed;
+        ''')
+        browser.execute_script('''
+          document.querySelector("#compose-text").value = "this box";
+          document.querySelector("#compose-form").requestSubmit();
+        ''')
+        comments = wait_until(lambda: get_json(f"{base}/artifacts/slides/comments")["comments"] or False)
+        anchor = comments[0]["anchor"]
+        assert (anchor["kind"], anchor["number"], anchor["title"]) == ("area", 1, "First")
+        assert all(abs(got - want) <= 2 / page[2] for got, want in zip(anchor["bbox"], (30, 40, 430, 240))), anchor
+
+        drawn = wait_until(lambda: browser.execute_script(f'''
+          const mark = document.querySelector("#artifact-frame").contentDocument
+            .querySelector('.html-mcp-area[data-comment-id="{comments[0]["id"]}"]');
+          return mark && [mark.offsetLeft, mark.offsetTop, mark.offsetWidth, mark.offsetHeight];
+        '''))
+        x1, y1, x2, y2 = anchor["bbox"]
+        assert drawn == [round(x1), round(y1), round(x2 - x1), round(y2 - y1)]
+
+        with urllib.request.urlopen(
+                f"{base}/artifacts/slides/render/page?page=1&dpi=72&bbox={x1},{y1},{x2},{y2}", timeout=60) as response:
+            png = response.read()
+        width, height = struct.unpack(">II", png[16:24])
+        # Page pixels are 0.75 points, and the crop keeps 8 pixels around the box.
+        assert abs(width - (x2 - x1 + 16) * 0.75) <= 2 and abs(height - (y2 - y1 + 16) * 0.75) <= 2
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
+
+
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) -> None:
     """Side by side, a phone left the artifact 150px of a 450px screen and pushed the row of

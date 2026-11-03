@@ -1048,6 +1048,14 @@ async def test_render_page_crops_to_a_target_block(client, monkeypatch) -> None:
     whole = await test_client.get("/artifacts/slides/render/page?page=1&dpi=96")
     assert Image.open(io.BytesIO(await whole.read())).size[0] >= 1279
 
+    # A box in page pixels, as an area comment holds it, crops the same way as the block.
+    boxed = await test_client.get("/artifacts/slides/render/page?page=1&dpi=96&bbox=100,100,500,400")
+    assert boxed.status == 200
+    width, height = Image.open(io.BytesIO(await boxed.read())).size
+    assert abs(width - 416) <= 1 and abs(height - 316) <= 1
+    for query in ("bbox=400,100,100,300", "bbox=1,2,3", "bbox=100,100,400,300&target=p1%3A0"):
+        assert (await test_client.get(f"/artifacts/slides/render/page?page=1&dpi=96&{query}")).status == 400
+
     # The ref names the page it lives on; asking for it on another page is a mistake,
     # an unknown ref is not found, and without a fresh measurement the place is unknown.
     assert (await test_client.get("/artifacts/slides/render/page?page=2&dpi=96&target=p1%3A0")).status == 400

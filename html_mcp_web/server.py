@@ -838,22 +838,37 @@ class HtmlReviewServer:
         dpi, gray = self._render_options(request)
         # A one-line fix in one block does not need the whole page back: a target ref crops
         # the render to that block, at a fraction of the tokens the full page costs.
+        # A box in page pixels, as an area comment holds one, crops the same way.
         target_ref = request.query.get("target")
+        drawn = request.query.get("bbox")
+        if target_ref is not None and drawn is not None:
+            raise web.HTTPBadRequest(text="target and bbox each name a part of the page, so give one")
         target_box = None
-        if target_ref is not None:
+        if target_ref is not None or drawn is not None:
             self.drop_stale_layout()
             if runtime.space_revision != runtime.revision:
                 await self._ensure_layout_checked(runtime, request.host)
             if runtime.space_revision != runtime.revision:
                 raise web.HTTPConflict(
-                    text="the layout check of the current revision did not finish, so the target's "
-                         "place is unknown. Try again")
-            if not target_ref.startswith(f"p{page}:"):
+                    text="the layout check of the current revision did not finish, so the page's "
+                         "size in pixels is unknown. Try again")
+            if target_ref is not None and not target_ref.startswith(f"p{page}:"):
                 raise web.HTTPBadRequest(text=f"target {target_ref!r} is not on page {page}")
             space_page = next((value for value in runtime.space_pages if value["number"] == page), None)
-            if space_page is None or target_ref not in space_page["nodes"]:
-                raise web.HTTPNotFound(text=f"unknown target {target_ref!r} on page {page}")
-            target_box = (space_page["nodes"][target_ref]["bbox"], space_page["bbox"])
+            if space_page is None:
+                raise web.HTTPNotFound(text=f"page {page} is not in the artifact")
+            if target_ref is not None:
+                if target_ref not in space_page["nodes"]:
+                    raise web.HTTPNotFound(text=f"unknown target {target_ref!r} on page {page}")
+                target_box = (space_page["nodes"][target_ref]["bbox"], space_page["bbox"])
+            else:
+                try:
+                    x1, y1, x2, y2 = (float(value) for value in drawn.split(","))
+                except ValueError as error:
+                    raise web.HTTPBadRequest(text="bbox reads x1,y1,x2,y2 in page pixels") from error
+                if not (x1 < x2 and y1 < y2):
+                    raise web.HTTPBadRequest(text="bbox needs x1 < x2 and y1 < y2")
+                target_box = ((x1, y1, x2 - x1, y2 - y1), space_page["bbox"])
         pdf = await self._printed(runtime)
         pymupdf = pdf_reader()
         with pymupdf.open(stream=pdf, filetype="pdf") as doc:

@@ -353,12 +353,13 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         page: Annotated[int | None, Field(ge=1, description="Omit with save to write every page, or the pages named, as p<N>.png into out as a folder.")] = None,
         pages: Annotated[str | None, Field(description='With save and no page: the pages to write, as "47-69" or "47-52,57,62-63".')] = None,
         target: Annotated[str | None, Field(description="A block ref from layout() (e.g. p8:1.1.0.2): render just that block, for fewer tokens.")] = None,
+        bbox: Annotated[tuple[float, float, float, float] | None, Field(description="x1, y1, x2, y2 in page pixels, as an area comment gives them: render just that box, for fewer tokens.")] = None,
         dpi: Annotated[int, Field(ge=36, le=300, description="96 reads text. 150 or more shows fine detail at more tokens.")] = 96,
         grayscale: Annotated[bool, Field(description="Set false when colour itself is being checked.")] = True,
         save: Annotated[bool, Field(description="Write a png and return its path, to show the user without spending image tokens.")] = False,
         out: Annotated[str | None, Field(description="With save: the png path, or the folder of pages. Relative to the project, or absolute or from ~ for a place outside it.")] = None,
     ) -> "Image":
-        """Render one page, or one block of it, as an image."""
+        """Render one page, or one block or box of it, as an image."""
         client = binding.require_client()
         # A grey picture says nothing of whether the page is grey, so a grey render says so.
         grey = "Grayscale render. Pass grayscale=false to see colour."
@@ -366,7 +367,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         if page is None:
             # Pages handed to a reader one call each spent an answer per page in the
             # transcript; one call writes them all from one print.
-            if not save or target is not None:
+            if not save or target is not None or bbox is not None:
                 raise ValueError("page is needed unless save writes every page or the pages named")
             folder = out if out is not None else f".html-mcp-web/renders/{artifact}"
             chosen = f"&pages={quote(pages)}" if pages is not None else ""
@@ -380,13 +381,16 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         params = f"?page={page}&{colour}"
         if target is not None:
             params += f"&target={quote(target)}"
+        if bbox is not None:
+            params += f"&bbox={','.join(f'{value:g}' for value in bbox)}"
         if not save:
             data = await client.get_bytes(f"/artifacts/{artifact}/render/page{params}", timeout=120.0)
             return [Image(data=data, format="png"), grey] if grayscale else Image(data=data, format="png")
         # The server writes the file, so its watcher does not take the render for an edit.
         # The answer is the file's place alone: the page, scale and colour are what the
         # caller asked for.
-        name = f"{artifact}-{target.replace(':', '-')}.png" if target is not None else f"{artifact}-p{page}.png"
+        name = (f"{artifact}-{target.replace(':', '-')}.png" if target is not None
+                else f"{artifact}-p{page}-box.png" if bbox is not None else f"{artifact}-p{page}.png")
         relative = out if out is not None else f".html-mcp-web/renders/{name}"
         saved = await client.request_json(
             "GET", f"/artifacts/{artifact}/render/page{params}&save={quote(relative)}", timeout=120.0)

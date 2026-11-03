@@ -106,6 +106,8 @@ def agent_comment_summary(comment: dict[str, Any], with_status: bool) -> dict[st
     if anchor["kind"] == "page":
         anchor_summary["number"] = anchor["number"]
         anchor_summary["title"] = anchor["title"]
+    elif anchor["kind"] == "area":
+        anchor_summary.update(number=anchor["number"], title=anchor["title"], bbox=anchor["bbox"])
     elif anchor["kind"] == "text":
         # A request is mostly a few words about the text it is anchored to; without the
         # quote, choosing a thread took reading it.

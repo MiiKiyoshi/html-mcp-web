@@ -90,6 +90,7 @@ export function createComments(dependencies) {
     if (anchor.kind === "artifact") return { label: "artifact", quote: "Whole artifact" };
     if (anchor.kind === "text") return { label: "", quote: anchor.quote };
     if (anchor.kind === "page") return { label: `p${anchor.number}`, quote: anchor.title };
+    if (anchor.kind === "area") return { label: `p${anchor.number} area`, quote: anchor.title };
     if (anchor.kind === "source") {
       const end = anchor.line_end === anchor.line_start ? "" : `-${anchor.line_end}`;
       return { label: `${anchor.file}:${anchor.line_start}${end}`, quote: anchor.quote };
@@ -503,6 +504,12 @@ export function createComments(dependencies) {
       openSourceLocation(comment.anchor).catch((error) => alert(`Could not open source: ${error.message}`));
       return;
     }
+    if (comment.anchor.kind === "area") {
+      frameDocument().querySelector(`.html-mcp-area[data-comment-id="${CSS.escape(commentId)}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      flashMarks(commentId);
+      return;
+    }
     if (comment.anchor.kind !== "text") return;
     const range = resolveAnchor(comment.anchor);
     // A comment whose text is gone is not stranded: the page carries a dashed mark where
@@ -513,6 +520,10 @@ export function createComments(dependencies) {
         ? range.startContainer
         : range.startContainer.parentElement);
     element?.scrollIntoView({ behavior: "smooth", block: "center" });
+    flashMarks(commentId);
+  }
+
+  function flashMarks(commentId) {
     setTimeout(() => {
       const marks = frameDocument().querySelectorAll(`[data-comment-id="${CSS.escape(commentId)}"]`);
       marks.forEach((mark) => mark.classList.add("flash"));
@@ -538,6 +549,7 @@ export function createComments(dependencies) {
   function composeAnchorText(anchor) {
     if (anchor.kind === "text") return anchor.quote;
     if (anchor.kind === "page") return `Page ${anchor.number}: ${anchor.title}`;
+    if (anchor.kind === "area") return `A box on page ${anchor.number}: ${anchor.title}`;
     if (anchor.kind === "source") return `${anchor.file}:${anchor.line_start}\n${anchor.quote}`;
     return "Whole artifact";
   }

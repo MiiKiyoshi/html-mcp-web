@@ -22,6 +22,7 @@ const state = {
   expanded: new Set(),
   picked: new Set(),
   focusedCommentId: null,
+  areaMode: false,
   activeForm: null,
   editingEntry: null,
   unattached: new Set(),
@@ -1509,6 +1510,9 @@ function ensureHighlightLayer(page) {
       .html-mcp-lost { position: absolute; border-radius: 2px; border: 1px dashed rgba(150, 122, 8, .8); background: rgba(246, 216, 74, .1); }
       .html-mcp-lost.flash { background: rgba(255, 177, 60, .4); }
       .html-mcp-highlight-badge.lost { border-style: dashed; color: #6d6650; background: #f6f1e2; }
+      .html-mcp-area { position: absolute; box-sizing: border-box; border: 2px solid rgba(171, 139, 0, .8); border-radius: 2px; background: rgba(246, 216, 74, .16); }
+      .html-mcp-area.flash { background: rgba(255, 177, 60, .4); }
+      html.html-mcp-area-mode, html.html-mcp-area-mode * { cursor: crosshair !important; user-select: none !important; -webkit-user-select: none !important; touch-action: none !important; }
     `;
     doc.head.appendChild(style);
   }
@@ -1582,8 +1586,26 @@ function renderHighlights() {
     return badge;
   };
   for (const comment of state.comments) {
-    if (comment.status !== "open" || comment.anchor.kind !== "text") continue;
+    if (comment.status !== "open" || !["text", "area"].includes(comment.anchor.kind)) continue;
     number += 1;
+    if (comment.anchor.kind === "area") {
+      // The box is in page pixels and the layer lies inside the page, so it is drawn as
+      // stored at every zoom.
+      const page = artifactPages()[comment.anchor.number - 1];
+      if (page === undefined) continue;
+      const [x1, y1, x2, y2] = comment.anchor.bbox;
+      const box = { left: x1, top: y1, width: x2 - x1, height: y2 - y1 };
+      const layer = ensureHighlightLayer(page);
+      const mark = frameDocument().createElement("div");
+      mark.className = "html-mcp-area";
+      mark.dataset.commentId = comment.id;
+      Object.assign(mark.style, {
+        left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px`,
+      });
+      layer.appendChild(mark);
+      layer.appendChild(numberedBadge(comment, number, box, false));
+      continue;
+    }
     const range = resolveAnchor(comment.anchor);
     const frame = range === null ? null : pageFrameFor(range.startContainer);
     if (frame === null) {
@@ -1628,6 +1650,77 @@ function renderHighlights() {
     renderComments();
     restoreCommentUi(ui);
   }
+}
+
+// While the Area button is down, a drag on a page draws a box instead of selecting text,
+// and the comment written for it opens when the drag ends. The box is kept in the page's
+// own pixels.
+function setAreaMode(on) {
+  state.areaMode = on;
+  const button = $("#area-btn");
+  button.classList.toggle("active", on);
+  button.setAttribute("aria-pressed", String(on));
+  frameDocument()?.documentElement.classList.toggle("html-mcp-area-mode", on);
+  if (on) frameWindow()?.getSelection()?.removeAllRanges();
+}
+
+function installAreaDrawing(doc) {
+  doc.documentElement.classList.toggle("html-mcp-area-mode", state.areaMode);
+  let drawing = null;
+  const pointOn = (page, event) => {
+    const rect = page.getBoundingClientRect();
+    const ratio = page.offsetWidth > 0 ? rect.width / page.offsetWidth : 1;
+    return {
+      x: Math.min(page.offsetWidth, Math.max(0, (event.clientX - rect.left) / ratio)),
+      y: Math.min(page.offsetHeight, Math.max(0, (event.clientY - rect.top) / ratio)),
+    };
+  };
+  const boxOf = ({ start, end }) => ({
+    left: Math.min(start.x, end.x), top: Math.min(start.y, end.y),
+    width: Math.abs(end.x - start.x), height: Math.abs(end.y - start.y),
+  });
+  doc.addEventListener("pointerdown", (event) => {
+    if (!state.areaMode || event.button !== 0) return;
+    const page = event.target.closest?.("body > main.pages > section.page");
+    if (!page) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const start = pointOn(page, event);
+    const mark = doc.createElement("div");
+    mark.className = "html-mcp-area";
+    ensureHighlightLayer(page).appendChild(mark);
+    drawing = { page, start, end: start, mark, pointer: event.pointerId };
+    event.target.setPointerCapture?.(event.pointerId);
+  }, true);
+  doc.addEventListener("pointermove", (event) => {
+    if (drawing === null || event.pointerId !== drawing.pointer) return;
+    event.preventDefault();
+    drawing.end = pointOn(drawing.page, event);
+    const box = boxOf(drawing);
+    Object.assign(drawing.mark.style, {
+      left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px`,
+    });
+  }, true);
+  const finish = (event) => {
+    if (drawing === null || event.pointerId !== drawing.pointer) return;
+    const done = drawing;
+    drawing = null;
+    done.mark.remove();
+    event.stopImmediatePropagation();
+    const box = boxOf(done);
+    // A click, not a box.
+    if (event.type !== "pointerup" || box.width < 4 || box.height < 4) return;
+    const index = artifactPages().indexOf(done.page);
+    setAreaMode(false);
+    openCompose({
+      kind: "area",
+      number: index + 1,
+      title: pageTitle(done.page, index),
+      bbox: [box.left, box.top, box.left + box.width, box.top + box.height].map((value) => Math.round(value)),
+    });
+  };
+  doc.addEventListener("pointerup", finish, true);
+  doc.addEventListener("pointercancel", finish, true);
 }
 
 function scheduleHighlights() {
@@ -1681,6 +1774,7 @@ function attachArtifactEvents(frame) {
   }
   state.currentPage = visiblePageNumber();
   renderPages();
+  installAreaDrawing(doc);
   doc.addEventListener("mouseup", () => setTimeout(showSelectionButton, 0), true);
   doc.addEventListener("keyup", () => setTimeout(showSelectionButton, 0), true);
   // A phone selects by holding a word and dragging the handles, and sends no mouseup for
@@ -2356,6 +2450,7 @@ function attachControls() {
   $("#selection-comment-btn").addEventListener("click", () => {
     if (state.selectionAnchor !== null) openCompose(state.selectionAnchor);
   });
+  $("#area-btn").addEventListener("click", () => setAreaMode(!state.areaMode));
   $("#artifact-comment-btn").addEventListener("click", () => openCompose({ kind: "artifact" }));
   $("#print-btn").addEventListener("click", printArtifact);
   $("#download-pdf-btn").addEventListener("click", (event) => download(event.currentTarget, "pdf"));

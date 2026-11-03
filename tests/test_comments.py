@@ -6,6 +6,7 @@ from html_mcp_web.comments import (
     Comment,
     CommentStore,
     DomPosition,
+    AreaAnchor,
     PageAnchor,
     SourceAnchor,
     TextAnchor,
@@ -83,6 +84,25 @@ def test_page_anchor_round_trips(tmp_path: Path) -> None:
 def test_page_anchor_rejects_number_below_one() -> None:
     with pytest.raises(ValueError, match="1 or greater"):
         anchor_from_dict({"kind": "page", "number": 0, "title": "Results"})
+
+
+def test_an_area_anchor_keeps_its_box_in_page_pixels(tmp_path: Path) -> None:
+    from html_mcp_web.comment_drafts import _anchor_line
+    from html_mcp_web.mcp_contract import agent_comment, agent_comment_summary
+
+    store = CommentStore(tmp_path / "comments.json")
+    created = store.add(anchor_from_dict(
+        {"kind": "area", "number": 2, "title": "Results", "bbox": [30.04, 40, 430.36, 240]}), "this plot")
+    loaded = store.get(created.id).to_dict()
+    assert loaded["anchor"] == {"kind": "area", "number": 2, "title": "Results", "bbox": [30.0, 40.0, 430.4, 240.0]}
+    assert isinstance(store.get(created.id).anchor, AreaAnchor)
+    # What the agent reads is the page and the box image(bbox) takes, and no more.
+    assert agent_comment(loaded)["anchor"] == loaded["anchor"]
+    assert agent_comment_summary(loaded, False)["anchor"] == loaded["anchor"]
+    assert _anchor_line(loaded["anchor"]) == "Anchor: page 2, Results, the box 30,40 to 430.4,240 in page pixels"
+    for bbox in ([40, 40, 30, 240], [-1, 0, 10, 10], [0, 0, 10]):
+        with pytest.raises(ValueError):
+            anchor_from_dict({"kind": "area", "number": 2, "title": "Results", "bbox": bbox})
 
 
 def test_source_anchor_keeps_exact_utf16_selection_and_reattaches(tmp_path: Path) -> None:
