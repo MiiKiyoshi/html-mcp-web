@@ -14,6 +14,11 @@
         <span id="main-file" class="main-file">loading</span>
         <span id="artifact-status" class="artifact-status">connecting</span>
       </div>
+      <nav class="view-tabs" aria-label="Workspace view">
+        <button class="view-tab active" type="button" data-view="preview">Preview</button>
+        <button class="view-tab" type="button" data-view="source">Source</button>
+        <button class="view-tab" type="button" data-view="split">Split</button>
+      </nav>
       <nav id="artifact-tabs" class="artifact-tabs" aria-label="Artifacts"></nav>
       <div class="topbar-actions">
         <button id="print-btn" type="button">Print</button>
@@ -44,11 +49,6 @@
               <rect x="7.8" y="1.5" width="6.7" height="13" rx=".8" fill="none" stroke="currentColor" stroke-width="1.2"/>
             </svg>
           </button>
-          <nav class="view-tabs" aria-label="Workspace view">
-            <button class="view-tab active" type="button" data-view="preview">Preview</button>
-            <button class="view-tab" type="button" data-view="source">Source</button>
-            <button class="view-tab" type="button" data-view="split">Split</button>
-          </nav>
           <button id="area-btn" type="button" title="Draw a box on a page to comment on it"
                   aria-label="Draw a box on a page to comment on it" aria-pressed="false">
             <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false">

@@ -108,14 +108,15 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
           const searchBox = document.querySelector("#search-btn").getBoundingClientRect();
           const areaBox = document.querySelector("#area-btn").getBoundingClientRect();
           const thumbsBox = document.querySelector("#thumbs-btn").getBoundingClientRect();
+          const artifactTabs = document.querySelector("#artifact-tabs").getBoundingClientRect();
           return {
             inTopbar: topbar.contains(tabs),
             inWorkspace: document.querySelector("#workspace").contains(tabs),
             toolbarAboveArtifact: toolbarBox.bottom <=
               document.querySelector("#artifact-pane").getBoundingClientRect().top + 1,
             fitInToolbar: toolbar.contains(fit),
-            tabsBesideThumbs: tabsBox.left - thumbsBox.right < 24,
-            boxFitSearchAtRight: tabsBox.right < areaBox.left && areaBox.right < fitBox.left
+            tabsLeftOfArtifactTabs: tabsBox.right <= artifactTabs.left,
+            boxFitSearchAtRight: thumbsBox.right < areaBox.left && areaBox.right < fitBox.left
               && fitBox.right < searchBox.left,
             searchAtRight: Math.abs(
               toolbarBox.right - searchBox.right - parseFloat(getComputedStyle(toolbar).paddingRight)
@@ -126,13 +127,13 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         ''')
         assert {key: placement[key] for key in (
             "inTopbar", "inWorkspace", "toolbarAboveArtifact", "fitInToolbar",
-            "tabsBesideThumbs", "boxFitSearchAtRight", "searchAtRight",
+            "tabsLeftOfArtifactTabs", "boxFitSearchAtRight", "searchAtRight",
         )} == {
-            "inTopbar": False,
-            "inWorkspace": True,
+            "inTopbar": True,
+            "inWorkspace": False,
             "toolbarAboveArtifact": True,
             "fitInToolbar": True,
-            "tabsBesideThumbs": True,
+            "tabsLeftOfArtifactTabs": True,
             "boxFitSearchAtRight": True,
             "searchAtRight": True,
         }
@@ -200,6 +201,7 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
             .key_up("m").key_up("\ue00a").key_up("\ue009").perform()
         wait_until(lambda: browser.execute_script('return document.querySelector("#compose-dialog").open'))
         browser.execute_script('document.querySelector("#compose-cancel").click()')
+        wait_until(lambda: browser.execute_script('return !document.querySelector("#compose-dialog").open'))
         assert browser.execute_script(
             'return document.querySelector("#source-file").textContent') == "slides.html"
         selected = browser.execute_script('''

@@ -13,6 +13,8 @@
   --accent: #647b95;
   --accent-soft: #ebe8df;
   --yellow: #f6d84a;
+  /* The bar along the top of each panel: the artifact's, the editor's and the comments'. */
+  --panel-bar: 2.2rem;
 }
 
 * { box-sizing: border-box; }
@@ -56,7 +58,9 @@ button:disabled { cursor: default; opacity: .6; }
 /* More tabs than the row holds scroll sideways, each label on one line: on a phone the
    labels broke over three lines and the tabs past the screen's right edge could not be
    reached. */
-.artifact-tabs { display: flex; align-self: stretch; min-width: 0; gap: 2px; padding-left: .75rem; border-left: 1px solid var(--line); overflow-x: auto; scrollbar-width: thin; }
+/* The view tabs sit on the left, as in the LaTeX review page, and the artifacts' tabs on the
+   right beside the actions. */
+.artifact-tabs { display: flex; align-self: stretch; min-width: 0; gap: 2px; margin-left: auto; padding-left: .75rem; border-left: 1px solid var(--line); overflow-x: auto; scrollbar-width: thin; }
 .artifact-tab { flex: none; white-space: nowrap; min-width: 72px; padding: .1rem .8rem; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: .82rem; }
 .artifact-tab.active { border-bottom-color: var(--accent); background: var(--accent-soft); color: #302e29; font-weight: 600; }
 .view-tabs { display: flex; align-self: stretch; }
@@ -65,7 +69,7 @@ button:disabled { cursor: default; opacity: .6; }
 .main-file { padding-right: .75rem; color: var(--muted); font-family: var(--mono); font-size: .82rem; }
 .artifact-status { align-self: stretch; display: flex; align-items: center; padding-left: .75rem; border-left: 1px solid var(--line); color: var(--muted); font-size: .82rem; }
 .artifact-status.error { color: #a23f34; }
-.topbar-actions { display: flex; flex: 0 0 auto; gap: .5rem; margin-left: auto; align-items: center; }
+.topbar-actions { display: flex; flex: 0 0 auto; gap: .5rem; align-items: center; }
 .topbar h1, .topbar-actions button, .download-btn { white-space: nowrap; }
 .topbar-actions button { padding: .1rem .55rem; border-radius: 3px; font-size: .82rem; }
 /* The scripts button is an icon that reads as a switch: lit while scripts show, plain
@@ -98,17 +102,21 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
   min-height: 0;
 }
 .workspace-toolbar {
-  grid-column: 1 / -1;
+  grid-column: 1;
   grid-row: 1;
   display: flex;
   align-items: center;
   gap: 1rem;
-  min-height: 2.2rem;
-  padding: .2rem .8rem;
+  min-height: var(--panel-bar);
+  padding: 0 .8rem;
   border-bottom: 1px solid var(--line);
   background: var(--paper);
 }
-#artifact-pane, #source-pane, #split-grip { grid-row: 2; }
+/* The artifact's bar sits over the artifact alone. The editor and the bar between the two
+   run from the top, so the editor's bar stands level with it. */
+#artifact-pane { grid-row: 2; }
+#source-pane, #split-grip { grid-row: 1 / -1; }
+.layout.view-source .workspace-toolbar { display: none; }
 #artifact-pane { position: relative; min-width: 0; min-height: 0; background: #faf8f2; }
 .layout.view-preview #source-pane { display: none; }
 .layout.view-source #artifact-pane { display: none; }
@@ -140,8 +148,8 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
   flex-wrap: wrap;
   align-items: center;
   gap: .45rem;
-  min-height: 36px;
-  padding: .3rem .5rem;
+  min-height: var(--panel-bar);
+  padding: .15rem .5rem;
   border-bottom: 1px solid var(--line);
   background: var(--bg);
 }
@@ -205,8 +213,6 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 #area-btn svg { display: block; }
 #search-btn.active,
 #area-btn.active { background: var(--accent-soft); border-color: var(--accent); }
-.layout.view-source #search-btn,
-.layout.view-source #area-btn { visibility: hidden; }
 .search-bar {
   position: absolute; z-index: 35; top: 8px; right: 18px; max-width: calc(100% - 36px);
   display: flex; align-items: center; gap: 4px; padding: 4px 6px;
@@ -324,13 +330,14 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 
 .sidebar-tabs {
   display: flex;
+  min-height: var(--panel-bar);
   border-bottom: 1px solid var(--line);
   background: var(--bg);
 }
 
 .tab-btn {
   flex: 1;
-  padding: .5rem;
+  padding: 0 .5rem;
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
