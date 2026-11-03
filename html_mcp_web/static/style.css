@@ -64,6 +64,7 @@ button:disabled { cursor: default; opacity: .6; }
 .artifact-tab { flex: none; white-space: nowrap; min-width: 72px; padding: .1rem .8rem; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: .82rem; }
 .artifact-tab.active { border-bottom-color: var(--accent); background: var(--accent-soft); color: #302e29; font-weight: 600; }
 .view-tabs { display: flex; align-self: stretch; }
+.topbar .view-tabs { padding-right: .75rem; border-right: 1px solid var(--line); }
 .view-tab { min-width: 58px; padding: .1rem .6rem; border: 0; border-top: 1px solid transparent; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: .82rem; }
 .view-tab.active { border-bottom-color: var(--accent); background: var(--accent-soft); color: #302e29; }
 .main-file { padding-right: .75rem; color: var(--muted); font-family: var(--mono); font-size: .82rem; }
@@ -319,6 +320,7 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
   #source-pane, #split-grip { grid-row: 2; }
   .layout.view-source .workspace-toolbar { display: flex; }
   .layout.view-source #search-btn,
+  .layout.view-source #scripts-btn,
   .layout.view-source #area-btn { visibility: hidden; }
   /* A phone zooms the whole page into a field smaller than 16px the moment it takes the
      cursor: writing a comment left the page zoomed, the source editor's hidden input

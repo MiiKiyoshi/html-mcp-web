@@ -942,7 +942,8 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert browser.execute_script('return document.title') == "slides.html"
         browser.find_element("css selector", '.artifact-tab:nth-child(2)').click()
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#main-file").textContent === "paper/report.html"'))
+            'return document.querySelector("#main-file").textContent === "report.html"'
+            ' && document.querySelector("#main-file").title === "paper/report.html"'))
         assert browser.execute_script('return document.title') == "report.html"
         # The PDF button is busy while the server prints and takes no second press, so
         # pressing it again before the file arrives downloads one copy.
@@ -2437,7 +2438,7 @@ def test_slide_previews_open_from_the_first_button_and_lead_to_a_page(tmp_path: 
             'return document.querySelector("#artifact-status")?.textContent === "ready"'))
         order = browser.execute_script(
             'return Array.from(document.querySelector(".workspace-toolbar").children).map((child) => child.id || child.className)')
-        assert order == ["thumbs-btn", "area-btn", "zoom-reset-btn", "search-btn"], order
+        assert order == ["thumbs-btn", "area-btn", "zoom-reset-btn", "scripts-btn", "search-btn"], order
         closed = browser.execute_script(geometry)
         assert not closed["open"] and not closed["shown"] and abs(closed["frameLeft"]) <= 1, closed
 

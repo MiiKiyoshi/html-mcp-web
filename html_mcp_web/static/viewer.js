@@ -194,7 +194,9 @@ async function selectArtifact(artifactId) {
 }
 
 function updateArtifactLinks() {
-  $("#main-file").textContent = displayPath(state.artifact.main_file, homePath);
+  // The file's name alone, as the editor shows it; the path is its title.
+  $("#main-file").textContent = state.artifact.main_file.split("/").pop();
+  $("#main-file").title = displayPath(state.artifact.main_file, homePath);
   // The tab carries the file being reviewed, so several projects open at once stay
   // apart in the browser's tab strip.
   document.title = state.artifact.main_file.split("/").pop();

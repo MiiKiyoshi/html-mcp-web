@@ -94,7 +94,8 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#artifact-status")?.textContent === "ready"'))
         assert browser.execute_script(
-            'return document.querySelector("#main-file").textContent') == "~/slides.html"
+            'return [document.querySelector("#main-file").textContent, document.querySelector("#main-file").title]'
+        ) == ["slides.html", "~/slides.html"]
         assert get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]["main_file"] == str(source)
         placement = browser.execute_script('''
           const tabs = document.querySelector(".view-tabs");
