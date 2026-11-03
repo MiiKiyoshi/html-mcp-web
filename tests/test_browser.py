@@ -936,7 +936,6 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert any("div#near-second" in error for error in narrow_errors)
         assert not any("This second paragraph" in error for error in narrow_errors)
         browser.set_window_rect(x=0, y=0, width=1400, height=1000)
-        assert browser.execute_script('return document.querySelector("#print-btn").disabled === false')
         wait_until(lambda: browser.execute_script(
             f'return document.querySelector("[data-comment-id=\\"{comment["id"]}\\"] .stale-pill") !== null'))
 

@@ -2476,11 +2476,6 @@ const restoreCommentUi = comments.restoreCommentUi;
 const submitCompose = comments.submitCompose;
 const switchSidebarTab = comments.switchSidebarTab;
 
-function printArtifact() {
-  frameWindow().focus();
-  frameWindow().print();
-}
-
 // Green reaches a parked waiter now; red remains clickable because the server queues the
 // call until the next waiter connects.
 function showAgentWaiting(waiters) {
@@ -2708,7 +2703,6 @@ function attachControls() {
   touch.addEventListener("change", placeViewTabs);
   placeViewTabs();
   $("#artifact-comment-btn").addEventListener("click", () => openCompose({ kind: "artifact" }));
-  $("#print-btn").addEventListener("click", printArtifact);
   $("#download-pdf-btn").addEventListener("click", (event) => download(event.currentTarget, "pdf"));
   $("#download-pptx-btn").addEventListener("click", (event) => download(event.currentTarget, "pptx"));
   $("#fullscreen-btn").addEventListener("click", () => {

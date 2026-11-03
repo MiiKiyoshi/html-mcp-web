@@ -54,7 +54,7 @@ button:disabled { cursor: default; opacity: .6; }
 }
 
 .topbar h1 { margin: 0; font-size: .9rem; font-weight: 600; letter-spacing: .01em; }
-.artifact-meta { align-self: stretch; display: flex; align-items: center; padding-left: 1rem; border-left: 1px solid var(--line); }
+.artifact-meta { align-self: stretch; display: flex; align-items: center; padding: 0 1rem; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
 /* More tabs than the row holds scroll sideways, each label on one line: on a phone the
    labels broke over three lines and the tabs past the screen's right edge could not be
    reached. */
@@ -69,7 +69,7 @@ button:disabled { cursor: default; opacity: .6; }
 .main-file { padding-right: .75rem; color: var(--muted); font-family: var(--mono); font-size: .82rem; }
 .artifact-status { align-self: stretch; display: flex; align-items: center; padding-left: .75rem; border-left: 1px solid var(--line); color: var(--muted); font-size: .82rem; }
 .artifact-status.error { color: #a23f34; }
-.topbar-actions { display: flex; flex: 0 0 auto; gap: .5rem; align-items: center; }
+.topbar-actions { display: flex; flex: 0 0 auto; align-self: stretch; gap: .5rem; align-items: center; padding-left: .75rem; border-left: 1px solid var(--line); }
 .topbar h1, .topbar-actions button, .download-btn { white-space: nowrap; }
 .topbar-actions button { padding: .1rem .55rem; border-radius: 3px; font-size: .82rem; }
 /* The scripts button is an icon that reads as a switch: lit while scripts show, plain
@@ -573,7 +573,7 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   .topbar { flex-wrap: wrap; gap: .4rem .6rem; padding: .3rem .5rem; }
   .topbar h1, .artifact-meta { display: none; }
   .artifact-tabs { flex: 1 1 100%; padding-left: 0; border-left: 0; }
-  .topbar-actions { margin-left: auto; flex-wrap: wrap; }
+  .topbar-actions { margin-left: auto; flex-wrap: wrap; padding-left: 0; border-left: 0; }
   .source-file { flex: 1 1 12rem; }
   /* After the buttons, at the right of their last row, in small type. */
   .source-status { order: 2; flex: 0 0 auto; margin-left: auto; font-size: .7rem; }
