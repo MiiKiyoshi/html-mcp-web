@@ -291,6 +291,8 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 
 .selection-source:hover { background: var(--accent-soft); }
 
+/* Fit sizes the artifact, so Source has none. */
+.layout.view-source #zoom-reset-btn { display: none; }
 .zoom-reset {
   padding: .1rem .55rem;
   border-radius: 3px;
@@ -308,7 +310,16 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
     left: auto !important;
     bottom: auto !important;
   }
-  .selection-source { top: 8px !important; }
+  /* Comment first, then Source on the corner, as the buttons read beside a selection. */
+  .selection-comment { right: calc(16px + var(--selection-source-width, 70px)) !important; }
+  .selection-source { top: 8px !important; right: 10px !important; left: auto !important; }
+  /* The view tabs sit in the artifact's bar, by the thumbs button, which then runs across
+     the editor too and stays in Source, where the artifact's own buttons step aside. */
+  .workspace-toolbar { grid-column: 1 / -1; }
+  #source-pane, #split-grip { grid-row: 2; }
+  .layout.view-source .workspace-toolbar { display: flex; }
+  .layout.view-source #search-btn,
+  .layout.view-source #area-btn { visibility: hidden; }
   /* A phone zooms the whole page into a field smaller than 16px the moment it takes the
      cursor: writing a comment left the page zoomed, the source editor's hidden input
      among them. At 16px nothing zooms, and a comment is easier to read as it is typed. */
@@ -564,7 +575,8 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   .artifact-tabs { flex: 1 1 100%; padding-left: 0; border-left: 0; }
   .topbar-actions { margin-left: auto; flex-wrap: wrap; }
   .source-file { flex: 1 1 12rem; }
-  .source-status { order: 2; flex: 1 0 100%; text-align: left; }
+  /* After the buttons, at the right of their last row, in small type. */
+  .source-status { order: 2; flex: 0 0 auto; margin-left: auto; font-size: .7rem; }
 }
 
 

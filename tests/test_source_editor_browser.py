@@ -216,6 +216,7 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         ''')
         assert selected == target
         browser.find_element("css selector", "#source-comment-btn").click()
+        wait_until(lambda: browser.execute_script('return document.querySelector("#compose-dialog").open'))
         browser.find_element("css selector", "#compose-text").send_keys("Review exactly this source selection")
         browser.find_element("css selector", "#compose-submit").click()
 

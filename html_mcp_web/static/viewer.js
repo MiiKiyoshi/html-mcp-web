@@ -554,7 +554,9 @@ async function loadSource(force = false) {
   state.sourcePath = source.path;
   state.sourceRevision = source.revision;
   state.sourceDirty = false;
-  $("#source-file").textContent = displayPath(source.path, homePath);
+  // The file's name alone, so the bar keeps its buttons on one row; the path is its title.
+  $("#source-file").textContent = source.path.split("/").pop();
+  $("#source-file").title = displayPath(source.path, homePath);
   $("#source-save-btn").disabled = true;
   $("#source-reload-btn").disabled = false;
   setSourceStatus("Saved");
@@ -1509,6 +1511,7 @@ function showSelectionButton() {
   source.classList.remove("hidden");
   const right = button.offsetLeft + width + 6;
   source.style.top = `${button.offsetTop}px`;
+  pane.style.setProperty("--selection-source-width", `${source.offsetWidth}px`);
   source.style.left = `${right + source.offsetWidth <= pane.clientWidth - gap ? right : button.offsetLeft - source.offsetWidth - 6}px`;
 }
 
@@ -2695,6 +2698,15 @@ function attachControls() {
     openSelectionInSource().catch((error) => alert(`Could not open the source: ${error.message}`));
   });
   $("#area-btn").addEventListener("click", () => setAreaMode(!state.areaMode));
+  // On a touch screen the view tabs sit in the artifact's bar by the thumbs button, where a
+  // thumb reaches them; with a mouse, on the left of the top bar.
+  const touch = window.matchMedia("(pointer: coarse)");
+  const placeViewTabs = () => {
+    if (touch.matches) $("#thumbs-btn").after($(".view-tabs"));
+    else $("#artifact-tabs").before($(".view-tabs"));
+  };
+  touch.addEventListener("change", placeViewTabs);
+  placeViewTabs();
   $("#artifact-comment-btn").addEventListener("click", () => openCompose({ kind: "artifact" }));
   $("#print-btn").addEventListener("click", printArtifact);
   $("#download-pdf-btn").addEventListener("click", (event) => download(event.currentTarget, "pdf"));

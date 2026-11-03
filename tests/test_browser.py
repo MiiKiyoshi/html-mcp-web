@@ -4696,12 +4696,14 @@ def test_a_touch_screen_keeps_the_two_buttons_in_their_corners(tmp_path: Path) -
             const box = frame.contentWindow.getSelection().getRangeAt(0).getBoundingClientRect();
             return frame.getBoundingClientRect().top + box.top;
           })();
-          return {fromTop: button.top - pane.top, fromRight: pane.right - button.right,
-                  selectionTop: words - pane.top};
+          const source = document.querySelector("#selection-source-btn").getBoundingClientRect();
+          return {fromTop: button.top - pane.top, sourceFromRight: pane.right - source.right,
+                  commentBeforeSource: button.right <= source.left, selectionTop: words - pane.top};
         """)
         assert placed["selectionTop"] > 150, placed      # the words are well down the page
-        assert placed["fromTop"] <= 12, placed           # the button is not
-        assert placed["fromRight"] <= 14, placed         # and it holds the right corner
+        assert placed["fromTop"] <= 12, placed           # the buttons are not
+        # Comment then Source, Source holding the right corner.
+        assert placed["sourceFromRight"] <= 14 and placed["commentBeforeSource"], placed
 
         # Fit belongs to the workspace controls, outside the artifact where selections live.
         reset = browser.execute_script("""
@@ -4714,6 +4716,16 @@ def test_a_touch_screen_keeps_the_two_buttons_in_their_corners(tmp_path: Path) -
                   abovePane: box.bottom <= pane.top};
         """)
         assert reset == {"insideToolbar": True, "abovePane": True}
+        # The view tabs sit in that bar by the thumbs button, and Source keeps the bar, with
+        # no Fit, which sizes the artifact.
+        assert browser.execute_script(
+            'return document.querySelector("#thumbs-btn").nextElementSibling.classList.contains("view-tabs")')
+        browser.execute_script('document.querySelector("[data-view=source]").click()')
+        wait_until(lambda: browser.execute_script('''
+          const bar = document.querySelector(".workspace-toolbar").getBoundingClientRect();
+          return document.querySelector(".layout").classList.contains("view-source") && bar.height > 0
+            && getComputedStyle(document.querySelector("#zoom-reset-btn")).display === "none";
+        '''))
     finally:
         if browser is not None:
             try:
