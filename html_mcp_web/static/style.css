@@ -128,8 +128,10 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
   border-left: 1px solid var(--line);
   background: var(--paper);
 }
+/* A narrow editor takes its buttons onto a second row rather than past its edge. */
 .source-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: .45rem;
   min-height: 36px;
@@ -543,7 +545,6 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   .topbar h1, .artifact-meta { display: none; }
   .artifact-tabs { flex: 1 1 100%; padding-left: 0; border-left: 0; }
   .topbar-actions { margin-left: auto; flex-wrap: wrap; }
-  .source-toolbar { flex-wrap: wrap; }
   .source-file { flex: 1 1 12rem; }
   .source-status { order: 2; flex: 1 0 100%; text-align: left; }
 }
