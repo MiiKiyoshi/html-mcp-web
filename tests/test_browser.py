@@ -2436,7 +2436,7 @@ def test_slide_previews_open_from_the_first_button_and_lead_to_a_page(tmp_path: 
             'return document.querySelector("#artifact-status")?.textContent === "ready"'))
         order = browser.execute_script(
             'return Array.from(document.querySelector(".workspace-toolbar").children).map((child) => child.id || child.className)')
-        assert order[:2] == ["thumbs-btn", "zoom-reset-btn"], order
+        assert order == ["thumbs-btn", "view-tabs", "area-btn", "zoom-reset-btn", "search-btn"], order
         closed = browser.execute_script(geometry)
         assert not closed["open"] and not closed["shown"] and abs(closed["frameLeft"]) <= 1, closed
 

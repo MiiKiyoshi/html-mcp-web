@@ -14,7 +14,20 @@ from html_mcp_web.project_server import SharedProjectServer
 
 
 marionette = pytest.importorskip("marionette_driver.marionette")
+from marionette_driver.marionette import ActionSequence  # noqa: E402
 
+
+def type_keys(browser, keys):
+    """Keys pressed one by one, with <C-[> for Ctrl+[ and <Enter> for Enter."""
+    actions = ActionSequence(browser, "key", "keyboard")
+    for key in keys:
+        if key == "<C-[>":
+            actions.key_down("\ue009").key_down("[").key_up("[").key_up("\ue009")
+        elif key == "<Enter>":
+            actions.key_down("\ue007").key_up("\ue007")
+        else:
+            actions.key_down(key).key_up(key)
+    actions.perform()
 
 def available_port() -> int:
     import socket
@@ -93,14 +106,17 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
           const tabsBox = tabs.getBoundingClientRect();
           const fitBox = fit.getBoundingClientRect();
           const searchBox = document.querySelector("#search-btn").getBoundingClientRect();
+          const areaBox = document.querySelector("#area-btn").getBoundingClientRect();
+          const thumbsBox = document.querySelector("#thumbs-btn").getBoundingClientRect();
           return {
             inTopbar: topbar.contains(tabs),
             inWorkspace: document.querySelector("#workspace").contains(tabs),
             toolbarAboveArtifact: toolbarBox.bottom <=
               document.querySelector("#artifact-pane").getBoundingClientRect().top + 1,
             fitInToolbar: toolbar.contains(fit),
-            fitBeforeTabs: fitBox.right < tabsBox.left,
-            searchAfterTabs: searchBox.left > tabsBox.right,
+            tabsBesideThumbs: tabsBox.left - thumbsBox.right < 24,
+            boxFitSearchAtRight: tabsBox.right < areaBox.left && areaBox.right < fitBox.left
+              && fitBox.right < searchBox.left,
             searchAtRight: Math.abs(
               toolbarBox.right - searchBox.right - parseFloat(getComputedStyle(toolbar).paddingRight)
             ) < 1,
@@ -110,14 +126,14 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         ''')
         assert {key: placement[key] for key in (
             "inTopbar", "inWorkspace", "toolbarAboveArtifact", "fitInToolbar",
-            "fitBeforeTabs", "searchAfterTabs", "searchAtRight",
+            "tabsBesideThumbs", "boxFitSearchAtRight", "searchAtRight",
         )} == {
             "inTopbar": False,
             "inWorkspace": True,
             "toolbarAboveArtifact": True,
             "fitInToolbar": True,
-            "fitBeforeTabs": True,
-            "searchAfterTabs": True,
+            "tabsBesideThumbs": True,
+            "boxFitSearchAtRight": True,
             "searchAtRight": True,
         }
         assert abs(placement["toolbarHeight"] - placement["topbarHeight"]) < 0.5, placement
@@ -134,6 +150,25 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         assert browser.execute_script(font_size) == "14px"
         assert browser.execute_script('return localStorage.getItem("htmlMcpSourceFontSize")') == "14"
         browser.execute_script('document.querySelector("#source-font-smaller-btn").click()')
+        # Long lines wrap until the wrap button turns it off, and the Vim button gives the
+        # editor Vim keys, with Ctrl+[ as Escape and :w saving.
+        editor = '(window.wrappedJSObject || window).ace.edit("source-editor")'
+        assert browser.execute_script(f"return {editor}.session.getUseWrapMode();") is True
+        browser.execute_script('document.querySelector("#source-wrap-btn").click()')
+        assert browser.execute_script(f"return {editor}.session.getUseWrapMode();") is False
+        assert browser.execute_script('return localStorage.getItem("htmlMcpSourceWrap")') == "0"
+        browser.execute_script('document.querySelector("#source-wrap-btn").click()')
+        assert browser.execute_script(f"return {editor}.session.getUseWrapMode();") is True
+        before = browser.execute_script(f"return {editor}.getValue();")
+        browser.execute_script('document.querySelector("#source-vim-btn").click()')
+        wait_until(lambda: browser.execute_script(f"return Boolean({editor}.$vimModeHandler);"))
+        type_keys(browser, [*"ggOvimtest", "<C-[>", *"dd"])
+        assert browser.execute_script(f"return {editor}.getValue();") == before
+        assert browser.execute_script('return document.querySelector("#source-save-btn").disabled') is False
+        type_keys(browser, [*":w", "<Enter>"])
+        wait_until(lambda: browser.execute_script('return document.querySelector("#source-save-btn").disabled'))
+        browser.execute_script('document.querySelector("#source-vim-btn").click()')
+        wait_until(lambda: not browser.execute_script(f"return Boolean({editor}.$vimModeHandler);"))
         assert browser.execute_script(
             'return document.querySelector("#source-file").textContent') == "slides.html"
         selected = browser.execute_script('''
