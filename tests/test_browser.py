@@ -3420,11 +3420,13 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
                   upperWidth: width(6, secondStart),
                   lowerWidth: width(secondStart, secondStart + 6), scrolled};
         ''')
-        wait_until(lambda: browser.execute_script(
-            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
-        placed = browser.execute_script(
-            'const b = document.querySelector("#selection-comment-btn").getBoundingClientRect();'
-            'return [b.left, b.top];')
+        # The button from the selection before is still up, so the wait is for this one's place.
+        def placed_now():
+            box = browser.execute_script(
+                'const b = document.querySelector("#selection-comment-btn").getBoundingClientRect();'
+                'return [b.left, b.top];')
+            return box if abs(box[0] - (spanned["frame"][0] + spanned["leftEdge"])) <= 3 else None
+        placed = wait_until(placed_now)
         # Left-aligned with the letters the grab covers, which for this shape the native
         # rects cannot say: they name nodes, not characters.
         assert abs(placed[0] - (spanned["frame"][0] + spanned["leftEdge"])) <= 3, (placed, spanned)
@@ -5618,14 +5620,19 @@ def test_a_report_head_keeps_its_text_and_a_word_space_stays_narrow(tmp_path: Pa
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
-def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path) -> None:
+def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path, monkeypatch) -> None:
     """A page keeps the modules it loaded however the server changes under it, and the
     server runs no check of its own while a page is connected. So a page left open across
     a restart on newer code went on checking a deck with the rules from before. The page
     is stamped with the tag of the code it was built with, every state carries the tag
     being served, and the page reloads on the first state that names another."""
-    import os
-    import time as clock
+    from html_mcp_web.server import HtmlReviewServer
+
+    # Newer code is played by the tag alone: touching a static file would hand every other
+    # review page served from this checkout, in tests running beside this one, a reload.
+    served = {"tag": None}
+    real_tag = HtmlReviewServer.static_tag
+    monkeypatch.setattr(HtmlReviewServer, "static_tag", lambda self: served["tag"] or real_tag(self))
 
     slides = tmp_path / "slides.html"
     slides.write_text(slides_html(), encoding="utf-8")
@@ -5643,9 +5650,6 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path) ->
         f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
     browser_process = None
     browser = None
-    static_dir = Path(__file__).resolve().parents[1] / "html_mcp_web" / "static"
-    moved = static_dir / "trace.js"
-    kept = moved.stat()
     try:
         shared.ensure()
         browser_process = subprocess.Popen(
@@ -5666,10 +5670,9 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path) ->
         read_at = wait_until(lambda: browser.execute_script(
             f'const win = {frame_window}; return win && win.scrollY > 300 ? win.scrollY : null;'))
 
-        # The code moves on: a static file is newer than the page's tag. A change to the
+        # The code moves on: the server serves another tag than the page's. A change to the
         # deck then reaches the page as a state carrying the new tag.
-        later = max(clock.time(), kept.st_mtime + 1.5)
-        os.utime(moved, (later, later))
+        served["tag"] = f"v{int(stamped[1:]) + 1}"
         assert get_json(f"http://127.0.0.1:{port}/state")["static"] != stamped
         slides.write_text(slides_html("Another sentence."), encoding="utf-8")
         reloaded = wait_until(lambda: browser.execute_script(
@@ -5714,7 +5717,6 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path) ->
             f'const win = {frame_window}; return win && win.scrollY > 0 ? win.scrollY : null;'))
         assert abs(returned - read_at) <= 2
     finally:
-        os.utime(moved, (kept.st_atime, kept.st_mtime))
         if browser is not None:
             try:
                 browser.delete_session()
@@ -6198,8 +6200,8 @@ def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
         built = get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["first"]["revision"]
         (tmp_path / "first.html").write_text(slides_html("First deck, edited."), encoding="utf-8")
         wait_until(lambda: get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["first"]["revision"] != built)
-        rebuilt = switch_to(0, "First deck, edited.")
-        assert abs(rebuilt["y"] - left["y"]) <= 2, (left, rebuilt)
+        switch_to(0, "First deck, edited.")
+        wait_until(lambda: abs(shown()["y"] - left["y"]) <= 2)
     finally:
         if browser is not None:
             try:
