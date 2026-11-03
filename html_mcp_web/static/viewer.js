@@ -290,6 +290,44 @@ function updateSourceCommentButton() {
   button.title = state.sourceDirty
     ? "Save source before commenting"
     : selected ? "Comment on the selected source text" : "Select source text to comment";
+  $("#source-page-btn").disabled = !selected;
+}
+
+// The words selected in the editor, shown where the page shows them: the server gives the
+// text the selection shows, the page finds it, scrolls to it and marks it a moment.
+async function showSourceSelectionOnPage() {
+  if (!state.editor?.getSelectedText().trim()) return;
+  const range = state.editor.getSelectionRange();
+  const shown = await fetchJson(`${artifactBase()}/source-shown`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      line_start: range.start.row + 1, column_start: range.start.column,
+      line_end: range.end.row + 1, column_end: range.end.column,
+    }),
+  });
+  const found = anchors.rangeFromShown(shown);
+  if (found === null) throw new Error("the pages do not show these words or the words around them");
+  const node = found.startContainer;
+  (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement)
+    ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  const frame = pageFrameFor(node);
+  if (frame === null) return;
+  const layer = ensureHighlightLayer(frame.page);
+  const rects = found.collapsed ? [found.getBoundingClientRect()] : selectionRects(found);
+  const marks = rects.map((rect) => {
+    const mark = frameDocument().createElement("div");
+    mark.className = "html-mcp-highlight flash";
+    Object.assign(mark.style, {
+      left: `${(rect.left - frame.rect.left) / frame.ratio + frame.scrollLeft}px`,
+      top: `${(rect.top - frame.rect.top) / frame.ratio + frame.scrollTop}px`,
+      width: `${Math.max(2, rect.width / frame.ratio)}px`,
+      height: `${rect.height / frame.ratio}px`,
+    });
+    layer.appendChild(mark);
+    return mark;
+  });
+  setTimeout(() => marks.forEach((mark) => mark.remove()), 2000);
 }
 
 function setSourceDirty(dirty) {
@@ -1372,20 +1410,54 @@ function showSelectionButton() {
   source.style.left = `${right + source.offsetWidth <= pane.clientWidth - gap ? right : button.offsetLeft - source.offsetWidth - 6}px`;
 }
 
+// A stretch of the page as its source writes it: rendered math as the TeX KaTeX keeps in
+// the formula's annotation, other text as shown.
+function sourceLikeText(range) {
+  const doc = frameDocument();
+  const walker = doc.createTreeWalker(range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+    ? range.commonAncestorContainer.parentNode : range.commonAncestorContainer, NodeFilter.SHOW_TEXT);
+  let text = "";
+  let formula = null;
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    if (!range.intersectsNode(node) || node.parentElement?.closest(".html-mcp-highlight-layer")) continue;
+    const math = node.parentElement?.closest(".katex");
+    if (math) {
+      if (math === formula) continue;
+      formula = math;
+      text += ` ${math.querySelector('annotation[encoding="application/x-tex"]')?.textContent ?? ""} `;
+      continue;
+    }
+    const from = node === range.startContainer ? range.startOffset : 0;
+    const to = node === range.endContainer ? range.endOffset : node.nodeValue.length;
+    text += node.nodeValue.slice(from, to);
+  }
+  return text;
+}
+
 // The place in the edit file the selected words come from, found by the server in the file
 // as saved, selected in the editor beside the page.
 async function openSelectionInSource() {
-  const anchor = state.selectionAnchor;
   const selection = frameWindow().getSelection();
-  if (anchor === null || selection === null || selection.rangeCount === 0) return;
-  const start = selectionSpan(selection).startContainer;
+  if (state.selectionAnchor === null || selection === null || selection.rangeCount === 0) return;
+  const selected = selectionSpan(selection);
+  const start = selected.startContainer;
   const page = (start.nodeType === Node.ELEMENT_NODE ? start : start.parentElement)
     ?.closest("body > main.pages > section.page");
   const title = page ? pageTitle(page, artifactPages().indexOf(page)) : "";
+  const around = (from, to) => {
+    const stretch = frameDocument().createRange();
+    stretch.setStart(from.node, from.offset);
+    stretch.setEnd(to.node, to.offset);
+    return sourceLikeText(stretch);
+  };
+  const edge = page ?? frameDocument().body;
+  const quote = sourceLikeText(selected);
+  const prefix = around({ node: edge, offset: 0 }, { node: selected.startContainer, offset: selected.startOffset }).slice(-120);
+  const suffix = around({ node: selected.endContainer, offset: selected.endOffset }, { node: edge, offset: edge.childNodes.length }).slice(0, 120);
   const place = await fetchJson(`${artifactBase()}/source-place`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ quote: anchor.quote, prefix: anchor.prefix, suffix: anchor.suffix, title }),
+    body: JSON.stringify({ quote, prefix, suffix, title }),
   });
   hideSelectionButton();
   if (!(await loadSource(false)) || state.sourcePath !== place.path) return;
@@ -2470,6 +2542,9 @@ function attachControls() {
   });
   $("#source-reload-btn").addEventListener("click", () => {
     loadSource(true).catch((error) => alert(`Could not reload: ${error.message}`));
+  });
+  $("#source-page-btn").addEventListener("click", () => {
+    showSourceSelectionOnPage().catch((error) => alert(`Could not show it on the page: ${error.message}`));
   });
   $("#source-font-smaller-btn").addEventListener("click", () => stepSourceFontSize(-1));
   $("#source-font-larger-btn").addEventListener("click", () => stepSourceFontSize(1));

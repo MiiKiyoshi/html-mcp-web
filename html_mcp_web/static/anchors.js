@@ -251,6 +251,64 @@ export function createAnchors(dependencies) {
     return rangeFromAbsolute(doc, snapshot, rawStart, rawEnd);
   }
   
+  // The words a stretch of the source shows, found on the pages without spacing, as the
+  // server gives them. The words around them pick among repeats. Words the page shows
+  // another way, such as math the source writes as TeX, give the place the words before
+  // them end, or else the place the words after them begin.
+  function rangeFromShown(shown) {
+    const doc = frameDocument();
+    if (doc === null || doc.body === null) return null;
+    const snapshot = textSnapshot(doc);
+    // A formula is read as the source writes it, by the TeX in its annotation alone: the
+    // glyphs KaTeX draws for it would stand between the words around it and their match.
+    const raw = [];
+    let text = "";
+    snapshot.nodes.forEach((node, index) => {
+      const parent = node.parentElement;
+      if (parent?.closest(".katex") && !parent.closest('annotation[encoding="application/x-tex"]')) return;
+      for (let offset = 0; offset < node.nodeValue.length; offset += 1) {
+        if (/\s/.test(node.nodeValue[offset])) continue;
+        raw.push(snapshot.starts[index] + offset);
+        text += node.nodeValue[offset];
+      }
+    });
+    const score = (at, length) => {
+      let matched = 0;
+      while (matched < shown.before.length && at - matched - 1 >= 0
+        && text[at - matched - 1] === shown.before[shown.before.length - matched - 1]) matched += 1;
+      let ahead = 0;
+      while (ahead < shown.after.length && at + length + ahead < text.length
+        && text[at + length + ahead] === shown.after[ahead]) ahead += 1;
+      return matched + ahead;
+    };
+    const best = (wanted) => {
+      if (!wanted) return null;
+      const found = allOccurrences(text, wanted);
+      if (found.length === 0) return null;
+      return found.reduce((top, at) => (score(at, wanted.length) > score(top, wanted.length) ? at : top));
+    };
+    const at = best(shown.quote);
+    if (at !== null) {
+      // TeX found in a formula's hidden annotation stands for the formula as drawn.
+      const range = rangeFromAbsolute(doc, snapshot, raw[at], raw[at + shown.quote.length - 1] + 1);
+      const formula = (node) => (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement)?.closest(".katex");
+      const first = formula(range.startContainer);
+      const last = formula(range.endContainer);
+      if (first) range.setStartBefore(first);
+      if (last) range.setEndAfter(last);
+      return range;
+    }
+    const lead = shown.before.slice(-24);
+    const before = best(lead);
+    if (before !== null) {
+      const end = raw[before + lead.length - 1] + 1;
+      return rangeFromAbsolute(doc, snapshot, end, end);
+    }
+    const trail = shown.after.slice(0, 24);
+    const after = best(trail);
+    return after === null ? null : rangeFromAbsolute(doc, snapshot, raw[after], raw[after]);
+  }
+
   function resolveAnchor(anchor) {
     return rangeFromPath(anchor) ?? rangeFromQuote(anchor);
   }
@@ -271,5 +329,5 @@ export function createAnchors(dependencies) {
     return null;
   }
 
-  return { captureTextAnchor, resolveAnchor, lastKnownPlace };
+  return { captureTextAnchor, resolveAnchor, lastKnownPlace, rangeFromShown };
 }

@@ -56,3 +56,25 @@ def test_math_written_as_tex_selects_the_words_around_it_or_the_place_before() -
 
 def test_words_only_a_script_holds_are_not_shown_text() -> None:
     assert locate(SOURCE, "const quick", "", "", "") is None
+
+
+
+def test_a_source_selection_gives_the_text_the_page_shows() -> None:
+    from html_mcp_web.source_place import shown_text
+
+    fox = LINES[2].index("fox")
+    shown = shown_text(SOURCE, 3, fox, 4, LINES[3].index("lazy") + 4)   # "fox &amp; the\n     lazy"
+    assert (shown.quote, shown.title) == ("fox&thelazy", "Methods")
+    assert shown.before.endswith("MethodsThequickbrown") and shown.after.startswith("dog.😀Then")
+    # Past the 😀 an editor column is a UTF-16 unit, two for the 😀 itself.
+    then = LINES[3].index("Then") + 1
+    assert shown_text(SOURCE, 4, then, 4, then + 4).quote == "Then"
+    # Markup alone shows nothing.
+    assert shown_text(SOURCE, 2, 0, 2, 8).quote == ""
+
+
+def test_a_formula_is_found_by_its_tex_without_the_dollar_signs() -> None:
+    place = locate(SOURCE, " \\alpha_k ", "😀 Then ", " grows with", "Methods")
+    assert place.whole and selected(place) == "\\alpha_k"
+    # Prose with a formula in it, as the page sends it, the formula as its TeX.
+    assert selected(locate(SOURCE, "Then \\alpha_k grows", "", "", "Methods")) == "Then $\\alpha_k$ grows"

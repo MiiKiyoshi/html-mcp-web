@@ -54,7 +54,7 @@ from .space import (
     union_bbox,
     validated_space_pages,
 )
-from .source_place import locate
+from .source_place import locate, shown_text
 from .watcher import Watcher
 
 logger = logging.getLogger(__name__)
@@ -968,6 +968,22 @@ class HtmlReviewServer:
             raise web.HTTPNotFound(text=f"the selected words and their surroundings are not in {relative} as written")
         return web.json_response({"path": relative, "revision": revision, **asdict(place)})
 
+    async def source_shown(self, request: web.Request) -> web.Response:
+        """What the page shows of a selection in the edit file: {line_start, column_start,
+        line_end, column_end} in the editor's lines and columns -> {quote, before, after,
+        title}, without spacing."""
+        path, relative = self.source_file(self.runtime(request))
+        text, _ = self.read_source(path)
+        data = await request.json()
+        try:
+            shown = shown_text(text, int(data["line_start"]), int(data["column_start"]),
+                               int(data["line_end"]), int(data["column_end"]))
+        except (KeyError, TypeError, ValueError) as error:
+            raise web.HTTPBadRequest(text=f"line_start, column_start, line_end and column_end: {error}") from error
+        if not shown.quote:
+            raise web.HTTPNotFound(text="the selection holds markup alone, which the page does not show")
+        return web.json_response(asdict(shown))
+
     async def save_source(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         path, relative = self.source_file(runtime)
@@ -1790,6 +1806,7 @@ class HtmlReviewServer:
         app.router.add_get(f"{base}/comments/{{comment_id}}", self.get_comment)
         app.router.add_post(f"{base}/comments", self.add_comment)
         app.router.add_post(f"{base}/source-place", self.source_place)
+        app.router.add_post(f"{base}/source-shown", self.source_shown)
         app.router.add_post(f"{base}/comments/update", self.update_comments)
         app.router.add_post(f"{base}/comments/export", self.export_comments)
         app.router.add_post(f"{base}/comments/{{comment_id}}/reply", self.reply_comment)

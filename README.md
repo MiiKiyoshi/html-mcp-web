@@ -68,6 +68,7 @@ to handle your comments when you press **Call agent**. Open that address in your
   comments on the whole artifact.
 - In Split, **Source** beside **Comment** selects the same words in the source editor. Words
   the source writes another way, such as math in TeX, select the words around them.
+  The other way, **→ Page** in the editor's bar marks the selected source words on the page.
 - The box tool, beside the search button over the artifact, turns a drag on a page into a
   box to comment on what has no text to select, such as part of a figure. The agent reads
   the box in page pixels and can look at just that part.

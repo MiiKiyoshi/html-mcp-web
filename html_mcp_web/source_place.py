@@ -47,8 +47,10 @@ class _ShownText(HTMLParser):
         return self.line_starts[line - 1] + column
 
     def keep(self, text: str, start: int, end: int | None = None) -> None:
+        # A $ delimits math, which the page shows rendered, and the page sends a formula
+        # as the TeX between the delimiters.
         for index, character in enumerate(text):
-            if not character.isspace():
+            if not character.isspace() and character != "$":
                 self.kept.append((character, start + index, start + index + 1) if end is None
                                  else (character, start, end))
 
@@ -164,3 +166,37 @@ def locate(source: str, quote: str, prefix: str = "", suffix: str = "", title: s
         line, column = _line_column(source, shown.line_starts, shown.kept[at + len(lead) - 1][2])
         return Place(line, column, line, column, False)
     return None
+
+
+@dataclass(frozen=True)
+class Shown:
+    """What the page shows of a stretch of the source, without spacing: the words, the
+    words before and after them, and the title of the section around them."""
+
+    quote: str
+    before: str
+    after: str
+    title: str
+
+
+def shown_text(source: str, line_start: int, column_start: int, line_end: int, column_end: int) -> Shown:
+    """The page's text for a selection in the editor, whose columns count UTF-16 units."""
+    shown = _ShownText(source)
+    shown.feed(source)
+    shown.close()
+
+    def offset(line: int, column: int) -> int:
+        if not 1 <= line <= len(shown.line_starts):
+            raise ValueError(f"line {line} is not in the source")
+        start = shown.line_starts[line - 1]
+        units = source[start:].encode("utf-16-le")[:column * 2].decode("utf-16-le", errors="ignore")
+        return start + len(units)
+
+    start, end = offset(line_start, column_start), offset(line_end, column_end)
+    inside = [index for index, (_, first, _) in enumerate(shown.kept) if start <= first < end]
+    text = "".join(character for character, _, _ in shown.kept)
+    if not inside:
+        return Shown("", "", "", "")
+    first, last = inside[0], inside[-1]
+    title = next((name for name, opened, closed in shown.sections if opened <= start < closed), "")
+    return Shown(text[first:last + 1], text[max(0, first - 80):first], text[last + 1:last + 81], title)

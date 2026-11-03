@@ -1924,6 +1924,121 @@ def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path
           return text ? {text, row: editor.getSelectionRange().start.row} : false;
         '''))
         assert picked == {"text": "Selected", "row": row}
+
+        # And back: → Page on words selected in the editor marks them on the page.
+        column = slides.read_text(encoding="utf-8").split("\n")[row].index("sentence.")
+        browser.execute_script(f'''
+          const page = window.wrappedJSObject || window;
+          const editor = page.ace.edit("source-editor");
+          const Range = page.ace.require("ace/range").Range;
+          editor.selection.setRange(new Range({row}, {column}, {row}, {column + 8}));
+          document.querySelector("#source-page-btn").click();
+        ''')
+        marked = wait_until(lambda: browser.execute_script('''
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const mark = doc.querySelector(".html-mcp-highlight.flash");
+          if (!mark) return false;
+          const words = doc.createRange();
+          const text = doc.querySelector("#target").firstChild;
+          words.setStart(text, 9);
+          words.setEnd(text, 17);
+          const want = words.getBoundingClientRect();
+          const got = mark.getBoundingClientRect();
+          return [got.left - want.left, got.right - want.right, got.top - want.top];
+        '''))
+        assert all(abs(value) < 2 for value in marked), marked
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
+
+
+def test_source_and_page_find_a_formula_by_the_tex_katex_keeps(tmp_path: Path) -> None:
+    """A formula the page draws with KaTeX is found in the source by the TeX KaTeX keeps in
+    its annotation, and TeX selected in the source marks the drawn formula."""
+    content = tmp_path / "content.html"
+    content.write_text(
+        '<!doctype html>\n<meta charset="utf-8">\n<title>Math</title>\n'
+        '<body data-author="A" data-meta="B">\n'
+        '<section data-title="Delay">\n<p>The delay $R_d C$ grows while $R_d$ shrinks.</p>\n</section>\n'
+        '</body>\n', encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html",
+                                 "template": "neutral-slides", "content": "content.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_formula_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=1400, height=900)
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=60)
+        browser.find_element("css selector", '[data-view="split"]').click()
+        wait_until(lambda: browser.execute_script(
+            'const page = window.wrappedJSObject || window;'
+            'return page.ace && page.ace.edit("source-editor").getValue().includes("R_d C")'))
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-frame").contentDocument.querySelectorAll(".katex").length === 2'))
+        browser.execute_script('''
+          const frame = document.querySelector("#artifact-frame");
+          const formula = frame.contentDocument.querySelector(".katex .katex-html");
+          const selection = frame.contentWindow.getSelection();
+          selection.removeAllRanges();
+          const range = frame.contentDocument.createRange();
+          range.selectNodeContents(formula);
+          selection.addRange(range);
+        ''')
+        wait_until(lambda: browser.execute_script(
+            'return !document.querySelector("#selection-source-btn").classList.contains("hidden")'))
+        browser.find_element("css selector", "#selection-source-btn").click()
+        picked = wait_until(lambda: browser.execute_script(
+            'return (window.wrappedJSObject || window).ace.edit("source-editor").getSelectedText() || false'))
+        assert picked == "R_d C"
+
+        line = content.read_text(encoding="utf-8").split("\n").index(
+            "<p>The delay $R_d C$ grows while $R_d$ shrinks.</p>")
+        column = "<p>The delay $R_d C$ grows while $R_d$ shrinks.</p>".index("$R_d$") + 1
+        browser.execute_script(f'''
+          const page = window.wrappedJSObject || window;
+          const editor = page.ace.edit("source-editor");
+          const Range = page.ace.require("ace/range").Range;
+          editor.selection.setRange(new Range({line}, {column}, {line}, {column + 3}));
+          document.querySelector("#source-page-btn").click();
+        ''')
+        marked = wait_until(lambda: browser.execute_script('''
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const mark = doc.querySelector(".html-mcp-highlight.flash");
+          if (!mark) return false;
+          const want = doc.querySelectorAll(".katex")[1].getBoundingClientRect();
+          const got = mark.getBoundingClientRect();
+          return [got.left - want.left, got.right - want.right];
+        '''))
+        assert all(abs(value) < 2 for value in marked), marked
     finally:
         if browser is not None:
             try:
