@@ -1936,7 +1936,7 @@ def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path
         ''')
         marked = wait_until(lambda: browser.execute_script('''
           const doc = document.querySelector("#artifact-frame").contentDocument;
-          const mark = doc.querySelector(".html-mcp-highlight.flash");
+          const mark = doc.querySelector(".html-mcp-shown");
           if (!mark) return false;
           const words = doc.createRange();
           const text = doc.querySelector("#target").firstChild;
@@ -2033,7 +2033,7 @@ def test_source_and_page_find_a_formula_by_the_tex_katex_keeps(tmp_path: Path) -
         ''')
         marked = wait_until(lambda: browser.execute_script('''
           const doc = document.querySelector("#artifact-frame").contentDocument;
-          const mark = doc.querySelector(".html-mcp-highlight.flash");
+          const mark = doc.querySelector(".html-mcp-shown");
           if (!mark) return false;
           const want = doc.querySelectorAll(".katex")[1].getBoundingClientRect();
           const got = mark.getBoundingClientRect();

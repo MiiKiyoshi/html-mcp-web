@@ -1614,6 +1614,7 @@ function ensureHighlightLayer(page) {
       .html-mcp-highlight-badge.lost { border-style: dashed; color: #6d6650; background: #f6f1e2; }
       .html-mcp-area { position: absolute; box-sizing: border-box; border: 2px solid rgba(171, 139, 0, .8); border-radius: 2px; background: rgba(246, 216, 74, .16); }
       .html-mcp-area.flash { background: rgba(255, 177, 60, .4); }
+      .html-mcp-shown { position: absolute; border-radius: 2px; background: rgba(181, 213, 255, .75); }
       html.html-mcp-area-mode, html.html-mcp-area-mode * { cursor: crosshair !important; user-select: none !important; -webkit-user-select: none !important; touch-action: none !important; }
     `;
     doc.head.appendChild(style);
@@ -1752,7 +1753,8 @@ function renderHighlights() {
     for (const rect of shown.collapsed ? [shown.getBoundingClientRect()] : selectionRects(shown)) {
       const box = local(shownFrame, rect);
       const mark = frameDocument().createElement("div");
-      mark.className = "html-mcp-highlight flash";
+      // The editor's selection blue, apart from the comments' yellow.
+      mark.className = "html-mcp-shown";
       Object.assign(mark.style, {
         left: `${box.left}px`, top: `${box.top}px`, width: `${Math.max(2, box.width)}px`, height: `${box.height}px`,
       });
