@@ -72,6 +72,7 @@ button:disabled { cursor: default; opacity: .6; }
 .artifact-status.error { color: #a23f34; }
 .topbar-actions { display: flex; flex: 0 0 auto; align-self: stretch; gap: .5rem; align-items: center; padding-left: .75rem; border-left: 1px solid var(--line); }
 .topbar h1, .topbar-actions button, .download-btn { white-space: nowrap; }
+.narrow-icon { display: none; }
 .topbar-actions button { padding: .1rem .55rem; border-radius: 3px; font-size: .82rem; }
 /* The scripts button is an icon that reads as a switch: lit while scripts show, plain
    while they hide. */
@@ -606,10 +607,15 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   .source-toolbar button svg { width: 14px; height: 14px; }
   .source-status { order: 2; flex: 0 0 auto; margin-left: auto; font-size: 0.62rem; }
   .source-file { flex: 0 1 auto; }
-  .topbar { flex-wrap: wrap; gap: .4rem .6rem; padding: .3rem .5rem; }
+  /* One row on a phone: the artifacts' tabs take what the actions leave and scroll
+     sideways, and Full screen and Note draw as icons. */
+  .topbar { flex-wrap: nowrap; gap: .4rem; padding: .3rem .5rem; }
   .topbar h1, .artifact-meta { display: none; }
-  .artifact-tabs { flex: 1 1 100%; padding-left: 0; border-left: 0; }
-  .topbar-actions { margin-left: auto; flex-wrap: wrap; padding-left: 0; border-left: 0; }
+  .artifact-tabs { flex: 1 1 auto; padding-left: 0; border-left: 0; }
+  .topbar-actions { gap: .3rem; padding-left: .4rem; }
+  .topbar-actions button { padding: .1rem .35rem; }
+  .topbar-actions .wide-label { display: none; }
+  .topbar-actions .narrow-icon { display: block; }
 }
 
 
