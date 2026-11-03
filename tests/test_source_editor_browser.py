@@ -167,8 +167,24 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         assert browser.execute_script('return document.querySelector("#source-save-btn").disabled') is False
         type_keys(browser, [*":w", "<Enter>"])
         wait_until(lambda: browser.execute_script('return document.querySelector("#source-save-btn").disabled'))
+        # gc comments on what a motion or a selection covers, here the one line this file
+        # has, and the editor has the keys back once the comment is dropped.
+        for keys in ("gggcc", "gg0vegc"):
+            type_keys(browser, [*keys])
+            wait_until(lambda: browser.execute_script('return document.querySelector("#compose-dialog").open'))
+            assert browser.execute_script(
+                'return document.querySelector("#compose-anchor").textContent').startswith("slides.html:1")
+            browser.execute_script('document.querySelector("#compose-cancel").click()')
+            wait_until(lambda: browser.execute_script(
+                'return document.querySelector("#source-editor").contains(document.activeElement)'))
         browser.execute_script('document.querySelector("#source-vim-btn").click()')
         wait_until(lambda: not browser.execute_script(f"return Boolean({editor}.$vimModeHandler);"))
+        # Without Vim keys, Ctrl+Alt+M comments on the selection.
+        browser.execute_script(f"{editor}.focus(); {editor}.selection.selectLine();")
+        ActionSequence(browser, "key", "keyboard").key_down("\ue009").key_down("\ue00a").key_down("m") \
+            .key_up("m").key_up("\ue00a").key_up("\ue009").perform()
+        wait_until(lambda: browser.execute_script('return document.querySelector("#compose-dialog").open'))
+        browser.execute_script('document.querySelector("#compose-cancel").click()')
         assert browser.execute_script(
             'return document.querySelector("#source-file").textContent') == "slides.html"
         selected = browser.execute_script('''

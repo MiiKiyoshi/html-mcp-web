@@ -291,7 +291,7 @@ function updateSourceCommentButton() {
   button.disabled = !selected || state.sourceDirty;
   button.title = state.sourceDirty
     ? "Save source before commenting"
-    : selected ? "Comment on the selected source text" : "Select source text to comment";
+    : selected ? "Comment on the selected source text (Ctrl+Alt+M, gc with Vim keys)" : "Select source text to comment";
   $("#source-page-btn").disabled = !selected;
 }
 
@@ -431,9 +431,43 @@ function applyVimKeys() {
       state.editor.renderer.$blockCursor = false;
       return;
     }
-    window.ace.require("ace/keyboard/vim").Vim.defineEx("write", "w", () =>
-      saveSource().catch((error) => alert(`Could not save: ${error.message}`)));
+    defineVimCommands(window.ace.require("ace/keyboard/vim").Vim);
   });
+}
+
+// :w saves, and gc comments on what a motion or the visual selection covers, as Vim's
+// operators do: gcc the line, gcip the paragraph, gc on a selection the selection.
+let vimCommandsDefined = false;
+
+function defineVimCommands(Vim) {
+  if (vimCommandsDefined) return;
+  vimCommandsDefined = true;
+  Vim.defineEx("write", "w", () =>
+    saveSource().catch((error) => alert(`Could not save: ${error.message}`)));
+  Vim.defineOperator("sourceComment", (cm, args, ranges) => {
+    const ends = [ranges[0].anchor, ranges[0].head].sort((a, b) => a.line - b.line || a.ch - b.ch);
+    const [start] = ends;
+    let [, end] = ends;
+    // A line's operator ends at the start of the next line, which is not part of it.
+    if (end.ch === 0 && end.line > start.line) {
+      end = { line: end.line - 1, ch: state.editor.session.getLine(end.line - 1).length };
+    }
+    const Range = window.ace.require("ace/range").Range;
+    state.editor.selection.setRange(new Range(start.line, start.ch, end.line, end.ch));
+    commentSourceSelection();
+    return start;
+  });
+  Vim.mapCommand("gc", "operator", "sourceComment");
+}
+
+// Ctrl+Alt+M (Cmd+Option+M), or gc with Vim keys. Comments wait for the file to be saved,
+// as the button does, and the bar says so.
+function commentSourceSelection() {
+  if (state.sourceDirty) {
+    setSourceStatus("Save before commenting", "dirty");
+    return;
+  }
+  openSourceCommentCompose();
 }
 
 async function initializeSourceEditor() {
@@ -455,6 +489,11 @@ async function initializeSourceEditor() {
     name: "saveSource",
     bindKey: { win: "Ctrl-S", mac: "Command-S" },
     exec: () => saveSource().catch((error) => alert(`Could not save: ${error.message}`)),
+  });
+  editor.commands.addCommand({
+    name: "commentSource",
+    bindKey: { win: "Ctrl-Alt-M", mac: "Command-Alt-M" },
+    exec: commentSourceSelection,
   });
   editor.on("guttermousedown", (event) => {
     if (event.domEvent.target.classList.contains("source-comment-line")) {
@@ -524,6 +563,8 @@ function openSourceCommentCompose() {
   const range = state.editor.getSelectionRange();
   const quote = state.editor.getSelectedText();
   if (!quote.trim() || range.isEmpty()) return;
+  // Back in the editor once the comment is sent or dropped, to go on from where it was.
+  $("#compose-dialog").addEventListener("close", () => state.editor.focus(), { once: true });
   openCompose({
     kind: "source",
     file: state.sourcePath,
