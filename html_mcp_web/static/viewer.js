@@ -23,6 +23,8 @@ const state = {
   picked: new Set(),
   focusedCommentId: null,
   areaMode: false,
+  // Source words shown on the page by → Preview, marked for a moment.
+  shownRange: null,
   activeForm: null,
   editingEntry: null,
   unattached: new Set(),
@@ -293,8 +295,9 @@ function updateSourceCommentButton() {
   $("#source-page-btn").disabled = !selected;
 }
 
-// The words selected in the editor, shown where the page shows them: the server gives the
-// text the selection shows, the page finds it, scrolls to it and marks it a moment.
+// The words selected in the editor, shown where the Preview shows them, beside the editor in
+// Split: the server gives the text the selection shows, the page finds it, scrolls to it and
+// marks it a moment.
 async function showSourceSelectionOnPage() {
   if (!state.editor?.getSelectedText().trim()) return;
   const range = state.editor.getSelectionRange();
@@ -306,28 +309,24 @@ async function showSourceSelectionOnPage() {
       line_end: range.end.row + 1, column_end: range.end.column,
     }),
   });
+  if (state.view !== "split") {
+    await setWorkspaceView("split");
+    // The Preview takes its new width before it is scrolled and marked.
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  }
   const found = anchors.rangeFromShown(shown);
   if (found === null) throw new Error("the pages do not show these words or the words around them");
   const node = found.startContainer;
   (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement)
     ?.scrollIntoView({ behavior: "smooth", block: "center" });
-  const frame = pageFrameFor(node);
-  if (frame === null) return;
-  const layer = ensureHighlightLayer(frame.page);
-  const rects = found.collapsed ? [found.getBoundingClientRect()] : selectionRects(found);
-  const marks = rects.map((rect) => {
-    const mark = frameDocument().createElement("div");
-    mark.className = "html-mcp-highlight flash";
-    Object.assign(mark.style, {
-      left: `${(rect.left - frame.rect.left) / frame.ratio + frame.scrollLeft}px`,
-      top: `${(rect.top - frame.rect.top) / frame.ratio + frame.scrollTop}px`,
-      width: `${Math.max(2, rect.width / frame.ratio)}px`,
-      height: `${rect.height / frame.ratio}px`,
-    });
-    layer.appendChild(mark);
-    return mark;
-  });
-  setTimeout(() => marks.forEach((mark) => mark.remove()), 2000);
+  // Drawn with the comments' marks, so a redraw as the Preview takes its width keeps it.
+  state.shownRange = found;
+  scheduleHighlights();
+  setTimeout(() => {
+    if (state.shownRange !== found) return;
+    state.shownRange = null;
+    scheduleHighlights();
+  }, 2000);
 }
 
 function setSourceDirty(dirty) {
@@ -1401,10 +1400,8 @@ function showSelectionButton() {
   const left = iframe.offsetLeft + rect.left;
   button.style.left = `${Math.max(gap, Math.min(left, pane.clientWidth - width - gap))}px`;
   button.style.top = `${Math.max(gap, Math.min(wanted, pane.clientHeight - height - gap))}px`;
-  // Source shows the words in the editor beside the page, so it is offered where the editor is.
   const source = $("#selection-source-btn");
-  source.classList.toggle("hidden", state.view !== "split");
-  if (state.view !== "split") return;
+  source.classList.remove("hidden");
   const right = button.offsetLeft + width + 6;
   source.style.top = `${button.offsetTop}px`;
   source.style.left = `${right + source.offsetWidth <= pane.clientWidth - gap ? right : button.offsetLeft - source.offsetWidth - 6}px`;
@@ -1435,7 +1432,7 @@ function sourceLikeText(range) {
 }
 
 // The place in the edit file the selected words come from, found by the server in the file
-// as saved, selected in the editor beside the page.
+// as saved, selected in the editor beside the Preview, in Split.
 async function openSelectionInSource() {
   const selection = frameWindow().getSelection();
   if (state.selectionAnchor === null || selection === null || selection.rangeCount === 0) return;
@@ -1460,6 +1457,7 @@ async function openSelectionInSource() {
     body: JSON.stringify({ quote, prefix, suffix, title }),
   });
   hideSelectionButton();
+  if (state.view !== "split") await setWorkspaceView("split");
   if (!(await loadSource(false)) || state.sourcePath !== place.path) return;
   const Range = window.ace.require("ace/range").Range;
   state.editor.selection.setRange(new Range(
@@ -1746,6 +1744,20 @@ function renderHighlights() {
     }
     const firstRect = rects[0];
     if (firstRect !== undefined) layer.appendChild(numberedBadge(comment, number, local(frame, firstRect), false));
+  }
+  const shown = state.shownRange;
+  const shownFrame = shown === null ? null : pageFrameFor(shown.startContainer);
+  if (shownFrame !== null) {
+    const layer = ensureHighlightLayer(shownFrame.page);
+    for (const rect of shown.collapsed ? [shown.getBoundingClientRect()] : selectionRects(shown)) {
+      const box = local(shownFrame, rect);
+      const mark = frameDocument().createElement("div");
+      mark.className = "html-mcp-highlight flash";
+      Object.assign(mark.style, {
+        left: `${box.left}px`, top: `${box.top}px`, width: `${Math.max(2, box.width)}px`, height: `${box.height}px`,
+      });
+      layer.appendChild(mark);
+    }
   }
   const attachmentChanged = previousUnattached.size !== state.unattached.size
     || Array.from(previousUnattached).some((commentId) => !state.unattached.has(commentId));
@@ -2544,7 +2556,7 @@ function attachControls() {
     loadSource(true).catch((error) => alert(`Could not reload: ${error.message}`));
   });
   $("#source-page-btn").addEventListener("click", () => {
-    showSourceSelectionOnPage().catch((error) => alert(`Could not show it on the page: ${error.message}`));
+    showSourceSelectionOnPage().catch((error) => alert(`Could not show it in the Preview: ${error.message}`));
   });
   $("#source-font-smaller-btn").addEventListener("click", () => stepSourceFontSize(-1));
   $("#source-font-larger-btn").addEventListener("click", () => stepSourceFontSize(1));

@@ -1865,8 +1865,8 @@ return {paragraph: size(page.querySelector('p')),
 
 
 def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path: Path) -> None:
-    """Source appears beside Comment only where the editor is beside the page, and selects
-    the words in the edit file there."""
+    """Source beside Comment selects the words in the edit file, and → Preview in the editor
+    marks source words on the page. Either turns the view to Split."""
     slides = tmp_path / "slides.html"
     slides.write_text(slides_html(), encoding="utf-8")
     port = available_port()
@@ -1905,17 +1905,13 @@ def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        # Pressed in the Preview alone, Source turns the view to Split and selects the words.
         browser.execute_script(select)
         wait_until(lambda: browser.execute_script(shown.format("comment")))
-        assert not browser.execute_script(shown.format("source"))
-
-        browser.find_element("css selector", '[data-view="split"]').click()
-        wait_until(lambda: browser.execute_script(
-            'const page = window.wrappedJSObject || window;'
-            'return page.ace && page.ace.edit("source-editor").getValue().includes("Selected sentence")'))
-        browser.execute_script(select)
         wait_until(lambda: browser.execute_script(shown.format("source")))
         browser.find_element("css selector", "#selection-source-btn").click()
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector(".layout").classList.contains("view-split")'))
         row = next(index for index, line in enumerate(slides.read_text(encoding="utf-8").split("\n"))
                    if "Selected sentence." in line)
         picked = wait_until(lambda: browser.execute_script('''
@@ -1925,7 +1921,11 @@ def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path
         '''))
         assert picked == {"text": "Selected", "row": row}
 
-        # And back: → Page on words selected in the editor marks them on the page.
+        # And back: → Preview on words selected in the editor alone turns the view to Split
+        # and marks them on the page.
+        browser.find_element("css selector", '[data-view="source"]').click()
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector(".layout").classList.contains("view-source")'))
         column = slides.read_text(encoding="utf-8").split("\n")[row].index("sentence.")
         browser.execute_script(f'''
           const page = window.wrappedJSObject || window;
@@ -1947,6 +1947,7 @@ def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path
           return [got.left - want.left, got.right - want.right, got.top - want.top];
         '''))
         assert all(abs(value) < 2 for value in marked), marked
+        assert browser.execute_script('return document.querySelector(".layout").classList.contains("view-split")')
     finally:
         if browser is not None:
             try:

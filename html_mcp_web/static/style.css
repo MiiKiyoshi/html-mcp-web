@@ -142,8 +142,6 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .source-status.dirty { color: #9a6b0d; }
 .source-status.conflict { color: #a23f34; }
 .source-toolbar button { padding: .2rem .55rem; border-radius: 3px; white-space: nowrap; }
-/* The page the words are shown on is beside the editor only in Split. */
-.layout:not(.view-split) #source-page-btn { display: none; }
 #source-editor { flex: 1; min-height: 0; font-family: ui-monospace, monospace; }
 #source-editor .ace_marker-layer .source-comment-highlight { position: absolute; background: rgba(246, 216, 74, .32); }
 #source-editor .ace_gutter-cell.source-comment-line::before {
