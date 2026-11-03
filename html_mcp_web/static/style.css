@@ -54,7 +54,7 @@ button:disabled { cursor: default; opacity: .6; }
 .artifact-tabs { display: flex; align-self: stretch; min-width: 0; gap: 2px; padding-left: .75rem; border-left: 1px solid var(--line); overflow-x: auto; scrollbar-width: thin; }
 .artifact-tab { flex: none; white-space: nowrap; min-width: 72px; padding: .1rem .8rem; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: .82rem; }
 .artifact-tab.active { border-bottom-color: var(--accent); background: var(--accent-soft); color: #302e29; font-weight: 600; }
-.view-tabs { display: flex; align-self: stretch; margin-left: auto; }
+.view-tabs { display: flex; align-self: stretch; }
 .view-tab { min-width: 58px; padding: .1rem .6rem; border: 0; border-top: 1px solid transparent; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: .82rem; }
 .view-tab.active { border-bottom-color: var(--accent); background: var(--accent-soft); color: #302e29; }
 .main-file { padding-right: .75rem; color: var(--muted); font-family: ui-monospace, monospace; font-size: .82rem; }
@@ -190,6 +190,7 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
    keeps its place in the source view, where the editor has a find of its own. */
 #search-btn,
 #area-btn { display: inline-flex; align-items: center; padding: .1rem .4rem; line-height: 1; }
+#area-btn { margin-left: auto; }
 #search-btn svg,
 #area-btn svg { display: block; }
 #search-btn.active,
