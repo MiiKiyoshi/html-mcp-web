@@ -1864,6 +1864,82 @@ return {paragraph: size(page.querySelector('p')),
         shutil.rmtree(profile, ignore_errors=True)
 
 
+def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path: Path) -> None:
+    """Source appears beside Comment only where the editor is beside the page, and selects
+    the words in the edit file there."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_source_jump_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    select = '''
+      const frame = document.querySelector("#artifact-frame");
+      const words = frame.contentDocument.querySelector("#target").firstChild;
+      const selection = frame.contentWindow.getSelection();
+      selection.removeAllRanges();
+      const range = frame.contentDocument.createRange();
+      range.setStart(words, 0);
+      range.setEnd(words, 8);
+      selection.addRange(range);
+    '''
+    shown = 'return !document.querySelector("#selection-{}-btn").classList.contains("hidden")'
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=1400, height=900)
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        browser.execute_script(select)
+        wait_until(lambda: browser.execute_script(shown.format("comment")))
+        assert not browser.execute_script(shown.format("source"))
+
+        browser.find_element("css selector", '[data-view="split"]').click()
+        wait_until(lambda: browser.execute_script(
+            'const page = window.wrappedJSObject || window;'
+            'return page.ace && page.ace.edit("source-editor").getValue().includes("Selected sentence")'))
+        browser.execute_script(select)
+        wait_until(lambda: browser.execute_script(shown.format("source")))
+        browser.find_element("css selector", "#selection-source-btn").click()
+        row = next(index for index, line in enumerate(slides.read_text(encoding="utf-8").split("\n"))
+                   if "Selected sentence." in line)
+        picked = wait_until(lambda: browser.execute_script('''
+          const editor = (window.wrappedJSObject || window).ace.edit("source-editor");
+          const text = editor.getSelectedText();
+          return text ? {text, row: editor.getSelectionRange().start.row} : false;
+        '''))
+        assert picked == {"text": "Selected", "row": row}
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+            try:
+                browser_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser_process.kill()
+        shutil.rmtree(profile, ignore_errors=True)
+        shared.stop()
+
+
 def test_the_area_button_draws_a_box_to_comment_on(tmp_path: Path) -> None:
     """With the box tool on, a drag on a page draws a box even where it starts on text. The box is
     stored in page pixels, drawn back on its page, and cropped by the render as image(bbox)

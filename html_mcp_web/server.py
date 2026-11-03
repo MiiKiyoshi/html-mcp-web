@@ -18,7 +18,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -54,6 +54,7 @@ from .space import (
     union_bbox,
     validated_space_pages,
 )
+from .source_place import locate
 from .watcher import Watcher
 
 logger = logging.getLogger(__name__)
@@ -952,6 +953,21 @@ class HtmlReviewServer:
             headers={"Cache-Control": "no-store"},
         )
 
+    async def source_place(self, request: web.Request) -> web.Response:
+        """Where in the edit file words selected on the page come from: {quote, prefix,
+        suffix, title} -> {path, revision, line_start, column_start, line_end, column_end,
+        whole}, in the editor's lines and columns."""
+        path, relative = self.source_file(self.runtime(request))
+        text, revision = self.read_source(path)
+        data = await request.json()
+        try:
+            place = locate(text, str(data["quote"]), str(data["prefix"]), str(data["suffix"]), str(data["title"]))
+        except (KeyError, TypeError) as error:
+            raise web.HTTPBadRequest(text="quote, prefix, suffix and title are required") from error
+        if place is None:
+            raise web.HTTPNotFound(text=f"the selected words and their surroundings are not in {relative} as written")
+        return web.json_response({"path": relative, "revision": revision, **asdict(place)})
+
     async def save_source(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         path, relative = self.source_file(runtime)
@@ -1773,6 +1789,7 @@ class HtmlReviewServer:
         app.router.add_get(f"{base}/comments", self.list_comments)
         app.router.add_get(f"{base}/comments/{{comment_id}}", self.get_comment)
         app.router.add_post(f"{base}/comments", self.add_comment)
+        app.router.add_post(f"{base}/source-place", self.source_place)
         app.router.add_post(f"{base}/comments/update", self.update_comments)
         app.router.add_post(f"{base}/comments/export", self.export_comments)
         app.router.add_post(f"{base}/comments/{{comment_id}}/reply", self.reply_comment)

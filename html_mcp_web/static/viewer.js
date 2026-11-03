@@ -1319,25 +1319,25 @@ function showSelectionButton() {
   if (state.pinch !== null) return;
   if (document.fullscreenElement === $("#artifact-pane")) {
     state.selectionAnchor = null;
-    button.classList.add("hidden");
+    hideSelectionButton();
     return;
   }
   if (selection === null || selection.rangeCount === 0) {
     state.selectionAnchor = null;
-    button.classList.add("hidden");
+    hideSelectionButton();
     return;
   }
   const range = selectionSpan(selection);
   if (range.collapsed) {
     state.selectionAnchor = null;
-    button.classList.add("hidden");
+    hideSelectionButton();
     return;
   }
   try {
     state.selectionAnchor = captureTextAnchor(range);
   } catch (error) {
     state.selectionAnchor = null;
-    button.classList.add("hidden");
+    hideSelectionButton();
     return;
   }
   // The same geometry the highlight uses, so the button meets the letters that were
@@ -1363,10 +1363,42 @@ function showSelectionButton() {
   const left = iframe.offsetLeft + rect.left;
   button.style.left = `${Math.max(gap, Math.min(left, pane.clientWidth - width - gap))}px`;
   button.style.top = `${Math.max(gap, Math.min(wanted, pane.clientHeight - height - gap))}px`;
+  // Source shows the words in the editor beside the page, so it is offered where the editor is.
+  const source = $("#selection-source-btn");
+  source.classList.toggle("hidden", state.view !== "split");
+  if (state.view !== "split") return;
+  const right = button.offsetLeft + width + 6;
+  source.style.top = `${button.offsetTop}px`;
+  source.style.left = `${right + source.offsetWidth <= pane.clientWidth - gap ? right : button.offsetLeft - source.offsetWidth - 6}px`;
+}
+
+// The place in the edit file the selected words come from, found by the server in the file
+// as saved, selected in the editor beside the page.
+async function openSelectionInSource() {
+  const anchor = state.selectionAnchor;
+  const selection = frameWindow().getSelection();
+  if (anchor === null || selection === null || selection.rangeCount === 0) return;
+  const start = selectionSpan(selection).startContainer;
+  const page = (start.nodeType === Node.ELEMENT_NODE ? start : start.parentElement)
+    ?.closest("body > main.pages > section.page");
+  const title = page ? pageTitle(page, artifactPages().indexOf(page)) : "";
+  const place = await fetchJson(`${artifactBase()}/source-place`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ quote: anchor.quote, prefix: anchor.prefix, suffix: anchor.suffix, title }),
+  });
+  hideSelectionButton();
+  if (!(await loadSource(false)) || state.sourcePath !== place.path) return;
+  const Range = window.ace.require("ace/range").Range;
+  state.editor.selection.setRange(new Range(
+    place.line_start - 1, place.column_start, place.line_end - 1, place.column_end));
+  state.editor.scrollToLine(place.line_start - 1, true, true, () => {});
+  state.editor.focus();
 }
 
 function hideSelectionButton() {
   $("#selection-comment-btn").classList.add("hidden");
+  $("#selection-source-btn").classList.add("hidden");
 }
 
 // A Range inside an <svg> does not report the characters it holds. Selecting nine letters
@@ -2449,6 +2481,9 @@ function attachControls() {
   }
   $("#selection-comment-btn").addEventListener("click", () => {
     if (state.selectionAnchor !== null) openCompose(state.selectionAnchor);
+  });
+  $("#selection-source-btn").addEventListener("click", () => {
+    openSelectionInSource().catch((error) => alert(`Could not open the source: ${error.message}`));
   });
   $("#area-btn").addEventListener("click", () => setAreaMode(!state.areaMode));
   $("#artifact-comment-btn").addEventListener("click", () => openCompose({ kind: "artifact" }));

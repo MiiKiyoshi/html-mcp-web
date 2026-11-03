@@ -260,6 +260,18 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 
 .selection-comment:hover { color: white; background: #506277; }
 
+.selection-source {
+  position: absolute;
+  z-index: 20;
+  padding: 6px 10px;
+  border-color: var(--accent);
+  color: var(--accent);
+  background: white;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .2);
+}
+
+.selection-source:hover { background: var(--accent-soft); }
+
 .zoom-reset {
   padding: .1rem .55rem;
   border-radius: 3px;
@@ -277,6 +289,7 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
     left: auto !important;
     bottom: auto !important;
   }
+  .selection-source { top: 8px !important; }
   /* A phone zooms the whole page into a field smaller than 16px the moment it takes the
      cursor: writing a comment left the page zoomed, the source editor's hidden input
      among them. At 16px nothing zooms, and a comment is easier to read as it is typed. */
@@ -284,7 +297,8 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
     font-size: 16px !important;
   }
 }
-#artifact-pane:fullscreen .selection-comment { display: none !important; }
+#artifact-pane:fullscreen .selection-comment,
+#artifact-pane:fullscreen .selection-source { display: none !important; }
 
 #sidebar {
   min-width: 0;
