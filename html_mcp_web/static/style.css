@@ -421,7 +421,34 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .filter-row { display: flex; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 /* A fixed width: grown to fill the row, the select stretched and shrank every time a
    button beside it came or went, and the row jumped under the reader's eye. */
+.filter-row .pick { flex: none; width: 96px; }
 .filter-row select { flex: none; width: 96px; padding: 5px 8px; font-size: 12px; }
+/* A list on a touch screen takes 16px type so the phone does not zoom in on it, which
+   drew it larger than everything around it. There its choice is drawn in the row's own
+   type, and the list lies clear over that and still opens on a tap. */
+.pick { position: relative; display: inline-flex; min-width: 0; }
+.pick-name { display: none; }
+@media (pointer: coarse) {
+  .pick-name {
+    position: relative;
+    display: block;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0.2rem 1.2rem 0.2rem 0.4rem;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--bg);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8rem;
+  }
+  .pick-name::after { content: "\25BE"; position: absolute; right: 0.4rem; top: 50%; transform: translateY(-50%); color: var(--muted); }
+  .pick select {
+    position: absolute !important; inset: 0; width: 100% !important; height: 100% !important;
+    min-width: 0 !important; max-width: none !important; opacity: 0;
+  }
+}
 /* Green reaches a parked waiter now; red queues the call for the next waiter. */
 .icon-btn {
   flex: none; display: inline-flex; align-items: center; gap: 4px;
@@ -572,13 +599,17 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
 /* A narrow screen also has no room for the row of controls, which ran off the right edge
    and took the control that hides the comments with it. */
 @media (max-width: 560px) {
+  /* One row on a phone: the buttons draw smaller, the file's name gives up what the row
+     lacks and ends in an ellipsis, and Saved follows the buttons in small type. */
+  .source-toolbar { flex-wrap: nowrap; gap: 0.25rem; padding: 0.1rem 0.35rem; }
+  .source-toolbar button { padding: 0.2rem 0.25rem; }
+  .source-toolbar button svg { width: 14px; height: 14px; }
+  .source-status { order: 2; flex: 0 0 auto; margin-left: auto; font-size: 0.62rem; }
+  .source-file { flex: 0 1 auto; }
   .topbar { flex-wrap: wrap; gap: .4rem .6rem; padding: .3rem .5rem; }
   .topbar h1, .artifact-meta { display: none; }
   .artifact-tabs { flex: 1 1 100%; padding-left: 0; border-left: 0; }
   .topbar-actions { margin-left: auto; flex-wrap: wrap; padding-left: 0; border-left: 0; }
-  .source-file { flex: 1 1 12rem; }
-  /* After the buttons, at the right of their last row, in small type. */
-  .source-status { order: 2; flex: 0 0 auto; margin-left: auto; font-size: .7rem; }
 }
 
 

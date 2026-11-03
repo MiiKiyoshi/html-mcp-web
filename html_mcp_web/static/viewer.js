@@ -2734,7 +2734,10 @@ function attachControls() {
     state.pendingAnchor = null;
     state.pendingSourceRevision = null;
   });
-  $("#comment-filter").addEventListener("change", () => refreshComments().catch((error) => alert(error.message)));
+  $("#comment-filter").addEventListener("change", (event) => {
+    $("#comment-filter-name").textContent = event.target.selectedOptions[0].textContent;
+    refreshComments().catch((error) => alert(error.message));
+  });
   $("#fold-all-btn").addEventListener("click", foldAll);
   $("#pick-all-btn").addEventListener("click", pickAll);
   // Picking is the reviewer's own act, and closing what was picked is the sign-off on a

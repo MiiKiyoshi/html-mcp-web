@@ -128,12 +128,12 @@
 
         <div id="tab-comments" class="tab-pane active">
           <div class="filter-row">
-            <select id="comment-filter" aria-label="Comment status">
+            <span class="pick"><span id="comment-filter-name" class="pick-name" aria-hidden="true">open</span><select id="comment-filter" aria-label="Comment status">
               <option value="open" selected>open</option>
               <option value="resolved">resolved</option>
               <option value="reference">archived</option>
               <option value="all">all</option>
-            </select>
+            </select></span>
             <!-- Icons, with the words as title and aria-label: written out, the row ran out of
                  room on a phone and wrapped. Each button shows the one drawing that fits its
                  state; a count rides beside the drawing where the action has one. A button with
