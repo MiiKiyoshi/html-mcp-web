@@ -274,12 +274,16 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     @_compact
     async def write_comments(
         artifact: str,
-        action: Literal["reply", "edit", "suggest", "withdraw"],
+        action: Literal["add", "reply", "edit", "suggest", "withdraw"],
         text: Annotated[str | None, Field(min_length=1, description=(
-            "reply: the replies as one text, each starting at a line head with its comment id "
-            "and a colon ('c-1a2b3c4d: ') and running to the next such head. edit: rewrites of "
-            "your own entries, each headed 'c-1a2b3c4d/e-5e6f7a8b@<rev>: '. suggest, withdraw: "
-            "why."))] = None,
+            "add: the new comment. reply: the replies as one text, each starting at a line head "
+            "with its comment id and a colon ('c-1a2b3c4d: ') and running to the next such head. "
+            "edit: rewrites of your own entries, each headed 'c-1a2b3c4d/e-5e6f7a8b@<rev>: '. "
+            "suggest, withdraw: why."))] = None,
+        anchor: Annotated[dict[str, Any] | None, Field(description=(
+            'add: where the comment sits. {"kind": "artifact"}, {"kind": "page", "number": N}, '
+            '{"kind": "area", "number": N, "bbox": [x1, y1, x2, y2]} in page pixels as layout() '
+            'gives them, or {"kind": "source", "start": L, "end": L}, whole lines of guide()\'s edit_file.'))] = None,
         edited_files: Annotated[list[str] | None, Field(description="reply: project-relative paths you edited for these comments.")] = None,
         draft: Annotated[str | None, Field(description="reply: a draft from read_comments(save=True), given without text. It carries replies and edits.")] = None,
         id: Annotated[str | None, Field(description="suggest, withdraw: the comment.")] = None,
@@ -287,9 +291,33 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         changes: Annotated[list[dict[str, str]] | None, Field(description=(
             "suggest: [{old, new}], each old found once in guide()'s edit_file, as the file spells it."))] = None,
     ) -> dict[str, Any]:
-        """Reply, rewrite your own entries, or propose a source change for the reviewer to
-        apply, replacing that thread's proposal. A stale rev is refused."""
+        """Open a comment, reply, rewrite your own entries, or propose a source change for the
+        reviewer to apply, replacing that thread's proposal. A stale rev is refused."""
         client = binding.require_client()
+        if action == "add":
+            if anchor is None or text is None:
+                raise ValueError("add needs anchor and text")
+            kind = anchor.get("kind")
+            body = {"text": text, "author": "agent"}
+            if kind == "artifact":
+                body["anchor"] = {"kind": "artifact"}
+            elif kind in ("page", "area"):
+                # The page's title is read off the page where the comment is shown.
+                body["anchor"] = {"kind": kind, "number": anchor["number"], "title": "",
+                                  **({"bbox": anchor["bbox"]} if kind == "area" else {})}
+            elif kind == "source":
+                source = await client.request_json("GET", f"/artifacts/{artifact}/source")
+                lines = source["text"].split("\n")
+                start, end = int(anchor["start"]), int(anchor["end"])
+                if not 1 <= start <= end <= len(lines):
+                    raise ValueError(f"source lines run from 1 to {len(lines)}, start before end")
+                body["anchor"] = {"kind": "source", "file": source["path"], "line_start": start, "line_end": end,
+                                  "column_start": 0, "column_end": len(lines[end - 1].encode("utf-16-le")) // 2}
+                body["source_revision"] = source["revision"]
+            else:
+                raise ValueError("anchor kind is artifact, page, area or source")
+            comment = await client.request_json("POST", f"/artifacts/{artifact}/comments", body)
+            return {"id": comment["id"], "rev": revision_of(comment["updated"])}
         if action in ("suggest", "withdraw"):
             if id is None or rev is None or text is None:
                 raise ValueError(f"{action} needs id, rev and text")

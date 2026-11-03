@@ -969,8 +969,8 @@ def test_write_comments_takes_edits_of_the_agents_own_entries(tmp_path: Path) ->
     mcp = create_server(ProjectBinding(tmp_path))
     schemas = {tool.name: tool.inputSchema for tool in asyncio.run(mcp.list_tools())}
     assert set(schemas["write_comments"]["properties"]) == {
-        "artifact", "action", "text", "edited_files", "draft", "id", "rev", "changes"}
-    assert schemas["write_comments"]["properties"]["action"]["enum"] == ["reply", "edit", "suggest", "withdraw"]
+        "artifact", "action", "text", "anchor", "edited_files", "draft", "id", "rev", "changes"}
+    assert schemas["write_comments"]["properties"]["action"]["enum"] == ["add", "reply", "edit", "suggest", "withdraw"]
     assert "'c-1a2b3c4d/e-5e6f7a8b@<rev>: '" in json.dumps(schemas["write_comments"]["properties"]["text"])
 
 
@@ -1082,3 +1082,15 @@ def test_unknown_arguments_are_refused_and_schemas_are_compact(tmp_path: Path) -
     # FastMCP adds a title to every schema and a null default to every optional field.
     schemas = json.dumps([tool.inputSchema for tool in asyncio.run(mcp.list_tools())])
     assert '"title"' not in schemas and '"default": null' not in schemas
+
+
+def test_new_never_hands_the_agent_a_thread_it_opened_until_the_reviewer_writes() -> None:
+    from html_mcp_web.mcp_contract import new_requests
+
+    opened = {"id": "c-1", "status": "open", "updated": "2026-11-03T10:00:00+00:00", "anchor": {"kind": "artifact"},
+              "thread": [{"author": "agent", "at": "2026-11-03T10:00:00+00:00", "text": "agent note"}]}
+    assert new_requests([opened], None) == ([], None)
+    answered = {**opened, "thread": [*opened["thread"],
+                                     {"author": "human", "at": "2026-11-03T10:05:00+00:00", "text": "why?"}]}
+    fresh, _ = new_requests([answered], None)
+    assert [entry["text"] for entry in fresh[0]["entries"]] == ["why?"]

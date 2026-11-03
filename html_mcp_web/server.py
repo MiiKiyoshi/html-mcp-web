@@ -1357,7 +1357,10 @@ class HtmlReviewServer:
                     raise ValueError("source anchor quote must not be empty")
             else:
                 anchor = anchor_from_dict(raw_anchor)
-            comment = runtime.store.add(anchor, str(data["text"]), author="human")
+            author = data["author"] if "author" in data else "human"
+            if author not in {"human", "agent"}:
+                raise ValueError("invalid author")
+            comment = runtime.store.add(anchor, str(data["text"]), author=author)
         except web.HTTPException:
             raise
         except (KeyError, TypeError, ValueError) as error:

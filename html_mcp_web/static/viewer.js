@@ -2342,6 +2342,10 @@ const comments = createComments({
   h,
   hideSelectionButton,
   openSourceLocation,
+  pageTitleAt: (number) => {
+    const page = frameDocument()?.body ? artifactPages()[number - 1] : undefined;
+    return page === undefined ? "" : pageTitle(page, number - 1);
+  },
   renderHighlights,
   resolveAnchor,
   state,

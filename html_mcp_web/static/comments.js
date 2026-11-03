@@ -9,6 +9,7 @@ export function createComments(dependencies) {
     h,
     hideSelectionButton,
     openSourceLocation,
+    pageTitleAt,
     renderHighlights,
     resolveAnchor,
     state,
@@ -89,8 +90,9 @@ export function createComments(dependencies) {
   function anchorSummary(anchor) {
     if (anchor.kind === "artifact") return { label: "artifact", quote: "Whole artifact" };
     if (anchor.kind === "text") return { label: "", quote: anchor.quote };
-    if (anchor.kind === "page") return { label: `p${anchor.number}`, quote: anchor.title };
-    if (anchor.kind === "area") return { label: `p${anchor.number} area`, quote: anchor.title };
+    // A page the agent commented on carries no title of its own; the page's is shown.
+    if (anchor.kind === "page") return { label: `p${anchor.number}`, quote: anchor.title || pageTitleAt(anchor.number) };
+    if (anchor.kind === "area") return { label: `p${anchor.number} area`, quote: anchor.title || pageTitleAt(anchor.number) };
     if (anchor.kind === "source") {
       const end = anchor.line_end === anchor.line_start ? "" : `-${anchor.line_end}`;
       return { label: `${anchor.file}:${anchor.line_start}${end}`, quote: anchor.quote };
