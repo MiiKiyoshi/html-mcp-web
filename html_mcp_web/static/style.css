@@ -685,3 +685,11 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
 :root[data-theme="dark"] dialog { border-color: #615d55; color: #f5f2eb; }
 :root[data-theme="dark"] dialog::backdrop { background: rgba(0, 0, 0, .5); }
 :root[data-theme="dark"] dialog blockquote { background: #2e2a1c; color: #e0d8c4; }
+/* The editor's One Dark keeps its words' colours on the page's gray rather than its own
+   near-black ground. */
+:root[data-theme="dark"] .ace-one-dark,
+:root[data-theme="dark"] .ace-one-dark .ace_gutter { background: #403f3b; }
+:root[data-theme="dark"] .ace-one-dark .ace_gutter { color: #a8a397; }
+:root[data-theme="dark"] .ace-one-dark .ace_marker-layer .ace_active-line,
+:root[data-theme="dark"] .ace-one-dark .ace_gutter-active-line { background: #4a4944; }
+:root[data-theme="dark"] .ace-one-dark .ace_marker-layer .ace_selection { background: #5b636d; }
