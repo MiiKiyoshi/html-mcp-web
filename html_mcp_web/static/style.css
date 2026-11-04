@@ -707,3 +707,7 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
 :root[data-theme="dark"] .ace-one-dark :is(.ace_variable, .ace_meta.ace_tag, .ace_entity.ace_name.ace_tag,
   .ace_entity.ace_other.ace_attribute-name, .ace_string.ace_regexp) { color: #f2a0a7; }
 :root[data-theme="dark"] .ace-one-dark .ace_cursor { color: #9cbcff; }
+/* Safari scrolls the boxes around the editor's hidden input to bring it into view as keys
+   are pressed, and the editor then put itself back: the text shook with every cursor move.
+   These boxes clip instead, which no scroll can move. */
+#source-pane, #source-editor, #source-editor .ace_scroller, #source-editor .ace_gutter { overflow: clip; }
