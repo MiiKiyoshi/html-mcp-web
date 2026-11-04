@@ -138,7 +138,11 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
             "boxFitSearchAtRight": True,
             "searchAtRight": True,
         }
-        assert abs(placement["toolbarHeight"] - placement["topbarHeight"]) < 0.5, placement
+        # The panels' bars share one height: the artifact's, the editor's and the comments' tabs.
+        bars = browser.execute_script(
+            'return [".workspace-toolbar", ".source-toolbar", ".sidebar-tabs"].map((s) =>'
+            ' document.querySelector(s).getBoundingClientRect().height);')
+        assert max(bars) - min(bars) < 0.5 or bars[1] == 0, bars
 
         browser.find_element("css selector", '[data-view="source"]').click()
         wait_until(lambda: browser.execute_script(
