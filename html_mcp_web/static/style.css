@@ -707,3 +707,4 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
 :root[data-theme="dark"] .ace-one-dark :is(.ace_variable, .ace_meta.ace_tag, .ace_entity.ace_name.ace_tag,
   .ace_entity.ace_other.ace_attribute-name, .ace_string.ace_regexp) { color: #f2a0a7; }
 :root[data-theme="dark"] .ace-one-dark .ace_cursor { color: #9cbcff; }
+#source-editor.steady-cursor .ace_cursor { animation: none !important; }
