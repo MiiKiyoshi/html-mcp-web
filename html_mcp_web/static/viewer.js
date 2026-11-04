@@ -65,6 +65,8 @@ const state = {
   sourceDirty: false,
   sourceLoading: false,
   sourceCommentMarkers: [],
+  // Each comment's marked text in the editor, as { range, comment }.
+  sourceCommentSpans: [],
   sourceCommentRows: new Set(),
   sourceCommentsByRow: new Map(),
   artifactZoom: 1,
@@ -283,6 +285,7 @@ function clearSourceCommentMarkers() {
     state.editor.session.removeGutterDecoration(row, "source-suggestion-line");
   }
   state.sourceCommentMarkers = [];
+  state.sourceCommentSpans = [];
   state.sourceCommentRows.clear();
   state.sourceCommentsByRow.clear();
 }
@@ -360,6 +363,7 @@ function syncSourceCommentMarkers() {
       "text",
       false,
     ));
+    state.sourceCommentSpans.push({ range: new Range(firstRow, anchor.column_start, lastRow, anchor.column_end), comment });
     state.editor.session.addGutterDecoration(firstRow, "source-comment-line");
     state.sourceCommentRows.add(firstRow);
     const comments = state.sourceCommentsByRow.get(firstRow) ?? [];
@@ -385,6 +389,7 @@ function syncSourceCommentMarkers() {
         "text",
         false,
       ));
+      state.sourceCommentSpans.push({ range: new Range(start.row, start.column, end.row, end.column), comment });
       state.editor.session.addGutterDecoration(start.row, "source-comment-line");
       state.editor.session.addGutterDecoration(start.row, "source-suggestion-line");
       state.sourceCommentRows.add(start.row);
@@ -515,6 +520,8 @@ function defineVimCommands(Vim) {
     return start;
   });
   Vim.mapCommand("gc", "operator", "sourceComment");
+  Vim.defineAction("showCommentAtCursor", () => showCommentAtCursor());
+  Vim.mapCommand("K", "action", "showCommentAtCursor", {}, { context: "normal" });
   // gs shows what a motion or the selection covers in the Preview, as → Preview does: gss
   // the line, gsip the paragraph.
   Vim.defineOperator("showInPreview", (cm, args, ranges) => {
@@ -597,6 +604,21 @@ function applyTheme(theme) {
   for (const frame of document.querySelectorAll("iframe")) markFrameTheme(frame);
 }
 
+// K with Vim keys, or Ctrl+Alt+K (Cmd+Option+K), opens in the comments the comment the
+// cursor is on, as a click on its mark beside the line does: the narrowest when several
+// cover the cursor, else one on the cursor's line.
+function showCommentAtCursor() {
+  const { row, column } = state.editor.getCursorPosition();
+  const size = ({ range }) => (range.end.row - range.start.row) * 1e6 + range.end.column - range.start.column;
+  const covering = state.sourceCommentSpans.filter(({ range }) => range.contains(row, column)).sort((a, b) => size(a) - size(b));
+  const chosen = covering[0]?.comment ?? state.sourceCommentsByRow.get(row)?.[0];
+  if (chosen === undefined) {
+    setSourceStatus("No comment here");
+    return;
+  }
+  focusComment(chosen.id);
+}
+
 // Ctrl+Alt+M (Cmd+Option+M), or gc with Vim keys. Comments wait for the file to be saved,
 // as the button does, and the bar says so.
 function commentSourceSelection() {
@@ -638,6 +660,11 @@ async function initializeSourceEditor() {
     name: "showInPreview",
     bindKey: { win: "Ctrl-Alt-P", mac: "Command-Alt-P" },
     exec: () => showSourceSelectionOnPage().catch((error) => alert(`Could not show it in the Preview: ${error.message}`)),
+  });
+  editor.commands.addCommand({
+    name: "showCommentAtCursor",
+    bindKey: { win: "Ctrl-Alt-K", mac: "Command-Alt-K" },
+    exec: () => showCommentAtCursor(),
   });
   editor.commands.addCommand({
     name: "commentSource",

@@ -275,6 +275,16 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         marker_count = wait_until(lambda: browser.execute_script(
             'return document.querySelectorAll("#source-editor .source-comment-highlight").length'))
         assert marker_count >= 2
+        # Ctrl+Alt+K on the commented characters opens their comment in the comments.
+        browser.execute_script('''
+          const editor = (window.wrappedJSObject || window).ace.edit("source-editor");
+          editor.focus();
+          editor.moveCursorTo(0, editor.getValue().indexOf("SELECT START") + 5);
+        ''')
+        ActionSequence(browser, "key", "keyboard").key_down("\ue009").key_down("\ue00a").key_down("k") \
+            .key_up("k").key_up("\ue00a").key_up("\ue009").perform()
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector(".comment-card.focused")?.dataset.commentId') == comments[0]["id"])
 
         browser.find_element("css selector", '[data-view="split"]').click()
         before = browser.execute_script('''
