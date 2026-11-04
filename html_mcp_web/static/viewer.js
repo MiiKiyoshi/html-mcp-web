@@ -319,8 +319,10 @@ async function showSourceSelectionOnPage() {
   const found = anchors.rangeFromShown(shown);
   if (found === null) throw new Error("the pages do not show these words or the words around them");
   const node = found.startContainer;
+  // At once: a smooth scroll in Safari came late, or stopped short, when one place followed
+  // another.
   (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement)
-    ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    ?.scrollIntoView({ behavior: "instant", block: "center" });
   // Drawn with the comments' marks, so a redraw as the Preview takes its width keeps it.
   state.shownRange = found;
   scheduleHighlights();
