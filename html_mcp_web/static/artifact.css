@@ -13,6 +13,12 @@ html[data-html-mcp-layout="report"] {
 }
 
 html[data-html-mcp-layout] { background: #faf8f2 !important; }
+/* In the review page's dark theme the ground around the pages darkens; the pages do not. */
+html[data-html-mcp-layout][data-html-mcp-theme="dark"],
+html[data-html-mcp-layout][data-html-mcp-theme="dark"] body { background: #161513 !important; }
+/* Only the scroll bar darkens with it: a dark colour scheme would also turn the default
+   colour of the artifact's own words light. */
+html[data-html-mcp-layout][data-html-mcp-theme="dark"] { scrollbar-color: #4a4740 #161513; }
 /* A sideways wheel with nothing to scroll is not a step back through history. */
 html[data-html-mcp-layout] { overscroll-behavior-x: none !important; }
 

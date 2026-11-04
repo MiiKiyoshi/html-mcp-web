@@ -73,6 +73,8 @@ button:disabled { cursor: default; opacity: .6; }
 .topbar-actions { display: flex; flex: 0 0 auto; align-self: stretch; gap: .5rem; align-items: center; padding-left: .75rem; border-left: 1px solid var(--line); }
 .topbar h1, .topbar-actions button, .download-btn { white-space: nowrap; }
 .narrow-icon { display: none; }
+#theme-btn { display: inline-flex; align-items: center; line-height: 1; }
+#theme-btn svg { display: block; }
 .topbar-actions button { padding: .1rem .55rem; border-radius: 3px; font-size: .82rem; }
 /* The scripts button is an icon that reads as a switch: lit while scripts show, plain
    while they hide. */
@@ -630,3 +632,45 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
 
 
 .stale-pill { color: #bd6d58; font-weight: 700; font-size: 11px; }
+
+/* ----- Dark theme -----
+   The review page's own parts on a dark ground. The artifact keeps its colours. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  scrollbar-color: #4a4740 #1c1b19;
+  color: #e4dfd4;
+  background: #1c1b19;
+  --bg: #1c1b19;
+  --paper: #242320;
+  --line: #3b3934;
+  --muted: #a39c8f;
+  --accent: #8ea5bf;
+  --accent-soft: #2e3238;
+  --yellow: #c9ad3a;
+}
+:root[data-theme="dark"] :is(button, select, .download-btn, .artifact-tab.active, .view-tab.active,
+  .tab-btn.active, .page-title, .comment-preview) { color: #e4dfd4; }
+:root[data-theme="dark"] #artifact-pane,
+:root[data-theme="dark"] .artifact-frame { background: #161513; }
+:root[data-theme="dark"] #thumbs-pane,
+:root[data-theme="dark"] #thumbs-pane iframe { background: #201f1c; }
+:root[data-theme="dark"] .selection-source { background: var(--paper); }
+:root[data-theme="dark"] :is(.artifact-status.error, .source-status.conflict, .danger) { color: #e0857c; }
+:root[data-theme="dark"] .source-status.dirty { color: #d6a64a; }
+:root[data-theme="dark"] .problem { border-color: #5a3a35; background: #2d2220; color: #e8cfc9; }
+:root[data-theme="dark"] .problem.clickable:hover { border-color: #7a4c44; background: #3a2926; }
+:root[data-theme="dark"] .problem.warning { border-color: #5a4f2c; background: #2e2a1c; color: #e9dcb5; }
+:root[data-theme="dark"] .problem.warning.clickable:hover { border-color: #786a3a; background: #3a3422; }
+:root[data-theme="dark"] #call-agent-btn.agent-ready { color: #8fcb9c; border-color: #3f6a48; background: #1f2b21; }
+:root[data-theme="dark"] #call-agent-btn.agent-offline { color: #e8968f; border-color: #6a3b38; background: #321f1e; }
+:root[data-theme="dark"] :is(.comment-summary:hover, .anchor-quote) { background: #2a2925; }
+:root[data-theme="dark"] :is(.anchor-quote, .comment-id) { color: #cfc8bb; }
+:root[data-theme="dark"] .status-pill.open { color: #d8c25a; }
+:root[data-theme="dark"] .status-pill.resolved { color: #8cc29a; }
+:root[data-theme="dark"] .status-pill.reference { color: #9fb4e0; }
+:root[data-theme="dark"] :is(.comment-body, .thread-entry) { border-color: var(--line); }
+:root[data-theme="dark"] :is(.comment-form textarea, #compose-text) { color: #e4dfd4; background: #1c1b19; }
+:root[data-theme="dark"] dialog { border-color: #4a4740; color: #e4dfd4; }
+:root[data-theme="dark"] dialog::backdrop { background: rgba(0, 0, 0, .5); }
+:root[data-theme="dark"] dialog blockquote { background: #2e2a1c; color: #e0d8c4; }
+:root[data-theme="dark"] #theme-btn { color: #d8c25a; }

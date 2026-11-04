@@ -491,6 +491,32 @@ function attachVimInputMethod(editor) {
   };
 }
 
+// Dark or light, as the reader last chose, else as the system is. The review page's own
+// parts change; the artifact is drawn as written, on a dark ground in the dark.
+function darkTheme() {
+  return document.documentElement.dataset.theme === "dark";
+}
+
+function editorTheme() {
+  return darkTheme() ? "ace/theme/tomorrow_night" : "ace/theme/textmate";
+}
+
+function markFrameTheme(frame) {
+  try {
+    const root = frame.contentDocument?.documentElement;
+    if (root) root.dataset.htmlMcpTheme = document.documentElement.dataset.theme;
+  } catch {
+    // A frame from elsewhere keeps its own look.
+  }
+}
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  $("#theme-btn").setAttribute("aria-pressed", String(theme === "dark"));
+  state.editor?.setTheme(editorTheme());
+  for (const frame of document.querySelectorAll("iframe")) markFrameTheme(frame);
+}
+
 // Ctrl+Alt+M (Cmd+Option+M), or gc with Vim keys. Comments wait for the file to be saved,
 // as the button does, and the bar says so.
 function commentSourceSelection() {
@@ -506,7 +532,7 @@ async function initializeSourceEditor() {
   if (window.ace === undefined) throw new Error("The source editor did not load");
   window.ace.config.set("basePath", `/static/${servedStatic()}/ace`);
   const editor = window.ace.edit("source-editor");
-  editor.setTheme("ace/theme/textmate");
+  editor.setTheme(editorTheme());
   editor.session.setUseWorker(false);
   editor.session.setMode("ace/mode/html");
   editor.session.setUseWrapMode(sourceWraps());
@@ -2696,6 +2722,21 @@ function attachControls() {
     openSelectionInSource().catch((error) => alert(`Could not open the source: ${error.message}`));
   });
   $("#area-btn").addEventListener("click", () => setAreaMode(!state.areaMode));
+  $("#theme-btn").addEventListener("click", () => {
+    const theme = darkTheme() ? "light" : "dark";
+    try { localStorage.setItem("htmlMcpTheme", theme); } catch { /* the choice lasts this visit */ }
+    applyTheme(theme);
+  });
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (event) => {
+    let chosen = null;
+    try { chosen = localStorage.getItem("htmlMcpTheme"); } catch { /* none kept */ }
+    if (chosen === null) applyTheme(event.matches ? "dark" : "light");
+  });
+  // Each artifact and preview frame takes the theme as its document loads.
+  document.addEventListener("load", (event) => {
+    if (event.target instanceof HTMLIFrameElement) markFrameTheme(event.target);
+  }, true);
+  applyTheme(document.documentElement.dataset.theme);
   // On a touch screen the view tabs sit in the artifact's bar by the thumbs button, where a
   // thumb reaches them; with a mouse, on the left of the top bar.
   const touch = window.matchMedia("(pointer: coarse)");

@@ -152,6 +152,18 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         assert browser.execute_script(font_size) == "14px"
         assert browser.execute_script('return localStorage.getItem("htmlMcpSourceFontSize")') == "14"
         browser.execute_script('document.querySelector("#source-font-smaller-btn").click()')
+        # The moon button turns the page dark and back, keeps the choice, and takes the
+        # editor and the artifact's frame with it; the artifact keeps its own colours.
+        theme = '''
+          const page = window.wrappedJSObject || window;
+          const frame = document.querySelector("#artifact-frame").contentDocument.documentElement;
+          return [document.documentElement.dataset.theme, localStorage.getItem("htmlMcpTheme"),
+                  page.ace.edit("source-editor").getTheme(), frame.dataset.htmlMcpTheme];
+        '''
+        browser.execute_script('document.querySelector("#theme-btn").click()')
+        assert browser.execute_script(theme) == ["dark", "dark", "ace/theme/tomorrow_night", "dark"]
+        browser.execute_script('document.querySelector("#theme-btn").click()')
+        assert browser.execute_script(theme) == ["light", "light", "ace/theme/textmate", "light"]
         # Long lines wrap until the wrap button turns it off, and the Vim button gives the
         # editor Vim keys, with Ctrl+[ as Escape and :w saving.
         editor = '(window.wrappedJSObject || window).ace.edit("source-editor")'
