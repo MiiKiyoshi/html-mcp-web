@@ -649,23 +649,23 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
    The review page's own parts on a dark ground. The artifact keeps its colours. */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  scrollbar-color: #77736a #383733;
+  scrollbar-color: #8a867c #4a4944;
   color: #f5f2eb;
-  background: #383733;
-  --bg: #383733;
-  --paper: #42413c;
-  --line: #66635b;
+  background: #4a4944;
+  --bg: #4a4944;
+  --paper: #54524d;
+  --line: #7a766e;
   --muted: #d8d2c6;
   --accent: #8ea5bf;
-  --accent-soft: #4b525b;
+  --accent-soft: #5b636d;
   --yellow: #c9ad3a;
 }
 :root[data-theme="dark"] :is(button, select, .download-btn, .artifact-tab.active, .view-tab.active,
   .tab-btn.active, .page-title, .comment-preview) { color: #f5f2eb; }
 :root[data-theme="dark"] #artifact-pane,
-:root[data-theme="dark"] .artifact-frame { background: #302f2c; }
+:root[data-theme="dark"] .artifact-frame { background: #403f3b; }
 :root[data-theme="dark"] #thumbs-pane,
-:root[data-theme="dark"] #thumbs-pane iframe { background: #3a3935; }
+:root[data-theme="dark"] #thumbs-pane iframe { background: #4c4a45; }
 :root[data-theme="dark"] .selection-source { background: var(--paper); }
 :root[data-theme="dark"] :is(.artifact-status.error, .source-status.conflict, .danger) { color: #e0857c; }
 :root[data-theme="dark"] .source-status.dirty { color: #d6a64a; }
@@ -675,13 +675,13 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
 :root[data-theme="dark"] .problem.warning.clickable:hover { border-color: #786a3a; background: #3a3422; }
 :root[data-theme="dark"] #call-agent-btn.agent-ready { color: #8fcb9c; border-color: #3f6a48; background: #1f2b21; }
 :root[data-theme="dark"] #call-agent-btn.agent-offline { color: #e8968f; border-color: #6a3b38; background: #321f1e; }
-:root[data-theme="dark"] :is(.comment-summary:hover, .anchor-quote) { background: #4a4843; }
+:root[data-theme="dark"] :is(.comment-summary:hover, .anchor-quote) { background: #5c5a54; }
 :root[data-theme="dark"] :is(.anchor-quote, .comment-id) { color: #cfc8bb; }
 :root[data-theme="dark"] .status-pill.open { color: #d8c25a; }
 :root[data-theme="dark"] .status-pill.resolved { color: #8cc29a; }
 :root[data-theme="dark"] .status-pill.reference { color: #9fb4e0; }
 :root[data-theme="dark"] :is(.comment-body, .thread-entry) { border-color: var(--line); }
-:root[data-theme="dark"] :is(.comment-form textarea, #compose-text) { color: #f5f2eb; background: #383733; }
+:root[data-theme="dark"] :is(.comment-form textarea, #compose-text) { color: #f5f2eb; background: #4a4944; }
 :root[data-theme="dark"] dialog { border-color: #615d55; color: #f5f2eb; }
 :root[data-theme="dark"] dialog::backdrop { background: rgba(0, 0, 0, .5); }
 :root[data-theme="dark"] dialog blockquote { background: #2e2a1c; color: #e0d8c4; }
