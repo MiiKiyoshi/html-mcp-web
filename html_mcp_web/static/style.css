@@ -650,18 +650,18 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
 :root[data-theme="dark"] {
   color-scheme: dark;
   scrollbar-color: #6a665e #2a2926;
-  color: #eeeae1;
+  color: #f5f2eb;
   background: #2a2926;
   --bg: #2a2926;
   --paper: #33322e;
   --line: #57544d;
-  --muted: #bdb6a9;
+  --muted: #d8d2c6;
   --accent: #8ea5bf;
   --accent-soft: #3d434b;
   --yellow: #c9ad3a;
 }
 :root[data-theme="dark"] :is(button, select, .download-btn, .artifact-tab.active, .view-tab.active,
-  .tab-btn.active, .page-title, .comment-preview) { color: #eeeae1; }
+  .tab-btn.active, .page-title, .comment-preview) { color: #f5f2eb; }
 :root[data-theme="dark"] #artifact-pane,
 :root[data-theme="dark"] .artifact-frame { background: #232220; }
 :root[data-theme="dark"] #thumbs-pane,
@@ -681,7 +681,7 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
 :root[data-theme="dark"] .status-pill.resolved { color: #8cc29a; }
 :root[data-theme="dark"] .status-pill.reference { color: #9fb4e0; }
 :root[data-theme="dark"] :is(.comment-body, .thread-entry) { border-color: var(--line); }
-:root[data-theme="dark"] :is(.comment-form textarea, #compose-text) { color: #eeeae1; background: #2a2926; }
-:root[data-theme="dark"] dialog { border-color: #615d55; color: #eeeae1; }
+:root[data-theme="dark"] :is(.comment-form textarea, #compose-text) { color: #f5f2eb; background: #2a2926; }
+:root[data-theme="dark"] dialog { border-color: #615d55; color: #f5f2eb; }
 :root[data-theme="dark"] dialog::backdrop { background: rgba(0, 0, 0, .5); }
 :root[data-theme="dark"] dialog blockquote { background: #2e2a1c; color: #e0d8c4; }

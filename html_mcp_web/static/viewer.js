@@ -498,7 +498,7 @@ function darkTheme() {
 }
 
 function editorTheme() {
-  return darkTheme() ? "ace/theme/tomorrow_night" : "ace/theme/textmate";
+  return darkTheme() ? "ace/theme/one_dark" : "ace/theme/textmate";
 }
 
 function markFrameTheme(frame) {

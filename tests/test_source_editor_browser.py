@@ -165,7 +165,7 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
                   page.ace.edit("source-editor").getTheme(), frame.dataset.htmlMcpTheme];
         '''
         browser.execute_script('document.querySelector("#theme-btn").click()')
-        assert browser.execute_script(theme) == ["dark", "dark", "ace/theme/tomorrow_night", "dark"]
+        assert browser.execute_script(theme) == ["dark", "dark", "ace/theme/one_dark", "dark"]
         browser.execute_script('document.querySelector("#theme-btn").click()')
         assert browser.execute_script(theme) == ["light", "light", "ace/theme/textmate", "light"]
         # Long lines wrap until the wrap button turns it off, and the Vim button gives the
