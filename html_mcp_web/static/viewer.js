@@ -1021,6 +1021,7 @@ const handlePresentationWheel = presentation.handleWheel;
 const movePresentationPage = presentation.movePage;
 const syncFullscreenMode = presentation.syncFullscreenMode;
 const toggleFullscreen = presentation.toggleFullscreen;
+const inFullscreen = presentation.inFullscreen;
 const updatePresentationControls = presentation.updateControls;
 
 const layoutChecks = createLayoutChecks({
@@ -1463,7 +1464,7 @@ function showSelectionButton() {
   // While a gesture carries the deck the button stays out of it: the selection's own
   // settle, timed from before the gesture, would otherwise bring it back mid-way.
   if (state.pinch !== null) return;
-  if (document.fullscreenElement === $("#artifact-pane")) {
+  if (inFullscreen()) {
     state.selectionAnchor = null;
     hideSelectionButton();
     return;
@@ -1997,7 +1998,7 @@ function attachArtifactEvents(frame) {
   // Page geometry exists before anchors are measured.
   installArtifactLayout();
   applyScriptVisibility();
-  if (document.fullscreenElement === $("#artifact-pane")) {
+  if (inFullscreen()) {
     doc.documentElement.dataset.htmlMcpFullscreen = "";
   }
   state.currentPage = visiblePageNumber();
@@ -2096,7 +2097,7 @@ function attachArtifactEvents(frame) {
   renderHighlights();
   search.refresh();
   updateLayoutUi();
-  if (document.fullscreenElement === $("#artifact-pane") && state.artifact.layout === "slides") activateSlideShow();
+  if (inFullscreen() && state.artifact.layout === "slides") activateSlideShow();
   scheduleLayoutCheck();
   doc.fonts.ready.then(scheduleLayoutCheck);
   // An image that finishes loading after the check changes the layout the
@@ -2716,7 +2717,7 @@ function attachControls() {
   $("#presentation-prev-btn").addEventListener("click", () => movePresentationPage(-1));
   $("#presentation-next-btn").addEventListener("click", () => movePresentationPage(1));
   $("#presentation-exit-btn").addEventListener("click", () => {
-    document.exitFullscreen().catch((error) => alert(`Could not exit full screen: ${error.message}`));
+    toggleFullscreen().catch((error) => alert(`Could not exit full screen: ${error.message}`));
   });
   document.addEventListener("wheel", handlePresentationWheel, { passive: false });
   document.addEventListener("wheel", handleViewerWheel, { passive: false });
@@ -2893,7 +2894,6 @@ function attachControls() {
   $("#zoom-reset-btn").addEventListener("click", () => {
     resetArtifactZoom();
   });
-  $("#fullscreen-btn").disabled = !document.fullscreenEnabled;
   // On a phone the comments cover the artifact, so they start out of the way until asked
   // for; a wide screen shows both and keeps whatever was chosen last.
   const stored = localStorage.getItem("htmlMcpSidebarCollapsed");

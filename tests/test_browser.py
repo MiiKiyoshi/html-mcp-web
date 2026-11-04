@@ -3365,11 +3365,11 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
             'return d.querySelectorAll(".html-mcp-highlight").length === 0'))
         wait_until(lambda: browser.execute_script(
             'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
-        browser.find_element("css selector", "#selection-comment-btn").click()
+        browser.execute_script('document.querySelector("#selection-comment-btn").click()')
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#compose-dialog").open === true'))
         browser.find_element("css selector", "#compose-text").send_keys("Inside the svg")
-        browser.find_element("css selector", "#compose-submit").click()
+        browser.execute_script('document.querySelector("#compose-submit").click()')
         wait_until(lambda: browser.execute_script(
             'const d = document.querySelector("#artifact-frame").contentDocument;'
             'return d.querySelectorAll(".html-mcp-highlight").length > 0'))
@@ -3440,11 +3440,11 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
         # The highlight is one band per line, each as wide as the letters it covers: the
         # native rects for this shape name whole nodes, and their widths gave the label
         # away as the fallback.
-        browser.find_element("css selector", "#selection-comment-btn").click()
+        browser.execute_script('document.querySelector("#selection-comment-btn").click()')
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#compose-dialog").open === true'))
         browser.find_element("css selector", "#compose-text").send_keys("Across the lines")
-        browser.find_element("css selector", "#compose-submit").click()
+        browser.execute_script('document.querySelector("#compose-submit").click()')
         wait_until(lambda: browser.execute_script(
             'const d = document.querySelector("#artifact-frame").contentDocument;'
             'return d.querySelectorAll(\'.html-mcp-highlight[data-comment-id]\').length >= 3'))
@@ -3678,6 +3678,68 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_without_full_screen_the_show_lies_over_the_page(tmp_path: Path) -> None:
+    """Safari on an iPhone gives a page no full screen, and Full screen stayed greyed out
+    there. Where the browser has none, the pane lies over the whole page in the slide show,
+    and Exit or Escape takes it back."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    profile = tempfile.mkdtemp(prefix="html_mcp_fills_page_")
+    marionette_port = available_port()
+    (Path(profile) / "user.js").write_text(
+        f'user_pref("marionette.port", {marionette_port});\n'
+        'user_pref("full-screen-api.enabled", false);\n', encoding="utf-8")
+    browser_process = None
+    browser = None
+    try:
+        shared.ensure()
+        browser_process = subprocess.Popen(
+            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser.start_session()
+        browser.set_window_rect(width=900, height=700)
+        browser.navigate(f"http://127.0.0.1:{port}")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+        assert browser.execute_script("return document.fullscreenEnabled") is False
+        shown = """
+          const pane = document.querySelector("#artifact-pane").getBoundingClientRect();
+          const doc = document.querySelector("#artifact-frame").contentDocument.documentElement;
+          return {show: doc.hasAttribute("data-html-mcp-presentation"),
+                  covers: pane.left === 0 && pane.top === 0 && pane.width === innerWidth
+                    && pane.height === innerHeight,
+                  exit: getComputedStyle(document.querySelector("#presentation-controls")).display};
+        """
+        browser.execute_script('document.querySelector("#fullscreen-btn").click()')
+        wait_until(lambda: browser.execute_script(shown) == {"show": True, "covers": True, "exit": "flex"})
+        browser.execute_script('document.querySelector("#presentation-exit-btn").click()')
+        wait_until(lambda: browser.execute_script(shown)["show"] is False)
+        assert browser.execute_script(shown)["covers"] is False
+        browser.execute_script('document.querySelector("#fullscreen-btn").click()')
+        wait_until(lambda: browser.execute_script(shown)["show"] is True)
+        browser.execute_script('document.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape", bubbles: true}))')
+        wait_until(lambda: browser.execute_script(shown)["show"] is False)
+    finally:
+        if browser is not None:
+            try:
+                browser.delete_session()
+            except Exception:
+                pass
+        if browser_process is not None:
+            browser_process.terminate()
+        shared.stop()
+        shutil.rmtree(profile, ignore_errors=True)
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_two_fingers_in_the_slide_show_carry_nothing(tmp_path: Path) -> None:

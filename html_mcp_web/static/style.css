@@ -200,6 +200,9 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 /* The frame a new revision replaces, kept over it until the new one is drawn at the reader's place. */
 .artifact-frame.covering { z-index: 2; }
 #artifact-pane:fullscreen { width: 100vw; height: 100vh; background: #111; }
+/* Where the browser gives a page no full screen, the pane lies over the whole page. */
+#artifact-pane.fills-page { position: fixed; inset: 0; z-index: 100; background: #111; }
+#artifact-pane.fills-page .presentation-controls { display: flex; }
 /* Slide previews: the deck drawn small in a column at the pane's left, scrolled on its own,
    with the deck itself moved over to make room. */
 #thumbs-btn { display: inline-flex; align-items: center; padding: .1rem .4rem; line-height: 1; }
@@ -233,8 +236,9 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 #thumbs-pane iframe.covering:not(#thumbs-frame) { z-index: 2; }
 #artifact-pane.thumbs-open #thumbs-pane { display: block; }
 #artifact-pane.thumbs-open .artifact-frame { left: 200px; width: calc(100% - 200px); }
-#artifact-pane:fullscreen #thumbs-pane, #artifact-pane.slide-show #thumbs-pane { display: none; }
+#artifact-pane:fullscreen #thumbs-pane, #artifact-pane.fills-page #thumbs-pane, #artifact-pane.slide-show #thumbs-pane { display: none; }
 #artifact-pane.thumbs-open:fullscreen .artifact-frame,
+#artifact-pane.thumbs-open.fills-page .artifact-frame,
 #artifact-pane.thumbs-open.slide-show .artifact-frame { left: 0; width: 100%; }
 
 .presentation-controls {
@@ -331,7 +335,9 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
   }
 }
 #artifact-pane:fullscreen .selection-comment,
-#artifact-pane:fullscreen .selection-source { display: none !important; }
+#artifact-pane:fullscreen .selection-source,
+#artifact-pane.fills-page .selection-comment,
+#artifact-pane.fills-page .selection-source { display: none !important; }
 
 #sidebar {
   min-width: 0;

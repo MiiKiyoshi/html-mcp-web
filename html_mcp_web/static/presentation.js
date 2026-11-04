@@ -82,8 +82,15 @@ export function createPresentation(state, dependencies) {
     }
   }
 
+  // Full screen, or where a browser gives a page none, as Safari on an iPhone does, the pane
+  // laid over the whole page.
+  function inFullscreen() {
+    const pane = $("#artifact-pane");
+    return document.fullscreenElement === pane || pane.classList.contains("fills-page");
+  }
+
   function syncFullscreenMode() {
-    const fullscreen = document.fullscreenElement === $("#artifact-pane");
+    const fullscreen = inFullscreen();
     $("#fullscreen-btn").setAttribute("aria-pressed", fullscreen ? "true" : "false");
     if (fullscreen) frameDocument().documentElement.dataset.htmlMcpFullscreen = "";
     else delete frameDocument().documentElement.dataset.htmlMcpFullscreen;
@@ -99,8 +106,15 @@ export function createPresentation(state, dependencies) {
   }
 
   async function toggleFullscreen() {
-    if (document.fullscreenElement === $("#artifact-pane")) await document.exitFullscreen();
-    else await $("#artifact-pane").requestFullscreen();
+    const pane = $("#artifact-pane");
+    if (!document.fullscreenEnabled) {
+      pane.classList.toggle("fills-page");
+      syncFullscreenMode();
+    } else if (document.fullscreenElement === pane) {
+      await document.exitFullscreen();
+    } else {
+      await pane.requestFullscreen();
+    }
   }
 
   function targetIsInteractive(target) {
@@ -109,6 +123,11 @@ export function createPresentation(state, dependencies) {
   }
 
   function handleKeydown(event) {
+    if (event.key === "Escape" && $("#artifact-pane").classList.contains("fills-page")) {
+      event.preventDefault();
+      toggleFullscreen();
+      return;
+    }
     if (!state.slideShow || event.metaKey || event.ctrlKey || event.altKey) return;
     if (targetIsInteractive(event.target)) return;
     const nextKeys = new Set(["n", "N", "Enter", " ", "PageDown", "ArrowRight", "ArrowDown"]);
@@ -193,6 +212,7 @@ export function createPresentation(state, dependencies) {
     handleWheel,
     movePage,
     setPage,
+    inFullscreen,
     syncFullscreenMode,
     toggleFullscreen,
     updateControls,
