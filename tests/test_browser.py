@@ -1936,8 +1936,11 @@ def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path
           const editor = page.ace.edit("source-editor");
           const Range = page.ace.require("ace/range").Range;
           editor.selection.setRange(new Range({row}, {column}, {row}, {column + 8}));
-          document.querySelector("#source-page-btn").click();
+          editor.focus();
         ''')
+        # Its keys, Ctrl+Alt+P, do what the button does.
+        marionette.ActionSequence(browser, "key", "keyboard").key_down("\ue009").key_down("\ue00a") \
+            .key_down("p").key_up("p").key_up("\ue00a").key_up("\ue009").perform()
         marked = wait_until(lambda: browser.execute_script('''
           const doc = document.querySelector("#artifact-frame").contentDocument;
           const mark = doc.querySelector(".html-mcp-shown");
