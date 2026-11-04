@@ -857,16 +857,15 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
         assert "Monitor" in told["how"] and "persistent" not in told["how"]
         assert 'description="' in told["how"] and "timeout_ms=1800000" in told["how"]
         assert "write_stdin" not in told["how"]
-        # An expiry is restarted only after a window that delivered something or on the user's
-        # word: an agent cannot tell whether the user is still there.
-        assert "restart the same Monitor only if it delivered an event in those 30 minutes" in told["how"]
+        # An expiry is not restarted: an agent cannot tell whether the user is still there.
+        assert "When it expires, leave it stopped" in told["how"]
         # The user opens the page themselves, so the agent is handed the address to give.
         assert f"http://localhost:{binding._shared.port}," in told["how"]
         for name in ("codex-mcp-client", "other-client"):
             context.session.client_params.clientInfo.name = name
             selected = answer(mcp.call_tool("listen", {}))
             assert "Monitor" not in selected["how"]
-            assert "still needs events" in selected["how"]
+            assert "the user asks" in selected["how"]
             assert ("codex queue" in selected["how"]) == (name == "codex-mcp-client")
             assert ('sandbox_permissions="require_escalated"' in selected["how"]) == (name == "codex-mcp-client")
         tool = next(t for t in asyncio.run(mcp.list_tools()) if t.name == "listen")
