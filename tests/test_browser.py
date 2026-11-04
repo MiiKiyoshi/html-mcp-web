@@ -452,9 +452,11 @@ def test_browser_review_contract(tmp_path: Path) -> None:
 
         # Tab out of the compose text has to land on Post, so Enter finishes the comment.
         browser.set_window_rect(x=0, y=0, width=1500, height=1000)
+        browser.find_element("css selector", "#more-btn").click()
         browser.find_element("css selector", "#artifact-comment-btn").click()
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#compose-dialog").open === true'))
+        assert browser.execute_script('return document.querySelector("#more-menu").hidden') is True
         assert browser.execute_script('''
           return document.activeElement === document.querySelector("#compose-text");
         ''')
@@ -957,9 +959,9 @@ def test_browser_review_contract(tmp_path: Path) -> None:
           return true;
         ''')
         assert browser.execute_script(
-            'const b = document.querySelector("#download-pdf-btn"); return [b.disabled, b.textContent];') == [True, "PDF…"]
+            'const b = document.querySelector("#download-pdf-btn"); return [b.disabled, b.textContent];') == [True, "Export PDF…"]
         wait_until(lambda: browser.execute_script('return !document.querySelector("#download-pdf-btn").disabled'), timeout=120)
-        assert browser.execute_script('return [document.body.dataset.downloads, document.querySelector("#download-pdf-btn").textContent]') == ["report.pdf ", "PDF"]
+        assert browser.execute_script('return [document.body.dataset.downloads, document.querySelector("#download-pdf-btn").textContent]') == ["report.pdf ", "Export PDF"]
         browser.find_element("css selector", "#fullscreen-btn").click()
         wait_until(lambda: browser.execute_script('return document.fullscreenElement !== null'))
         assert browser.execute_script('''

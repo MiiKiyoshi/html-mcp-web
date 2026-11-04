@@ -209,7 +209,7 @@ function updateArtifactLinks() {
 // export and download another copy.
 async function download(button, format) {
   if (button.disabled) return;
-  const label = format.toUpperCase();
+  const label = button.dataset.label;
   const title = button.dataset.title ??= button.title;
   button.disabled = true;
   button.classList.add("busy");
@@ -513,6 +513,7 @@ function markFrameTheme(frame) {
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   $("#theme-btn").setAttribute("aria-pressed", String(theme === "dark"));
+  $("#theme-btn").textContent = theme === "dark" ? "Light mode" : "Dark mode";
   state.editor?.setTheme(editorTheme());
   for (const frame of document.querySelectorAll("iframe")) markFrameTheme(frame);
 }
@@ -2722,6 +2723,21 @@ function attachControls() {
     openSelectionInSource().catch((error) => alert(`Could not open the source: ${error.message}`));
   });
   $("#area-btn").addEventListener("click", () => setAreaMode(!state.areaMode));
+  const closeMore = () => {
+    $("#more-menu").hidden = true;
+    $("#more-btn").setAttribute("aria-expanded", "false");
+  };
+  $("#more-btn").addEventListener("click", (event) => {
+    event.stopPropagation();
+    const open = $("#more-menu").hidden;
+    $("#more-menu").hidden = !open;
+    $("#more-btn").setAttribute("aria-expanded", String(open));
+  });
+  // A choice in the menu closes it, but for an export, which shows its progress there.
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".more")
+      || event.target.closest(".more-menu button:not(.download-btn)")) closeMore();
+  });
   $("#theme-btn").addEventListener("click", () => {
     const theme = darkTheme() ? "light" : "dark";
     try { localStorage.setItem("htmlMcpTheme", theme); } catch { /* the choice lasts this visit */ }

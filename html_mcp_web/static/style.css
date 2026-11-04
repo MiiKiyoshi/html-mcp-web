@@ -72,9 +72,26 @@ button:disabled { cursor: default; opacity: .6; }
 .artifact-status.error { color: #a23f34; }
 .topbar-actions { display: flex; flex: 0 0 auto; align-self: stretch; gap: .5rem; align-items: center; padding-left: .75rem; border-left: 1px solid var(--line); }
 .topbar h1, .topbar-actions button, .download-btn { white-space: nowrap; }
-.narrow-icon { display: none; }
-#theme-btn { display: inline-flex; align-items: center; line-height: 1; }
-#theme-btn svg { display: block; }
+#more-btn, #fullscreen-btn { display: inline-flex; align-items: center; line-height: 1; }
+#more-btn svg, #fullscreen-btn svg { display: block; }
+.more { position: relative; display: inline-flex; }
+.more-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 15rem;
+  padding: .25rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--paper);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+}
+.more-menu[hidden] { display: none; }
+.topbar-actions .more-menu button { border: 0; border-radius: 3px; background: transparent; text-align: left; padding: .35rem .6rem; }
+.topbar-actions .more-menu button:hover { background: var(--accent-soft); }
 .topbar-actions button { padding: .1rem .55rem; border-radius: 3px; font-size: .82rem; }
 /* The scripts button is an icon that reads as a switch: lit while scripts show, plain
    while they hide. */
@@ -619,14 +636,12 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   #source-font-smaller-btn { margin-left: auto; }
   .source-file { flex: 0 1 auto; }
   /* One row on a phone: the artifacts' tabs take what the actions leave and scroll
-     sideways, and Full screen and Note draw as icons. */
+     sideways. */
   .topbar { flex-wrap: nowrap; gap: .4rem; padding: .3rem .5rem; }
   .topbar h1, .artifact-meta { display: none; }
   .artifact-tabs { flex: 1 1 auto; padding-left: 0; border-left: 0; }
   .topbar-actions { gap: .3rem; padding-left: .4rem; }
   .topbar-actions button { padding: .1rem .35rem; }
-  .topbar-actions .wide-label { display: none; }
-  .topbar-actions .narrow-icon { display: block; }
 }
 
 
@@ -673,4 +688,3 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
 :root[data-theme="dark"] dialog { border-color: #4a4740; color: #e4dfd4; }
 :root[data-theme="dark"] dialog::backdrop { background: rgba(0, 0, 0, .5); }
 :root[data-theme="dark"] dialog blockquote { background: #2e2a1c; color: #e0d8c4; }
-:root[data-theme="dark"] #theme-btn { color: #d8c25a; }
