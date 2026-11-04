@@ -180,6 +180,14 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         before = browser.execute_script(f"return {editor}.getValue();")
         browser.execute_script('document.querySelector("#source-vim-btn").click()')
         wait_until(lambda: browser.execute_script(f"return Boolean({editor}.$vimModeHandler);"))
+        # Outside Insert mode the editor's input field is read-only, so a held key repeats
+        # rather than opening macOS's accent menu; Insert mode writes again.
+        field = f"{editor}.textInput.getElement().readOnly"
+        assert browser.execute_script(f"return {field};") is True
+        type_keys(browser, ["i"])
+        assert browser.execute_script(f"return {field};") is False
+        type_keys(browser, ["<C-[>"])
+        assert browser.execute_script(f"return {field};") is True
         # With a Korean input method on, a key outside Insert mode is read by where it sits
         # (the key that gives ㅣ is l), and the letter the method composes is dropped.
         ime = browser.execute_script(f"""
@@ -212,6 +220,7 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
                 'return document.querySelector("#source-editor").contains(document.activeElement)'))
         browser.execute_script('document.querySelector("#source-vim-btn").click()')
         wait_until(lambda: not browser.execute_script(f"return Boolean({editor}.$vimModeHandler);"))
+        assert browser.execute_script(f"return {editor}.textInput.getElement().readOnly;") is False
         # Without Vim keys, Ctrl+Alt+M comments on the selection.
         browser.execute_script(f"{editor}.focus(); {editor}.selection.selectLine();")
         ActionSequence(browser, "key", "keyboard").key_down("\ue009").key_down("\ue00a").key_down("m") \
