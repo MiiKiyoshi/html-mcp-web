@@ -4,6 +4,7 @@ import os
 import shutil
 import socket
 import select
+import shlex
 import subprocess
 import sys
 import time
@@ -17,6 +18,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from html_mcp_web import config as config_module
+from html_mcp_web import plugin_monitor
 from html_mcp_web.config import load_config
 from html_mcp_web.mcp_client import CLI, INIT_GUIDE, ProjectBinding
 from html_mcp_web.mcp_contract import agent_comment, agent_comment_summary, revision_of, short_time
@@ -833,6 +835,8 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
     # The tool returns at once with a script for the harness to watch in the background;
     # blocking here would freeze the agent, which is what the button exists to avoid.
     project(tmp_path)
+    # No plugin monitor runs for this session, whatever runs for the one running the tests.
+    monkeypatch.setattr(plugin_monitor, "DIRECTORY", tmp_path / "no-monitor")
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
@@ -954,6 +958,50 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
             waiter.terminate()
             waiter.wait(timeout=5)
     finally:
+        binding.stop()
+
+
+def test_listen_hands_the_waiter_to_the_plugin_monitor(tmp_path: Path, monkeypatch) -> None:
+    """In a session the plugin's monitor serves, listen() hands it the waiter and tells the
+    agent not to start one, and the monitor passes a press on as the waiter prints it."""
+    project(tmp_path)
+    cache = tmp_path / "cache"
+    monkeypatch.setattr(plugin_monitor, "DIRECTORY", cache / "html-mcp-web" / "monitor")
+    session = subprocess.Popen(["sleep", "60"])
+    monkeypatch.setattr(plugin_monitor, "claude_pid", lambda: session.pid)
+    monitor = subprocess.Popen(
+        ["sh", str(Path(__file__).parents[1] / "plugin" / "monitors" / "review.sh"), str(session.pid)],
+        stdout=subprocess.PIPE, text=True, env={**os.environ, "XDG_CACHE_HOME": str(cache)})
+    binding = ProjectBinding(tmp_path)
+    try:
+        record = plugin_monitor.DIRECTORY / f"{session.pid}.monitor"
+        deadline = time.monotonic() + 5
+        while not record.exists() and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert int(record.read_text()) == monitor.pid
+        mcp = create_server(binding)
+        context = SimpleNamespace(session=SimpleNamespace(client_params=SimpleNamespace(
+            clientInfo=SimpleNamespace(name="claude-code"))))
+        monkeypatch.setattr(mcp, "get_context", lambda: context)
+        told = answer(mcp.call_tool("listen", {}))
+        assert "plugin's monitor now runs the script" in told["how"]
+        assert "Monitor(" not in told["how"] and "On [review]" in told["how"]
+        handed = (plugin_monitor.DIRECTORY / f"{session.pid}.command").read_text().splitlines()
+        assert handed[1] == shlex.quote(told["script"])
+        base = f"http://127.0.0.1:{binding._shared.port}"
+        urllib.request.urlopen(urllib.request.Request(f"{base}/review-request", method="POST")).close()
+        ready, _, _ = select.select([monitor.stdout], [], [], 15)
+        assert ready and monitor.stdout.readline().startswith("[review]")
+        # The session ending ends the monitor, its waiter, and its record.
+        session.kill()
+        session.wait()                  # reaped, or kill -0 still finds it
+        monitor.wait(timeout=10)
+        assert not record.exists()
+    finally:
+        for process in (session, monitor):
+            if process.poll() is None:
+                process.kill()
+                process.wait()
         binding.stop()
 
 

@@ -59,8 +59,9 @@ do html listen
 ```
 
 The agent gives you the review page address, such as `http://localhost:8765`, and gets ready
-to handle your comments when you press **Call agent**. Open that address in your browser. Say
-`do html listen` again after the agent restarts.
+to handle your comments when you press **Call agent**. Open that address in your browser. In
+Claude Code the agent keeps listening for the rest of the session, however long the page sits
+idle. Say `do html listen` again after the agent restarts.
 
 ## Reviewing
 

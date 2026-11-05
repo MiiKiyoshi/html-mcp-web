@@ -3,11 +3,14 @@
 import asyncio
 import functools
 import json
+import shlex
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.parse import quote, urlencode
+
+from . import plugin_monitor
 
 from .mcp_contract import (
     LIST_LIMIT,
@@ -98,16 +101,23 @@ def check(start_dir: Path) -> list[str]:
     return sorted(tool.name for tool in asyncio.run(server.list_tools()))
 
 
-def _wait_method(ctx: "Context") -> str:
+def _wait_method(ctx: "Context", script: Path) -> str:
     name = ctx.session.client_params.clientInfo.name.casefold()
     if "claude" in name:
+        if plugin_monitor.hand_over(shlex.quote(str(script))):
+            return (
+                "The html-mcp plugin's monitor now runs the script for this session and turns each "
+                "line it prints into a notification, for as long as the session lasts. Do not "
+                "start it yourself, and end the turn."
+            )
         return (
             'Run the script with Monitor(command=<script>, description="html-mcp review", '
             "timeout_ms=1800000), then end the turn. When it expires, leave it stopped and tell the "
             "user in one line that listening stopped and that asking again resumes it. Nothing is "
             "lost while it is stopped: new "
             "comments wait for read_comments(new=True), and a Call agent press waits for the next "
-            "waiter. Stop an active Monitor when the review is finished or the user asks."
+            "waiter. Stop an active Monitor when the review is finished or the user asks. "
+            "Start another copy only after the previous process has ended."
         )
     if "codex" in name:
         return (
@@ -119,12 +129,14 @@ def _wait_method(ctx: "Context") -> str:
             "including while idle. Delivery may take about 10 seconds. "
             "Requires codex queue on PATH and CODEX_THREAD_ID in the agent shell. "
             "Run one waiter at a time. "
-            "Stop its process when the review is finished or the user asks."
+            "Stop its process when the review is finished or the user asks. "
+            "Start another copy only after the previous process has ended."
         )
     return (
         "Run the script with your shell tool and read its output. If the tool returns a "
         "running session, read what follows with the tool that reads subsequent output. "
-        "After handling an event, stop it; listening resumes when the user asks again."
+        "After handling an event, stop it; listening resumes when the user asks again. "
+        "Start another copy only after the previous process has ended."
     )
 
 
@@ -562,9 +574,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         return {
             "script": str(target),
             "how": (
-                _wait_method(ctx)
-                + " Start another copy only after the previous process has ended. "
-                "On [review], call read_comments(new=True) for the reported artifact and handle the review. "
+                _wait_method(ctx, target)
+                + " On [review], call read_comments(new=True) for the reported artifact and handle the review. "
                 "[gone] means the review server is unreachable; the script keeps retrying. "
                 "[back] means it is reachable again. "
                 f"Once listening is active, give the user the full review page address, http://localhost:{port}, "
