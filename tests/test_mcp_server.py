@@ -175,15 +175,12 @@ def test_mcp_connects_after_config_is_created_without_restarting(tmp_path: Path)
     try:
         mcp = create_server(binding)
         # The setup guide's path is as long as the install location, the rest is bounded.
-        assert len(mcp.instructions) - len(str(INIT_GUIDE)) < 1000
+        assert len(mcp.instructions) - len(str(INIT_GUIDE)) < 900
         # Setup lives in the guide: the instructions give its path and nothing else about it.
         assert mcp.instructions.endswith(f"Setup: read {INIT_GUIDE}.")
         for needed in ("read_comments(new=True)", "guide()", "layout()", "image()", "write_comments",
                        "listen()", "init.md"):
             assert needed in mcp.instructions, needed
-        # A session that listens from its start never sees listen()'s how, and a press that
-        # reads as a mere notification was left alone.
-        assert "a request to handle the review now" in mcp.instructions
         for needed in ("asks to listen", "do not poll", "duplicate",
                        "write in chat only what no thread carries", "not the replies or the edits they report"):
             assert needed in mcp.instructions.lower(), needed

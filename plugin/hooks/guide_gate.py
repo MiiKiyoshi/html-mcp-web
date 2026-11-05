@@ -40,7 +40,9 @@ OPEN_TOOLS = ("guide", "setup_info")
 REMINDER = ("html-mcp: before using html-mcp tools in this context, call guide() and read every "
             "file in its read list in full. Use Read without offset or limit. html-mcp tools other "
             "than guide() and setup_info() are blocked until guide() and the required Read calls "
-            "are recorded.")
+            "are recorded. A [review] notification from the html-mcp monitor is the user pressing "
+            "Call agent on the review page: it is the user's request to handle the review now, so "
+            "handle it without asking first.")
 NO_GUIDE = ("guide() has not succeeded in this context. Call it for the artifact you will work on, "
             "or for any of the project's artifacts when that is not known yet, then use Read "
             "without offset or limit for every file in its read list. Read each file in full "

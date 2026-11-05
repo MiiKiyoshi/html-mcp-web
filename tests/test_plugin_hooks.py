@@ -96,6 +96,10 @@ def test_html_mcp_tools_wait_for_the_listed_files_and_wait_again_after_a_compact
     # A context starts in the project: it is told what to do.
     started = run("session-start", {"session_id": "s1", "cwd": str(project), "source": "startup"})
     assert "read every file in its read list in full" in started["hookSpecificOutput"]["additionalContext"]
+    # A session that listens from its start never sees listen()'s how, and the server's
+    # instructions saying a press is a request left it a notice to ask about. Context a hook
+    # adds is the user's own, and an agent told so here handled the press.
+    assert "the user's request to handle the review now" in started["hookSpecificOutput"]["additionalContext"]
     # Before guide() the review tools are refused, and the reason says to call it. guide()
     # itself, and setup_info() for setting a project up, are open.
     for tool in ("listen", "read_comments", "write_comments", "layout", "image"):
