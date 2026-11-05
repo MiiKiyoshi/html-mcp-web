@@ -508,6 +508,15 @@ lift(page.querySelector('.pageno'), {pageno: true});
 const chromeCount = items.length;
 if (body) for (const ch of body.children) emit(ch);
 for (let k = chromeCount; k < items.length; k++) items[k].body = true;
+// A reference line is a box as wide as its words, and PowerPoint, setting the same face a
+// little wider, broke its last word onto a line of its own. Each line reaches to the
+// slide's right edge instead, where the body leaves nothing; the text box adds 6px of its own.
+const refs = body && body.querySelector(':scope > .refs');
+if (refs) for (const line of refs.children) {
+  const marked = line.getAttribute('data-pptx-index');
+  const item = items.find((it) => it.kind === 'text' && String(it.i) === marked);
+  if (item) item.rect[2] = pr.width - item.rect[0] - 6;
+}
 // On a full-bleed page a line of text goes where its letters are drawn and does not wrap: a
 // number centred in a ring by the ring's own layout came out at the ring's left edge, and
 // PowerPoint's letters, a little wider, broke a label in two. Its alignment is read from

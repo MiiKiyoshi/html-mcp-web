@@ -499,6 +499,34 @@ def test_takeaway_pptx_textbox_uses_the_body_width(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+def test_reference_lines_reach_the_slide_edge(tmp_path: Path) -> None:
+    """A reference line set as wide as its words wrapped its last word under PowerPoint's
+    wider letters, so each line's box keeps its left edge and reaches the slide's right edge."""
+    from html_mcp_web.slides import build
+
+    content = tmp_path / "content.html"
+    content.write_text('''<!doctype html>
+<meta charset="utf-8"><title>Reference width</title>
+<body data-author="A" data-meta="B">
+<ol class="references">
+  <li id="elmore">W. C. Elmore, "The transient response of damped linear networks," 1948.</li>
+  <li id="obrien">P. R. O'Brien and T. L. Savarino, 1989.</li>
+</ol>
+<section data-title="Result"><p>Load <cite>obrien</cite> and moment <cite>elmore</cite>.</p></section></body>
+''', encoding="utf-8")
+    html = tmp_path / "slides.html"
+    build(content, html, NEUTRAL)
+    out = tmp_path / "deck.pptx"
+    export_pptx(html.as_uri(), out, tmp_path, None)
+    slide = pptx.Presentation(str(out)).slides[1]
+    lines = [shape for shape in slide.shapes if shape.has_text_frame and shape.text.startswith("[")]
+    assert [shape.text[:3] for shape in lines] == ["[1]", "[2]"]
+    assert len({shape.left for shape in lines}) == 1
+    for shape in lines:
+        assert abs((shape.left + shape.width) / 9525 - 1280) < 1
+
+
+@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
 def test_a_wrapped_svg_label_keeps_its_lines_in_the_vector(tmp_path: Path) -> None:
     """The deck breaks a data-wrap label into lines when it opens; the export serializes
     the drawing as it stands, so the vector carries the lines and their spacing."""
