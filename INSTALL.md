@@ -72,8 +72,9 @@ Remove a registration the user agreed to replace (`claude mcp remove --scope use
 
 For Claude Code, also install the plugin from the checkout. It refuses html-mcp's tools other
 than `guide()` and `setup_info()` until that context has read the files `guide()` lists, again
-after each compaction. Its monitor runs the waiter `listen()` hands it for the rest of the
-session, so a Call agent press reaches the agent however long the review page sits idle. It
+after each compaction. Its monitor makes a session started in the folder listen for Call
+agent from its start to its end, unless another session listens to that folder already, so a
+press reaches the agent with no request to listen, however long the review page sits idle. It
 loads from the checkout in place, so an update of the checkout updates it.
 
     claude plugin marketplace add "$DIR"
@@ -97,3 +98,4 @@ once per folder. At setup, they just choose from the available templates and gui
 can accept the slide defaults or name a change, such as a report. After setup, say "do html
 listen" to start reviewing. The agent gives them the review page address and gets ready to
 handle their comments when they press **Call agent**. They open that address in their browser.
+With the plugin, Claude Code started in a folder already set up listens on its own.

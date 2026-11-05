@@ -109,4 +109,5 @@ or failed before binding does not by itself require a restart.
 Report setup as ready only after the current MCP connection passes the guide check. If
 restarting the MCP process remains necessary, say that the files are prepared but this session
 is not ready yet, and state the remaining action. Saying "do html listen" starts the review
-page. Start listening only when the user asks for it.
+page. With the plugin, Claude Code started in the folder later listens on its own. Start
+listening only when the user asks for it.

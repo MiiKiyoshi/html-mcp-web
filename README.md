@@ -52,16 +52,21 @@ what to change.
 
 ## Listen
 
-To review, say:
+With the plugin installed, a recent Claude Code, one that runs plugin monitors, needs no
+command: a session started in the folder listens for **Call agent** for as long as it runs,
+however long the page sits idle. Open `http://localhost:<port>` in your browser, with the
+`port` in `.html-mcp-web.yaml`. In Codex, or in a Claude Code without plugin monitors, say:
 
 ```
 do html listen
 ```
 
 The agent gives you the review page address, such as `http://localhost:8765`, and gets ready
-to handle your comments when you press **Call agent**. Open that address in your browser. In
-Claude Code the agent keeps listening for the rest of the session, however long the page sits
-idle. Say `do html listen` again after the agent restarts.
+to handle your comments when you press **Call agent**. Open that address in your browser. Say
+`do html listen` again after the agent restarts.
+
+Presses go to one session per folder. A Claude Code session that starts while another listens
+leaves the presses to it, and `do html listen` in any session moves them there.
 
 ## Reviewing
 
@@ -112,8 +117,9 @@ print every page.
 
 ![The review page on a tablet and a phone, zoomed into a slide: the commented phrase above, its thread below.](docs/mobile.png)
 
-Use the port number in the review page address the agent gives you. Forward that port over SSH
-from Termux on Android or iSH on iOS, then open the same address in the phone's browser.
+Use the port number in the review page address, the `port` in `.html-mcp-web.yaml`. Forward
+that port over SSH from Termux on Android or iSH on iOS, then open the same address in the
+phone's browser.
 
 ```
 ssh -L <port>:localhost:<port> <server>

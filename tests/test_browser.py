@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -317,7 +318,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
                  "Agent is not waiting; queue this call until it reconnects (Ctrl+Alt+Enter)", "rgb(166, 64, 59)"]
         with ThreadPoolExecutor(max_workers=1) as pool:
             waiter = pool.submit(lambda: urllib.request.urlopen(
-                f"{base}/wait-review", timeout=10).read())
+                f"{base}/wait-review?listener=one&pid={os.getpid()}", timeout=10).read())
             wait_until(lambda: browser.execute_script('''
               const button = document.querySelector("#call-agent-btn");
               return button.classList.contains("agent-ready")

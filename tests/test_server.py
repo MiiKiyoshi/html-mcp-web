@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import re
 from pathlib import Path
 
@@ -1267,13 +1268,14 @@ async def test_call_button_wakes_a_parked_waiter_and_keeps_an_early_press(client
     whenever the response died on the wire, so until the ack lands the press is offered
     again, and only after it does a restarted waiter park."""
     test_client, review = client
+    wait = f"/wait-review?listener=one&pid={os.getpid()}"
 
     # Presses with nobody parked are kept, and coalesce into the next wait.
     reply = await (await test_client.post("/review-request")).json()
     assert reply == {"calls": 1, "delivered": False}
     reply = await (await test_client.post("/review-request")).json()
     assert reply == {"calls": 2, "delivered": False}
-    early = await test_client.get("/wait-review")
+    early = await test_client.get(wait)
     assert early.status == 200
     assert early.headers["X-Press"] == "2"
     line = await early.text()
@@ -1293,7 +1295,7 @@ async def test_call_button_wakes_a_parked_waiter_and_keeps_an_early_press(client
     assert "no unanswered comments" in review._review_line()
 
     # Not acked yet (the line may never have reached the harness), so it is offered again.
-    again = await test_client.get("/wait-review")
+    again = await test_client.get(wait)
     assert again.status == 200
     assert again.headers["X-Press"] == "2"
 
@@ -1302,11 +1304,11 @@ async def test_call_button_wakes_a_parked_waiter_and_keeps_an_early_press(client
     acked = await (await test_client.post("/wait-review/ack?upto=2")).json()
     assert acked == {"calls": 2, "consumed": 2}
     review.REVIEW_POLL_TIMEOUT = 0.05
-    assert (await test_client.get("/wait-review")).status == 204
+    assert (await test_client.get(wait)).status == 204
     review.REVIEW_POLL_TIMEOUT = HtmlReviewServer.REVIEW_POLL_TIMEOUT
 
     # A parked waiter is released by the press.
-    parked = asyncio.ensure_future(test_client.get("/wait-review"))
+    parked = asyncio.ensure_future(test_client.get(wait))
     for _ in range(50):
         if review.review_waiters == 1:
             break
@@ -1326,7 +1328,7 @@ async def test_call_button_wakes_a_parked_waiter_and_keeps_an_early_press(client
     stale = await (await test_client.post("/wait-review/ack?upto=1")).json()
     assert stale == {"calls": 3, "consumed": 3}
     review.REVIEW_POLL_TIMEOUT = 0.05
-    assert (await test_client.get("/wait-review")).status == 204
+    assert (await test_client.get(wait)).status == 204
 
 
 async def test_presses_survive_a_server_restart(client, tmp_path: Path) -> None:
@@ -1344,7 +1346,7 @@ async def test_presses_survive_a_server_restart(client, tmp_path: Path) -> None:
     second_client = TestClient(TestServer(app))
     await second_client.start_server()
     try:
-        offered = await second_client.get("/wait-review")
+        offered = await second_client.get(f"/wait-review?listener=one&pid={os.getpid()}")
         assert offered.status == 200
         assert offered.headers["X-Press"] == "1"
         await second_client.post("/wait-review/ack?upto=1")
@@ -1352,6 +1354,51 @@ async def test_presses_survive_a_server_restart(client, tmp_path: Path) -> None:
         assert (third.review_calls, third.review_consumed) == (1, 1)
     finally:
         await second_client.close()
+
+
+async def test_presses_go_to_one_listener(client) -> None:
+    """Two sessions answering one press would edit the same threads, so a press goes to
+    one waiter: the one asked to listen last, or else the one that listened first. A
+    waiter whose place is taken hears so once, with no press to ack."""
+    test_client, review = client
+    pid = os.getpid()
+
+    # A waiter with no listener named before it is the one.
+    parked = asyncio.ensure_future(test_client.get(f"/wait-review?listener=one&pid={pid}"))
+    for _ in range(50):
+        if review.review_waiters == 1:
+            break
+        await asyncio.sleep(0.02)
+    assert review.review_listener == "one"
+    # A session starting up leaves the presses to a waiter that runs.
+    refused = await test_client.post("/wait-review/listen?listener=two&if_free=1")
+    assert await refused.json() == {"listening": False}
+    # A session asked to listen takes them, and the parked waiter hears it at once.
+    taken = await test_client.post("/wait-review/listen?listener=two")
+    assert await taken.json() == {"listening": True}
+    moved = await parked
+    assert moved.headers["X-Moved"] == "1" and "X-Press" not in moved.headers
+    assert (await moved.text()).startswith("[moved] another session took over listening")
+
+    await test_client.post("/review-request")
+    offered = await test_client.get(f"/wait-review?listener=two&pid={pid}")
+    assert offered.headers["X-Press"] == "1"
+    assert (await test_client.get(f"/wait-review?listener=one&pid={pid}")).headers["X-Moved"] == "1"
+    await test_client.post("/wait-review/ack?upto=1")
+
+    # A listener whose waiter has ended leaves the presses to the next session that starts.
+    ended = await asyncio.create_subprocess_exec("true")
+    await ended.wait()
+    review.REVIEW_POLL_TIMEOUT = 0.05
+    assert (await test_client.get(f"/wait-review?listener=two&pid={ended.pid}")).status == 204
+    started = await test_client.post("/wait-review/listen?listener=three&if_free=1")
+    assert await started.json() == {"listening": True}
+    # One that was just named has a while to start its waiter before it counts as ended.
+    early = await test_client.post("/wait-review/listen?listener=four&if_free=1")
+    assert await early.json() == {"listening": False}
+    review.LISTENER_START = 0
+    late = await test_client.post("/wait-review/listen?listener=four&if_free=1")
+    assert await late.json() == {"listening": True}
 
 
 async def test_the_shell_names_its_assets_under_a_tag_that_moves(client) -> None:

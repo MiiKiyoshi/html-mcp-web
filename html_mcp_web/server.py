@@ -392,6 +392,9 @@ class HtmlReviewServer:
     # again. Under the MCP client's own timeouts, and short enough that a stopped server
     # is noticed within a minute.
     REVIEW_POLL_TIMEOUT = 55.0
+    # How long a session that asked to listen has to start its waiter before a session
+    # starting up may listen in its place.
+    LISTENER_START = 60.0
     # How long the server's own layout check may take before an answer says it did not finish.
     LAYOUT_CHECK_SECONDS = 45.0
 
@@ -423,6 +426,12 @@ class HtmlReviewServer:
         self.review_calls, self.review_consumed = self._load_review_state()
         self.review_called = asyncio.Event()
         self.review_waiters = 0
+        # Presses go to one waiter, named by the id listen() gave it: two sessions answering
+        # one press would edit the same threads. Its pid, which its polls report, says
+        # whether it still runs.
+        self.review_listener: str | None = None
+        self.review_listener_pid: int | None = None
+        self.review_listener_claimed = 0.0
         self.closing = False
         self.headless_check = asyncio.Lock()
         # The checking browser and its profile while a check runs, so a server that stops
@@ -1652,15 +1661,47 @@ class HtmlReviewServer:
                 + (f"unanswered comments: {listed}" if listed else "no unanswered comments")
                 + " -- read them with read_comments(new=True)")
 
+    def _wake_review_waiters(self) -> None:
+        released = self.review_called
+        self.review_called = asyncio.Event()
+        released.set()
+
+    def _review_listener_alive(self) -> bool:
+        if self.review_listener is None:
+            return False
+        if self.review_listener_pid is None:
+            return asyncio.get_running_loop().time() - self.review_listener_claimed < self.LISTENER_START
+        try:
+            os.kill(self.review_listener_pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+
     async def request_review(self, request: web.Request) -> web.Response:
         self.review_calls += 1
         self._save_review_state()
         delivered = self.review_waiters > 0
-        released = self.review_called
-        self.review_called = asyncio.Event()
-        released.set()
+        self._wake_review_waiters()
         await self.broadcast({"type": "review_requested", "calls": self.review_calls, "delivered": delivered})
         return web.json_response({"calls": self.review_calls, "delivered": delivered})
+
+    async def claim_review(self, request: web.Request) -> web.Response:
+        """Make the waiter with this listener id the one presses go to. With if_free, only
+        when no other waiter runs: a session listening from its start takes presses from
+        no one, and a session asked to listen takes them from whoever had them."""
+        try:
+            listener = request.query["listener"]
+        except KeyError as error:
+            raise web.HTTPBadRequest(text="listener is required") from error
+        if "if_free" in request.query and self._review_listener_alive():
+            return web.json_response({"listening": False})
+        self.review_listener, self.review_listener_pid = listener, None
+        self.review_listener_claimed = asyncio.get_running_loop().time()
+        # A waiter parked for the listener before is released to hear that it is not one.
+        self._wake_review_waiters()
+        return web.json_response({"listening": True})
 
     async def wait_review(self, request: web.Request) -> web.Response:
         # The consumption watermark lives here, not in the waiter: a waiter carrying its
@@ -1669,12 +1710,27 @@ class HtmlReviewServer:
         # watermark moved, and the wake-up died with it. The waiter acks what it printed
         # (the X-Press header names it), and until then the press is offered again. The
         # since query of the first design is accepted and ignored.
+        try:
+            listener, pid = request.query["listener"], int(request.query["pid"])
+        except (KeyError, ValueError) as error:
+            raise web.HTTPBadRequest(text="listener and pid are required") from error
+        # A restarted server knows no listener, and the first waiter back is the one.
+        if self.review_listener is None:
+            self.review_listener = listener
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self.REVIEW_POLL_TIMEOUT
         self.review_waiters += 1
         await self.broadcast({"type": "review_waiters", "waiters": self.review_waiters})
         try:
-            while self.review_calls <= self.review_consumed:
+            while True:
+                if self.review_listener != listener:
+                    return web.Response(
+                        text="[moved] another session took over listening for Call agent, so "
+                        "presses no longer come here; listen() takes them back",
+                        headers={"X-Moved": "1"})
+                self.review_listener_pid = pid
+                if self.review_calls > self.review_consumed:
+                    break
                 remaining = deadline - loop.time()
                 if remaining <= 0:
                     return web.Response(status=204)
@@ -1823,6 +1879,7 @@ class HtmlReviewServer:
         app.router.add_delete(f"{base}/comments/{{comment_id}}", self.delete_comment)
         app.router.add_post("/review-request", self.request_review)
         app.router.add_get("/wait-review", self.wait_review)
+        app.router.add_post("/wait-review/listen", self.claim_review)
         app.router.add_post("/wait-review/ack", self.ack_review)
         app.router.add_get("/ws", self.websocket)
         app.on_startup.append(self.start_watcher)
