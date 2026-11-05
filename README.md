@@ -83,6 +83,25 @@ The thread shows the source the agent would change as a −/+ pair, and the Sour
 the same text in red. **Apply suggestion** writes the change into the file. Proposing again
 replaces the proposal.
 
+## Editor keys
+
+The Vim button in the editor's bar turns on Vim keys, and the page remembers the choice.
+
+- `:w` saves. `jj` typed quickly, Escape or Ctrl+[ leaves Insert mode.
+- `gc` comments on the text a motion or a visual selection covers, and `gs` marks that text
+  on the page.
+- `K` opens the comment under the cursor in the comment list.
+- A yank also goes to the system clipboard.
+
+With or without Vim keys, Ctrl+S saves, Ctrl+Alt+M comments on the selection, Ctrl+Alt+P
+marks it on the page, and Ctrl+Alt+K opens the comment under the cursor. Ctrl+Alt+Enter
+presses Call agent. On macOS, Cmd takes the place of Ctrl and Option of Alt in these.
+Ctrl+[ drops a comment being written, with Ctrl on macOS too.
+
+A browser extension that drives pages with Vim keys takes Escape and Ctrl+[ before the
+editor does and moves the focus out of it, which leaves the editor in Insert mode. Turn the
+extension off for the review page's address.
+
 ## Export to PowerPoint and PDF
 
 Press **PPTX** in the topbar for an editable PowerPoint deck of the slides, or **PDF** to
