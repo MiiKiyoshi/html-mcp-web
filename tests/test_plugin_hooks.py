@@ -101,11 +101,11 @@ def test_html_mcp_tools_wait_for_the_listed_files_and_wait_again_after_a_compact
     # adds is the user's own, and an agent told so here handled the press.
     assert "the user's request to handle the review now" in started["hookSpecificOutput"]["additionalContext"]
     # Before guide() the review tools are refused, and the reason says to call it. guide()
-    # itself, and setup_info() for setting a project up, are open.
-    for tool in ("listen", "read_comments", "write_comments", "layout", "image"):
+    # itself, setup_info() for setting a project up, and image(), which only draws a page, are open.
+    for tool in ("listen", "read_comments", "write_comments", "layout"):
         assert "guide() has not succeeded" in reason(run("before-tool", call("s1", project, tool)))
-    assert run("before-tool", call("s1", project, "guide")) is None
-    assert run("before-tool", call("s1", project, "setup_info")) is None
+    for tool in ("guide", "setup_info", "image"):
+        assert run("before-tool", call("s1", project, tool)) is None
     # After guide() the tools wait for the files it lists to read, named in the reason. The
     # reference to consult by section is not among them.
     run("guide-read", guided("s1", content, rules))

@@ -4,9 +4,10 @@ read the rules in the context it is working in.
 
 guide() names the files to read in full. A context that calls it records those files as unread,
 a Read that returned a whole file, or found it unchanged since doing so, takes it off, and every
-html-mcp tool but guide() and setup_info() is refused while guide() has not answered in this
-context or a listed file has not been read in full. Review work runs through these tools (listen, read_comments, write_comments,
-layout, image) however the deck itself is edited, with Edit or with a script in a shell. The
+html-mcp tool but guide(), setup_info() and image() is refused while guide() has not answered in
+this context or a listed file has not been read in full. Review work runs through these tools
+(listen, read_comments, write_comments, layout) however the deck itself is edited, with Edit or
+with a script in a shell, while image() only draws a page, which looking at needs no rules. The
 record is cleared whenever a context starts again (a new session, a resumed one, a cleared one,
 or the summary a compaction leaves), since what was read before is no longer in it. A subagent
 starts without its parent's context and has a record of its own. What is checked is that the
@@ -15,7 +16,8 @@ Read calls returned the whole files, not that they were understood.
   session-start  SessionStart: clear the record, and in a project say what to do.
   guide-read     PostToolUse on guide(): record the files its answer lists to read.
   file-read      PostToolUse on Read: take a file read whole off the record.
-  before-tool    PreToolUse on html-mcp's tools: refuse one other than guide() and setup_info()
+  before-tool    PreToolUse on html-mcp's tools: refuse one other than guide(), setup_info() and
+                 image()
                  while this context has not read the rules.
 
 A project is a folder holding .html-mcp-web.yaml, found from the file or folder upward. The
@@ -34,12 +36,13 @@ from pathlib import Path
 CONFIG = ".html-mcp-web.yaml"
 RECORDS = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "html-mcp-web" / "guide-read"
 # The tools that come before the rules: guide() names them, and setup_info() serves setting
-# a project up, before there is a guide() to call.
-OPEN_TOOLS = ("guide", "setup_info")
+# a project up, before there is a guide() to call. image() only draws a page, so a context
+# that looks at the deck without working on it need not read the rules.
+OPEN_TOOLS = ("guide", "setup_info", "image")
 
 REMINDER = ("html-mcp: before using html-mcp tools in this context, call guide() and read every "
             "file in its read list in full. Use Read without offset or limit. html-mcp tools other "
-            "than guide() and setup_info() are blocked until guide() and the required Read calls "
+            "than guide(), setup_info() and image() are blocked until guide() and the required Read calls "
             "are recorded. A [review] notification from the html-mcp monitor is the user pressing "
             "Call agent on the review page: it is the user's request to handle the review now, so "
             "handle it without asking first.")
