@@ -10,7 +10,7 @@ const homePath = document.querySelector('meta[name="html-mcp-home"]')?.content ?
 
 const state = {
   project: null,
-  artifactId: null,
+  alias: null,
   artifact: null,
   comments: [],
   revision: null,
@@ -80,18 +80,18 @@ const state = {
 };
 
 function artifactBase() {
-  return `/artifacts/${encodeURIComponent(state.artifactId)}`;
+  return `/artifacts/${encodeURIComponent(state.alias)}`;
 }
 
 function renderArtifactTabs() {
   const tabs = $("#artifact-tabs");
   clear(tabs);
-  for (const [artifactId, artifact] of Object.entries(state.project.artifacts)) {
+  for (const alias of Object.keys(state.project.artifacts)) {
     tabs.appendChild(h("button", {
       type: "button",
-      class: `artifact-tab${artifactId === state.artifactId ? " active" : ""}`,
-      text: artifact.label,
-      onclick: () => selectArtifact(artifactId).catch((error) => alert(error.message)),
+      class: `artifact-tab${alias === state.alias ? " active" : ""}`,
+      text: alias,
+      onclick: () => selectArtifact(alias).catch((error) => alert(error.message)),
     }));
   }
   // Tabs scroll sideways when they outnumber the row, so the open one is brought into the
@@ -109,8 +109,8 @@ function renderArtifactTabs() {
 // The frame that holds an artifact. The frame the page starts with is taken by the
 // first artifact shown; every artifact after that gets a frame of its own. The active
 // one carries the id everything else looks the frame up by.
-function frameFor(artifactId) {
-  let frame = state.frames[artifactId];
+function frameFor(alias) {
+  let frame = state.frames[alias];
   if (frame !== undefined) return frame;
   const pane = $("#artifact-pane");
   const spare = pane.querySelector(".artifact-frame:not([data-artifact])");
@@ -122,9 +122,9 @@ function frameFor(artifactId) {
     const last = Array.from(pane.querySelectorAll(".artifact-frame")).pop();
     last.after(frame);
   }
-  frame.dataset.artifact = artifactId;
+  frame.dataset.artifact = alias;
   frame.addEventListener("load", () => attachArtifactEvents(frame));
-  state.frames[artifactId] = frame;
+  state.frames[alias] = frame;
   return frame;
 }
 
@@ -163,14 +163,14 @@ function scrollToRepaint(win) {
   requestAnimationFrame(() => win.scrollTo({ left: scrollX, top: scrollY, behavior: "instant" }));
 }
 
-async function selectArtifact(artifactId) {
-  if (artifactId === state.artifactId) return;
+async function selectArtifact(alias) {
+  if (alias === state.alias) return;
   if (state.sourceDirty && !confirm(`Discard unsaved changes to ${state.sourcePath}?`)) return;
-  if (state.artifactId) state.zooms[state.artifactId] = state.artifactZoom;
-  state.artifactId = artifactId;
+  if (state.alias) state.zooms[state.alias] = state.artifactZoom;
+  state.alias = alias;
   announceActiveArtifact();
-  localStorage.setItem("htmlMcpArtifact", artifactId);
-  state.artifact = state.project.artifacts[artifactId];
+  localStorage.setItem("htmlMcpArtifact", alias);
+  state.artifact = state.project.artifacts[alias];
   state.revision = state.artifact.revision;
   state.loadedRevision = null;
   state.comments = [];
@@ -180,10 +180,10 @@ async function selectArtifact(artifactId) {
   state.sourcePath = null;
   state.sourceRevision = null;
   state.sourceDirty = false;
-  const frame = frameFor(artifactId);
+  const frame = frameFor(alias);
   // The frame says what revision it shows; the artifact says which is current.
   state.loadedRevision = frame.dataset.revision === undefined ? null : Number(frame.dataset.revision);
-  state.artifactZoom = state.zooms[artifactId] ?? 1;
+  state.artifactZoom = state.zooms[alias] ?? 1;
   renderArtifactTabs();
   updateArtifactLinks();
   updateLayoutUi();
@@ -880,12 +880,14 @@ function setThumbsOpen(open) {
 
 function loadThumbs() {
   const frame = $("#thumbs-frame");
-  const wanted = `${state.artifactId}@${state.revision}`;
+  const wanted = `${state.alias}@${state.revision}`;
   if (frame.dataset.loaded === wanted) {
     markCurrentThumb();
     return;
   }
-  const sameArtifact = frame.dataset.loaded?.startsWith(`${state.artifactId}@`) ?? false;
+  // An alias may hold an @ itself: the revision is what follows the last one.
+  const loaded = frame.dataset.loaded;
+  const sameArtifact = loaded !== undefined && loaded.slice(0, loaded.lastIndexOf("@")) === state.alias;
   frame.dataset.loaded = wanted;
   const url = artifactUrl();
   const shown = frame.contentDocument?.URL;
@@ -2219,8 +2221,8 @@ function attachArtifactEvents(frame) {
   // The zoom the document is shown at is the artifact's own, and the reset control
   // follows it; a scroll put back means the same only at the zoom it was taken at.
   applyArtifactZoom();
-  const artifactId = state.artifactId;
-  const view = state.pendingViews[artifactId];
+  const alias = state.alias;
+  const view = state.pendingViews[alias];
   if (view !== undefined) {
     // Put back as a page and a point on it, not as a scroll offset, and again once the fonts
     // are in: the new document is set first in a fallback face, its script blocks at other
@@ -2231,9 +2233,9 @@ function attachArtifactEvents(frame) {
     };
     win.requestAnimationFrame(putBack);
     doc.fonts.ready.then(() => {
-      if (state.pendingViews[artifactId] !== view) return;
+      if (state.pendingViews[alias] !== view) return;
       putBack();
-      delete state.pendingViews[artifactId];
+      delete state.pendingViews[alias];
     });
   } else {
     const place = recalledReadingPlace();
@@ -2260,7 +2262,7 @@ function artifactUrl() {
 }
 
 function loadArtifact(preserveView) {
-  const iframe = frameFor(state.artifactId);
+  const iframe = frameFor(state.alias);
   showFrame(iframe);
   if (thumbsOpen()) loadThumbs();
   if (state.loadedRevision === state.revision) return;
@@ -2281,21 +2283,21 @@ function loadArtifact(preserveView) {
 // edit made while the reader was in another tab read the top of the document loaded for
 // the first, which sent them back to page 1. The slide show keeps its own page.
 function keepView(iframe, preserveView) {
-  if (!preserveView || state.slideShow || state.pendingViews[state.artifactId] !== undefined) return;
+  if (!preserveView || state.slideShow || state.pendingViews[state.alias] !== undefined) return;
   if (iframe.id !== "artifact-frame" || iframe.contentDocument?.body == null) return;
   const place = readingPlace();
-  if (place !== null) state.pendingViews[state.artifactId] = { page: artifactPages().indexOf(place.page), y: place.y };
+  if (place !== null) state.pendingViews[state.alias] = { page: artifactPages().indexOf(place.page), y: place.y };
 }
 
 // A deck on screen takes a revision by changing the pages that differ, see updateFrame, at
 // the reader's place, and is set up as a deck shown again is.
 function updateDeck(frame, preserveView) {
-  const artifactId = frame.dataset.artifact;
+  const alias = frame.dataset.artifact;
   const revision = state.revision;
   const whole = () => {
     // The reader has gone to another artifact meanwhile: the frame forgets what it shows,
     // and is brought up to date when they come back.
-    if (state.artifactId !== artifactId) {
+    if (state.alias !== alias) {
       delete frame.dataset.revision;
       return;
     }
@@ -2305,7 +2307,7 @@ function updateDeck(frame, preserveView) {
   // Only a document this page set up takes pages: Firefox puts back the address a frame last
   // showed when the review page is reloaded, and a document loaded that way was never set up,
   // so its pages changed and the reader's place was never put back.
-  const canPatch = () => state.framesBehind[artifactId] === undefined && frame.contentDocument?.readyState === "complete"
+  const canPatch = () => state.framesBehind[alias] === undefined && frame.contentDocument?.readyState === "complete"
     && frame.contentDocument.documentElement.dataset.htmlMcpRevision !== undefined;
   if (!canPatch()) {
     whole();
@@ -2454,22 +2456,22 @@ function changePages(doc, shown, next) {
 // loaded, and the deck stayed on the earlier revision under the later one's number while
 // agents' edits came in bursts. The latest address waits on the frame for its load to end.
 function loadBehind(shown, url) {
-  const artifactId = shown.dataset.artifact;
-  let next = state.framesBehind[artifactId];
+  const alias = shown.dataset.artifact;
+  let next = state.framesBehind[alias];
   if (next === undefined) {
     next = document.createElement("iframe");
     next.className = "artifact-frame";
     next.title = shown.title;
     next.tabIndex = -1;
     next.toggleAttribute("inert", true);
-    next.dataset.artifact = artifactId;
+    next.dataset.artifact = alias;
     next.src = url;
     shown.after(next);
     const frame = next;
     // The swap runs first, so the setup that follows finds this frame on screen.
     frame.addEventListener("load", () => { if (frame.contentDocument?.URL !== "about:blank") revealBehind(frame); });
     frame.addEventListener("load", () => { if (frame.id === "artifact-frame") attachArtifactEvents(frame); });
-    state.framesBehind[artifactId] = next;
+    state.framesBehind[alias] = next;
   }
   next.dataset.revision = String(state.revision);
   next.dataset.wanted = new URL(url, location.href).href;
@@ -2485,11 +2487,11 @@ async function revealBehind(next) {
     showInFrame(next, next.dataset.wanted);
     return;
   }
-  const artifactId = next.dataset.artifact;
-  delete state.framesBehind[artifactId];
-  const old = state.frames[artifactId];
-  state.frames[artifactId] = next;
-  if (state.artifactId !== artifactId) {
+  const alias = next.dataset.artifact;
+  delete state.framesBehind[alias];
+  const old = state.frames[alias];
+  state.frames[alias] = next;
+  if (state.alias !== alias) {
     old.remove();
     delete next.dataset.revision;
     return;
@@ -2529,18 +2531,18 @@ const READING_PLACE = "htmlMcpReadingPlace";
 
 function rememberReadingPlace() {
   try {
-    if (state.artifactId === null || frameDocument() === null) return;
+    if (state.alias === null || frameDocument() === null) return;
     const held = state.slideShow ? state.currentPage || 1 : state.leftSlideShowAt;
-    const pending = state.pendingViews[state.artifactId];
+    const pending = state.pendingViews[state.alias];
     if (held === null && pending !== undefined) {
-      sessionStorage.setItem(READING_PLACE, JSON.stringify({ artifact: state.artifactId, page: pending.page, y: pending.y }));
+      sessionStorage.setItem(READING_PLACE, JSON.stringify({ artifact: state.alias, page: pending.page, y: pending.y }));
       return;
     }
     const shown = held === null ? undefined : artifactPages()[held - 1];
     const place = held === null ? readingPlace() : (shown === undefined ? null : { page: shown, y: 0 });
     if (place === null) return;
     sessionStorage.setItem(READING_PLACE, JSON.stringify(
-      { artifact: state.artifactId, page: artifactPages().indexOf(place.page), y: place.y }));
+      { artifact: state.alias, page: artifactPages().indexOf(place.page), y: place.y }));
   } catch {
     // Storage refused, as a private window may: the reload starts at the top as before.
   }
@@ -2554,7 +2556,7 @@ function recalledReadingPlace() {
   } catch {
     return null;
   }
-  if (saved === null || saved.artifact !== state.artifactId) return null;
+  if (saved === null || saved.artifact !== state.alias) return null;
   const page = artifactPages()[saved.page];
   return page === undefined ? null : { page, y: saved.y };
 }
@@ -2582,8 +2584,8 @@ async function refreshState() {
   // headless browser is pointed at the artifact whose layout it has to check.
   const asked = new URLSearchParams(location.search).get("artifact");
   const remembered = asked !== null ? asked : localStorage.getItem("htmlMcpArtifact");
-  state.artifactId = remembered !== null && ids.includes(remembered) ? remembered : ids[0];
-  state.artifact = state.project.artifacts[state.artifactId];
+  state.alias = remembered !== null && ids.includes(remembered) ? remembered : ids[0];
+  state.artifact = state.project.artifacts[state.alias];
   state.revision = state.artifact.revision;
   renderArtifactTabs();
   updateArtifactLinks();
@@ -2645,7 +2647,7 @@ async function handleSocketMessage(message) {
   if (message.type === "state") {
     if (!adoptProject(message)) return;
     if (message.review !== undefined) showAgentWaiting(message.review.waiters);
-    const artifact = message.artifacts[state.artifactId];
+    const artifact = message.artifacts[state.alias];
     if (artifact !== undefined && state.revision !== artifact.revision) {
       state.artifact = artifact;
       state.revision = artifact.revision;
@@ -2661,7 +2663,7 @@ async function handleSocketMessage(message) {
   // The server finished its check of a revision: the review page shows that result.
   if (message.type === "layout_checked") {
     if (!adoptProject(message)) return;
-    const artifact = state.project.artifacts[state.artifactId];
+    const artifact = state.project.artifacts[state.alias];
     if (artifact !== undefined && artifact.revision === state.revision) {
       state.artifact = artifact;
       updateLayoutUi();
@@ -2670,11 +2672,11 @@ async function handleSocketMessage(message) {
   }
   if (["artifacts_changed", "config_reloaded"].includes(message.type)) {
     if (!adoptProject(message)) return;
-    if (state.project.artifacts[state.artifactId] === undefined) {
-      state.artifactId = Object.keys(state.project.artifacts)[0];
+    if (state.project.artifacts[state.alias] === undefined) {
+      state.alias = Object.keys(state.project.artifacts)[0];
       state.loadedRevision = null;
     }
-    const artifact = state.project.artifacts[state.artifactId];
+    const artifact = state.project.artifacts[state.alias];
     const changed = state.loadedRevision !== artifact.revision || state.revision !== artifact.revision;
     state.artifact = artifact;
     state.revision = artifact.revision;
@@ -2693,7 +2695,7 @@ async function handleSocketMessage(message) {
     return;
   }
   if (["comment_added", "comment_updated", "comments_updated", "comment_deleted"].includes(message.type)
-      && message.artifact === state.artifactId) {
+      && message.artifact === state.alias) {
     await refreshComments();
   }
 }
@@ -2717,8 +2719,8 @@ function connectWebSocket() {
 }
 
 function announceActiveArtifact() {
-  if (state.ws?.readyState === WebSocket.OPEN && state.artifactId !== null) {
-    state.ws.send(JSON.stringify({ type: "active_artifact", artifact: state.artifactId }));
+  if (state.ws?.readyState === WebSocket.OPEN && state.alias !== null) {
+    state.ws.send(JSON.stringify({ type: "active_artifact", artifact: state.alias }));
   }
 }
 

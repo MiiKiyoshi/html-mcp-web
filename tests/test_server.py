@@ -8,7 +8,7 @@ import pytest
 import yaml
 from aiohttp.test_utils import TestClient, TestServer
 
-from html_mcp_web.config import ArtifactConfig, Config
+from html_mcp_web.config import ArtifactConfig, Config, artifact_address
 from html_mcp_web.server import HtmlReviewServer
 from html_mcp_web.space import maximal_free_regions
 
@@ -20,7 +20,7 @@ async def client(tmp_path: Path):
         encoding="utf-8",
     )
     config = Config(
-        artifacts={"slides": ArtifactConfig(label="Slides", layout="slides", main="artifact.html")},
+        artifacts={"slides": ArtifactConfig(layout="slides", main="artifact.html")},
         watch=["*.html"],
         config_path=tmp_path / ".html-mcp-web.yaml",
     )
@@ -166,7 +166,7 @@ def test_absolute_artifact_path_stays_absolute_outside_the_ui(tmp_path: Path, mo
     main.write_text("<!doctype html><p>absolute artifact</p>", encoding="utf-8")
     monkeypatch.setenv("HOME", str(home))
     config = Config(
-        artifacts={"slides": ArtifactConfig(label="Slides", layout="slides", main=str(main))},
+        artifacts={"slides": ArtifactConfig(layout="slides", main=str(main))},
         config_path=home / ".html-mcp-web.yaml",
     )
 
@@ -245,7 +245,7 @@ async def test_templated_artifact_source_opens_the_content_file(tmp_path: Path) 
     )
     review = HtmlReviewServer(Config(
         artifacts={"slides": ArtifactConfig(
-            label="Slides", layout="slides", main="slides.html",
+            layout="slides", main="slides.html",
             template="neutral-slides", content="content.html",
         )},
         config_path=tmp_path / ".html-mcp-web.yaml",
@@ -269,7 +269,7 @@ def test_report_artifact_uses_portrait_a4_print_page(tmp_path: Path) -> None:
     report = tmp_path / "report.html"
     report.write_text("<!doctype html><html><head></head><body><main class=\"pages\"><section class=\"page\"></section></main></body></html>", encoding="utf-8")
     review = HtmlReviewServer(Config(
-        artifacts={"report": ArtifactConfig(label="Report", layout="report", main="report.html")},
+        artifacts={"report": ArtifactConfig(layout="report", main="report.html")},
         config_path=tmp_path / ".html-mcp-web.yaml",
     ))
     artifact = review._artifact_html(review.artifacts["report"])
@@ -414,7 +414,7 @@ async def test_headless_check_runs_while_a_different_artifact_is_reviewed(client
     scheduled: list[str] = []
 
     async def checked(runtime, host):
-        scheduled.append(runtime.artifact_id)
+        scheduled.append(runtime.alias)
 
     monkeypatch.setattr(review, "_ensure_layout_checked", checked)
     await test_client.get("/state")
@@ -725,7 +725,7 @@ def test_template_build_uses_common_build_entrypoint(tmp_path: Path) -> None:
     (tmp_path / "artifact.html").write_text("<p>old</p>", encoding="utf-8")
     config = Config(
         artifacts={"report": ArtifactConfig(
-            label="Report", layout="report", main="artifact.html", template="test", content="content.html")},
+            layout="report", main="artifact.html", template="test", content="content.html")},
         config_path=tmp_path / ".html-mcp-web.yaml",
     )
     review = HtmlReviewServer(config)
@@ -735,6 +735,36 @@ def test_template_build_uses_common_build_entrypoint(tmp_path: Path) -> None:
 
     assert review.artifacts["report"].build_error is None
     assert (tmp_path / "artifact.html").read_text(encoding="utf-8") == "<p>artifact</p>"
+
+
+async def test_an_artifact_is_served_and_kept_under_its_alias(tmp_path: Path) -> None:
+    """Its address carries the alias as one path segment, and its comments and exports are
+    files named after it, a slash written %2F. A name that is no alias is answered with the
+    aliases."""
+    alias = "Draft 2/3 (초안)"
+    (tmp_path / "artifact.html").write_text(
+        "<!doctype html><html><head><title>Artifact</title></head><body><p>Selected sentence.</p></body></html>",
+        encoding="utf-8")
+    review = HtmlReviewServer(Config(artifacts={alias: ArtifactConfig(layout="slides", main="artifact.html")},
+                                     watch=["*.html"], config_path=tmp_path / ".html-mcp-web.yaml"))
+    app = review.create_app()
+    app.on_startup.clear()
+    app.on_cleanup.clear()
+    test_client = TestClient(TestServer(app))
+    await test_client.start_server()
+    try:
+        base = artifact_address(alias)
+        assert base == "/artifacts/Draft%202%2F3%20%28%EC%B4%88%EC%95%88%29"
+        assert (await test_client.get(f"{base}/artifact")).status == 200
+        added = await test_client.post(f"{base}/comments", json={"anchor": {"kind": "artifact"}, "text": "Tighten this."})
+        assert added.status == 201
+        assert (tmp_path / ".html-mcp-web" / "comments" / "Draft 2%2F3 (초안).json").is_file()
+        assert review.default_pptx_path(review.artifacts[alias]) == tmp_path / "export" / "Draft 2%2F3 (초안).pptx"
+        missing = await test_client.get("/artifacts/artifact.html/comments")
+        assert missing.status == 404
+        assert await missing.text() == "unknown artifact: artifact.html. The artifacts are 'Draft 2/3 (초안)'"
+    finally:
+        await test_client.close()
 
 
 async def test_control_data_is_not_served(client) -> None:
@@ -752,7 +782,7 @@ async def test_config_change_adds_artifact_and_invalid_config_keeps_current_stat
         )
     config_path = tmp_path / ".html-mcp-web.yaml"
     initial = {
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "port": 8765,
     }
     config_path.write_text(yaml.safe_dump(initial, sort_keys=False), encoding="utf-8")
@@ -766,7 +796,7 @@ async def test_config_change_adds_artifact_and_invalid_config_keeps_current_stat
         updated = {
             "artifacts": {
                 **initial["artifacts"],
-                "report": {"label": "Report", "layout": "report", "main": "paper/report.html"},
+                "report": {"layout": "report", "main": "paper/report.html"},
             },
             "port": 8765,
         }
@@ -801,9 +831,9 @@ async def test_artifact_content_change_does_not_invalidate_sibling(tmp_path: Pat
     for name in ("slides.html", "paper/report.html", "paper/content.html"):
         (tmp_path / name).write_text("<p>artifact</p>", encoding="utf-8")
     config = Config.from_dict({"artifacts": {
-        "slides": {"label": "Slides", "layout": "slides", "main": "slides.html"},
+        "slides": {"layout": "slides", "main": "slides.html"},
         "report": {
-            "label": "Report", "layout": "report", "main": "paper/report.html",
+            "layout": "report", "main": "paper/report.html",
             "template": "neutral-report", "content": "paper/content.html",
         },
     }}, config_path=tmp_path / ".html-mcp-web.yaml")
@@ -828,7 +858,7 @@ def test_a_templated_artifact_names_its_missing_content(tmp_path: Path) -> None:
     main file sent the reader looking for a build that had nothing to build from."""
     config = Config.from_dict({"artifacts": {
         "report": {
-            "label": "Report", "layout": "report", "main": "report.html",
+            "layout": "report", "main": "report.html",
             "template": "neutral-report", "content": "report-content.html",
         },
     }}, config_path=tmp_path / ".html-mcp-web.yaml")
@@ -1169,8 +1199,8 @@ async def test_one_broken_artifact_does_not_take_the_server_down(tmp_path: Path)
     )
     config = Config(
         artifacts={
-            "good": ArtifactConfig(label="Good", layout="slides", main="good.html"),
-            "gone": ArtifactConfig(label="Gone", layout="slides", main="renamed-away.html"),
+            "good": ArtifactConfig(layout="slides", main="good.html"),
+            "gone": ArtifactConfig(layout="slides", main="renamed-away.html"),
         },
         watch=["*.html"],
         config_path=tmp_path / ".html-mcp-web.yaml",
@@ -1570,7 +1600,7 @@ async def test_a_write_that_lands_while_its_content_builds_is_built_in_turn(tmp_
     content.write_text("<p>first</p>", encoding="utf-8")
     main.write_text("<p>first</p>", encoding="utf-8")
     config = Config.from_dict({"artifacts": {"slides": {
-        "label": "Slides", "layout": "slides", "main": "slides.html",
+        "layout": "slides", "main": "slides.html",
         "template": "neutral-slides", "content": "content.html"}}}, config_path=tmp_path / ".html-mcp-web.yaml")
     review = HtmlReviewServer(config)
     runtime = review.artifacts["slides"]

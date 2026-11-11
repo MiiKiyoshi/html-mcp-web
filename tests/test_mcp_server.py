@@ -40,7 +40,7 @@ def project(tmp_path: Path, port: int | None = None):
     )
     path = tmp_path / ".html-mcp-web.yaml"
     path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "port": available_port() if port is None else port,
     }, sort_keys=False), encoding="utf-8")
     return load_config(path)
@@ -477,7 +477,7 @@ def test_failed_start_releases_the_lock_so_a_retry_can_serve(tmp_path: Path) -> 
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     good = yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "port": port,
     }, sort_keys=False)
     config_path.write_text(good, encoding="utf-8")
@@ -681,6 +681,40 @@ def test_guide_names_the_file_to_edit_what_to_read_and_what_to_consult(tmp_path:
         binding.stop()
 
 
+def test_the_tools_take_the_alias_on_the_tab_and_name_the_aliases_otherwise(tmp_path: Path) -> None:
+    """An artifact goes by its alias alone, which may hold spaces, a slash and any script.
+    The tools take it as the tab shows it, and a name that is no alias is answered with the
+    aliases."""
+    alias = "Draft 2/3 (초안)"
+    (tmp_path / "deck").mkdir()
+    (tmp_path / "deck" / "deck.html").write_text(
+        '<!doctype html><html><body><main class="pages"><section class="page"></section></main></body></html>',
+        encoding="utf-8")
+    path = tmp_path / ".html-mcp-web.yaml"
+    path.write_text(yaml.safe_dump({
+        "artifacts": {alias: {"layout": "slides", "main": "deck/deck.html"}},
+        "port": available_port(),
+    }, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    config = load_config(path)
+    binding = ProjectBinding(tmp_path)
+    try:
+        mcp = create_server(binding)
+        assert guided(mcp, alias)["edit_file"] == str(tmp_path / "deck" / "deck.html")
+        base = f"http://127.0.0.1:{config.port}"
+        created = post_json(f"{base}/artifacts/Draft%202%2F3%20%28%EC%B4%88%EC%95%88%29/comments",
+                            {"anchor": {"kind": "artifact"}, "text": "Tighten this."})
+        handed = answer(mcp.call_tool("read_comments", {"artifact": alias, "new": True}))
+        assert [comment["id"] for comment in handed["comments"]] == [created["id"]]
+        assert (tmp_path / ".html-mcp-web" / "comments" / "Draft 2%2F3 (초안).json").is_file()
+        for name in ("deck/deck.html", "deck.html"):
+            with pytest.raises(Exception, match=f"unknown artifact: {name}. The artifacts are 'Draft 2/3 \\(초안\\)'"):
+                asyncio.run(mcp.call_tool("read_comments", {"artifact": name}))
+        with pytest.raises(Exception, match="The artifacts are 'Draft 2/3"):
+            asyncio.run(mcp.call_tool("guide", {"artifact": "deck"}))
+    finally:
+        binding.stop()
+
+
 def test_replies_are_one_text_with_a_comment_id_at_each_line_head() -> None:
     """An agent writing a list of objects serialized the prose inside them by hand, and
     by habit as \\uXXXX escapes: five or six tokens a character, and twice a miscounted
@@ -786,7 +820,7 @@ def test_guide_gives_each_artifact_the_neutral_guideline_of_its_layout(tmp_path:
         '<!doctype html><html><body><main class="pages"><section class="page"></section></main></body></html>',
         encoding="utf-8")
     data = yaml.safe_load(config.config_path.read_text(encoding="utf-8"))
-    data["artifacts"]["report"] = {"label": "Report", "layout": "report", "main": "paper/report.html"}
+    data["artifacts"]["report"] = {"layout": "report", "main": "paper/report.html"}
     data["guideline"] = "team-meeting"
     config.config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     built_in = Path(config_module.__file__).resolve().parent.parent / "guidelines"

@@ -16,6 +16,7 @@ from urllib.parse import quote, urlencode
 
 from . import plugin_monitor
 
+from .config import alias_file_name, artifact_address
 from .mcp_contract import (
     LIST_LIMIT,
     agent_comment,
@@ -252,13 +253,16 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         ),
     )
 
+    alias = "The artifact's alias, the name on its tab in the review page."
+    artifact_alias = Annotated[str, Field(description=alias)]
+
     # Paths, not the documents: clients cap a tool result at different sizes, and the rules
     # run to some 50,000 characters. The files to read in full and the component reference,
     # looked up by the section needed, are listed apart, so a check can tell which reads the
     # rules require.
     @mcp.tool(structured_output=False)
     @_compact
-    async def guide(artifact: str | None = None) -> dict[str, Any]:
+    async def guide(artifact: Annotated[str | None, Field(description=alias)] = None) -> dict[str, Any]:
         """The edit file, paths to files to read in full before editing, and references to consult by section. Omit artifact only when the project has one artifact."""
         client = binding.require_client()
         state = await client.request_json("GET", "/state")
@@ -266,10 +270,10 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         if artifact is None:
             # Nothing else names the artifacts to an agent, so a lone one needs no name.
             if len(artifacts) != 1:
-                raise RuntimeError(f"this project has several artifacts: {', '.join(artifacts)}. Name one.")
+                raise RuntimeError(f"this project has several artifacts: {', '.join(map(repr, artifacts))}. Name one.")
             artifact = next(iter(artifacts))
         if artifact not in artifacts:
-            raise RuntimeError(f"unknown artifact: {artifact}; available artifacts: {', '.join(artifacts)}")
+            raise RuntimeError(f"unknown artifact: {artifact}. The artifacts are {', '.join(map(repr, artifacts))}")
         entry = artifacts[artifact]
         docs = Path(__file__).resolve().parent.parent / "templates"
         read = [str(docs / "README.md"), str(docs / "PRODUCTION.md")]
@@ -285,7 +289,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     @mcp.tool(structured_output=False)
     @_compact
     async def read_comments(
-        artifact: str,
+        artifact: artifact_alias,
         ids: list[str] | None = None,
         new: Annotated[bool, Field(description=(
             "What the reviewer wrote on open threads that you have neither been handed nor "
@@ -304,7 +308,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         if new:
             if ids is not None or save or status != "open" or unanswered:
                 raise ValueError("new answers on its own; it takes no ids, status, unanswered or save")
-            payload = await client.request_json("GET", f"/artifacts/{artifact}/comments?status=open")
+            payload = await client.request_json("GET", f"{artifact_address(artifact)}/comments?status=open")
             project_dir = Path((await client.request_json("GET", "/state"))["project_dir"])
             previous = read_cursor(project_dir, artifact)
             edge = parse_short_time(since) if since is not None else (
@@ -330,16 +334,16 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             if not ids or len(set(ids)) != len(ids):
                 raise ValueError("ids must be nonempty and unique")
             if save:
-                return await client.request_json("POST", f"/artifacts/{artifact}/comments/export", {"comment_ids": ids})
+                return await client.request_json("POST", f"{artifact_address(artifact)}/comments/export", {"comment_ids": ids})
             comments = []
             for comment_id in ids:
-                comment = await client.request_json("GET", f"/artifacts/{artifact}/comments/{comment_id}")
+                comment = await client.request_json("GET", f"{artifact_address(artifact)}/comments/{comment_id}")
                 comments.append(agent_comment(comment))
             return {"artifact": artifact, "comments": comments}
         if save:
             raise ValueError("save needs ids")
         query = "" if status == "all" else f"?status={status}"
-        comments = (await client.request_json("GET", f"/artifacts/{artifact}/comments{query}"))["comments"]
+        comments = (await client.request_json("GET", f"{artifact_address(artifact)}/comments{query}"))["comments"]
         if unanswered:
             comments = [comment for comment in comments if is_unanswered(comment)]
         if since is not None:
@@ -356,7 +360,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     @mcp.tool(structured_output=False)
     @_compact
     async def write_comments(
-        artifact: str,
+        artifact: artifact_alias,
         action: Literal["add", "reply", "edit", "suggest", "withdraw"],
         text: Annotated[str | None, Field(min_length=1, description=(
             "add: the new comment. reply: the replies as one text, each starting at a line head "
@@ -389,7 +393,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 body["anchor"] = {"kind": kind, "number": anchor["number"], "title": "",
                                   **({"bbox": anchor["bbox"]} if kind == "area" else {})}
             elif kind == "source":
-                source = await client.request_json("GET", f"/artifacts/{artifact}/source")
+                source = await client.request_json("GET", f"{artifact_address(artifact)}/source")
                 lines = source["text"].split("\n")
                 start, end = int(anchor["start"]), int(anchor["end"])
                 if not 1 <= start <= end <= len(lines):
@@ -399,25 +403,25 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 body["source_revision"] = source["revision"]
             else:
                 raise ValueError("anchor kind is artifact, page, area or source")
-            comment = await client.request_json("POST", f"/artifacts/{artifact}/comments", body)
+            comment = await client.request_json("POST", f"{artifact_address(artifact)}/comments", body)
             return {"id": comment["id"], "rev": revision_of(comment["updated"])}
         if action in ("suggest", "withdraw"):
             if id is None or rev is None or text is None:
                 raise ValueError(f"{action} needs id, rev and text")
             if (action == "suggest") != (changes is not None):
                 raise ValueError("changes go with suggest, and only with it")
-            comment = await client.request_json("GET", f"/artifacts/{artifact}/comments/{id}")
+            comment = await client.request_json("GET", f"{artifact_address(artifact)}/comments/{id}")
             if revision_of(comment["updated"]) != rev:
                 raise ValueError(f"stale: {id} changed since it was read; read it again")
             body: dict[str, Any] = {"updated": comment["updated"], "text": text}
             if changes is not None:
                 body["changes"] = changes
-            result = await client.request_json("POST", f"/artifacts/{artifact}/comments/{id}/{action}", body)
+            result = await client.request_json("POST", f"{artifact_address(artifact)}/comments/{id}/{action}", body)
             return {"id": id, "rev": revision_of(result["updated"])}
         if draft is not None:
             if action != "reply" or text is not None:
                 raise ValueError("a draft goes with action reply and no text")
-            result = await client.request_json("POST", f"/artifacts/{artifact}/comments/update", {
+            result = await client.request_json("POST", f"{artifact_address(artifact)}/comments/update", {
                 "replies_file": draft,
                 **({"edited_files": edited_files} if edited_files is not None else {}),
             })
@@ -432,11 +436,11 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             stamps: dict[str, str] = {}
             for comment_id, _, rev, _ in rewrites:
                 if comment_id not in stamps:
-                    comment = await client.request_json("GET", f"/artifacts/{artifact}/comments/{comment_id}")
+                    comment = await client.request_json("GET", f"{artifact_address(artifact)}/comments/{comment_id}")
                     if revision_of(comment["updated"]) != rev:
                         raise ValueError(f"stale: {comment_id} changed since it was read; read it again")
                     stamps[comment_id] = comment["updated"]
-            result = await client.request_json("POST", f"/artifacts/{artifact}/comments/update", {
+            result = await client.request_json("POST", f"{artifact_address(artifact)}/comments/update", {
                 "entry_edits": [{"comment": comment_id, "entry": entry_id, "updated": stamps[comment_id], "text": body}
                                 for comment_id, entry_id, _, body in rewrites],
             })
@@ -444,7 +448,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         updated: list[dict[str, Any]] = []
         notes: list[str] = []
         for comment_id, message in parse_replies(text):
-            result = await client.request_json("POST", f"/artifacts/{artifact}/comments/update", {
+            result = await client.request_json("POST", f"{artifact_address(artifact)}/comments/update", {
                 "comment_ids": [comment_id],
                 "message": message,
                 **({"edited_files": edited_files} if edited_files is not None else {}),
@@ -459,7 +463,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     @mcp.tool(structured_output=False)
     @_compact
     async def image(
-        artifact: str,
+        artifact: artifact_alias,
         page: Annotated[int | None, Field(ge=1, description="Omit with save to write every page, or the pages named, as p<N>.png into out as a folder.")] = None,
         pages: Annotated[str | None, Field(description='With save and no page: the pages to write, as "47-69" or "47-52,57,62-63".')] = None,
         target: Annotated[str | None, Field(description="A block ref from layout() (e.g. p8:1.1.0.2): render just that block, for fewer tokens.")] = None,
@@ -479,10 +483,10 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             # transcript; one call writes them all from one print.
             if not save or target is not None or bbox is not None:
                 raise ValueError("page is needed unless save writes every page or the pages named")
-            folder = out if out is not None else f".html-mcp-web/renders/{artifact}"
+            folder = out if out is not None else f".html-mcp-web/renders/{alias_file_name(artifact)}"
             chosen = f"&pages={quote(pages)}" if pages is not None else ""
             saved = await client.request_json(
-                "GET", f"/artifacts/{artifact}/render/pages?{colour}&save={quote(folder)}{chosen}", timeout=600.0)
+                "GET", f"{artifact_address(artifact)}/render/pages?{colour}&save={quote(folder)}{chosen}", timeout=600.0)
             written = (f"{saved['path']}: p<N>.png for pages {pages}" if pages is not None
                        else f"{saved['path']}: p1.png to p{len(saved['pages'])}.png")
             return [written, grey] if grayscale else written
@@ -494,22 +498,23 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         if bbox is not None:
             params += f"&bbox={','.join(f'{value:g}' for value in bbox)}"
         if not save:
-            data = await client.get_bytes(f"/artifacts/{artifact}/render/page{params}", timeout=120.0)
+            data = await client.get_bytes(f"{artifact_address(artifact)}/render/page{params}", timeout=120.0)
             return [Image(data=data, format="png"), grey] if grayscale else Image(data=data, format="png")
         # The server writes the file, so its watcher does not take the render for an edit.
         # The answer is the file's place alone: the page, scale and colour are what the
         # caller asked for.
-        name = (f"{artifact}-{target.replace(':', '-')}.png" if target is not None
-                else f"{artifact}-p{page}-box.png" if bbox is not None else f"{artifact}-p{page}.png")
+        stem = alias_file_name(artifact)
+        name = (f"{stem}-{target.replace(':', '-')}.png" if target is not None
+                else f"{stem}-p{page}-box.png" if bbox is not None else f"{stem}-p{page}.png")
         relative = out if out is not None else f".html-mcp-web/renders/{name}"
         saved = await client.request_json(
-            "GET", f"/artifacts/{artifact}/render/page{params}&save={quote(relative)}", timeout=120.0)
+            "GET", f"{artifact_address(artifact)}/render/page{params}&save={quote(relative)}", timeout=120.0)
         return [saved["path"], grey] if grayscale else saved["path"]
 
     @mcp.tool(structured_output=False)
     @_compact
     async def figure(
-        artifact: str,
+        artifact: artifact_alias,
         number: Annotated[int, Field(ge=1, description="The figure's number, as its caption reads it.")],
         out: Annotated[str, Field(description="The path of the PDF, relative to the project, or absolute or from ~ for a place outside it.")],
     ) -> str:
@@ -517,13 +522,13 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         its caption, for \\includegraphics in a paper."""
         client = binding.require_client()
         saved = await client.request_json(
-            "GET", f"/artifacts/{artifact}/render/figure?number={number}&save={quote(out)}", timeout=300.0)
+            "GET", f"{artifact_address(artifact)}/render/figure?number={number}&save={quote(out)}", timeout=300.0)
         return saved["path"]
 
     @mcp.tool(structured_output=False)
     @_compact
     async def layout(
-        artifact: str,
+        artifact: artifact_alias,
         page: Annotated[int | None, Field(ge=1, description="Add this page's blocks and free space, in page pixels.")] = None,
         target: Annotated[str | None, Field(description=(
             "With page: a block ref from children, to measure inside it: its lines and "
@@ -538,7 +543,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         client = binding.require_client()
         # Long enough for the server's own check, the only one recorded: it starts a headless
         # browser on its own page and answers once that posts.
-        result = await client.request_json("GET", f"/artifacts/{artifact}/layout", timeout=75.0)
+        result = await client.request_json("GET", f"{artifact_address(artifact)}/layout", timeout=75.0)
         if page is not None:
             if "warnings" in result:
                 result["warnings"] = [warning for warning in result["warnings"] if warning.startswith(f"page {page} ")]
@@ -550,7 +555,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 for key, value in (("target", target), ("min_width", min_width), ("min_height", min_height)):
                     if value is not None:
                         query[key] = value
-                space = await client.request_json("GET", f"/artifacts/{artifact}/space?{urlencode(query)}", timeout=75.0)
+                space = await client.request_json("GET", f"{artifact_address(artifact)}/space?{urlencode(query)}", timeout=75.0)
                 # What the agent asked for is not news: only the measurement comes back.
                 result.update({key: value for key, value in space.items()
                                if key not in ("artifact", "revision", "page") and value is not None})

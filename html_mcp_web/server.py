@@ -21,6 +21,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 import yaml
 from aiohttp import WSMsgType, web
@@ -37,6 +38,8 @@ from .comments import (
 from .config import (
     ArtifactConfig,
     Config,
+    alias_file_name,
+    artifact_address,
     get_content_file,
     NEUTRAL,
     guideline_files_for,
@@ -249,7 +252,7 @@ def page_numbers(spec: str, count: int) -> list[int]:
 
 @dataclass
 class ArtifactRuntime:
-    artifact_id: str
+    alias: str
     config: ArtifactConfig
     main_file: Path
     content_file: Path | None
@@ -310,8 +313,6 @@ class ArtifactRuntime:
             for status in ("open", "resolved", "reference")
         }
         data: dict[str, Any] = {
-            "id": self.artifact_id,
-            "label": self.config.label,
             "layout": self.config.layout,
             "main_file": self.config.main,
             "edit_file": self.config.content if self.content_file is not None else self.config.main,
@@ -447,15 +448,15 @@ class HtmlReviewServer:
 
     def _create_artifacts(self, config: Config) -> dict[str, ArtifactRuntime]:
         runtimes: dict[str, ArtifactRuntime] = {}
-        for artifact_id, artifact in config.artifacts.items():
-            comment_path = self.project_dir / ".html-mcp-web" / "comments" / f"{artifact_id}.json"
+        for alias, artifact in config.artifacts.items():
+            comment_path = self.project_dir / ".html-mcp-web" / "comments" / f"{alias_file_name(alias)}.json"
             runtime = ArtifactRuntime(
-                artifact_id=artifact_id,
+                alias=alias,
                 config=artifact,
-                main_file=get_main_file(config, artifact_id).resolve(),
-                content_file=(get_content_file(config, artifact_id).resolve()
-                              if get_content_file(config, artifact_id) is not None else None),
-                template_dir=get_template_dir(config, artifact_id),
+                main_file=get_main_file(config, alias).resolve(),
+                content_file=(get_content_file(config, alias).resolve()
+                              if get_content_file(config, alias) is not None else None),
+                template_dir=get_template_dir(config, alias),
                 store=CommentStore(comment_path),
             )
             if runtime.content_file is not None and runtime.content_file.is_file():
@@ -465,7 +466,7 @@ class HtmlReviewServer:
             # raised: raising here took the whole server down over one artifact while the
             # reviewer was renaming its file, and blocked every healthy one with it.
             runtime.note_files()
-            runtimes[artifact_id] = runtime
+            runtimes[alias] = runtime
         return runtimes
 
     def _create_watcher(self, config: Config) -> Watcher:
@@ -480,11 +481,11 @@ class HtmlReviewServer:
                   if runtime.content_file is not None]
         return roots
 
-    def artifact_guideline(self, artifact_id: str) -> list[Path]:
-        return guideline_files_for(self.config, self.config.artifacts[artifact_id].layout)
+    def artifact_guideline(self, alias: str) -> list[Path]:
+        return guideline_files_for(self.config, self.config.artifacts[alias].layout)
 
     def artifact_state(self, runtime: ArtifactRuntime) -> dict[str, Any]:
-        guidelines = self.artifact_guideline(runtime.artifact_id)
+        guidelines = self.artifact_guideline(runtime.alias)
         return {
             **runtime.state(),
             # The guideline this artifact follows and the ones it extends, base first.
@@ -494,7 +495,7 @@ class HtmlReviewServer:
         }
 
     def project_state(self) -> dict[str, Any]:
-        artifacts = {artifact_id: self.artifact_state(runtime) for artifact_id, runtime in self.artifacts.items()}
+        artifacts = {alias: self.artifact_state(runtime) for alias, runtime in self.artifacts.items()}
         return {
             # The tag of the code being served. A page stamped with another one is running
             # code this server no longer serves, and reloads itself on seeing this.
@@ -510,11 +511,12 @@ class HtmlReviewServer:
         }
 
     def runtime(self, request: web.Request) -> ArtifactRuntime:
-        artifact_id = request.match_info["artifact_id"]
+        alias = request.match_info["alias"]
         try:
-            return self.artifacts[artifact_id]
+            return self.artifacts[alias]
         except KeyError as error:
-            raise web.HTTPNotFound(text=f"unknown artifact: {artifact_id}") from error
+            raise web.HTTPNotFound(
+                text=f"unknown artifact: {alias}. The artifacts are {', '.join(map(repr, self.artifacts))}") from error
 
     async def broadcast(self, message: dict[str, Any]) -> None:
         dead: list[web.WebSocketResponse] = []
@@ -529,13 +531,13 @@ class HtmlReviewServer:
             self.websocket_artifacts.pop(socket, None)
             self.websocket_hosts.pop(socket, None)
 
-    def has_review_ui(self, artifact_id: str) -> bool:
-        return artifact_id in self.websocket_artifacts.values()
+    def has_review_ui(self, alias: str) -> bool:
+        return alias in self.websocket_artifacts.values()
 
-    def review_host(self, artifact_id: str) -> str | None:
+    def review_host(self, alias: str) -> str | None:
         """The address a review page showing this artifact reached the server at."""
         return next((self.websocket_hosts[socket] for socket, shown in self.websocket_artifacts.items()
-                     if shown == artifact_id and socket in self.websocket_hosts), None)
+                     if shown == alias and socket in self.websocket_hosts), None)
 
     async def on_project_change(self, path: str) -> None:
         changed = Path(path).resolve()
@@ -591,7 +593,7 @@ class HtmlReviewServer:
         await self.broadcast({"type": "artifacts_changed", "path": str(changed.relative_to(self.project_dir)), **self.project_state()})
         # A review page shows the server's check, so a revision one is looking at is checked now.
         for runtime in affected:
-            host = self.review_host(runtime.artifact_id)
+            host = self.review_host(runtime.alias)
             if host is not None:
                 asyncio.ensure_future(self._ensure_layout_checked(runtime, host))
 
@@ -708,7 +710,7 @@ class HtmlReviewServer:
         def address(match: re.Match[str]) -> str:
             name = hashlib.sha1(match.group(2).encode("ascii")).hexdigest()
             assets.setdefault(name, (match.group(1), base64.b64decode(match.group(2))))
-            return f"/artifacts/{runtime.artifact_id}/asset/{name}"
+            return f"{artifact_address(runtime.alias)}/asset/{name}"
 
         # Script text is left as written: a script may read its data as a data URI.
         pieces: list[str] = []
@@ -732,7 +734,7 @@ class HtmlReviewServer:
                             headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
     async def _pdf(self, runtime: ArtifactRuntime) -> bytes:
-        url = f"http://127.0.0.1:{self.config.port}/artifacts/{runtime.artifact_id}/artifact?print=1"
+        url = f"http://127.0.0.1:{self.config.port}{artifact_address(runtime.alias)}/artifact?print=1"
         async with self.pdf_lock:
             return await asyncio.get_running_loop().run_in_executor(None, print_artifact_pdf, url, runtime.config.layout)
 
@@ -751,7 +753,7 @@ class HtmlReviewServer:
         # Not the print URL: that one strips the speaker scripts, and each becomes its
         # slide's notes. They are hidden with CSS for the shots instead, which is enough
         # here because the export photographs each page element rather than printing.
-        url = f"http://127.0.0.1:{self.config.port}/artifacts/{runtime.artifact_id}/artifact"
+        url = f"http://127.0.0.1:{self.config.port}{artifact_address(runtime.alias)}/artifact"
         try:
             async with self.pdf_lock:
                 return await asyncio.get_running_loop().run_in_executor(
@@ -760,7 +762,7 @@ class HtmlReviewServer:
             raise web.HTTPServiceUnavailable(text=f"pptx export failed: {error}") from error
 
     def default_pptx_path(self, runtime: ArtifactRuntime) -> Path:
-        return self.project_dir / "export" / f"{runtime.artifact_id}.pptx"
+        return self.project_dir / "export" / f"{alias_file_name(runtime.alias)}.pptx"
 
     async def export_pptx(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
@@ -774,7 +776,7 @@ class HtmlReviewServer:
         runtime = self.runtime(request)
         # Built in a folder removed once it is read, so a download leaves no copy in the project.
         with tempfile.TemporaryDirectory(prefix="html_mcp_pptx_") as folder:
-            out = Path(folder) / f"{runtime.artifact_id}.pptx"
+            out = Path(folder) / f"{alias_file_name(runtime.alias)}.pptx"
             await self._export_pptx(runtime, out)
             body = out.read_bytes()
         return web.Response(
@@ -914,7 +916,7 @@ class HtmlReviewServer:
             number = int(request.query["number"])
         except (KeyError, ValueError) as error:
             raise web.HTTPBadRequest(text="number must be an integer") from error
-        url = f"http://127.0.0.1:{self.config.port}/artifacts/{runtime.artifact_id}/artifact?print=1"
+        url = f"http://127.0.0.1:{self.config.port}{artifact_address(runtime.alias)}/artifact?print=1"
         try:
             async with self.pdf_lock:
                 pdf = await asyncio.get_running_loop().run_in_executor(None, print_figure_pdf, url, number)
@@ -1045,7 +1047,7 @@ class HtmlReviewServer:
             if not behind:
                 return
             for runtime in behind:
-                logger.warning("%s changed on disk without the watcher saying so", runtime.artifact_id)
+                logger.warning("%s changed on disk without the watcher saying so", runtime.alias)
                 source = runtime.content_file or runtime.main_file
                 source_seen = runtime.seen_content if runtime.content_file is not None else runtime.seen_main
                 if runtime.stamp(source) != source_seen and source.is_file():
@@ -1081,10 +1083,10 @@ class HtmlReviewServer:
                 f"port changed from {self.config.port} to {config.port}; the new port applies when the agent restarts"
             )
         replacements = self._create_artifacts(config)
-        for artifact_id, replacement in replacements.items():
-            current = self.artifacts[artifact_id] if artifact_id in self.artifacts else None
+        for alias, replacement in replacements.items():
+            current = self.artifacts[alias] if alias in self.artifacts else None
             if current is not None and current.config == replacement.config:
-                replacements[artifact_id] = current
+                replacements[alias] = current
             elif current is not None:
                 replacement.revision = current.revision + 1
         self.config = config
@@ -1168,7 +1170,7 @@ class HtmlReviewServer:
             profile = tempfile.mkdtemp(prefix="html_mcp_check_")
             process = await asyncio.create_subprocess_exec(
                 "firefox", "-headless", "-no-remote", "-profile", profile,
-                f"http://{host}/?artifact={runtime.artifact_id}&check={runtime.check_token}",
+                f"http://{host}/?{urlencode({'artifact': runtime.alias, 'check': runtime.check_token})}",
                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
             )
             run = (process, profile)
@@ -1218,12 +1220,12 @@ class HtmlReviewServer:
                                  else "the layout check did not finish. Try again")
         if runtime.build_error is not None:
             data["build_error"] = runtime.build_error
-        # The planning record beside the edit file, `<artifact>.FLOORPLAN.md`, is prose too,
+        # The planning record beside the edit file, `<alias>.FLOORPLAN.md`, is prose too,
         # under the neutral guidelines, which ask for one.
-        guidelines = self.artifact_guideline(runtime.artifact_id)
+        guidelines = self.artifact_guideline(runtime.alias)
         floorplan = None if not (guidelines and guidelines[0].parent.name in NEUTRAL.values()) \
             else floorplan_semicolons(
-                (runtime.content_file or runtime.main_file).parent / f"{runtime.artifact_id}.FLOORPLAN.md")
+                (runtime.content_file or runtime.main_file).parent / f"{alias_file_name(runtime.alias)}.FLOORPLAN.md")
         if floorplan is not None:
             data["floorplan"] = floorplan
         return web.json_response(data)
@@ -1282,7 +1284,7 @@ class HtmlReviewServer:
         scope_area = scope[2] * scope[3]
         used_area = union_area(obstacles, scope)
         result: dict[str, Any] = {
-            "artifact": runtime.artifact_id,
+            "artifact": runtime.alias,
             "revision": revision,
             "page": page_number,
             "target": target_ref,
@@ -1374,7 +1376,7 @@ class HtmlReviewServer:
             raise
         except (KeyError, TypeError, ValueError) as error:
             raise web.HTTPBadRequest(text=str(error)) from error
-        await self.broadcast({"type": "comment_added", "artifact": runtime.artifact_id, "comment": comment.to_dict()})
+        await self.broadcast({"type": "comment_added", "artifact": runtime.alias, "comment": comment.to_dict()})
         return web.json_response(comment.to_dict(), status=201)
 
     async def _thread_mutation(self, request: web.Request, action: str) -> web.Response:
@@ -1405,7 +1407,7 @@ class HtmlReviewServer:
             raise web.HTTPNotFound(text=str(error)) from error
         except (TypeError, ValueError) as error:
             raise web.HTTPBadRequest(text=str(error)) from error
-        await self.broadcast({"type": "comment_updated", "artifact": runtime.artifact_id, "comment": comment.to_dict()})
+        await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment.to_dict()})
         return web.json_response(comment.to_dict())
 
     def _anchor_text_survives(self, runtime: ArtifactRuntime, comment: Comment) -> bool:
@@ -1524,7 +1526,7 @@ class HtmlReviewServer:
                 )
         await self.broadcast({
             "type": "comments_updated",
-            "artifact": runtime.artifact_id,
+            "artifact": runtime.alias,
             "comment_ids": [comment.id for comment in comments],
         })
         return web.json_response(result)
@@ -1554,7 +1556,7 @@ class HtmlReviewServer:
             raise web.HTTPNotFound(text=str(error)) from error
         except (IndexError, TypeError, ValueError) as error:
             raise web.HTTPBadRequest(text=str(error)) from error
-        await self.broadcast({"type": "comment_updated", "artifact": runtime.artifact_id, "comment": comment.to_dict()})
+        await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment.to_dict()})
         return web.json_response(comment.to_dict())
 
     async def suggest_comment(self, request: web.Request) -> web.Response:
@@ -1577,7 +1579,7 @@ class HtmlReviewServer:
             raise web.HTTPNotFound(text=str(error)) from error
         except (TypeError, ValueError) as error:
             raise web.HTTPConflict(text=str(error)) from error
-        await self.broadcast({"type": "comment_updated", "artifact": runtime.artifact_id, "comment": comment.to_dict()})
+        await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment.to_dict()})
         return web.json_response(comment.to_dict())
 
     async def withdraw_suggestion(self, request: web.Request) -> web.Response:
@@ -1590,7 +1592,7 @@ class HtmlReviewServer:
             raise web.HTTPNotFound(text=str(error)) from error
         except (TypeError, ValueError) as error:
             raise web.HTTPConflict(text=str(error)) from error
-        await self.broadcast({"type": "comment_updated", "artifact": runtime.artifact_id, "comment": comment.to_dict()})
+        await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment.to_dict()})
         return web.json_response(comment.to_dict())
 
     async def apply_suggestion(self, request: web.Request) -> web.Response:
@@ -1616,7 +1618,7 @@ class HtmlReviewServer:
             raise web.HTTPConflict(text=str(error)) from error
         runtime.store.refresh_source_anchors(path, relative)
         comment = runtime.store.get(comment.id)
-        await self.broadcast({"type": "comment_updated", "artifact": runtime.artifact_id, "comment": comment.to_dict()})
+        await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment.to_dict()})
         return web.json_response(comment.to_dict())
 
     async def delete_comment(self, request: web.Request) -> web.Response:
@@ -1626,7 +1628,7 @@ class HtmlReviewServer:
             runtime.store.delete(comment_id)
         except KeyError as error:
             raise web.HTTPNotFound(text=str(error)) from error
-        await self.broadcast({"type": "comment_deleted", "artifact": runtime.artifact_id, "comment_id": comment_id})
+        await self.broadcast({"type": "comment_deleted", "artifact": runtime.alias, "comment_id": comment_id})
         return web.Response(status=204)
 
     # The reviewer's call button. An agent cannot be spoken to first over MCP, but its
@@ -1653,10 +1655,10 @@ class HtmlReviewServer:
     def _review_line(self) -> str:
         # The line counts what a wake-up is for: open threads whose last word is the
         # reviewer's. A count of open threads sent an agent to read one it had answered.
-        waiting = {artifact_id: sum(comment.status == "open" and comment.thread[-1].author == "human"
+        waiting = {alias: sum(comment.status == "open" and comment.thread[-1].author == "human"
                                     for comment in runtime.store.list())
-                   for artifact_id, runtime in self.artifacts.items()}
-        listed = ", ".join(f"{count} on '{artifact_id}'" for artifact_id, count in waiting.items() if count)
+                   for alias, runtime in self.artifacts.items()}
+        listed = ", ".join(f"{count} on '{alias}'" for alias, count in waiting.items() if count)
         return (f"[review] reviewer called (press #{self.review_calls}): "
                 + (f"unanswered comments: {listed}" if listed else "no unanswered comments")
                 + " -- read them with read_comments(new=True)")
@@ -1777,10 +1779,10 @@ class HtmlReviewServer:
                         continue
                     if not isinstance(event, dict):
                         continue
-                    artifact_id = event.get("artifact") if event.get("type") == "active_artifact" else None
-                    if artifact_id in self.artifacts:
-                        self.websocket_artifacts[socket] = artifact_id
-                        asyncio.ensure_future(self._ensure_layout_checked(self.artifacts[artifact_id], request.host))
+                    alias = event.get("artifact") if event.get("type") == "active_artifact" else None
+                    if alias in self.artifacts:
+                        self.websocket_artifacts[socket] = alias
+                        asyncio.ensure_future(self._ensure_layout_checked(self.artifacts[alias], request.host))
         finally:
             self.websockets.discard(socket)
             self.websocket_artifacts.pop(socket, None)
@@ -1847,7 +1849,7 @@ class HtmlReviewServer:
         app.router.add_get("/static/{name:.*}", self.static)
         app.router.add_get("/project/{path:.*}", self.project_file)
         app.router.add_get("/state", self.get_state)
-        base = "/artifacts/{artifact_id}"
+        base = "/artifacts/{alias}"
         app.router.add_get(f"{base}/artifact", self.artifact)
         app.router.add_get(f"{base}/asset/{{name}}", self.shared_asset)
         app.router.add_get(f"{base}/download/pdf", self.download_pdf)

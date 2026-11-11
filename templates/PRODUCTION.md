@@ -6,7 +6,7 @@ Neutral clauses cited below are in the neutral guideline of the artifact's layou
 
 1.1 **Keep the template's page geometry.** Keep the template's page geometry. Without a template, preserve the `main.pages` and `section.page` structure described in [README.md](README.md#without-a-template).
 
-1.2 **Keep planning records in the floorplan file.** Keep the planning records of neutral clause 2.8 in `<artifact>.FLOORPLAN.md` beside the edit file.
+1.2 **Keep planning records in the floorplan file.** Keep the planning records of neutral clause 2.8 in `<alias>.FLOORPLAN.md` beside the edit file, named by the artifact's alias with a slash in it written `%2F`.
 
 ## Article 2. Build page content
 

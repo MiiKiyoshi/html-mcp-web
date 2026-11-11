@@ -71,7 +71,7 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
     port = available_port()
     config_path = home / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": str(source)}},
+        "artifacts": {"slides": {"layout": "slides", "main": str(source)}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")

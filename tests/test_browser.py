@@ -280,8 +280,8 @@ def test_browser_review_contract(tmp_path: Path) -> None:
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
         "artifacts": {
-            "slides": {"label": "Slides", "layout": "slides", "main": "slides.html"},
-            "report": {"label": "Report", "layout": "report", "main": "paper/report.html"},
+            "slides": {"layout": "slides", "main": "slides.html"},
+            "report": {"layout": "report", "main": "paper/report.html"},
         },
         "watch": ["*.html"],
         "port": port,
@@ -1016,18 +1016,23 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert len(get_json(f"{base}/artifacts/slides/comments/{comment['id']}")["thread"]) == 1
 
 
+        # The tab shows the artifact's alias, which may hold spaces, a slash and any script.
+        renamed = "Draft 2/3 (초안)"
         config_path.write_text(yaml.safe_dump({
             "artifacts": {
-                "slides": {"label": "Updated Slides", "layout": "slides", "main": "slides.html"},
-                "report": {"label": "Updated Report", "layout": "report", "main": "paper/report.html"},
+                "slides": {"layout": "slides", "main": "slides.html"},
+                renamed: {"layout": "report", "main": "paper/report.html"},
             },
             "watch": ["*.html"],
             "port": port,
-        }, sort_keys=False), encoding="utf-8")
+        }, sort_keys=False, allow_unicode=True), encoding="utf-8")
         wait_until(lambda: browser.execute_script('''
           return Array.from(document.querySelectorAll(".artifact-tab"))
-            .map((tab) => tab.textContent).join("|") === "Updated Slides|Updated Report";
+            .map((tab) => tab.textContent).join("|") === "slides|Draft 2/3 (초안)";
         '''))
+        browser.find_element("css selector", '.artifact-tab:nth-child(2)').click()
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#main-file").textContent === "report.html"'))
 
         # The reviewer picks comments and closes what was picked, which is how a batch the
         # agent answered and deliberately left open is signed off. Each button counts what
@@ -1650,7 +1655,7 @@ return {
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -1877,7 +1882,7 @@ def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -1984,7 +1989,7 @@ def test_source_and_page_find_a_formula_by_the_tex_katex_keeps(tmp_path: Path) -
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html",
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html",
                                  "template": "neutral-slides", "content": "content.html"}},
         "watch": ["*.html"],
         "port": port,
@@ -2075,7 +2080,7 @@ def test_the_area_button_draws_a_box_to_comment_on(tmp_path: Path) -> None:
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -2174,7 +2179,7 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -2408,7 +2413,7 @@ def test_slide_previews_open_from_the_first_button_and_lead_to_a_page(tmp_path: 
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -2539,7 +2544,7 @@ def test_hiding_the_comments_keeps_the_page_being_read(tmp_path: Path) -> None:
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -2625,7 +2630,7 @@ def test_a_layout_problem_leads_to_its_element(tmp_path: Path) -> None:
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -2701,7 +2706,7 @@ def test_svg_text_moved_in_a_way_firefox_ignores_is_reported(tmp_path: Path) -> 
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -2752,7 +2757,7 @@ def test_an_arrowhead_that_leaves_too_little_line_is_reported(tmp_path: Path) ->
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -2809,7 +2814,7 @@ def test_a_box_that_runs_past_the_box_it_is_drawn_in_is_reported(tmp_path: Path)
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -2875,7 +2880,7 @@ def test_semicolons_and_stretching_are_reported_and_normal_cases_are_not(tmp_pat
         port = available_port()
         config_path = tmp_path / ".html-mcp-web.yaml"
         config_path.write_text(yaml.safe_dump({
-            "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+            "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
             "watch": ["*.html"],
             "port": port,
             **({"guideline": guideline} if guideline else {}),
@@ -2948,7 +2953,7 @@ def test_a_panel_stretched_far_past_its_content_is_reported_under_the_neutral_gu
         port = available_port()
         config_path = tmp_path / ".html-mcp-web.yaml"
         config_path.write_text(yaml.safe_dump({
-            "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+            "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
             "watch": ["*.html"],
             "port": port,
             **({"guideline": guideline} if guideline else {}),
@@ -3017,7 +3022,7 @@ def test_a_table_column_saying_the_same_in_every_row_is_reported_under_the_neutr
         port = available_port()
         config_path = tmp_path / ".html-mcp-web.yaml"
         config_path.write_text(yaml.safe_dump({
-            "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+            "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
             "watch": ["*.html"],
             "port": port,
             **({"guideline": guideline} if guideline else {}),
@@ -3082,7 +3087,7 @@ def test_a_bullet_citing_a_visual_from_another_column_is_reported_under_the_neut
         port = available_port()
         config_path = tmp_path / ".html-mcp-web.yaml"
         config_path.write_text(yaml.safe_dump({
-            "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+            "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
             "watch": ["*.html"],
             "port": port,
             **({"guideline": guideline} if guideline else {}),
@@ -3147,7 +3152,7 @@ def test_space_is_measured_with_no_review_ui_open(tmp_path: Path) -> None:
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -3311,7 +3316,7 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -3557,7 +3562,7 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -3695,7 +3700,7 @@ def test_without_full_screen_the_show_lies_over_the_page(tmp_path: Path) -> None
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -3762,7 +3767,7 @@ def test_two_fingers_in_the_slide_show_carry_nothing(tmp_path: Path) -> None:
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -3868,7 +3873,7 @@ def test_a_sideways_wheel_stays_in_the_artifact(tmp_path: Path) -> None:
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -3943,7 +3948,7 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -4472,7 +4477,7 @@ def test_the_artifact_stays_selectable_under_the_zoom(tmp_path: Path) -> None:
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -4578,7 +4583,7 @@ def test_a_fitted_page_sits_evenly_on_a_phone(tmp_path: Path) -> None:
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -4637,7 +4642,7 @@ def test_a_phone_gives_an_opened_comment_the_room_it_needs(tmp_path: Path) -> No
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -4709,7 +4714,7 @@ def test_a_touch_screen_keeps_the_two_buttons_in_their_corners(tmp_path: Path) -
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -4827,7 +4832,7 @@ def test_a_selection_the_browser_took_over_still_brings_the_button(tmp_path: Pat
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -4936,7 +4941,7 @@ def test_a_long_svg_label_wraps_to_its_width(tmp_path: Path) -> None:
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -5057,7 +5062,7 @@ def test_the_resolved_and_mixed_views_lead_with_the_latest(tmp_path: Path) -> No
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -5132,7 +5137,7 @@ def test_archived_threads_have_their_own_view_and_picked_archive_action(tmp_path
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -5335,7 +5340,7 @@ def test_a_label_given_a_box_takes_the_size_the_box_holds(tmp_path: Path) -> Non
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -5438,7 +5443,7 @@ def test_a_comment_whose_text_is_gone_keeps_its_place(tmp_path: Path) -> None:
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -5640,8 +5645,8 @@ def test_a_short_last_line_is_a_fault_on_a_slide_and_a_page(tmp_path: Path) -> N
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
         "artifacts": {
-            "deck": {"label": "Deck", "layout": "slides", "main": "deck.html"},
-            "paper": {"label": "Paper", "layout": "report", "main": "paper/paper.html"},
+            "deck": {"layout": "slides", "main": "deck.html"},
+            "paper": {"layout": "report", "main": "paper/paper.html"},
         },
         "watch": ["*.html"],
         "port": port,
@@ -5687,7 +5692,7 @@ def test_a_report_head_keeps_its_text_and_a_word_space_stays_narrow(tmp_path: Pa
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"paper": {"label": "Paper", "layout": "report", "main": "paper.html"}},
+        "artifacts": {"paper": {"layout": "report", "main": "paper.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -5728,7 +5733,7 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path, mo
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -5833,7 +5838,7 @@ def test_an_edit_replaces_the_deck_with_no_blank_and_no_jump(tmp_path: Path) -> 
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -5943,7 +5948,7 @@ def test_an_edit_changes_only_its_page_and_sets_it_up(tmp_path: Path) -> None:
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -6075,7 +6080,7 @@ def test_find_marks_the_words_in_the_deck_and_steps_through_them(tmp_path: Path)
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -6190,8 +6195,8 @@ def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
         "artifacts": {
-            "first": {"label": "First", "layout": "slides", "main": "first.html"},
-            "second": {"label": "Second", "layout": "slides", "main": "second/second.html"},
+            "first": {"layout": "slides", "main": "first.html"},
+            "second": {"layout": "slides", "main": "second/second.html"},
         },
         "watch": ["*.html"],
         "port": port,
@@ -6319,7 +6324,7 @@ def test_a_review_page_shows_the_servers_check_and_measures_nothing_itself(tmp_p
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -6474,7 +6479,7 @@ def test_a_report_saved_in_quick_succession_shows_what_a_reload_shows(tmp_path: 
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"report": {"label": "Report", "layout": "report", "main": "report.html",
+        "artifacts": {"report": {"layout": "report", "main": "report.html",
                                  "template": "neutral-report", "content": "content.html"}},
         "watch": ["*.html"],
         "port": port,

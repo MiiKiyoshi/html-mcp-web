@@ -208,7 +208,7 @@ def test_export_route_writes_inside_the_project(tmp_path: Path) -> None:
         port = int(listener.getsockname()[1])
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
         "port": port,
     }, sort_keys=False), encoding="utf-8")
     shared = SharedProjectServer(load_config(config_path))

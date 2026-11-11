@@ -26,7 +26,7 @@ def _config(tmp_path: Path):
         port = int(listener.getsockname()[1])
     path = tmp_path / ".html-mcp-web.yaml"
     path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"label": "Slides", "layout": "slides", "main": "html/slides.html"}},
+        "artifacts": {"slides": {"layout": "slides", "main": "html/slides.html"}},
         "port": port,
     }, sort_keys=False), encoding="utf-8")
     return load_config(path)
@@ -113,7 +113,7 @@ async def test_config_reload_watches_a_newly_declared_artifact_directory(tmp_pat
         assert watches() == {(str(tmp_path), False), (str(tmp_path / "html"), True)}
 
         data = yaml.safe_load(config.config_path.read_text(encoding="utf-8"))
-        data["artifacts"]["report"] = {"label": "Report", "layout": "report", "main": "docs/report.html"}
+        data["artifacts"]["report"] = {"layout": "report", "main": "docs/report.html"}
         config.config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
         await review.apply_config()
         assert review.watcher.roots == [tmp_path / "docs", tmp_path / "html"]

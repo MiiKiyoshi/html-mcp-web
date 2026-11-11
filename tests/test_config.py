@@ -21,7 +21,7 @@ def test_missing_config_explains_project_setup(tmp_path: Path, monkeypatch) -> N
 
 
 def artifact(layout: str = "slides", main: str = "artifact.html", **values) -> dict:
-    return {"label": layout.title(), "layout": layout, "main": main, **values}
+    return {"layout": layout, "main": main, **values}
 
 
 def test_create_and_find_config_from_child(tmp_path: Path) -> None:
@@ -60,7 +60,7 @@ def test_config_rejects_non_html_main() -> None:
 
 def test_config_requires_supported_layout() -> None:
     with pytest.raises(ValueError, match="requires layout"):
-        Config.from_dict({"artifacts": {"brief": {"label": "Brief", "main": "brief.html"}}})
+        Config.from_dict({"artifacts": {"brief": {"main": "brief.html"}}})
     with pytest.raises(ValueError, match="slides or report"):
         Config.from_dict({"artifacts": {"brief": artifact("book")}})
 
@@ -100,6 +100,16 @@ def test_unknown_keys_fail() -> None:
         Config.from_dict({"artifacts": {"slides": artifact()}, "main": "old.html"})
     with pytest.raises(ValueError, match="unknown keys"):
         Config.from_dict({"artifacts": {"slides": artifact(extra=True)}})
+    # The alias is the artifact's one name, so there is no other to give it.
+    with pytest.raises(ValueError, match="unknown keys: label"):
+        Config.from_dict({"artifacts": {"slides": artifact(label="Slides")}})
+
+
+def test_an_alias_is_any_name_without_space_at_its_ends() -> None:
+    assert list(Config.from_dict({"artifacts": {"Draft 2/3 (초안)": artifact()}}).artifacts) == ["Draft 2/3 (초안)"]
+    for alias in ("", " Draft", "Draft "):
+        with pytest.raises(ValueError, match="must not be empty or start or end with a space"):
+            Config.from_dict({"artifacts": {alias: artifact()}})
 
 
 def test_artifact_main_files_are_unique() -> None:
@@ -167,7 +177,7 @@ def test_a_guideline_extends_another_and_is_read_after_it(tmp_path: Path, monkey
 
     own.write_text("---\nextends: missing\n---\n", encoding="utf-8")
     path = tmp_path / ".html-mcp-web.yaml"
-    path.write_text("artifacts:\n  slides:\n    label: Slides\n    layout: slides\n"
+    path.write_text("artifacts:\n  slides:\n    layout: slides\n"
                     "    main: artifact.html\nguideline: team-meeting\n", encoding="utf-8")
     with pytest.raises(FileNotFoundError, match="missing"):
         load_config(path)
@@ -183,7 +193,7 @@ def test_load_config_rejects_a_missing_guideline(tmp_path: Path, monkeypatch) ->
     monkeypatch.setattr(config_module, "USER_CONFIG_DIR", tmp_path / "user-config")
     path = tmp_path / ".html-mcp-web.yaml"
     path.write_text(
-        "artifacts:\n  slides:\n    label: Slides\n    layout: slides\n    main: artifact.html\n"
+        "artifacts:\n  slides:\n    layout: slides\n    main: artifact.html\n"
         "guideline: missing\n",
         encoding="utf-8",
     )

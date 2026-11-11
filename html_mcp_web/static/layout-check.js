@@ -1778,7 +1778,7 @@ export function createLayoutChecks(dependencies) {
     // The project state is what the next tab switch reads the artifact back from. Left
     // as it was, it still said the artifact was unchecked, and a frame kept across the
     // switch, which is checked and does not check again, showed "checking" for good.
-    state.project.artifacts[state.artifactId] = payload;
+    state.project.artifacts[state.alias] = payload;
     updateLayoutUi();
   }
   

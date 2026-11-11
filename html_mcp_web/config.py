@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
+from urllib.parse import quote
 
 import yaml
 
@@ -16,49 +17,47 @@ LayoutMode = Literal["slides", "report"]
 LAYOUT_MODES = {"slides", "report"}
 
 
+# An artifact goes by one name, its alias: the review page's tab shows it, the tools take it,
+# and the server's addresses and the files kept for the artifact are named after it.
 @dataclass(frozen=True)
 class ArtifactConfig:
-    label: str
     layout: LayoutMode
     main: str
     template: str | None = None
     content: str | None = None
 
     @classmethod
-    def from_dict(cls, artifact_id: str, data: dict[str, Any]) -> "ArtifactConfig":
-        unknown = set(data) - {"label", "layout", "main", "template", "content"}
+    def from_dict(cls, alias: str, data: dict[str, Any]) -> "ArtifactConfig":
+        unknown = set(data) - {"layout", "main", "template", "content"}
         if unknown:
-            raise ValueError(f"artifact {artifact_id!r} has unknown keys: {', '.join(sorted(unknown))}")
-        if not re.fullmatch(r"[A-Za-z0-9_-]+", artifact_id):
-            raise ValueError(f"artifact id must contain only letters, numbers, underscores, and hyphens: {artifact_id!r}")
+            raise ValueError(f"artifact {alias!r} has unknown keys: {', '.join(sorted(unknown))}")
+        if not alias.strip() or alias != alias.strip():
+            raise ValueError(f"artifact alias {alias!r} must not be empty or start or end with a space")
         if "layout" not in data:
-            raise ValueError(f"artifact {artifact_id!r} requires layout")
+            raise ValueError(f"artifact {alias!r} requires layout")
         if "main" not in data:
-            raise ValueError(f"artifact {artifact_id!r} requires main")
+            raise ValueError(f"artifact {alias!r} requires main")
         layout = str(data["layout"])
         main = str(data["main"])
-        label = str(data["label"]) if "label" in data else artifact_id
         template = str(data["template"]) if "template" in data and data["template"] else None
         content = str(data["content"]) if "content" in data and data["content"] else None
         if layout not in LAYOUT_MODES:
-            raise ValueError(f"artifact {artifact_id!r} layout must be slides or report")
-        if not label.strip():
-            raise ValueError(f"artifact {artifact_id!r} label must not be empty")
+            raise ValueError(f"artifact {alias!r} layout must be slides or report")
         if not main.endswith((".html", ".htm")):
-            raise ValueError(f"artifact {artifact_id!r} main must name an HTML file")
+            raise ValueError(f"artifact {alias!r} main must name an HTML file")
         if (template is None) != (content is None):
-            raise ValueError(f"artifact {artifact_id!r} template and content must be set together")
+            raise ValueError(f"artifact {alias!r} template and content must be set together")
         if template is not None and not re.fullmatch(r"[A-Za-z0-9_-]+", template):
-            raise ValueError(f"artifact {artifact_id!r} template must be a directory name under templates/")
+            raise ValueError(f"artifact {alias!r} template must be a directory name under templates/")
         if content is not None:
             if not content.endswith((".html", ".htm")):
-                raise ValueError(f"artifact {artifact_id!r} content must name an HTML file")
+                raise ValueError(f"artifact {alias!r} content must name an HTML file")
             if content == main:
-                raise ValueError(f"artifact {artifact_id!r} content and main must differ")
-        return cls(label=label.strip(), layout=layout, main=main, template=template, content=content)
+                raise ValueError(f"artifact {alias!r} content and main must differ")
+        return cls(layout=layout, main=main, template=template, content=content)
 
     def to_dict(self) -> dict[str, Any]:
-        data: dict[str, Any] = {"label": self.label, "layout": self.layout, "main": self.main}
+        data: dict[str, Any] = {"layout": self.layout, "main": self.main}
         if self.template is not None:
             data["template"] = self.template
             data["content"] = self.content
@@ -82,8 +81,8 @@ class Config:
         if "artifacts" not in data or not isinstance(data["artifacts"], dict) or not data["artifacts"]:
             raise ValueError("artifacts must be a non-empty mapping")
         artifacts = {
-            str(artifact_id): ArtifactConfig.from_dict(str(artifact_id), value)
-            for artifact_id, value in data["artifacts"].items()
+            str(alias): ArtifactConfig.from_dict(str(alias), value)
+            for alias, value in data["artifacts"].items()
             if isinstance(value, dict)
         }
         if len(artifacts) != len(data["artifacts"]):
@@ -95,24 +94,24 @@ class Config:
         # files shared one folder were taken for one another, an edit made in the wrong deck's
         # file. Two artifacts with a file in one folder stop the configuration.
         folders: dict[str, str] = {}
-        for artifact_id, artifact in artifacts.items():
+        for alias, artifact in artifacts.items():
             for name in (artifact.main, artifact.content):
                 if name is None:
                     continue
                 folder = PurePosixPath(name).parent.as_posix()
-                other = folders.setdefault(folder, artifact_id)
-                if other != artifact_id:
+                other = folders.setdefault(folder, alias)
+                if other != alias:
                     raise ValueError(
-                        f"artifacts {other!r} and {artifact_id!r} keep their files in one folder, "
+                        f"artifacts {other!r} and {alias!r} keep their files in one folder, "
                         f"{folder!r}. Give each artifact a folder of its own for its content and main files")
         # The review server serves and watches only the config's folder.
         if config_path is not None:
             root = config_path.parent.resolve()
-            for artifact_id, artifact in artifacts.items():
+            for alias, artifact in artifacts.items():
                 for name in (artifact.main, artifact.content):
                     if name is not None and not (root / name).resolve().is_relative_to(root):
                         raise ValueError(
-                            f"artifact {artifact_id!r} names {name!r} outside {root}. An artifact's files sit in "
+                            f"artifact {alias!r} names {name!r} outside {root}. An artifact's files sit in "
                             f"the config's folder or a subfolder, and a config is found from every folder below "
                             f"it, so a config in a folder that holds the document serves it")
         guideline = data.get("guideline")
@@ -130,7 +129,7 @@ class Config:
 
     def to_dict(self) -> dict[str, Any]:
         data = {
-            "artifacts": {artifact_id: artifact.to_dict() for artifact_id, artifact in self.artifacts.items()},
+            "artifacts": {alias: artifact.to_dict() for alias, artifact in self.artifacts.items()},
             "watch": list(self.watch),
             "ignore": list(self.ignore),
             "port": self.port,
@@ -183,14 +182,14 @@ def create_config(
     target = output_path if output_path is not None else Path.cwd() / DEFAULT_CONFIG_NAME
     if target.exists():
         raise FileExistsError(f"{target} already exists")
-    artifact_id = layout
-    artifact: dict[str, Any] = {"label": layout.title(), "layout": layout, "main": main}
+    alias = layout
+    artifact: dict[str, Any] = {"layout": layout, "main": main}
     if template is not None or content is not None:
         artifact["template"] = template
         artifact["content"] = content
     config = Config.from_dict(
         {
-            "artifacts": {artifact_id: artifact},
+            "artifacts": {alias: artifact},
             **({"guideline": guideline} if guideline is not None else {}),
             "watch": list(watch) if watch is not None else list(DEFAULT_WATCH),
             "ignore": list(ignore) if ignore is not None else [],
@@ -211,13 +210,24 @@ def get_project_dir(config: Config) -> Path:
     return config.config_path.parent
 
 
-def get_main_file(config: Config, artifact_id: str) -> Path:
-    return get_project_dir(config) / config.artifacts[artifact_id].main
+def get_main_file(config: Config, alias: str) -> Path:
+    return get_project_dir(config) / config.artifacts[alias].main
 
 
-def get_content_file(config: Config, artifact_id: str) -> Path | None:
-    content = config.artifacts[artifact_id].content
+def get_content_file(config: Config, alias: str) -> Path | None:
+    content = config.artifacts[alias].content
     return None if content is None else get_project_dir(config) / content
+
+
+def alias_file_name(alias: str) -> str:
+    """The alias as a file name. A slash, which no file name holds, is written %2F, and a
+    percent sign %25, so no two aliases share a file."""
+    return alias.replace("%", "%25").replace("/", "%2F")
+
+
+def artifact_address(alias: str) -> str:
+    """Where the review server serves the artifact, its alias written as one path segment."""
+    return f"/artifacts/{quote(alias, safe='')}"
 
 
 _REQUIRED_FILE = {"templates": "build.py", "guidelines": "GUIDELINE.md"}
@@ -304,8 +314,8 @@ def guideline_files_for(config: Config, layout: str) -> list[Path]:
     return files
 
 
-def get_template_dir(config: Config, artifact_id: str) -> Path | None:
-    template = config.artifacts[artifact_id].template
+def get_template_dir(config: Config, alias: str) -> Path | None:
+    template = config.artifacts[alias].template
     if template is None:
         return None
     roots = _roots("templates")
