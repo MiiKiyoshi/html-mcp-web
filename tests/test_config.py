@@ -6,6 +6,7 @@ from html_mcp_web import config as config_module
 from html_mcp_web.config import (
     Config,
     create_config,
+    find_alias,
     find_config,
     get_guideline_files,
     get_main_file,
@@ -103,6 +104,18 @@ def test_unknown_keys_fail() -> None:
     # The alias is the artifact's one name, so there is no other to give it.
     with pytest.raises(ValueError, match="unknown keys: label"):
         Config.from_dict({"artifacts": {"slides": artifact(label="Slides")}})
+
+
+def test_an_artifact_is_found_by_its_alias_or_the_path_of_its_files(tmp_path: Path) -> None:
+    config = Config.from_dict({"artifacts": {
+        "Draft 2/3 (초안)": artifact(main="deck/deck.html", template="neutral-slides", content="deck/content.html"),
+        "notes": artifact("report", "notes/notes.html"),
+    }}, config_path=tmp_path / ".html-mcp-web.yaml")
+    for name in ("Draft 2/3 (초안)", "deck/deck.html", "deck/content.html", str(tmp_path / "deck" / "content.html")):
+        assert find_alias(config, name) == "Draft 2/3 (초안)"
+    assert find_alias(config, "notes/notes.html") == "notes"
+    with pytest.raises(ValueError, match="unknown artifact: deck.html. The artifacts are 'Draft 2/3 \\(초안\\)', 'notes'"):
+        find_alias(config, "deck.html")
 
 
 def test_an_alias_is_any_name_without_space_at_its_ends() -> None:

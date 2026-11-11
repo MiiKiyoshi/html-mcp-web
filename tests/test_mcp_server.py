@@ -683,8 +683,8 @@ def test_guide_names_the_file_to_edit_what_to_read_and_what_to_consult(tmp_path:
 
 def test_the_tools_take_the_alias_on_the_tab_and_name_the_aliases_otherwise(tmp_path: Path) -> None:
     """An artifact goes by its alias alone, which may hold spaces, a slash and any script.
-    The tools take it as the tab shows it, and a name that is no alias is answered with the
-    aliases."""
+    The tools take it as the tab shows it, or the path of the artifact's file, and a name
+    that is neither is answered with the aliases."""
     alias = "Draft 2/3 (초안)"
     (tmp_path / "deck").mkdir()
     (tmp_path / "deck" / "deck.html").write_text(
@@ -706,9 +706,11 @@ def test_the_tools_take_the_alias_on_the_tab_and_name_the_aliases_otherwise(tmp_
         handed = answer(mcp.call_tool("read_comments", {"artifact": alias, "new": True}))
         assert [comment["id"] for comment in handed["comments"]] == [created["id"]]
         assert (tmp_path / ".html-mcp-web" / "comments" / "Draft 2%2F3 (초안).json").is_file()
-        for name in ("deck/deck.html", "deck.html"):
-            with pytest.raises(Exception, match=f"unknown artifact: {name}. The artifacts are 'Draft 2/3 \\(초안\\)'"):
-                asyncio.run(mcp.call_tool("read_comments", {"artifact": name}))
+        # A path names the same artifact, and what was handed by its alias is not handed again.
+        for name in ("deck/deck.html", str(tmp_path / "deck" / "deck.html")):
+            assert answer(mcp.call_tool("read_comments", {"artifact": name, "new": True}))["comments"] == []
+        with pytest.raises(Exception, match="unknown artifact: deck.html. The artifacts are 'Draft 2/3 \\(초안\\)'"):
+            asyncio.run(mcp.call_tool("read_comments", {"artifact": "deck.html"}))
         with pytest.raises(Exception, match="The artifacts are 'Draft 2/3"):
             asyncio.run(mcp.call_tool("guide", {"artifact": "deck"}))
     finally:

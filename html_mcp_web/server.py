@@ -40,6 +40,7 @@ from .config import (
     Config,
     alias_file_name,
     artifact_address,
+    find_alias,
     get_content_file,
     NEUTRAL,
     guideline_files_for,
@@ -511,12 +512,13 @@ class HtmlReviewServer:
         }
 
     def runtime(self, request: web.Request) -> ArtifactRuntime:
-        alias = request.match_info["alias"]
         try:
-            return self.artifacts[alias]
-        except KeyError as error:
-            raise web.HTTPNotFound(
-                text=f"unknown artifact: {alias}. The artifacts are {', '.join(map(repr, self.artifacts))}") from error
+            return self.artifacts[find_alias(self.config, request.match_info["alias"])]
+        except ValueError as error:
+            raise web.HTTPNotFound(text=str(error)) from error
+
+    async def get_alias(self, request: web.Request) -> web.Response:
+        return web.json_response({"alias": self.runtime(request).alias})
 
     async def broadcast(self, message: dict[str, Any]) -> None:
         dead: list[web.WebSocketResponse] = []
@@ -1850,6 +1852,7 @@ class HtmlReviewServer:
         app.router.add_get("/project/{path:.*}", self.project_file)
         app.router.add_get("/state", self.get_state)
         base = "/artifacts/{alias}"
+        app.router.add_get(f"{base}/alias", self.get_alias)
         app.router.add_get(f"{base}/artifact", self.artifact)
         app.router.add_get(f"{base}/asset/{{name}}", self.shared_asset)
         app.router.add_get(f"{base}/download/pdf", self.download_pdf)

@@ -225,6 +225,19 @@ def alias_file_name(alias: str) -> str:
     return alias.replace("%", "%25").replace("/", "%2F")
 
 
+def find_alias(config: Config, name: str) -> str:
+    """The alias of the artifact a name gives: the alias itself, or the path of the
+    artifact's main or content file, relative to the project folder or absolute."""
+    if name in config.artifacts:
+        return name
+    path = (get_project_dir(config) / name).resolve()
+    for alias in config.artifacts:
+        files = (get_main_file(config, alias), get_content_file(config, alias))
+        if path in {file.resolve() for file in files if file is not None}:
+            return alias
+    raise ValueError(f"unknown artifact: {name}. The artifacts are {', '.join(map(repr, config.artifacts))}")
+
+
 def artifact_address(alias: str) -> str:
     """Where the review server serves the artifact, its alias written as one path segment."""
     return f"/artifacts/{quote(alias, safe='')}"

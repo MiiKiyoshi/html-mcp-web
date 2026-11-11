@@ -739,8 +739,8 @@ def test_template_build_uses_common_build_entrypoint(tmp_path: Path) -> None:
 
 async def test_an_artifact_is_served_and_kept_under_its_alias(tmp_path: Path) -> None:
     """Its address carries the alias as one path segment, and its comments and exports are
-    files named after it, a slash written %2F. A name that is no alias is answered with the
-    aliases."""
+    files named after it, a slash written %2F. A name that is neither its alias nor the path
+    of its file is answered with the aliases."""
     alias = "Draft 2/3 (초안)"
     (tmp_path / "artifact.html").write_text(
         "<!doctype html><html><head><title>Artifact</title></head><body><p>Selected sentence.</p></body></html>",
@@ -760,9 +760,11 @@ async def test_an_artifact_is_served_and_kept_under_its_alias(tmp_path: Path) ->
         assert added.status == 201
         assert (tmp_path / ".html-mcp-web" / "comments" / "Draft 2%2F3 (초안).json").is_file()
         assert review.default_pptx_path(review.artifacts[alias]) == tmp_path / "export" / "Draft 2%2F3 (초안).pptx"
-        missing = await test_client.get("/artifacts/artifact.html/comments")
+        # The path of its file names it too.
+        assert (await (await test_client.get("/artifacts/artifact.html/alias")).json()) == {"alias": alias}
+        missing = await test_client.get("/artifacts/slides/comments")
         assert missing.status == 404
-        assert await missing.text() == "unknown artifact: artifact.html. The artifacts are 'Draft 2/3 (초안)'"
+        assert await missing.text() == "unknown artifact: slides. The artifacts are 'Draft 2/3 (초안)'"
     finally:
         await test_client.close()
 

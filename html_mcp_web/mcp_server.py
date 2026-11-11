@@ -253,8 +253,13 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         ),
     )
 
-    alias = "The artifact's alias, the name on its tab in the review page."
+    alias = ("The artifact's alias, the name on its tab in the review page, or the path of its main "
+             "or content file, relative to the project folder or absolute.")
     artifact_alias = Annotated[str, Field(description=alias)]
+
+    async def alias_of(client: Any, artifact: str) -> str:
+        """The alias of the artifact named, by which its cursor and saved files go too."""
+        return (await client.request_json("GET", f"{artifact_address(artifact)}/alias"))["alias"]
 
     # Paths, not the documents: clients cap a tool result at different sizes, and the rules
     # run to some 50,000 characters. The files to read in full and the component reference,
@@ -272,8 +277,8 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             if len(artifacts) != 1:
                 raise RuntimeError(f"this project has several artifacts: {', '.join(map(repr, artifacts))}. Name one.")
             artifact = next(iter(artifacts))
-        if artifact not in artifacts:
-            raise RuntimeError(f"unknown artifact: {artifact}. The artifacts are {', '.join(map(repr, artifacts))}")
+        else:
+            artifact = await alias_of(client, artifact)
         entry = artifacts[artifact]
         docs = Path(__file__).resolve().parent.parent / "templates"
         read = [str(docs / "README.md"), str(docs / "PRODUCTION.md")]
@@ -305,6 +310,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     ) -> dict[str, Any]:
         """Read what is new (new), threads whole (ids), or else a listing of requests, newest first."""
         client = binding.require_client()
+        artifact = await alias_of(client, artifact)
         if new:
             if ids is not None or save or status != "open" or unanswered:
                 raise ValueError("new answers on its own; it takes no ids, status, unanswered or save")
@@ -381,6 +387,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         """Open a comment, reply, rewrite your own entries, or propose a source change for the
         reviewer to apply, replacing that thread's proposal. A stale rev is refused."""
         client = binding.require_client()
+        artifact = await alias_of(client, artifact)
         if action == "add":
             if anchor is None or text is None:
                 raise ValueError("add needs anchor and text")
@@ -475,6 +482,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
     ) -> "Image":
         """Render one page, or one block or box of it, as an image."""
         client = binding.require_client()
+        artifact = await alias_of(client, artifact)
         # A grey picture says nothing of whether the page is grey, so a grey render says so.
         grey = "Grayscale render. Pass grayscale=false to see colour."
         colour = f"dpi={dpi}&gray={'1' if grayscale else '0'}"
@@ -521,6 +529,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         """Write one figure of a report as a vector PDF the size of its drawing, without
         its caption, for \\includegraphics in a paper."""
         client = binding.require_client()
+        artifact = await alias_of(client, artifact)
         saved = await client.request_json(
             "GET", f"{artifact_address(artifact)}/render/figure?number={number}&save={quote(out)}", timeout=300.0)
         return saved["path"]
@@ -541,6 +550,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         overlapping labels, and warnings of likely faults to confirm. With page, that page's
         errors, blocks and free space."""
         client = binding.require_client()
+        artifact = await alias_of(client, artifact)
         # Long enough for the server's own check, the only one recorded: it starts a headless
         # browser on its own page and answers once that posts.
         result = await client.request_json("GET", f"{artifact_address(artifact)}/layout", timeout=75.0)

@@ -151,7 +151,7 @@ port: 8765
 
 | Field | Effect |
 |---|---|
-| `artifacts.<alias>` | The artifact's one name. The review page shows it on the artifact's tab, the agent's tools take it, and the artifact's comments are kept in `.html-mcp-web/comments/<alias>.json`, a slash in the alias written `%2F`. Any name without a space at either end. |
+| `artifacts.<alias>` | The artifact's one name. The review page shows it on the artifact's tab, the agent's tools take it or the path of the artifact's `main` or `content` file, and the artifact's comments are kept in `.html-mcp-web/comments/<alias>.json`, a slash in the alias written `%2F`. Any name without a space at either end. |
 | `artifacts.<alias>.layout` | `slides` (16:9) or `report` (A4). |
 | `artifacts.<alias>.main` | The HTML file the page shows. Each artifact keeps its `main` and `content` in a folder of its own, and two artifacts with either file in one folder stop the configuration with an error naming both. |
 | `artifacts.<alias>.template`, `.content` | A template name and the content file it builds `main` from. |
