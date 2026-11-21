@@ -3,6 +3,7 @@ the browser sets it: printing a PDF and setting a report's pages.
 
 Requires firefox and the marionette_driver package. Callers surface the ImportError or
 FileNotFoundError message instead of crashing."""
+import os
 import shutil
 import socket
 import subprocess
@@ -10,6 +11,13 @@ import tempfile
 import time
 from contextlib import contextmanager
 from pathlib import Path
+
+
+def headless_environment() -> dict[str, str]:
+    """The environment a headless Firefox is started in: this one without a display. A
+    headless Firefox still connects to the display it is given, and over ssh with X
+    forwarding that display is the far machine's, which prints a refusal for each try."""
+    return {name: value for name, value in os.environ.items() if name not in ("DISPLAY", "WAYLAND_DISPLAY")}
 
 
 @contextmanager
@@ -35,7 +43,7 @@ def firefox():
         'user_pref("accessibility.force_disabled", 1);\n', encoding="utf-8")
     proc = subprocess.Popen(
         ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=headless_environment(),
     )
     try:
         client = Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=60)

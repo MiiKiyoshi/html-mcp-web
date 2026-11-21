@@ -1297,6 +1297,8 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
     from marionette_driver.marionette import Marionette
     from pptx import Presentation
 
+    from .firefox import headless_environment
+
     if shutil.which("firefox") is None:
         raise FileNotFoundError("firefox is not installed")
     config = load_pptx_config(skin_dir)
@@ -1324,7 +1326,7 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
     proc = subprocess.Popen(
         ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
          "-width", "1400", "-height", "900", "about:blank"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=headless_environment(),
     )
     try:
         client = Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=60)

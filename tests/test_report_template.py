@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from html_mcp_web.firefox import headless_environment
+
 marionette = pytest.importorskip("marionette_driver.marionette")
 
 REPO = Path(__file__).resolve().parents[1]
@@ -55,7 +57,8 @@ def run_in_report(tmp_path: Path, html: str, script: str, skin: Path | None = No
     Path(profile, "user.js").write_text(f'user_pref("marionette.port", {port});\n', encoding="utf-8")
     process = subprocess.Popen(["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
                                 "-width", "1200", "-height", "900", "about:blank"],
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                               env=headless_environment())
     try:
         browser = marionette.Marionette(host="127.0.0.1", port=port, startup_timeout=60)
         browser.start_session()

@@ -49,6 +49,7 @@ from .config import (
     get_template_dir,
     load_config,
 )
+from .firefox import headless_environment
 from .pdf_export import print_artifact_pdf, print_figure_pdf
 from .pptx_export import export_pptx
 from .space import (
@@ -1174,6 +1175,7 @@ class HtmlReviewServer:
                 "firefox", "-headless", "-no-remote", "-profile", profile,
                 f"http://{host}/?{urlencode({'artifact': runtime.alias, 'check': runtime.check_token})}",
                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+                env=headless_environment(),
             )
             run = (process, profile)
             self.check_runs.add(run)
