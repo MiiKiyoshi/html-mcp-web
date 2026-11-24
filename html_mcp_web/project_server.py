@@ -1,6 +1,7 @@
 """Shared ownership of the project review HTTP server."""
 
 import asyncio
+import contextlib
 import json
 import os
 import threading
@@ -29,6 +30,8 @@ class SharedProjectServer:
         self.lock_guard = threading.Lock()
         self.thread: threading.Thread | None = None
         self.ready = threading.Event()
+        # Set by stop(), for the start it ends: one of its own for each start.
+        self.stopping = threading.Event()
         self.start_error: BaseException | None = None
         self.start_task: asyncio.Task | None = None
         self.loop: asyncio.AbstractEventLoop | None = None
@@ -47,6 +50,7 @@ class SharedProjectServer:
 
         loop = asyncio.new_event_loop()
         self.loop = loop
+        stopping = self.stopping
         asyncio.set_event_loop(loop)
 
         review = None
@@ -74,10 +78,13 @@ class SharedProjectServer:
             self.start_task = loop.create_task(start())
             loop.run_until_complete(self.start_task)
             if self.start_error is None:
-                # What is not built yet is built now, the server serving and its start
-                # reported: whoever asks meanwhile waits for the build.
-                loop.create_task(review.catch_up())
-                loop.run_forever()
+                # A stop asked for as the start was reported can have ended that run of the
+                # loop instead of the one below: it is not run then.
+                if not stopping.is_set():
+                    # What is not built yet is built now, the server serving and its start
+                    # reported: whoever asks meanwhile waits for the build.
+                    loop.create_task(review.catch_up())
+                    loop.run_forever()
                 if self.runner is not None:
                     loop.run_until_complete(self.runner.cleanup())
         finally:
@@ -152,6 +159,7 @@ class SharedProjectServer:
         holder_path.write_text(f"pid {os.getpid()}, port {self.port}", encoding="utf-8")
         self.lock_handle = handle
         self.ready.clear()
+        self.stopping = threading.Event()
         self.start_error = None
         self.start_task = None
         self.thread = threading.Thread(target=self._serve, name="html-mcp-web", daemon=True)
@@ -172,8 +180,13 @@ class SharedProjectServer:
             raise RuntimeError(f"project server failed to start: {error}")
 
     def stop(self) -> None:
-        if self.loop is not None and self.loop.is_running():
-            self.loop.call_soon_threadsafe(self.loop.stop)
+        # The loop is told to stop even when it is not running: ready is set a moment before
+        # the loop runs on for good, and a stop asked for only of a running loop let a server
+        # stopped in that moment serve on with its lock released.
+        self.stopping.set()
+        if self.loop is not None:
+            with contextlib.suppress(RuntimeError):  # closed: its thread has ended
+                self.loop.call_soon_threadsafe(self.loop.stop)
         if self.thread is not None:
             self.thread.join(timeout=10)
         self.thread = None

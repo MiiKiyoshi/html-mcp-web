@@ -141,6 +141,28 @@ async def test_config_reload_watches_a_newly_declared_artifact_directory(tmp_pat
         review.watcher.stop()
 
 
+def test_a_stop_right_after_the_start_ends_the_server(tmp_path: Path, monkeypatch) -> None:
+    """The start is reported ready a moment before the server's loop runs on for good. A stop
+    in that moment found the loop not running and asked nothing of it: the server served on
+    with its lock released, and the next start in the project found it answering and stayed
+    out, even with the lock held by a process that served nothing."""
+    config = _config(tmp_path)
+    shared = SharedProjectServer(config)
+    original = HtmlReviewServer.catch_up
+
+    def late(self):
+        time.sleep(0.5)  # the moment between the start and the loop running on, drawn out
+        return original(self)
+
+    monkeypatch.setattr(HtmlReviewServer, "catch_up", late)
+    before = _server_threads()
+    shared.ensure()
+    shared.stop()
+    assert _server_threads() == before
+    assert shared._remote_identity() is None
+    assert _lock_is_free(config)
+
+
 def test_a_build_due_at_start_runs_once_the_server_serves(tmp_path: Path, monkeypatch) -> None:
     """A report whose content was newer than its built file was built before the server
     reported its start, and a report's build sets its pages in Firefox: on a slow machine the
