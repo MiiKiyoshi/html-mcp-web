@@ -16,10 +16,10 @@ Review an AI agent's HTML slides or report from the rendered page, on a desktop,
 
 ## What keeps the agent on track
 
-- **It reads the rules, and reads them again.** In Claude Code, html-mcp's tools stay locked
-  until the agent has read the template's rules and the writing guideline in full, and they
-  lock again after every compaction. A long session keeps working from the rules, not from a
-  fading memory of them.
+- **It reads the rules, and reads them again.** In Claude Code, html-mcp's tools, and edits
+  to an artifact's own files, stay locked until the agent has read the template's rules and the
+  writing guideline in full, and they lock again after every compaction. A long session keeps
+  working from the rules, not from a fading memory of them.
 - **It fixes its own layout.** The way a programmer works through compiler errors, the agent
   checks each page it changes, gets a plain list of layout faults such as text spilling out of
   its box or a last line left nearly empty, fixes them, and checks again before you look.
@@ -194,6 +194,18 @@ port: 8765
 | `ignore` | Patterns excluded even when they match `watch`. |
 | `port` | This folder's review page port. Any free port works. Init picks the first free one from 8765, so each folder can have its own. |
 | `agents` | Agents the bell can call beside the session that is listening. See [Calling a second agent](#calling-a-second-agent). |
+| `update_check` | `true` unless set to `false`: the page asks once a day whether GitHub has commits this install lacks, which the ⋯ menu then offers as **Update**. |
+
+## Updating
+
+When GitHub has commits your install lacks, the ⋯ menu at the top of the page shows
+**Update (N new commits)** above the running version. Click it to pull them and install them.
+The page's server runs inside your agent, which keeps running the code it started with, so a
+band across the page then asks you to reconnect html-mcp in your agent: in Claude Code with
+`/mcp`, and in any agent by starting it again. The page then asks you to reload it.
+
+An install that was not made with the steps in [INSTALL.md](INSTALL.md) cannot update itself,
+and the page tells you to ask your agent to update html-mcp-web.
 
 ## Your own templates and guidelines
 

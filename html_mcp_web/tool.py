@@ -2,4 +2,5 @@
 
 from .shared.tool import Tool
 
-TOOL = Tool(name="html-mcp-web", package="html_mcp_web", server="review server", event="[HTML review event]")
+TOOL = Tool(name="html-mcp-web", package="html_mcp_web", server="review server", event="[HTML review event]",
+            extras="[mcp]")

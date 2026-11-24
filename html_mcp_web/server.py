@@ -56,8 +56,11 @@ from .config import (
 )
 from .firefox import headless_environment
 from .pdf_export import print_artifact_pdf, print_figure_pdf
+from . import __version__
 from .pptx_export import export_pptx
 from .shared.calls import Calls
+from .shared.update import Update
+from .tool import TOOL
 from .space import (
     intersection,
     maximal_free_regions,
@@ -449,6 +452,8 @@ class HtmlReviewServer:
         # outlives a server restart.
         self.review = Calls(self.project_dir / ".html-mcp-web", DEFAULT_CONFIG_NAME, lambda: self.config.agents,
                             lambda press: self._review_line(press), lambda message: self.broadcast(message))
+        # The ⋯ menu's Update of this install.
+        self.update = Update(TOOL, __version__, lambda: self.config.update_check)
         self.closing = False
         self.headless_check = asyncio.Lock()
         # The checking browser and its profile while a check runs, so a server that stops
@@ -1844,6 +1849,7 @@ class HtmlReviewServer:
         app.router.add_post(f"{base}/comments/{{comment_id}}/delete-entry", self.delete_comment_entry)
         app.router.add_delete(f"{base}/comments/{{comment_id}}", self.delete_comment)
         self.review.add_routes(app)
+        self.update.add_routes(app)
         app.router.add_get("/ws", self.websocket)
         app.on_startup.append(self.start_watcher)
         app.on_startup.append(self.sweep_check_profiles)

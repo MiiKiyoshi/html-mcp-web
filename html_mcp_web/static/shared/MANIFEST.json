@@ -1,5 +1,5 @@
 {
-  "source": "tex-mcp-web 4d48fd0",
+  "source": "tex-mcp-web c9dfd0a",
   "files": {
     "agent-bell.css": "4c4474b0b75c4f41697df70dc22988067b3ae76da2bad550ef551338db713428",
     "agent-bell.js": "0189afbc2a5ce615fbcbd27cc69e9fc0ac78641f69eb8a56503aa46c75d9fc42",
@@ -16,6 +16,8 @@
     "markdown.js": "7f49fce18f5ab57f161584d227eac3629f28adcd2a9874ce0f4304f06d4bcb35",
     "settings.js": "d733de013dffe5527f0abbca6eff0c0af6037d79cf2a58ea7b83d3e0487631c9",
     "tab-strip.css": "12cdfacdbdc6749fe728443153c4217a08c14a3e812210c7d2f22908563cabb0",
-    "tab-strip.js": "7ef0a836c56582a6f75f363fcefd14e24162f2458d983c42eb4dc3004396bfc2"
+    "tab-strip.js": "7ef0a836c56582a6f75f363fcefd14e24162f2458d983c42eb4dc3004396bfc2",
+    "update.css": "3f7bc5c124d466c11de8d7820f64d94d3a7e449e55760e9fc2f297f9d645dd15",
+    "update.js": "61b761b9ad9d8c3ecb93a703fb7b8066e68467eac1bc0aeb730632f854da7c24"
   }
 }

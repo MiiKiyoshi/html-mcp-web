@@ -72,10 +72,12 @@ Remove a registration the user agreed to replace (`claude mcp remove --scope use
 
 For Claude Code, also install the plugin from the checkout. It refuses html-mcp's tools other
 than `guide()` and `setup_info()` until that context has read the files `guide()` lists, again
-after each compaction. Its monitor makes a session started in the folder listen for Call
-agent from its start to its end, unless another session listens to that folder already, so a
-press reaches the agent with no request to listen, however long the review page sits idle. It
-loads from the checkout in place, so an update of the checkout updates it.
+after each compaction. It refuses an edit of an artifact's main or content file in the same way,
+until `guide()` has answered for that artifact and the files it lists are read. Its monitor
+makes a session started in the folder listen for Call agent from its start to its end, unless
+another session listens to that folder already, so a press reaches the agent with no request
+to listen, however long the review page sits idle. It loads from the checkout in place, so an
+update of the checkout updates it.
 
     claude plugin marketplace add "$DIR"
     claude plugin install html-mcp@html-mcp-web

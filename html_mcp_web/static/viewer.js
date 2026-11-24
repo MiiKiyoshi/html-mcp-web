@@ -8,6 +8,7 @@ import { $, h, clear, COMPOSED, keyByPosition, showMacKeyNames } from "./shared/
 import { createCommentPanel } from "./shared/comment-panel.js";
 import { createTabStrip } from "./shared/tab-strip.js";
 import { createHelp } from "./shared/help.js";
+import { createUpdate } from "./shared/update.js";
 const homePath = document.querySelector('meta[name="html-mcp-home"]')?.content ?? "";
 
 // What the browser keeps this page's shared choices under, named once, in index.html.
@@ -2712,6 +2713,13 @@ const strip = createTabStrip({ shown: (name, clicked) => panel.showTab(name, cli
 const help = createHelp({ prefix: PREFIX, pages: [], keys: panel.keys, words: {
   both: ["legend", "color"], either: ["chart", "table"], phrase: "title slide", without: "backup" } });
 
+// The ⋯ menu's Update and the version line at its end, and the band under the top bar that says
+// what is left once an update is installed.
+const update = createUpdate({
+  name: "html-mcp-web", server: "html-mcp", menu: $("#more-menu"), before: $("main.layout"),
+  how: "https://github.com/MiiKiyoshi/html-mcp-web/blob/main/INSTALL.md",
+});
+
 // A card opened at the foot of the list unfolds below the fold, and the reader had to
 // scroll after every open to read what they had just asked for. The list scrolls by
 // what the card overhangs, so the whole of it shows; a card taller than the list is
@@ -2900,6 +2908,8 @@ function connectWebSocket() {
   socket.onopen = () => {
     announceActiveArtifact();
     updateLayoutUi();
+    // A server that comes back may be a new version's: the page asks which runs now.
+    update.read().catch((error) => console.error(error));
     // The comments may have changed while the page could not hear the server, or before it
     // first could: the socket opens after the first reading and the artifact's load, and an
     // agent's reply written in between was never shown.

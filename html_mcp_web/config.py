@@ -74,11 +74,13 @@ class Config:
     port: int = DEFAULT_PORT
     # The agents the bell can call beside the session listening, by name (shared/agents.py).
     agents: dict[str, dict[str, list[str]]] = field(default_factory=dict)
+    # Whether the page asks once a day whether this install is behind (shared/update.py).
+    update_check: bool = True
     config_path: Path | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], config_path: Path | None = None) -> "Config":
-        unknown = set(data) - {"artifacts", "guideline", "watch", "ignore", "port", "agents"}
+        unknown = set(data) - {"artifacts", "guideline", "watch", "ignore", "port", "agents", "update_check"}
         if unknown:
             raise ValueError(f"unknown configuration keys: {', '.join(sorted(unknown))}")
         if "artifacts" not in data or not isinstance(data["artifacts"], dict) or not data["artifacts"]:
@@ -127,8 +129,12 @@ class Config:
         port = int(data["port"]) if "port" in data else DEFAULT_PORT
         if not 1 <= port <= 65535:
             raise ValueError("port must be between 1 and 65535")
+        update_check = data.get("update_check", True)
+        if not isinstance(update_check, bool):
+            raise ValueError("update_check must be true or false")
         return cls(artifacts=artifacts, guideline=guideline, watch=watch, ignore=ignore,
-                   port=port, agents=agents.parse(data.get("agents")), config_path=config_path)
+                   port=port, agents=agents.parse(data.get("agents")), update_check=update_check,
+                   config_path=config_path)
 
     def to_dict(self) -> dict[str, Any]:
         data = {
@@ -141,6 +147,8 @@ class Config:
             data["guideline"] = self.guideline
         if self.agents:
             data["agents"] = self.agents
+        if not self.update_check:
+            data["update_check"] = False
         return data
 
 

@@ -274,3 +274,20 @@ def test_an_artifact_follows_the_neutral_guideline_of_its_layout(tmp_path: Path,
     config = Config.from_dict({"artifacts": {"slides": artifact()}, "guideline": "plain"})
     assert guideline_files_for(config, "report") == [plain]
     assert (built_in / "neutral-report" / "GUIDELINE.md").is_file()
+
+
+@pytest.mark.parametrize("example", sorted(str(path.relative_to(Path(__file__).resolve().parent.parent))
+                                            for path in (Path(__file__).resolve().parent.parent / "examples").rglob(".html-mcp-web.yaml")))
+def test_the_example_configurations_load(example: str) -> None:
+    """Each example a reader copies is a configuration the server takes as it is."""
+    config = load_config(Path(__file__).resolve().parent.parent / example)
+    assert config.artifacts
+
+
+def test_the_update_check_is_on_unless_the_config_turns_it_off() -> None:
+    assert Config.from_dict({"artifacts": {"slides": artifact()}}).update_check is True
+    assert "update_check" not in Config.from_dict({"artifacts": {"slides": artifact()}}).to_dict()
+    off = Config.from_dict({"artifacts": {"slides": artifact()}, "update_check": False})
+    assert off.update_check is False and off.to_dict()["update_check"] is False
+    with pytest.raises(ValueError, match="update_check must be true or false"):
+        Config.from_dict({"artifacts": {"slides": artifact()}, "update_check": "no"})

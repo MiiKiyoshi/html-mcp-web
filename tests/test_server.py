@@ -1810,3 +1810,46 @@ async def test_a_write_that_lands_while_its_content_builds_is_built_in_turn(tmp_
     await review.on_project_change(str(content))
     assert builds == ["<p>second</p>", "<p>third, written while the second builds</p>"]
     assert main.read_text(encoding="utf-8") == "<p>third, written while the second builds</p>"
+
+
+async def test_the_page_is_told_what_is_newer_and_updates_the_install(client, monkeypatch):
+    """GET /update names what runs, what is on disk and how many commits the clone's upstream
+    has that it lacks, which is not asked when the config says so. POST /update runs the update
+    once, and its failure comes back in words."""
+    from html_mcp_web.shared.update import UpdateError
+
+    test_client, server = client
+    update = server.update
+    asked = []
+
+    async def ahead():
+        asked.append(True)
+        return None, 3
+
+    monkeypatch.setattr(update, "news", ahead)
+    monkeypatch.setattr(update, "way", lambda: "checkout")
+    told = await (await test_client.get("/update")).json()
+    assert told == {"version": update.version, "on_disk": update.on_disk(), "latest": None, "ahead": 3,
+                    "self_update": True}
+    assert told["version"].startswith(f"{__import__('html_mcp_web').__version__}+")
+    server.config.update_check = False
+    monkeypatch.setattr(update, "way", lambda: None)
+    told = await (await test_client.get("/update")).json()
+    assert (told["ahead"], told["self_update"], len(asked)) == (None, False, 1)
+
+    async def updated():
+        return "0.1.0+abc1234"
+
+    monkeypatch.setattr(update, "run", updated)
+    # Another site's page cannot start one: its POST needs no leave, and carries its origin.
+    refused = await test_client.post("/update", headers={"Origin": "https://elsewhere.example"})
+    assert refused.status == 403 and "review page" in (await refused.json())["error"]
+    done = await test_client.post("/update", headers={"Origin": f"http://{test_client.host}:{test_client.port}"})
+    assert done.status == 200 and await done.json() == {"on_disk": "0.1.0+abc1234"}
+
+    async def failed():
+        raise UpdateError("fatal: Not possible to fast-forward, aborting.")
+
+    monkeypatch.setattr(update, "run", failed)
+    done = await test_client.post("/update")
+    assert done.status == 500 and (await done.json())["error"] == "fatal: Not possible to fast-forward, aborting."

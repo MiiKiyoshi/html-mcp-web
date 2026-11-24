@@ -21,3 +21,14 @@ def test_the_shared_files_are_the_copies_their_manifest_names(folder: str) -> No
     for name, digest in manifest["files"].items():
         assert hashlib.sha256((shared / name).read_bytes()).hexdigest() == digest, (
             f"{folder}/{name} differs from the copy of {manifest['source']}")
+
+
+def test_the_shared_hook_file_is_the_copy_its_manifest_names() -> None:
+    """plugin/hooks holds this tool's own hook beside the file the guide gates share, written
+    in tex-mcp-web and copied here by its scripts/share_page.py with a manifest of that file."""
+    hooks = PACKAGE.parent / "plugin" / "hooks"
+    manifest = json.loads((hooks / "MANIFEST.json").read_text(encoding="utf-8"))
+    assert sorted(manifest["files"]) == ["guide_record.py"]
+    for name, digest in manifest["files"].items():
+        assert hashlib.sha256((hooks / name).read_bytes()).hexdigest() == digest, (
+            f"plugin/hooks/{name} differs from the copy of {manifest['source']}")

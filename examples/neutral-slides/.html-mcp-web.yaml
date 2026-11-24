@@ -1,6 +1,5 @@
 artifacts:
   slides:
-    label: Slides
     layout: slides
     main: slides.html
     template: neutral-slides

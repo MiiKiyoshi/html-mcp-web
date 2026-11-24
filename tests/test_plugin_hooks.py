@@ -220,6 +220,125 @@ def test_the_plugin_is_listed_and_wired_to_the_gate() -> None:
         ("PostToolUse", "mcp__html-mcp__guide"): ["guide-read"],
         ("PostToolUse", "Read"): ["file-read"],
         ("PreToolUse", "mcp__html-mcp__.*"): ["before-tool"],
+        ("PreToolUse", "Edit|Write|MultiEdit|NotebookEdit"): ["before-edit"],
     }
     assert all(hook["command"].startswith('python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guide_gate.py" ')
                for entries in hooks.values() for entry in entries for hook in entry["hooks"])
+
+
+def two_decks(root: Path) -> Path:
+    """A project of two artifacts: a talk built by a template from its content file, and a
+    plain report whose main file is edited as it is."""
+    root.mkdir(parents=True)
+    (root / ".html-mcp-web.yaml").write_text(
+        "artifacts:\n  talk:\n    layout: slides\n    main: talk/slides.html\n    template: neutral-slides\n"
+        "    content: talk/content.html\n  report:\n    layout: report\n    main: report/report.html\n",
+        encoding="utf-8")
+    for name in ("talk/slides.html", "talk/content.html", "report/report.html", "talk/notes.html"):
+        (root / name).parent.mkdir(exist_ok=True)
+        (root / name).write_text("<p>x</p>\n", encoding="utf-8")
+    return root
+
+
+def edit(session: str, cwd: Path, path: Path | str, tool: str = "Edit", agent: str | None = None) -> dict:
+    """What the PreToolUse hook receives when Claude Code is about to change a file itself."""
+    key = "notebook_path" if tool == "NotebookEdit" else "file_path"
+    return with_context({"cwd": str(cwd), "tool_name": tool, "tool_input": {key: str(path)}}, session, agent)
+
+
+def test_editing_an_artifacts_files_waits_for_what_guide_listed_for_it(tmp_path: Path, run, rules) -> None:
+    """An agent that changes an artifact's main or content file with Edit or Write, without
+    going through html-mcp's tools, still reads the files guide() lists for that artifact
+    first. guide() makes the list, so an edit waits for guide() to answer for the artifact."""
+    project = two_decks(tmp_path / "deck")
+    content, built, report = project / "talk" / "content.html", project / "talk" / "slides.html", project / "report" / "report.html"
+    production, guideline, components = rules
+    for tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
+        refused = reason(run("before-edit", edit("s1", project, content, tool)))
+        assert "guide(artifact='talk')" in refused and "this edit" in refused
+    # The talk's main file, which its template builds from the content, is the talk's too, and
+    # a path relative to the working folder names the same file.
+    assert "guide(artifact='talk')" in reason(run("before-edit", edit("s1", project, built)))
+    assert "guide(artifact='talk')" in reason(run("before-edit", edit("s1", project / "talk", "content.html")))
+    # Files that are no artifact's, and files outside any project, are left alone.
+    assert run("before-edit", edit("s1", project, project / "talk" / "notes.html")) is None
+    assert run("before-edit", edit("s1", project, project / ".html-mcp-web.yaml")) is None
+    assert run("before-edit", edit("s1", tmp_path, tmp_path / "other.html")) is None
+    # guide() for the talk lists its files, which the edit then waits for, named in the reason.
+    run("guide-read", guided("s1", content, rules))
+    refused = reason(run("before-edit", edit("s1", project, content)))
+    assert str(production) in refused and str(guideline) in refused and str(components) not in refused
+    run("file-read", read("s1", production))
+    refused = reason(run("before-edit", edit("s1", project, built, "Write")))
+    assert str(production) not in refused and str(guideline) in refused
+    run("file-read", read("s1", guideline))
+    assert run("before-edit", edit("s1", project, content)) is None
+    assert run("before-edit", edit("s1", project, built)) is None
+    # The report is another artifact, whose list guide() has not given in this context.
+    assert "guide(artifact='report')" in reason(run("before-edit", edit("s1", project, report)))
+    # A subagent, or a compaction, starts again.
+    assert "guide(artifact='talk')" in reason(run("before-edit", edit("s1", project, content, agent="a1")))
+    run("session-start", {"session_id": "s1", "cwd": str(project), "source": "compact"})
+    assert "guide(artifact='talk')" in reason(run("before-edit", edit("s1", project, content)))
+
+
+def test_each_artifact_keeps_what_guide_listed_for_it(tmp_path: Path, run, rules) -> None:
+    """guide() for a second artifact gives the tools its list, and leaves an edit to the first
+    with the list given for the first."""
+    project = two_decks(tmp_path / "deck")
+    content, report = project / "talk" / "content.html", project / "report" / "report.html"
+    production, guideline, _ = rules
+    run("guide-read", guided("s1", content, rules))
+    for path in (production, guideline):
+        run("file-read", read("s1", path))
+    other = tmp_path / "rules" / "REPORT.md"
+    other.write_text("# Report rules\n", encoding="utf-8")
+    run("guide-read", guided("s1", report, rules, answer={"edit_file": str(report), "read": [str(other)], "consult": []}))
+    assert run("before-edit", edit("s1", project, content)) is None
+    assert str(other) in reason(run("before-edit", edit("s1", project, report)))
+    assert str(other) in reason(run("before-tool", call("s1", project)))
+    run("file-read", read("s1", other))
+    assert run("before-edit", edit("s1", project, report)) is None
+    assert run("before-tool", call("s1", project)) is None
+
+
+def test_a_hook_that_fails_lets_the_call_through(tmp_path: Path) -> None:
+    """A hook that cannot run, as one whose shared file is missing, ends with an error Claude
+    Code does not take for a refusal: the call goes on."""
+    alone = tmp_path / "hooks"
+    alone.mkdir()
+    (alone / "guide_gate.py").write_bytes(GATE.read_bytes())
+    event = {"session_id": "s1", "cwd": str(tmp_path), "tool_name": "mcp__html-mcp__listen", "tool_input": {}}
+    result = subprocess.run([sys.executable, str(alone / "guide_gate.py"), "before-tool"], input=json.dumps(event),
+                            capture_output=True, text=True)
+    assert result.returncode == 1 and result.stdout == "" and "guide_record" in result.stderr
+
+
+@pytest.mark.parametrize("written", [
+    "artifacts:\n  talk:\n    layout: slides\n    main: talk/slides.html\n    template: neutral-slides\n"
+    "    content: talk/content.html\n  report:\n    layout: report\n    main: report/report.html\nwatch:\n- '*.html'\nport: 8765\n",
+    "# two decks\nport: 8765\nartifacts:\n    'talk':   # the talk\n        main: \"talk/slides.html\"\n"
+    "        layout: slides\n\n        content: 'talk/content.html'\n        template: neutral-slides\n"
+    "    \"decks/two\":\n        layout: report\n        main: report/report.html\nguideline: neutral-slides\n",
+    "artifacts:\n  talk: {layout: slides, main: talk/slides.html, template: neutral-slides, content: 'talk/content.html'}\n"
+    "  report: {layout: report, main: \"report/report.html\"}\n",
+    "artifacts: {talk: {layout: slides, main: talk/slides.html}, 'report one': {layout: report, main: report/report.html}}\n",
+])
+def test_the_gate_reads_the_artifacts_as_the_server_does(tmp_path: Path, written: str) -> None:
+    """The gate runs outside the server's environment and reads the configuration without its
+    YAML reader: the artifacts it finds, with their main and content files, are the ones the
+    server finds."""
+    import importlib.util
+
+    from html_mcp_web.config import get_content_file, get_main_file, load_config
+
+    (tmp_path / ".html-mcp-web.yaml").write_text(written, encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("guide_gate", GATE)
+    gate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gate)
+    config = load_config(tmp_path / ".html-mcp-web.yaml")
+    content = {alias: get_content_file(config, alias) for alias in config.artifacts}
+    assert gate.artifact_files(tmp_path) == {
+        alias: (os.path.realpath(get_main_file(config, alias)),
+                os.path.realpath(content[alias]) if content[alias] is not None else None)
+        for alias in config.artifacts}

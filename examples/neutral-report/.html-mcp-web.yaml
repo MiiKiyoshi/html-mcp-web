@@ -1,6 +1,5 @@
 artifacts:
   report:
-    label: Report
     layout: report
     main: report.html
     template: neutral-report

@@ -1,14 +1,15 @@
 {
-  "source": "tex-mcp-web 4d48fd0",
+  "source": "tex-mcp-web c9dfd0a",
   "files": {
-    "__init__.py": "efb9c487210f254eea3a3765597e39bb33deaaa6c638abef973f053e1002c5dc",
+    "__init__.py": "07102f3132f796e37701ecc07c83522649f86cd88101a0d466b77710846b17dc",
     "agents.py": "7a8a6741bd251458ca8c7ec4107c285413583b6998f47ee57d6277149f1da23c",
     "calls.py": "5d40459889b3c6925b9d1df002a9a23d3967729cb7ceda996288c709ca16632c",
     "filelock.py": "fce37f9bfd5f0f31b497d6833ba459e85247831e16fafd5d4312d5444514c902",
     "monitor.py": "291daae7996b290eedbbcbc02b8fd61d7401e6ebc28e00cfa91516a1e8c7b1fe",
     "plugin_monitor.py": "82e3dbf459fe862a945ddf219d6e5b6fce6f083cbfdfdddaa5119017995c4f5c",
     "shared_file.py": "6da5267dc743b5b568ae31749f7f094ab85dbc2db3a25dfbaf30f1f42979292c",
-    "tool.py": "573c62b93a069a7cb457683fd172964aa83e24a0183fde8bec73c08797817c2c",
+    "tool.py": "1c8baa9a4e4f0a512497335615f10195e88a85a2cb44a21f4b1b8f63e328ec8a",
+    "update.py": "251bee89668c73332dc628b6458c59cf06b84fe80306a43f3c772b4a74db147a",
     "waiter.py": "d18ae5ff52dbab74130c4b48a4c333363d4fc7e7088ce7a2ca34b65fe4747cf4"
   }
 }
