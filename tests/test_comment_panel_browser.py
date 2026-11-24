@@ -1258,3 +1258,22 @@ def test_a_reply_written_while_the_page_cannot_hear_its_server_shows_once_it_can
         # The page asks again a moment later; the reply is written before it does.
         post_json(f"{base}/artifacts/slides/comments/{asked}/reply", {"text": "Shortened.", "author": "agent"})
         wait_until(unanswered)
+
+
+@needs_firefox
+def test_an_agents_reply_shows_its_markdown_and_a_closed_card_its_words(tmp_path: Path) -> None:
+    """An opened card draws a reply's bold, list and code. A closed card shows the same words
+    without their marks."""
+    kept = CommentStore(store_of(tmp_path, "slides"))
+    asked = kept.add(ArtifactAnchor(), "Shorten the title.").id
+    kept.reply(asked, "**Done.** The title is shorter.\n- Cut `the subtitle`\n- Kept the date", "agent")
+    with review_page(tmp_path) as (browser, base):
+        card = f'document.querySelector(\'[data-comment-id="{asked}"]\')'
+        wait_until(lambda: browser.execute_script(f'return {card}?.querySelector(".cmt-latest")?.textContent')
+                   == "agent  Done. The title is shorter.\n• Cut the subtitle\n• Kept the date")
+        browser.execute_script(f"{card}.querySelector('.cmt-head').click()")
+        reply = f"{card}.querySelector('.thread-entry.author-agent .thread-text')"
+        wait_until(lambda: browser.execute_script(f"return {reply}?.querySelector('strong')?.textContent") == "Done.")
+        assert browser.execute_script(f"return [...{reply}.querySelectorAll('ul > li')].map((item) => item.textContent)") \
+            == ["Cut the subtitle", "Kept the date"]
+        assert browser.execute_script(f"return {reply}.querySelector('li code').textContent") == "the subtitle"
