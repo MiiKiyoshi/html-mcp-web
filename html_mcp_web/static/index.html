@@ -6,6 +6,7 @@
   <title>html-web</title>
   <link rel="stylesheet" href="/static/shared/look.css">
   <link rel="stylesheet" href="/static/shared/comment-panel.css">
+  <link rel="stylesheet" href="/static/shared/help.css">
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/shared/look-early.js" data-key="htmlMcpTheme"></script>
 </head>
@@ -34,6 +35,7 @@
             <button id="download-pdf-btn" class="download-btn" type="button" role="menuitem" data-label="Export PDF" title="Export the artifact as a PDF">Export PDF</button>
             <button id="download-pptx-btn" class="download-btn" type="button" role="menuitem" data-label="Export PPTX" title="Export the deck as an editable pptx">Export PPTX</button>
             <button id="artifact-comment-btn" type="button" role="menuitem">Add a note on the whole artifact…</button>
+            <button id="help-btn" type="button" role="menuitem">Help (?)</button>
             <button id="settings-menu-btn" type="button" role="menuitem">Settings…</button>
           </div>
         </span>
@@ -138,8 +140,11 @@
           <div id="problems-list" class="problems-list"></div>
         </div>
 
-        <!-- The comment panel draws itself here (shared/comment-panel.js). -->
-        <div id="tab-comments" class="tab-pane active"></div>
+        <!-- The comment panel draws itself here (shared/comment-panel.js), with the link to Help
+             under the search's conditions. -->
+        <div id="tab-comments" class="tab-pane active">
+          <button id="search-help-btn" data-slot="search" class="search-help" type="button" tabindex="-1" title="Search help">more…</button>
+        </div>
       </aside>
     </main>
   </div>
@@ -153,6 +158,101 @@
         <button value="close" autofocus>Close</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Help, which shared/help.js draws with this page's parts. The comment keys on the Keys
+       page are filled in from the keys themselves each time the dialog opens. The tests type
+       the example on the Search page into the search box, so each step must find what its
+       text says. -->
+  <dialog id="help-dialog" aria-labelledby="help-title">
+    <template data-slot="start">
+        <h4>Add a comment</h4>
+        <p>Select words on a page and choose <b>Comment</b>. In the Source, select text and
+          press the comment <span class="help-nowrap">button <svg class="help-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7v6M9 10h6"/></svg></span>
+          in the editor's toolbar. For a figure or anything else without text to select, choose
+          the box <span class="help-nowrap">tool <svg class="help-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9V3h6M15 3h6v6M21 15v6h-6M9 21H3v-6M8 12h8M12 8v8"/></svg></span>
+          in the toolbar above the artifact and draw a box over it. To comment on a whole page,
+          press <b>+ comment</b> beside it in the Pages tab, and to comment on the artifact as a
+          whole, choose <b>Add a note on the whole artifact…</b> in the ⋯ menu.</p>
+        <h4>Call the agent</h4>
+        <p>Write as many comments as you like. When they are ready, press the
+          <span class="help-nowrap">bell <svg class="help-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11V7a4 4 0 0 1 8 0v4l1.5 1.5h-11z"/><path d="M6.5 14a1.5 1.5 0 0 0 3 0"/></svg></span>
+          above the comment list, or <kbd>Ctrl+Alt+Enter</kbd>, and the agent receives them all at
+          once. The bell is green while an agent is listening. When it is red, the call is queued
+          until an agent connects.</p>
+        <h4>Read the reply</h4>
+        <p>The agent edits the artifact's HTML source, checks the layout of the pages it changed
+          and replies in each comment's thread. When the wording is yours to decide, it proposes
+          a change instead. The card shows the current lines marked − and the new ones marked +,
+          and the Source highlights the same text in red. <b>Apply suggestion</b> writes the
+          change into the file, and <b>Reject</b> discards it. To ask for something different,
+          use <b>Reply</b> and call the agent again.</p>
+        <p>A comment is unanswered when its last message is from the agent. Its card is marked
+          <span class="cmt-unanswered">unanswered</span>, the <b>unanswered</b> view lists only
+          those comments, and the number on the Comments tab counts them.</p>
+        <h4>Finish a thread</h4>
+        <p>When the change is what you wanted, press <b>Resolve</b> on the card. <b>Archive</b>
+          sets a thread aside without resolving it, and you can still reply to it. After either
+          one, a line above the list says what was done, and <b>Undo</b> on that line, or the
+          <kbd>u</kbd> key, reverses it.</p>
+    </template>
+    <template data-slot="search-example">
+        <h4>Example: an answer from last week</h4>
+        <p>Suppose the agent answered a comment of yours about a chart's legend a few days ago,
+          and you want to read its answer again. You remember that it came on
+          November&nbsp;13. Type the following in the search box.</p>
+        <ol class="help-steps">
+          <li><code class="help-typed"><span>legend</span></code>
+            <p>The list shows only the threads with the word legend in them, in any status.</p></li>
+          <li><code class="help-typed"><span>legend</span> <span>from:agent</span></code>
+            <p>Adding <code>from:agent</code> leaves only those the agent wrote in.</p></li>
+          <li><code class="help-typed"><span>legend</span> <span>from:agent</span> <span>after:11-13</span> <span>before:11-14</span></code>
+            <p><code>after:11-13</code> keeps the threads with a message written on or after
+              November&nbsp;13, and <code>before:11-14</code> keeps those with a message written
+              before November&nbsp;14. Only the comment you were looking for is left.</p></li>
+        </ol>
+    </template>
+    <template data-slot="search-order">With <b>page order</b>, comments keep the order they were
+          written in.</template>
+    <template data-slot="search-rows">
+            <tr><td><code>from:agent</code></td><td>have a message from the agent</td></tr>
+            <tr><td><code>file:slides</code></td><td>are on a source file whose path contains “slides”</td></tr>
+    </template>
+    <template data-slot="search-writers">Use <code>from:me</code> for your own messages.</template>
+    <template data-slot="search-words">the messages, the text a comment is on, the title of its page,
+          its file name and proposed changes</template>
+    <template data-slot="search-thread"><code>from:me after:11-12</code> also finds a thread you wrote in on
+          November&nbsp;10 if the agent replied on November&nbsp;12</template>
+    <template data-slot="keys">
+          <h4>Artifact</h4>
+          <span class="keys-of"><kbd>Ctrl+F</kbd></span><span>Find words in the artifact, from the artifact or its slide previews. In the find bar, Enter and Shift+Enter go to the next and previous match, and Escape closes it</span>
+          <h5>Slide previews</h5>
+          <span class="keys-of"><kbd>↓</kbd><kbd>→</kbd><kbd>PageDown</kbd></span><span>Next page</span>
+          <span class="keys-of"><kbd>↑</kbd><kbd>←</kbd><kbd>PageUp</kbd></span><span>Previous page</span>
+          <span class="keys-of"><kbd>Home</kbd><kbd>End</kbd></span><span>First and last page</span>
+          <h5>Slide show</h5>
+          <p>For slides, the full screen button in the top bar starts the slide show. These keys
+            then move through the slides, and the comment keys rest until it ends.</p>
+          <span class="keys-of"><kbd>→</kbd><kbd>n</kbd><kbd>Space</kbd></span><span>Next slide. Enter, ↓ and PageDown do the same.</span>
+          <span class="keys-of"><kbd>←</kbd><kbd>p</kbd><kbd>Backspace</kbd></span><span>Previous slide. ↑ and PageUp do the same.</span>
+          <span class="keys-of"><kbd>Home</kbd><kbd>End</kbd></span><span>First and last slide</span>
+          <span class="keys-of"><kbd>Escape</kbd></span><span>End the slide show</span>
+          <h4>Source editor</h4>
+          <span class="keys-of"><kbd>Ctrl+S</kbd></span><span>Save the file</span>
+          <span class="keys-of"><kbd>Ctrl+Alt+M</kbd></span><span>Comment on the selected text</span>
+          <span class="keys-of"><kbd>Ctrl+Alt+P</kbd></span><span>Show the selected text on the page</span>
+          <span class="keys-of"><kbd>Ctrl+Alt+K</kbd></span><span>Go to the comment at the cursor in the comment list. Press it again there to come back.</span>
+          <span class="keys-of"><kbd>Ctrl+Alt+Enter</kbd></span><span>Call the agent</span>
+          <h5>With Vim keys</h5>
+          <p>To use Vim keys, turn them on with the Vim button in the editor's toolbar. These keys
+            then work along with Vim's usual ones.</p>
+          <span class="keys-of"><kbd>:w</kbd></span><span>Save the file</span>
+          <span class="keys-of"><kbd>jj</kbd><kbd>Escape</kbd><kbd>Ctrl+[</kbd></span><span>Leave Insert mode. Type jj quickly.</span>
+          <span class="keys-of"><kbd>gc</kbd></span><span>Comment on the text a motion or selection covers, as in gcc for the line or gcip for the paragraph</span>
+          <span class="keys-of"><kbd>gs</kbd></span><span>Show the text a motion or selection covers on the page, as in gss for the line</span>
+          <span class="keys-of"><kbd>K</kbd></span><span>Go to the comment at the cursor in the comment list</span>
+          <p>Text you yank is also copied to the system clipboard.</p>
+    </template>
   </dialog>
 
   <!-- The new comment dialog, which the comment panel draws. -->

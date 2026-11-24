@@ -2,8 +2,6 @@
    look, in shared/look.css. What follows is this page's own. */
 :root {
   color-scheme: light;
-  /* The bar along the top of each panel: the artifact's, the editor's and the comments'. */
-  --panel-bar: 2.2rem;
 }
 
 * { box-sizing: border-box; }

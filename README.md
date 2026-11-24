@@ -70,8 +70,8 @@ leaves the presses to it, and `do html listen` in any session moves them there.
 
 ## Reviewing
 
-- Select text on the rendered page and press the **Comment** button beside it. **+ Note**
-  comments on the whole artifact.
+- Select text on the rendered page and press the **Comment** button beside it. **Add a note
+  on the whole artifact…** in the ⋯ menu comments on the artifact as a whole.
 - **Source** beside **Comment** selects the same words in the source editor, a formula by
   the TeX KaTeX keeps for it. The other way, **→ Preview** beside **+ Comment** in the
   editor's bar marks the selected source words on the page. Either turns the view to Split.
@@ -87,6 +87,10 @@ leaves the presses to it, and `do html listen` in any session moves them there.
   **unanswered** view lists them.
 - The search box above the list finds comments in any status by their words, `from:agent`
   or `from:me`, a source file as `file:`, and a day as `after:11-12` or `before:11-14`.
+- The comments go by keys as a notebook's cells do. `j` and `k` move through them, Space
+  opens one and shows its place, and `r`, `R` and `A` reply, resolve and archive. `?`, or
+  **Help (?)** in the ⋯ menu, opens Help, whose **Keys** page lists every key. In the slide
+  show the keys move the slides.
 
 ## Suggested edits
 
@@ -101,7 +105,7 @@ The Vim button in the editor's bar turns on Vim keys, and the page remembers the
 - `:w` saves. `jj` typed quickly, Escape or Ctrl+[ leaves Insert mode.
 - `gc` comments on the text a motion or a visual selection covers, and `gs` marks that text
   on the page.
-- `K` opens the comment under the cursor in the comment list.
+- `K` opens the comment under the cursor in the comment list, and `K` there comes back.
 - A yank also goes to the system clipboard.
 
 With or without Vim keys, Ctrl+S saves, Ctrl+Alt+M comments on the selection, Ctrl+Alt+P
@@ -109,14 +113,17 @@ marks it on the page, and Ctrl+Alt+K opens the comment under the cursor. Ctrl+Al
 presses Call agent. On macOS, Cmd takes the place of Ctrl and Option of Alt in these.
 Ctrl+[ drops a comment being written, with Ctrl on macOS too.
 
+Settings can hold the cursor's line a third or half of the way down the editor, so the
+text moves under it as the keys move the cursor.
+
 A browser extension that drives pages with Vim keys takes Escape and Ctrl+[ before the
 editor does and moves the focus out of it, which leaves the editor in Insert mode. Turn the
 extension off for the review page's address.
 
 ## Export to PowerPoint and PDF
 
-Press **PPTX** in the topbar for an editable PowerPoint deck of the slides, or **PDF** to
-print every page.
+**Export PPTX** in the ⋯ menu makes an editable PowerPoint deck of the slides, and **Export
+PDF** prints every page.
 
 ## On a tablet or phone
 

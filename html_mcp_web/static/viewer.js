@@ -4,8 +4,10 @@ import { createAnchors } from "./anchors.js";
 import { createSearch } from "./search.js";
 import { displayPath } from "./path-display.mjs";
 import { createSettings } from "./shared/settings.js";
-import { $, h, clear } from "./shared/dom.js";
+import { $, h, clear, COMPOSED, keyByPosition, showMacKeyNames } from "./shared/dom.js";
 import { createCommentPanel } from "./shared/comment-panel.js";
+import { createCommentKeys } from "./shared/comment-keys.js";
+import { createHelp } from "./shared/help.js";
 const homePath = document.querySelector('meta[name="html-mcp-home"]')?.content ?? "";
 
 const state = {
@@ -53,6 +55,8 @@ const state = {
   panelDraggedAt: -Infinity,
   view: "preview",
   editor: null,
+  // Whether a press in the editor is held down, which moves the cursor with the text in place.
+  editorPointing: false,
   sourcePath: null,
   sourceRevision: null,
   sourceDirty: false,
@@ -167,6 +171,7 @@ async function selectArtifact(alias) {
   state.revision = state.artifact.revision;
   state.loadedRevision = null;
   resetCommentPanel();
+  commentKeys.reset();
   state.unattached.clear();
   state.currentPage = null;
   state.sourcePath = null;
@@ -508,8 +513,6 @@ function defineVimCommands(Vim) {
 // the page as the method's own event and then as the letter it composed, and Vim knew
 // neither: the command was lost and the letter went into the text. The key is read by
 // where it sits on the keyboard instead, and the letter that follows is dropped.
-const COMPOSED = /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/;
-
 function vimCommandMode() {
   const vim = state.editor?.state?.cm?.state.vim;
   return Boolean(state.editor?.$vimModeHandler && vim && !vim.insertMode);
@@ -521,8 +524,7 @@ function attachVimInputMethod(editor) {
     if (!vimCommandMode() || event.target !== field || event.ctrlKey || event.metaKey || event.altKey) return;
     let key = null;
     if (event.isComposing || event.key === "Process" || COMPOSED.test(event.key)) {
-      const letter = /^Key([A-Z])$/.exec(event.code)?.[1];
-      if (letter !== undefined) key = event.shiftKey ? letter : letter.toLowerCase();
+      key = keyByPosition(event) ?? null;
     } else if (field.readOnly && event.key.length === 1 && event.key !== " ") {
       // A read-only field (below) takes no typing, so a character key reaches Vim here,
       // where Vim otherwise reads it from the typing. Space is a named key Vim reads itself.
@@ -566,16 +568,32 @@ function markFrameTheme(frame) {
   }
 }
 
-// The theme, the text size and the key that sends a comment, as Settings keeps them. The
-// review page's own parts follow the theme; the artifact is drawn as written, on a ground that
-// follows it.
+// The theme, the text size, the key that sends a comment, the key letters and the editor's
+// cursor, as Settings keeps them. The review page's own parts follow the theme; the artifact
+// is drawn as written, on a ground that follows it.
 const settings = createSettings({
   prefix: "htmlMcp",
   onTheme: () => {
     state.editor?.setTheme(editorTheme());
     for (const frame of document.querySelectorAll("iframe")) markFrameTheme(frame);
   },
+  onLetters: (shown) => shown || commentKeys.showLetters(false),
+  onCursor: () => holdCursorLine(),
 });
+
+// The cursor's line held a third or a half of the way down the editor, as the comment keys
+// hold the ringed card in the list, when the viewer chose it in Settings: the keys move the
+// text under the cursor and the eyes stay where they are. A click or a drag leaves the text
+// where it is. The first lines stay at the top and the last ones at the bottom, with no room
+// made above or below the text to hold them there.
+function holdCursorLine() {
+  const editor = state.editor;
+  const at = settings.cursorAt();
+  if (!editor || at === undefined || state.editorPointing) return;
+  const { row, column } = editor.getCursorPosition();
+  const top = editor.session.documentToScreenRow(row, column) * editor.renderer.lineHeight;
+  editor.session.setScrollTop(Math.max(0, top - editor.renderer.scroller.clientHeight * at));
+}
 
 // K with Vim keys, or Ctrl+Alt+K (Cmd+Option+K), opens in the comments the comment the
 // cursor is on, as a click on its mark beside the line does: the narrowest when several
@@ -589,7 +607,11 @@ function showCommentAtCursor() {
     setSourceStatus("No comment here");
     return;
   }
+  // The keys go with it to the list, shown first, where K takes them back to these words.
+  state.editor.blur();
+  switchTab("comments");
   focusComment(chosen.id).catch((error) => console.error(error));
+  $("#comments-list").focus({ preventScroll: true });
 }
 
 // Ctrl+Alt+M (Cmd+Option+M), or gc with Vim keys. Comments wait for the file to be saved,
@@ -624,6 +646,10 @@ async function initializeSourceEditor() {
     if (!state.sourceLoading) setSourceDirty(true);
   });
   editor.selection.on("changeSelection", updateSourceCommentButton);
+  // A press in the text or beside it moves the cursor itself, before the editor does.
+  for (const name of ["mousedown", "guttermousedown"]) editor.on(name, () => { state.editorPointing = true; });
+  document.addEventListener("pointerup", () => { state.editorPointing = false; }, true);
+  editor.selection.on("changeCursor", holdCursorLine);
   editor.commands.addCommand({
     name: "saveSource",
     bindKey: { win: "Ctrl-S", mac: "Command-S" },
@@ -749,7 +775,9 @@ async function setWorkspaceView(view) {
   });
 }
 
-async function openSourceLocation(anchor) {
+// A comment's words in the source, selected, the editor taking the keys unless told to leave
+// them where they are.
+async function openSourceLocation(anchor, focus = true) {
   if (state.view === "preview") await setWorkspaceView("source");
   else await loadSource(false);
   if (state.editor === null || state.sourcePath !== anchor.file) return;
@@ -763,7 +791,7 @@ async function openSourceLocation(anchor) {
       anchor.column_end,
     ));
   }
-  state.editor.focus();
+  if (focus) state.editor.focus();
 }
 
 function frameWindow() {
@@ -2627,10 +2655,34 @@ function commentOn(anchor) {
   openCompose(anchor, composeAnchorText(anchor), anchor.kind === "source" ? { source_revision: state.sourceRevision } : {});
 }
 
-const {
-  attach: attachCommentPanel, refreshComments, renderComments, setCommentFilter, closeCommentSearch, openCompose,
-  reset: resetCommentPanel,
-} = createCommentPanel({
+// The comment keys, with the artifact's places: Space shows where a comment is on the page or
+// in the source, and K takes the keys to its words in the source. They rest while the artifact
+// fills the screen, where the slide show has keys of its own.
+const commentKeys = createCommentKeys({
+  state,
+  labels: { document: "artifact", firstSort: "page order" },
+  panel: () => panel,
+  rows: () => [
+    { keys: ["K", "Ctrl+Alt+K"], does: "Jump to its text in the source and move keyboard focus there; press K (Ctrl+Alt+K without "
+      + "Vim keys) to come back. A comment on the page shows its place there instead, and the keys stay here" },
+  ],
+  showPlace: (commentId) => jumpToComment(commentId),
+  enterPlace: (comment) => {
+    if (comment.anchor.kind === "source") {
+      openSourceLocation(comment.anchor).catch((error) => alert(`Could not open source: ${error.message}`));
+    } else {
+      // Its words are on the page, which takes no keys from here: the page shows them, and the
+      // keys stay with the list.
+      jumpToComment(comment.id).catch((error) => console.error(error));
+    }
+  },
+  commentWhole: () => $("#artifact-comment-btn").click(),
+  showHelp: () => help.show(),
+  lettersShown: () => settings.keyLetters(),
+  rests: () => inFullscreen(),
+});
+
+const panel = createCommentPanel({
   state,
   prefix: "htmlMcp",
   api: {
@@ -2665,8 +2717,7 @@ const {
   },
   sendOn: settings.sendOn,
   sendKeyName: settings.sendKeyName,
-  // No key works the comments here: none names a button, holds a range or rings a card.
-  keys: { hint: () => "", rangeIds: () => [], mark: () => {}, placeRing: () => {} },
+  keys: commentKeys,
   tabOf: () => "comments",
   readAlong: async () => null,
   applyAlong: () => {},
@@ -2685,7 +2736,7 @@ const {
   // An opened card shows whole, and the page or the source shows where the comment is.
   showPlace: (commentId) => {
     if (state.expanded.has(commentId)) revealCard(commentId);
-    jumpToComment(commentId);
+    jumpToComment(commentId).catch((error) => console.error(error));
   },
   markPlaces: () => {
     renderHighlights();
@@ -2730,6 +2781,13 @@ const {
     closed: () => {},
   },
 });
+const {
+  attach: attachCommentPanel, refreshComments, renderComments, setCommentFilter, closeCommentSearch, openCompose,
+  switchTab, reset: resetCommentPanel,
+} = panel;
+
+// Help, with the artifact's own Start here, search story and keys.
+const help = createHelp({ prefix: "htmlMcp", pages: [], keys: commentKeys });
 
 // A card opened at the foot of the list unfolds below the fold, and the reader had to
 // scroll after every open to read what they had just asked for. The list scrolls by
@@ -2786,30 +2844,36 @@ function growPanelFor(wanted) {
   layout.style.setProperty("--html-mcp-panel-height", `${limited}px`);
 }
 
-function jumpToComment(commentId) {
+// Where a comment is, shown from the comments: the page scrolls to it, or the source selects
+// its words, and the keys stay with the comments, where the reader clicked or pressed Space.
+async function jumpToComment(commentId) {
   const comment = state.comments.find((value) => value.id === commentId);
   if (comment === undefined) return;
   if (comment.anchor.kind === "source") {
-    openSourceLocation(comment.anchor).catch((error) => alert(`Could not open source: ${error.message}`));
-    return;
-  }
-  if (comment.anchor.kind === "area") {
+    await openSourceLocation(comment.anchor, false);
+  } else if (comment.anchor.kind === "page") {
+    artifactPages()[comment.anchor.number - 1]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } else if (comment.anchor.kind === "area") {
     frameDocument().querySelector(`.html-mcp-area[data-comment-id="${CSS.escape(commentId)}"]`)
       ?.scrollIntoView({ behavior: "smooth", block: "center" });
     flashMarks(commentId);
-    return;
+  } else if (comment.anchor.kind === "text") {
+    const range = resolveAnchor(comment.anchor);
+    // A comment whose text is gone is not stranded: the page carries a dashed mark where
+    // it was written, and the card opens there like any other.
+    const element = range === null
+      ? frameDocument().querySelector(`.html-mcp-lost[data-comment-id="${CSS.escape(commentId)}"]`)
+      : (range.startContainer.nodeType === Node.ELEMENT_NODE
+        ? range.startContainer
+        : range.startContainer.parentElement);
+    element?.scrollIntoView({ behavior: "smooth", block: "center" });
+    flashMarks(commentId);
   }
-  if (comment.anchor.kind !== "text") return;
-  const range = resolveAnchor(comment.anchor);
-  // A comment whose text is gone is not stranded: the page carries a dashed mark where
-  // it was written, and the card opens there like any other.
-  const element = range === null
-    ? frameDocument().querySelector(`.html-mcp-lost[data-comment-id="${CSS.escape(commentId)}"]`)
-    : (range.startContainer.nodeType === Node.ELEMENT_NODE
-      ? range.startContainer
-      : range.startContainer.parentElement);
-  element?.scrollIntoView({ behavior: "smooth", block: "center" });
-  flashMarks(commentId);
+  // The keys come back to the list, unless a box in it took them while the jump went on, as r
+  // pressed right after Space opens the reply box.
+  if (!document.activeElement?.matches?.("#comments-list textarea")) {
+    $("#comments-list").focus({ preventScroll: true });
+  }
 }
 
 function flashMarks(commentId) {
@@ -2894,6 +2958,7 @@ async function handleSocketMessage(message) {
       state.alias = Object.keys(state.project.artifacts)[0];
       state.loadedRevision = null;
       resetCommentPanel();
+      commentKeys.reset();
       state.unattached.clear();
     }
     const artifact = state.project.artifacts[state.alias];
@@ -3132,6 +3197,7 @@ function attachControls() {
   // record over the page when the address carries ?trace.
   if (new URLSearchParams(window.location.search).has("trace")) import("./trace.js");
   attachCommentPanel();
+  commentKeys.attach();
   // Ctrl+Alt+Enter (Cmd+Option+Enter) presses the bell from anywhere on the page, the
   // editor included, but not over a dialog.
   document.addEventListener("keydown", (event) => {
@@ -3283,6 +3349,8 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  // On a Mac the keys go by the Mac's names, in Help too.
+  showMacKeyNames("#help-dialog");
   init().catch((error) => {
     console.error(error);
     alert(`html-web failed to start: ${error.message}`);
