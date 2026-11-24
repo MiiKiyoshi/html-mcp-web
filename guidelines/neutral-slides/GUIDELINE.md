@@ -10,7 +10,7 @@ Articles 1 to 3 apply to every deck and every change to one. Articles 4 and 5 ap
 
 1.2 **Each page fits what the audience knows at that moment.** That is what they knew when they sat down and what earlier pages showed them, nothing else.
 
-1.3 **Everything else comes after.** Last of all come proving accuracy, cross-checking data, how the data was obtained, where a fact came from, and detail the audience did not ask about. None of these takes space on a page or in a script unless the audience needs it to follow the answer.
+1.3 **Everything else comes after.** Last of all come strictness for its own sake, proving accuracy, cross-checking data, how the data was obtained, where a fact came from, and detail the audience did not ask about. None of these takes space on a page or in a script unless the audience needs it to follow the answer.
 
 1.4 **Adapt for understanding.** Adapt the material so it is understood: simplify, pick one example, leave things out, change the order the source used. An adaptation is good when what the audience learns from it is what the later pages build on. How closely it follows the source does not matter. When a default of form, such as a title, a lead, a takeaway or a layout, works against 1.1 or 1.2 on some page, change or drop that default. When any other clause seems to, say so under 3.9.
 
@@ -20,11 +20,19 @@ Articles 1 to 3 apply to every deck and every change to one. Articles 4 and 5 ap
 
 2.2 **Walk.** Starting from what the audience knows, write the explanation as steps. Each step is the question a listener has at that point and its answer in one sentence. For each answer, name where the listener got every object, word, value and relation it uses. Whatever they have not been given yet becomes an earlier step. Do not think in pages yet. Explain what the requester asked for, not an easier subject or one the material happens to cover.
 
-2.3 **Pages.** Cut the walk into pages, one answer to a page, as many pages as the walk needs.
+2.3 **Pages.** Cut the walk into pages, one answer to a page, as many pages as the walk needs. Then plan each page before building it. List what the page will hold in the order the audience's eye meets it: the title, the line under it, the left column from top to bottom, then the right column, then the bottom line. Go down the list as someone who has seen only the items above and the earlier pages, and ask of every item, down to a single symbol, number or unit:
+
+- What is this called, by the name people use?
+- What does it say, in one sentence? For an equation, what relation does it state?
+- Where does this number come from?
+- What is compared with what?
+- Is anything here explained only further down the list?
+
+When an item fails, change the order or add what is missing, and go down the whole list again from the top. Rework the plan this way, discarding it and starting over when patching does not fix it, until no item fails. Build the page only then. You do not feel where a newcomer stops, so the questions have to be asked one by one; a page that only has no wrong statement has not been checked.
 
 2.4 **Draw, then write.** On each page show the thing itself and the relation the answer is about. Then add only the words the picture does not give.
 
-2.5 **Read from page one.** Render the deck and read it in order as someone who has seen only the earlier pages. At each page, check first whether what the audience knew and what the earlier pages actually gave is enough to follow this page's answer. When it is not, fix the missing premise or relation, or the question the page took, before anything else: polishing the wording or layout of an explanation that does not connect only polishes the wrong explanation. Then fix wording, then layout. When the presenter knows less than the author, read each page also as the presenter, who must be able to find its question and answer on the page and explain every element.
+2.5 **Read from page one.** Render the deck and read it in order as someone who has seen only the earlier pages. On each page read in the order of 2.3, one item at a time, asking the same questions of the rendered page. At each page, check first whether what the audience knew and what the earlier pages actually gave is enough to follow this page's answer. When it is not, fix the missing premise or relation, or the question the page took, before anything else: polishing the wording or layout of an explanation that does not connect only polishes the wrong explanation. Then fix wording, then layout. When the presenter knows less than the author, read each page also as the presenter, who must be able to find its question and answer on the page and explain every element.
 
 2.6 **Script.** Write each page's script while looking at the rendered page.
 
@@ -40,7 +48,7 @@ Articles 1 to 3 apply to every deck and every change to one. Articles 4 and 5 ap
 
 3.3 **A reader's finding conflicts with what you built.** Check the finding against the requester's actual words, not against your reading of them. When it conflicts only with your own choice, change what you built. When it conflicts with their words, take it to them.
 
-3.4 **Someone asks what a part of a page means.** Answer the question. Treat it also as a report that the page confuses its audience, and fix the page when that lies within the pages and the kinds of change the requester allowed. Outside that, answer, say what on the page causes the confusion and what would fix it, and leave the decision to the requester.
+3.4 **Someone asks what a part of a page means.** Answer the question in the sense the person means, in the plainest words that are true, and stop. When a plain answer and a stricter one differ, give the plain one: do not answer a finer question than the one asked in order to avoid being wrong. A person who has to ask again was not answered. Treat the question also as a report that the page confuses its audience, and fix the page when that lies within the pages and the kinds of change the requester allowed. Outside that, answer, say what on the page causes the confusion and what would fix it, and leave the decision to the requester.
 
 3.5 **An explanation is reported unclear again, or one report already shows a missing premise or a wrong order.** Stop changing words. Read all the questions about it together, write the one thing the audience is missing (a relation, a premise or a distinction), and rebuild the explanation around it, keeping the terms already established. Put no note about the revision on the page.
 
@@ -82,15 +90,17 @@ Articles 1 to 3 apply to every deck and every change to one. Articles 4 and 5 ap
 
 5.3 **What acts, and what happens.** Say what acts or changes and what happens to it, close together. Name the operation, such as multiplying by a factor below one, not a vague word for its effect, such as weakening.
 
-5.4 **Define at first use.** Say what kind of thing a new term or symbol is and what it stands for, in words the audience knows. For a quantity, say first what it counts or measures. Expand an abbreviation the audience does not know once, at its first appearance, and leave routine ones alone. Define a thing once; a later use with the same meaning needs no new definition.
+5.4 **Define at first use.** Say what kind of thing a new term or symbol is and what it stands for, in words the audience knows. When the thing has a name people commonly use, such as a proportionality constant, write that name and what it relates. Describe it in your own words only when it has no such name. For a quantity, say first what it counts or measures. Expand an abbreviation the audience does not know once, at its first appearance, and leave routine ones alone. Define a thing once; a later use with the same meaning needs no new definition.
 
-5.5 **One term, one meaning.** Keep one name and one notation for one thing through the deck, and keep the qualifiers and indices that tell different things apart.
+5.5 **One term, one meaning.** Keep one name and one notation for one thing through the deck, and keep the qualifiers and indices that tell different things apart. Count things as the audience counts them. Two names are two things only when some page cannot be followed without telling them apart, such as a quantity and its estimate when the deck compares the two. When no page needs the difference, they are one thing to the audience and get one name, even when the sources use different words for them or a stricter reading separates them. Sources that each bring their own word for the same thing do not make the deck need both: pick one and use it everywhere, titles and figures included.
 
-5.6 **Prose and math apart.** A sentence, label, title, lead or takeaway is either words or notation, not both. The one place where a symbol and words meet is the definition line below an equation: for each symbol the equation introduces and does not explain, write once the symbol, a colon and its meaning in words. Typeset all notation, in figures too. Use the notation of the method's standard source, keep each symbol in the form and the role its definition gave it, and show one equation for one step of a definition. Write words inside an expression in English, and keep the explanation around it in the deck's language. When the requester asks what an element means, rewrite that element itself instead of adding a gloss in brackets.
+5.6 **Prose and math apart.** A sentence, label, title, lead or takeaway is either words or notation, not both. A symbol and words meet in two places only. The first is the sentence that says what an equation states, such as that one quantity is proportional to a power of another: put it on the page with the equation, in one sentence, and let it use the equation's symbols where words alone would be vague. The audience does not read that meaning off the equation, and a script does not replace it. The second is the definition line below the equation: for each symbol the equation introduces and does not explain, write once the symbol, a colon and its meaning in words. Typeset all notation, in figures too. Use the notation of the method's standard source, keep each symbol in the form and the role its definition gave it, and show one equation for one step of a definition. Write words inside an expression in English, and keep the explanation around it in the deck's language. When the requester asks what an element means, rewrite that element itself instead of adding a gloss in brackets.
 
 5.7 **Counts, and pointing at things.** Write a count on the page as digits with its unit beside it, unless a shared header already gives the unit. Call a thing by its name, and use its position, colour or shape only to help find it. For a relation, give its direction and both ends.
 
-5.8 **Conditions and reasons.** When you attach a condition or an effect to a statement, make sure that relation really holds. Do not invent a reason from the field for a choice that was made for the implementation.
+5.8 **Line endings.** End a line on the page with the word that carries its meaning. When that word is already a noun, stop there. Add a nominalising ending only to a verb that is not a word without it. Do not add an ending to make a line look like its neighbours or like a reference deck.
+
+5.9 **Conditions and reasons.** When you attach a condition or an effect to a statement, make sure that relation really holds. Do not invent a reason from the field for a choice that was made for the implementation.
 
 ## Article 6. Figures, tables, equations
 
