@@ -40,6 +40,7 @@ from .comments import (
     waiting,
 )
 from .config import (
+    DEFAULT_CONFIG_NAME,
     ArtifactConfig,
     Config,
     alias_file_name,
@@ -56,6 +57,7 @@ from .config import (
 from .firefox import headless_environment
 from .pdf_export import print_artifact_pdf, print_figure_pdf
 from .pptx_export import export_pptx
+from .shared.calls import Calls
 from .space import (
     intersection,
     maximal_free_regions,
@@ -427,13 +429,6 @@ class ArtifactRuntime:
 
 
 class HtmlReviewServer:
-    # How long one long-poll request is held before it returns empty and the caller asks
-    # again. Under the MCP client's own timeouts, and short enough that a stopped server
-    # is noticed within a minute.
-    REVIEW_POLL_TIMEOUT = 55.0
-    # How long a session that asked to listen has to start its waiter before a session
-    # starting up may listen in its place.
-    LISTENER_START = 60.0
     # How long the server's own layout check may take before an answer says it did not finish.
     LAYOUT_CHECK_SECONDS = 45.0
 
@@ -450,27 +445,10 @@ class HtmlReviewServer:
         self.generated_paths: set[Path] = set()
         # The renders this server saved into the project, as each file looked once written.
         self.saved_renders: dict[Path, tuple[int, int]] = {}
-        # The reviewer's call button. Presses are a monotonic count and the server keeps
-        # the consumption watermark, so a press is never lost to timing: made while nobody
-        # waits, it answers the next wait at once (the first design froze the watermark
-        # into each waiter's script at arming time, and a press made before the arming was
-        # frozen out with it). The watermark moves only on the waiter's ack, after the line
-        # was delivered: consuming before delivery lost the wake-up whenever the response
-        # died on the wire. Until the ack lands the press is offered again, so delivery is
-        # at-least-once, and a duplicate wake-up is harmless where a lost one is not.
-        # Presses that pile up coalesce into one wake-up carrying the latest press number.
-        # Both counters persist across server restarts, or a press made just before one
-        # would strand a stateless waiter parked against fresh zeroes.
-        self.review_state_path = self.project_dir / ".html-mcp-web" / "review-state.json"
-        self.review_calls, self.review_consumed = self._load_review_state()
-        self.review_called = asyncio.Event()
-        self.review_waiters = 0
-        # Presses go to one waiter, named by the id listen() gave it: two sessions answering
-        # one press would edit the same threads. Its pid, which its polls report, says
-        # whether it still runs.
-        self.review_listener: str | None = None
-        self.review_listener_pid: int | None = None
-        self.review_listener_claimed = 0.0
+        # The reviewer's Call agent presses, kept beside the comments so that a press
+        # outlives a server restart.
+        self.review = Calls(self.project_dir / ".html-mcp-web", DEFAULT_CONFIG_NAME, lambda: self.config.agents,
+                            lambda press: self._review_line(press), lambda message: self.broadcast(message))
         self.closing = False
         self.headless_check = asyncio.Lock()
         # The checking browser and its profile while a check runs, so a server that stops
@@ -541,8 +519,8 @@ class HtmlReviewServer:
             "config_path": str(self.config.config_path),
             "project_dir": str(self.project_dir),
             "port": self.config.port,
-            "review": {"calls": self.review_calls, "consumed": self.review_consumed,
-                       "waiters": self.review_waiters},
+            "review": {"calls": self.review.calls, "consumed": self.review.consumed,
+                       "waiters": self.review.waiters, "lanes": self.review.page_lanes()},
             "artifacts": artifacts,
             # Whether the layout can be checked at all: only the server checks it, with Firefox.
             "layout_checker": shutil.which("firefox") is not None,
@@ -1730,28 +1708,7 @@ class HtmlReviewServer:
         await self.broadcast({"type": "comment_deleted", "artifact": runtime.alias, "comment_id": comment_id})
         return web.Response(status=204)
 
-    # The reviewer's call button. An agent cannot be spoken to first over MCP, but its
-    # harness can watch a process in the background and wake the agent when it exits, so
-    # the button becomes: a waiter parks here in a long poll, the press releases it, and
-    # the waiter's exit is the interrupt. The agent spends nothing while parked.
-    def _load_review_state(self) -> tuple[int, int]:
-        try:
-            data = json.loads(self.review_state_path.read_text(encoding="utf-8"))
-            calls, consumed = int(data["calls"]), int(data["consumed"])
-        except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError, ValueError):
-            return 0, 0
-        if calls < 0 or not 0 <= consumed <= calls:
-            return 0, 0
-        return calls, consumed
-
-    def _save_review_state(self) -> None:
-        self.review_state_path.parent.mkdir(parents=True, exist_ok=True)
-        staging = self.review_state_path.with_name(self.review_state_path.name + ".new")
-        staging.write_text(json.dumps(
-            {"calls": self.review_calls, "consumed": self.review_consumed}), encoding="utf-8")
-        staging.replace(self.review_state_path)
-
-    def _review_line(self) -> str:
+    def _review_line(self, press: int | None = None) -> str:
         # The line counts what a wake-up is for: the open threads read_comments(new=True)
         # gives, with words for the agent it has neither answered nor carried before. A
         # count of open threads sent an agent to read one it had answered.
@@ -1763,107 +1720,9 @@ class HtmlReviewServer:
             edge = datetime.fromisoformat(cursor) if cursor is not None else None
             counts[alias] = sum(bool(waiting(comment.thread, edge)) for comment in runtime.store.list(status="open"))
         listed = ", ".join(f"{count} on '{alias}'" for alias, count in counts.items() if count)
-        return (f"[review] reviewer called (press #{self.review_calls}): "
+        return (f"[review] reviewer called (press #{self.review.calls if press is None else press}): "
                 + (f"new comments: {listed}" if listed else "no new comments")
                 + " -- read them with read_comments(new=True)")
-
-    def _wake_review_waiters(self) -> None:
-        released = self.review_called
-        self.review_called = asyncio.Event()
-        released.set()
-
-    def _review_listener_alive(self) -> bool:
-        if self.review_listener is None:
-            return False
-        if self.review_listener_pid is None:
-            return asyncio.get_running_loop().time() - self.review_listener_claimed < self.LISTENER_START
-        try:
-            os.kill(self.review_listener_pid, 0)
-        except ProcessLookupError:
-            return False
-        except PermissionError:
-            return True
-        return True
-
-    async def request_review(self, request: web.Request) -> web.Response:
-        self.review_calls += 1
-        self._save_review_state()
-        delivered = self.review_waiters > 0
-        self._wake_review_waiters()
-        await self.broadcast({"type": "review_requested", "calls": self.review_calls, "delivered": delivered})
-        return web.json_response({"calls": self.review_calls, "delivered": delivered})
-
-    async def claim_review(self, request: web.Request) -> web.Response:
-        """Make the waiter with this listener id the one presses go to. With if_free, only
-        when no other waiter runs: a session listening from its start takes presses from
-        no one, and a session asked to listen takes them from whoever had them."""
-        try:
-            listener = request.query["listener"]
-        except KeyError as error:
-            raise web.HTTPBadRequest(text="listener is required") from error
-        if "if_free" in request.query and self._review_listener_alive():
-            return web.json_response({"listening": False})
-        self.review_listener, self.review_listener_pid = listener, None
-        self.review_listener_claimed = asyncio.get_running_loop().time()
-        # A waiter parked for the listener before is released to hear that it is not one.
-        self._wake_review_waiters()
-        return web.json_response({"listening": True})
-
-    async def wait_review(self, request: web.Request) -> web.Response:
-        # The consumption watermark lives here, not in the waiter: a waiter carrying its
-        # own (frozen when its script was written) could never see a press made before
-        # that. Waiting does not consume: the response can die on the wire after the
-        # watermark moved, and the wake-up died with it. The waiter acks what it printed
-        # (the X-Press header names it), and until then the press is offered again. The
-        # since query of the first design is accepted and ignored.
-        try:
-            listener, pid = request.query["listener"], int(request.query["pid"])
-        except (KeyError, ValueError) as error:
-            raise web.HTTPBadRequest(text="listener and pid are required") from error
-        # A restarted server knows no listener, and the first waiter back is the one.
-        if self.review_listener is None:
-            self.review_listener = listener
-        loop = asyncio.get_running_loop()
-        deadline = loop.time() + self.REVIEW_POLL_TIMEOUT
-        self.review_waiters += 1
-        await self.broadcast({"type": "review_waiters", "waiters": self.review_waiters})
-        try:
-            while True:
-                if self.review_listener != listener:
-                    return web.Response(
-                        text="[moved] another session took over listening for Call agent, so "
-                        "presses no longer come here; listen() takes them back",
-                        headers={"X-Moved": "1"})
-                self.review_listener_pid = pid
-                if self.review_calls > self.review_consumed:
-                    break
-                remaining = deadline - loop.time()
-                if remaining <= 0:
-                    return web.Response(status=204)
-                waited = self.review_called
-                try:
-                    await asyncio.wait_for(waited.wait(), timeout=remaining)
-                except asyncio.TimeoutError:
-                    return web.Response(status=204)
-                if self.closing:
-                    return web.Response(status=204)
-            return web.Response(text=self._review_line(),
-                                headers={"X-Press": str(self.review_calls)})
-        finally:
-            self.review_waiters -= 1
-            await self.broadcast({"type": "review_waiters", "waiters": self.review_waiters})
-
-    async def ack_review(self, request: web.Request) -> web.Response:
-        try:
-            upto = int(request.query["upto"])
-        except (KeyError, ValueError) as error:
-            raise web.HTTPBadRequest(text="upto must be an integer") from error
-        # Idempotent and monotonic: a late or repeated ack never moves the watermark back,
-        # and one beyond the count (a script talking to a restarted server whose counters
-        # are behind it) clamps rather than marking presses that do not exist yet.
-        self.review_consumed = max(self.review_consumed, min(upto, self.review_calls))
-        self._save_review_state()
-        return web.json_response({"calls": self.review_calls, "consumed": self.review_consumed})
 
     async def websocket(self, request: web.Request) -> web.WebSocketResponse:
         socket = web.WebSocketResponse(heartbeat=30)
@@ -1984,10 +1843,7 @@ class HtmlReviewServer:
         app.router.add_post(f"{base}/comments/{{comment_id}}/edit", self.edit_comment_entry)
         app.router.add_post(f"{base}/comments/{{comment_id}}/delete-entry", self.delete_comment_entry)
         app.router.add_delete(f"{base}/comments/{{comment_id}}", self.delete_comment)
-        app.router.add_post("/review-request", self.request_review)
-        app.router.add_get("/wait-review", self.wait_review)
-        app.router.add_post("/wait-review/listen", self.claim_review)
-        app.router.add_post("/wait-review/ack", self.ack_review)
+        self.review.add_routes(app)
         app.router.add_get("/ws", self.websocket)
         app.on_startup.append(self.start_watcher)
         app.on_startup.append(self.sweep_check_profiles)
@@ -1997,10 +1853,6 @@ class HtmlReviewServer:
         return app
 
     async def release_waiters(self, app: web.Application) -> None:
-        # A parked waiter holds its connection for the whole poll, and a shutdown that
-        # waited for it kept the port half-alive for that long: the waiter's script saw
-        # nothing gone, and a restart could not take the port. Let go, it asks again at
-        # once and finds the port closed.
         self.closing = True
-        self.review_called.set()
+        self.review.close()
 

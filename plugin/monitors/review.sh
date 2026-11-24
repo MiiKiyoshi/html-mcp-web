@@ -1,45 +1,22 @@
 #!/bin/sh
-# The html-mcp review monitor. Claude Code starts it with the session and turns each line it
-# prints into a notification. It prints nothing of its own: it runs the newest waiter command
-# html-mcp hands this session (html_mcp_web/plugin_monitor.py), at the session's start or on
-# listen(), in place of the one it ran before, and passes on what the waiter prints. It never
-# ends while the session's Claude Code process lives, since Claude Code does not start an
-# ended monitor again.
-# The first argument, when given, names that process in place of the one found above.
-dir="${XDG_CACHE_HOME:-$HOME/.cache}/html-mcp-web/monitor"
-session=${1-}
-if [ -z "$session" ]; then
+# Starts the html-mcp review monitor (html_mcp_web/monitor.py) with the Python html-mcp-web is
+# installed in: the checkout's own environment, or the Python on the PATH that has it.
+# An argument, when given, names the session's Claude Code process.
+root=$(cd "$(dirname "$0")/../.." && pwd)
+# Under Git Bash on Windows a process's Windows parent is gone once it is started, so the
+# way up to Claude Code is lost to the monitor: the shell's own tree is walked to its top
+# here, and the monitor looks for the session from that process's Windows pid.
+if [ $# -eq 0 ] && [ -r "/proc/$$/winpid" ]; then
   pid=$$
-  while [ "$pid" -gt 1 ]; do
-    pid=$(ps -o ppid= -p "$pid" | tr -d ' ')
-    [ -n "$pid" ] || break
-    case $(ps -o comm= -p "$pid") in
-      claude|*/claude) session=$pid; break ;;
-    esac
+  while :; do
+    above=$(cat "/proc/$pid/ppid" 2>/dev/null)
+    if [ -z "$above" ] || [ "$above" -le 1 ]; then break; fi
+    pid=$above
   done
+  set -- --from "$(cat "/proc/$pid/winpid")"
 fi
-if [ -z "$session" ]; then
-  # No Claude Code process above: nothing can hand this monitor a waiter.
-  while kill -0 "$PPID" 2>/dev/null; do sleep 60; done
-  exit 0
-fi
-until mkdir -p "$dir" 2>/dev/null && echo $$ > "$dir/$session.monitor"; do sleep 30; done
-child=
-current=
-stop_child() {
-  # The waiter's own children first, as they lose their parent once it ends.
-  [ -n "$child" ] && { pkill -TERM -P "$child" 2>/dev/null; kill -TERM "$child" 2>/dev/null; }
-  child=
-}
-trap 'stop_child; rm -f "$dir/$session.monitor" "$dir/$session.command"' EXIT
-trap 'exit 0' TERM INT HUP
-while kill -0 "$session" 2>/dev/null; do
-  next=$(cat "$dir/$session.command" 2>/dev/null)
-  if [ -n "$next" ] && [ "$next" != "$current" ]; then
-    stop_child
-    current=$next
-    sh -c "$(printf '%s\n' "$next" | sed 1d)" &
-    child=$!
+for python in "$root/.venv/bin/python" "$root/.venv/Scripts/python.exe" python3 python; do
+  if PYTHONPATH="$root" "$python" -c "import html_mcp_web.monitor" 2>/dev/null; then
+    PYTHONPATH="$root" exec "$python" -m html_mcp_web.monitor "$@"
   fi
-  sleep 1
 done

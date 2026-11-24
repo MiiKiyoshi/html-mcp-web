@@ -2663,7 +2663,13 @@ const panel = createCommentPanel({
   },
   whole: () => $("#artifact-comment-btn").click(),
   help: (page) => help.show(page),
-  bell: { call: () => fetchJson("/review-request", { method: "POST" }) },
+  // The bell (shared/agent-bell.js). A press goes to the session listening, or to the agent
+  // picked beside the bell with its model and effort.
+  bell: {
+    call: (lane) => fetchJson("/review-request", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(lane ?? {}),
+    }),
+  },
   bringIntoView: (commentId) => revealCard(commentId),
   labels: { document: "artifact" },
   tabs: {
@@ -2821,7 +2827,7 @@ async function handleSocketMessage(message) {
   }
   if (message.type === "state") {
     if (!adoptProject(message)) return;
-    if (message.review !== undefined) panel.bell.show({ waiters: message.review.waiters });
+    if (message.review !== undefined) panel.bell.show({ waiters: message.review.waiters, lanes: message.review.lanes });
     const artifact = message.artifacts[state.alias];
     if (artifact !== undefined && state.revision !== artifact.revision) {
       state.artifact = artifact;
@@ -2833,6 +2839,10 @@ async function handleSocketMessage(message) {
   }
   if (message.type === "review_waiters") {
     panel.bell.show({ waiters: message.waiters });
+    return;
+  }
+  if (message.type === "lanes") {
+    panel.bell.show({ lanes: message.lanes });
     return;
   }
   // The server finished its check of a revision: the review page shows that result.
@@ -2847,6 +2857,8 @@ async function handleSocketMessage(message) {
   }
   if (["artifacts_changed", "config_reloaded"].includes(message.type)) {
     if (!adoptProject(message)) return;
+    // An edited configuration can name other agents beside the session listening.
+    panel.bell.show({ lanes: message.review.lanes });
     // An artifact shown that the configuration no longer names gives way to the first, with its
     // comments.
     const gone = state.project.artifacts[state.alias] === undefined;

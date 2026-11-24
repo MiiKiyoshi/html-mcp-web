@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import contextlib
 import json
-import os
 import tempfile
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Iterator, Literal
+
+from .shared import filelock, shared_file
 
 
 Author = Literal["human", "agent"]
@@ -497,7 +498,7 @@ class CommentStore:
         by the pieces rejected, each line of them starting "− ". Version 3 marks those."""
         with self._locked():
             try:
-                data = json.loads(self.path.read_text(encoding="utf-8"))
+                data = json.loads(shared_file.read_text(self.path))
                 if data["version"] != 2:
                     return
                 for comment in data["comments"]:
@@ -537,22 +538,17 @@ class CommentStore:
 
     @contextlib.contextmanager
     def _locked(self) -> Iterator[None]:
-        try:
-            import fcntl
-        except ImportError:
-            yield
-            return
         self._ready()
         with self.lock_path.open("a") as lock_file:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            filelock.lock(lock_file)
             try:
                 yield
             finally:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                filelock.unlock(lock_file)
 
     def _read(self) -> dict[str, Any]:
         self._ready()
-        data = json.loads(self.path.read_text(encoding="utf-8"))
+        data = json.loads(shared_file.read_text(self.path))
         if int(data["version"]) != STORE_VERSION:
             raise ValueError(f"unsupported comment store version: {data['version']}")
         if not isinstance(data["comments"], list):
@@ -570,7 +566,7 @@ class CommentStore:
         ) as handle:
             json.dump(data, handle, ensure_ascii=False, indent=2)
             temporary = Path(handle.name)
-        os.replace(temporary, self.path)
+        shared_file.replace(temporary, self.path)
 
     def _all(self) -> list[Comment]:
         return [Comment.from_dict(value) for value in self._read()["comments"]]

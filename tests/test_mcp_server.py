@@ -18,13 +18,14 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from html_mcp_web import config as config_module
-from html_mcp_web import plugin_monitor
 from html_mcp_web.config import load_config
 from html_mcp_web.mcp_client import CLI, INIT_GUIDE, ProjectBinding
 from html_mcp_web.mcp_contract import agent_comment, agent_comment_summary, revision_of, short_time
 from html_mcp_web.mcp_server import _listen_from_start, create_server
 from html_mcp_web.project_server import SharedProjectServer
 from html_mcp_web.server import HtmlReviewServer
+from html_mcp_web.shared import plugin_monitor
+from html_mcp_web.tool import TOOL
 
 
 def available_port() -> int:
@@ -878,7 +879,7 @@ def test_guide_lists_the_configured_guideline_after_the_one_it_extends(
 
 @pytest.mark.parametrize("codex", [False, True])
 def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
-    # The tool returns at once with a script for the harness to watch in the background;
+    # The tool returns at once with a command for the harness to watch in the background;
     # blocking here would freeze the agent, which is what the button exists to avoid.
     project(tmp_path)
     binding = ProjectBinding(tmp_path)
@@ -888,19 +889,10 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
             clientInfo=SimpleNamespace(name="claude-code"))))
         monkeypatch.setattr(mcp, "get_context", lambda: context)
         told = answer(mcp.call_tool("listen", {}))
-        script = Path(shlex.split(told["command"])[0])
-        assert script == tmp_path / ".html-mcp-web" / "wait-review.sh"
-        assert script.stat().st_mode & 0o111
-        body = script.read_text(encoding="utf-8")
-        # The script carries no watermark: the server keeps consumption, so a press made
-        # before this call is picked up at once and a restarted script parks again. It
-        # acks after printing, so a press is only marked consumed once its line was
-        # delivered, and it never exits on an empty 204 or a curl timeout.
-        assert "since" not in body
-        assert f":{binding._shared.port}/wait-review?listener=$listener&pid=$$\"" in body
-        assert f":{binding._shared.port}/wait-review/ack?upto=$press" in body
-        assert body.index('deliver "$out"') < body.index("/wait-review/ack")
-        assert "[gone]" in body and "timeout" not in body
+        # The waiter is Python, the same on every system: the interpreter the server runs in.
+        command = shlex.split(told["command"])
+        assert command[:3] == [Path(sys.executable).as_posix(), "-m", "html_mcp_web.waiter"]
+        assert command[3] == str(binding._shared.port) and len(command) == 5
         # Claude Code's Monitor takes command, description and timeout_ms (at most 30 minutes).
         assert "Monitor" in told["how"] and "persistent" not in told["how"]
         assert 'description="' in told["how"] and "timeout_ms=1800000" in told["how"]
@@ -918,9 +910,6 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
             assert ('sandbox_permissions="require_escalated"' in selected["how"]) == (name == "codex-mcp-client")
         tool = next(t for t in asyncio.run(mcp.list_tools()) if t.name == "listen")
         assert "ctx" not in tool.inputSchema["properties"]
-        # One monitor serves the whole session: a press is printed, not exited on. Only
-        # another session taking over listening ends it.
-        assert body.replace("grep -qi '^x-moved:' \"$headers\" && exit 0", "").count("exit 0") == 0
 
         # The whole loop, live: an early press is picked up and acked (the server's
         # watermark moves), the same process parks again instead of exiting or replaying
@@ -946,8 +935,7 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
             args = ["--codex", "test-thread"]
         press()
         # Each listen() call names a new listener, and the last one is the one presses go to.
-        listener = shlex.split(selected["command"])[1]
-        waiter = subprocess.Popen(["/bin/sh", str(script), listener, *args],
+        waiter = subprocess.Popen([*shlex.split(selected["command"]), *args],
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
             if codex:
@@ -981,13 +969,13 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
             assert line(15).startswith("[review]")
             time.sleep(1.0)
             assert waiter.poll() is None
-            assert review() == {"calls": 1, "consumed": 1, "waiters": 1}    # parked again
+            assert review() == {"calls": 1, "consumed": 1, "waiters": 1, "lanes": {}}    # parked again
             assert line(1.5) == ""                                           # and silent
             press()
             assert line(15).startswith("[review]")
             time.sleep(1.0)
             assert waiter.poll() is None
-            assert review() == {"calls": 2, "consumed": 2, "waiters": 1}
+            assert review() == {"calls": 2, "consumed": 2, "waiters": 1, "lanes": {}}
 
             # The server going away is not the end of the waiter: a reconnect of the MCP
             # client restarted it and the monitor died with "[gone]", to be started again
@@ -1013,7 +1001,7 @@ def test_listen_hands_the_waiter_to_the_plugin_monitor(tmp_path: Path, monkeypat
     agent not to start one, and the monitor passes a press on as the waiter prints it."""
     project(tmp_path)
     cache = tmp_path / "cache"
-    monkeypatch.setattr(plugin_monitor, "DIRECTORY", cache / "html-mcp-web" / "monitor")
+    monkeypatch.setattr(TOOL, "monitors", cache / "html-mcp-web" / "monitor")
     session = subprocess.Popen(["sleep", "60"])
     monkeypatch.setattr(plugin_monitor, "claude_pid", lambda: session.pid)
     monitor = subprocess.Popen(
@@ -1021,7 +1009,7 @@ def test_listen_hands_the_waiter_to_the_plugin_monitor(tmp_path: Path, monkeypat
         stdout=subprocess.PIPE, text=True, env={**os.environ, "XDG_CACHE_HOME": str(cache)})
     binding = ProjectBinding(tmp_path)
     try:
-        record = plugin_monitor.DIRECTORY / f"{session.pid}.monitor"
+        record = TOOL.monitors / f"{session.pid}.monitor"
         deadline = time.monotonic() + 5
         while not record.exists() and time.monotonic() < deadline:
             time.sleep(0.1)
@@ -1033,7 +1021,7 @@ def test_listen_hands_the_waiter_to_the_plugin_monitor(tmp_path: Path, monkeypat
         told = answer(mcp.call_tool("listen", {}))
         assert "plugin's monitor now runs the command" in told["how"]
         assert "Monitor(" not in told["how"] and "On [review]" in told["how"]
-        handed = (plugin_monitor.DIRECTORY / f"{session.pid}.command").read_text().splitlines()
+        handed = (TOOL.monitors / f"{session.pid}.command").read_text().splitlines()
         assert handed[1] == told["command"]
         base = f"http://127.0.0.1:{binding._shared.port}"
         urllib.request.urlopen(urllib.request.Request(f"{base}/review-request", method="POST")).close()
@@ -1057,7 +1045,7 @@ def test_a_session_with_the_plugin_listens_from_its_start(tmp_path: Path, monkey
     no listen() call, unless another session listens to the project already."""
     project(tmp_path)
     cache = tmp_path / "cache"
-    monkeypatch.setattr(plugin_monitor, "DIRECTORY", cache / "html-mcp-web" / "monitor")
+    monkeypatch.setattr(TOOL, "monitors", cache / "html-mcp-web" / "monitor")
     session = subprocess.Popen(["sleep", "60"])
     monkeypatch.setattr(plugin_monitor, "claude_pid", lambda: session.pid)
     monitor = subprocess.Popen(
@@ -1074,7 +1062,7 @@ def test_a_session_with_the_plugin_listens_from_its_start(tmp_path: Path, monkey
             with urllib.request.urlopen(urllib.request.Request(f"{base}{path}", method="POST")) as reply:
                 return json.loads(reply.read())
 
-        handed = plugin_monitor.DIRECTORY / f"{session.pid}.command"
+        handed = TOOL.monitors / f"{session.pid}.command"
         assert post("/wait-review/listen?listener=other")["listening"]
         _listen_from_start(port)
         assert not handed.exists()
@@ -1084,8 +1072,7 @@ def test_a_session_with_the_plugin_listens_from_its_start(tmp_path: Path, monkey
             assert reply.headers["X-Press"] == "1"
         post("/wait-review/ack?upto=1")
         _listen_from_start(port)
-        script, _ = shlex.split(handed.read_text().splitlines()[1])
-        assert script == str(tmp_path / ".html-mcp-web" / "wait-review.sh")
+        assert shlex.split(handed.read_text().splitlines()[1])[1:3] == ["-m", "html_mcp_web.waiter"]
         post("/review-request")
         ready, _, _ = select.select([monitor.stdout], [], [], 15)
         assert ready and monitor.stdout.readline().startswith("[review] reviewer called (press #2)")
@@ -1107,6 +1094,190 @@ def test_a_session_with_the_plugin_listens_from_its_start(tmp_path: Path, monkey
                 process.kill()
                 process.wait()
         binding.stop()
+
+
+def test_listen_from_a_client_of_a_named_agent_waits_in_its_lane(tmp_path: Path, monkeypatch) -> None:
+    """A client whose name holds one the configuration lists for an agent gets the waiter of
+    that agent's lane, which ends after one press, and its listen() does not take presses from
+    the session listening. Without the configuration it listens as any client does."""
+    config = project(tmp_path)
+    binding = ProjectBinding(tmp_path)
+    try:
+        mcp = create_server(binding)
+        context = SimpleNamespace(session=SimpleNamespace(client_params=SimpleNamespace(
+            clientInfo=SimpleNamespace(name="second-cli-mcp-client"))))
+        monkeypatch.setattr(mcp, "get_context", lambda: context)
+        assert "--agent" not in answer(mcp.call_tool("listen", {}))["command"]
+        data = yaml.safe_load(config.config_path.read_text(encoding="utf-8"))
+        data["agents"] = {"second": {"clients": ["second", "other"]}}
+        config.config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+        context.session.client_params.clientInfo.name = "claude-code"
+        assert "--agent" not in answer(mcp.call_tool("listen", {}))["command"]
+        for name in ("second-cli-mcp-client", "Other"):
+            context.session.client_params.clientInfo.name = name
+            told = answer(mcp.call_tool("listen", {}))
+            assert shlex.split(told["command"])[2:] == ["html_mcp_web.waiter", str(binding._shared.port), "-",
+                                                        "--agent", "second", "--once"]
+            assert "background shell command" in told["how"] and "Monitor" not in told["how"]
+    finally:
+        binding.stop()
+
+
+class _Page:
+    """A stand-in for the review page that answers every wait with press #3 and records what
+    the waiter asks and acknowledges."""
+
+    def __init__(self, line: bytes) -> None:
+        import http.server
+        import threading
+
+        self.asked, self.acked = [], []
+        page = self
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                page.asked.append(self.path)
+                self.send_response(200)
+                self.send_header("X-Press", "3")
+                self.end_headers()
+                self.wfile.write(line)
+
+            def do_POST(self):
+                page.acked.append(self.path)
+                self.send_response(200)
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.port = self.server.server_port
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+
+def test_the_waiter_ends_when_no_one_reads_it_and_does_not_take_the_press() -> None:
+    """A waiter whose reader is gone ends at the first line it cannot print, and leaves the
+    press unacknowledged for the next waiter: a stopped monitor left a waiter that took
+    presses no one heard."""
+    page = _Page(b"[review] reviewer called (press #3)")
+    try:
+        waiter = subprocess.Popen([sys.executable, "-m", "html_mcp_web.waiter", str(page.port), "one"],
+                                  stdout=subprocess.PIPE)
+        waiter.stdout.close()
+        assert waiter.wait(timeout=20) == 0
+        assert page.acked == []
+    finally:
+        page.server.shutdown()
+
+
+def test_the_waiter_of_a_lane_prints_one_press_and_ends() -> None:
+    """--agent <name> --once: the waiter asks that agent's lane, prints the press, acknowledges it
+    there, and ends."""
+    page = _Page(b"[review] reviewer called (press #3): new comments: 1 on 'slides' [model=small effort=low]")
+    try:
+        done = subprocess.run([sys.executable, "-m", "html_mcp_web.waiter", str(page.port), "-",
+                               "--agent", "second", "--once"], capture_output=True, text=True, encoding="utf-8",
+                              stdin=subprocess.DEVNULL, timeout=20)
+    finally:
+        page.server.shutdown()
+    assert done.returncode == 0
+    assert done.stdout.strip().endswith("effort=low]")
+    assert len(page.asked) == 1 and "agent=second" in page.asked[0]
+    assert page.acked == ["/wait-review/ack?upto=3&agent=second"]
+
+
+def _start_monitor(session: int, cache: Path) -> subprocess.Popen:
+    """The plugin's monitor, as Claude Code starts it, for the session whose pid is *session*."""
+    return subprocess.Popen(
+        ["sh", str(Path(__file__).parents[1] / "plugin" / "monitors" / "review.sh"), str(session)],
+        stdout=subprocess.PIPE, text=True, env={**os.environ, "XDG_CACHE_HOME": str(cache)})
+
+
+def test_a_monitor_killed_outright_leaves_nothing_a_later_session_takes(tmp_path: Path, monkeypatch) -> None:
+    """A monitor killed outright leaves its record and the last command. A pid in that record
+    now held by another process is no monitor, and the next monitor for a session with the
+    same pid drops the command before it records itself."""
+    cache = tmp_path / "cache"
+    monkeypatch.setattr(TOOL, "monitors", cache / "html-mcp-web" / "monitor")
+    TOOL.monitors.mkdir(parents=True)
+    session = subprocess.Popen(["sleep", "60"])
+    other = subprocess.Popen(["sleep", "60"])
+    monkeypatch.setattr(plugin_monitor, "claude_pid", lambda: session.pid)
+    record = TOOL.monitors / f"{session.pid}.monitor"
+    handed = TOOL.monitors / f"{session.pid}.command"
+    record.write_text(f"{other.pid}\n", encoding="utf-8")
+    handed.write_text("1\necho left over\n", encoding="utf-8")
+    monitor = None
+    try:
+        assert plugin_monitor.monitored_session(TOOL) is None
+        monitor = _start_monitor(session.pid, cache)
+        deadline = time.monotonic() + 5
+        while record.read_text(encoding="utf-8").strip() != str(monitor.pid) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert plugin_monitor.monitored_session(TOOL) == session.pid
+        assert not handed.exists()
+    finally:
+        for process in (monitor, other, session):
+            if process is not None and process.poll() is None:
+                process.kill()
+                process.wait()
+
+
+def test_the_monitor_ends_a_replaced_waiter_and_all_it_started(tmp_path: Path) -> None:
+    """A waiter waits in a request, and what it started holds that open: the monitor ends the
+    waiter and all it started when the session hands it another, and when the session ends,
+    so that no waiter of an earlier listen() is left asking the page."""
+    # Lengths no other run sleeps for: one left over from a run that failed is not this one's.
+    first, second = f"61.{os.getpid()}", f"62.{os.getpid()}"
+    cache = tmp_path / "cache"
+    directory = cache / "html-mcp-web" / "monitor"
+    session = subprocess.Popen(["sleep", "60"])
+    monitor = _start_monitor(session.pid, cache)
+
+    def sleeping(seconds: str) -> bool:
+        rows = subprocess.run(["ps", "-eo", "args="], capture_output=True, text=True).stdout.splitlines()
+        return f"sleep {seconds}" in [row.strip() for row in rows]
+
+    def hand(name: str, seconds: str) -> None:
+        script = tmp_path / f"{name}.sh"
+        script.write_text(f"#!/bin/sh\nwhile :; do out=$(printf x | sleep {seconds}); done\n", encoding="utf-8")
+        script.chmod(0o755)
+        (directory / f"{session.pid}.command.new").write_text(f"{name}\n{script}\n", encoding="utf-8")
+        (directory / f"{session.pid}.command.new").replace(directory / f"{session.pid}.command")
+        deadline = time.monotonic() + 5
+        while not sleeping(seconds) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert sleeping(seconds)
+
+    def gone(seconds: str) -> bool:
+        deadline = time.monotonic() + 5
+        while sleeping(seconds) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        return not sleeping(seconds)
+
+    try:
+        deadline = time.monotonic() + 5
+        while not (directory / f"{session.pid}.monitor").exists() and time.monotonic() < deadline:
+            time.sleep(0.1)
+        hand("first", first)
+        hand("second", second)
+        assert gone(first) and sleeping(second)
+    finally:
+        session.kill()
+        session.wait()
+        monitor.wait(timeout=10)
+    assert gone(second)
+
+
+def test_the_monitor_looks_for_its_session_from_the_process_it_is_told(monkeypatch) -> None:
+    """Where a monitor's own parents do not lead to Claude Code, its launcher names a process
+    that does, and with no session above that one the monitor ends at once."""
+    from html_mcp_web.shared import monitor
+
+    asked = []
+    monkeypatch.setattr(plugin_monitor, "session_of", lambda pid: asked.append(pid))
+    monitor.main(TOOL, ["--from", "4242"])
+    assert asked == [4242]
 
 
 def test_read_comments_offers_the_archived_view(tmp_path: Path) -> None:

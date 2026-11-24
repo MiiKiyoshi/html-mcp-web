@@ -4,7 +4,6 @@ import asyncio
 import functools
 import json
 import secrets
-import shlex
 import sys
 import threading
 import time
@@ -14,9 +13,9 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.parse import quote, urlencode
 
-from . import plugin_monitor
-
-from .config import alias_file_name, artifact_address
+from .config import alias_file_name, artifact_address, load_config
+from .shared import agents, plugin_monitor, shared_file, waiter
+from .tool import TOOL
 from .mcp_contract import (
     LIST_LIMIT,
     agent_comment,
@@ -106,10 +105,19 @@ def check(start_dir: Path) -> list[str]:
     return sorted(tool.name for tool in asyncio.run(server.list_tools()))
 
 
-def _wait_method(ctx: "Context", command: str) -> str:
+def _wait_method(ctx: "Context", command: str, lane: str | None = None) -> str:
     name = ctx.session.client_params.clientInfo.name.casefold()
+    if lane is not None:
+        return (
+            "Run <command> as a background shell command, then end the turn and do not poll. "
+            f"It shows {lane} as waiting on the review page and ends as soon as the reviewer "
+            f"presses Call agent for {lane}, printing the [review] line, which may end with "
+            "[model=M effort=E], the model and effort the reviewer picked. After handling "
+            "that press, start the command again; otherwise leave it stopped and tell the user "
+            "in one line. Stop a running one when the review is finished or the user asks."
+        )
     if "claude" in name:
-        if plugin_monitor.hand_over(command):
+        if plugin_monitor.hand_over(TOOL, command):
             return (
                 "The html-mcp plugin's monitor now runs the command for this session and turns each "
                 "line it prints into a notification, for as long as the session lasts. Do not "
@@ -126,11 +134,11 @@ def _wait_method(ctx: "Context", command: str) -> str:
         )
     if "codex" in name:
         return (
-            'Run sh <command> --codex "$CODEX_THREAD_ID" with '
+            'Run <command> --codex "$CODEX_THREAD_ID" with '
             'exec_command(yield_time_ms=1000, sandbox_permissions="require_escalated", '
             'justification="Allow the HTML review waiter to deliver events to this Codex thread?"). '
             "Once running, end the turn; do not poll. "
-            "The script uses codex queue to deliver events as labeled user messages, "
+            "The waiter uses codex queue to deliver events as labeled user messages, "
             "including while idle. Delivery may take about 10 seconds. "
             "Requires codex queue on PATH and CODEX_THREAD_ID in the agent shell. "
             "Run one waiter at a time. "
@@ -148,73 +156,6 @@ def _wait_method(ctx: "Context", command: str) -> str:
 # The id this process's session listens by. One per process, so a session asked to listen
 # again restarts its waiter without that waiter hearing that another session took over.
 LISTENER = secrets.token_hex(8)
-
-
-def _write_waiter(project_dir: Path, port: int) -> Path:
-    """Write the project's review waiter and return its path. It runs as <path> <listener>,
-    with the id the review server knows the listening session by."""
-    # The server keeps the press count and the consumption watermark, so the script
-    # carries no state of its own: a press made before this call answers it at once,
-    # and after a line is delivered the loop parks again rather than replaying the
-    # press it acked, so one monitor serves every press of the session. The ack comes
-    # after the line is printed: consuming before delivery lost the wake-up whenever
-    # the response died on the wire, so a press is offered until a waiter confirms it
-    # landed, and delivery is at-least-once.
-    script = (
-        "#!/bin/sh\n"
-        "listener=${1:?Pass the listener id that listen() gave}\n"
-        "thread=\n"
-        "if [ \"${2-}\" = \"--codex\" ]; then\n"
-        "  thread=${3:?Pass the Codex thread ID}\n"
-        "  command -v codex >/dev/null || exit 1\n"
-        "fi\n"
-        "deliver() {\n"
-        "  if [ -n \"$thread\" ]; then\n"
-        "    until codex queue --thread \"$thread\" --message \"[HTML review event]\n"
-        "$1\"; do\n"
-        "      printf '%s\\n' 'Queue delivery failed; retrying in 5 seconds' >&2\n"
-        "      sleep 5\n"
-        "    done\n"
-        "  else\n"
-        "    printf '%s\\n' \"$1\"\n"
-        "  fi\n"
-        "}\n"
-        f"# Prints one line each time the reviewer presses 'Call agent' on http://127.0.0.1:{port},\n"
-        "# at once if an unacknowledged press is waiting, and keeps waiting for the next. A server\n"
-        "# that goes away is waited for too: one [gone] line, then [back] when it answers again.\n"
-        "# Presses go to one session: when another takes over listening, one [moved] line ends it.\n"
-        "headers=$(mktemp) || exit 1\n"
-        "trap 'rm -f \"$headers\"' EXIT\n"
-        "gone=0\n"
-        "delay=2\n"
-        "while :; do\n"
-        f"  out=$(curl -sf -D \"$headers\" --max-time 60 \"http://127.0.0.1:{port}/wait-review?listener=$listener&pid=$$\"); rc=$?\n"
-        "  if [ $gone -eq 1 ] && { [ $rc -eq 0 ] || [ $rc -eq 28 ]; }; then\n"
-        "    deliver '[back] review server reachable again'; gone=0; delay=2\n"
-        "  fi\n"
-        "  if [ $rc -eq 0 ] && [ -n \"$out\" ]; then\n"
-        "    deliver \"$out\"\n"
-        "    grep -qi '^x-moved:' \"$headers\" && exit 0\n"
-        "    press=$(tr -d '\\r' < \"$headers\" | sed -n 's/^[Xx]-[Pp]ress: *//p' | head -1)\n"
-        f"    [ -n \"$press\" ] && curl -sf -X POST \"http://127.0.0.1:{port}/wait-review/ack?upto=$press\" >/dev/null\n"
-        "  fi\n"
-        "  if [ $rc -ne 0 ] && [ $rc -ne 28 ]; then\n"
-        "    if [ $gone -eq 0 ]; then deliver \"[gone] review server unreachable (curl exit $rc); waiting for it\"; gone=1; fi\n"
-        "    sleep $delay\n"
-        "    [ $delay -lt 30 ] && delay=$((delay * 2))\n"
-        "  fi\n"
-        "done\n"
-    )
-    # Replaced atomically so a waiter started from the previous script keeps reading
-    # the file it opened.
-    directory = project_dir / ".html-mcp-web"
-    directory.mkdir(parents=True, exist_ok=True)
-    target = directory / "wait-review.sh"
-    staging = directory / "wait-review.sh.new"
-    staging.write_text(script, encoding="utf-8")
-    staging.chmod(0o755)
-    staging.replace(target)
-    return target
 
 
 def _revisions(result: dict[str, Any]) -> list[dict[str, str]]:
@@ -605,16 +546,24 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
             ) from error
         state = await client.request_json("GET", "/state")
         port = state["port"]
-        await client.request_json("POST", f"/wait-review/listen?listener={LISTENER}")
-        command = f"{shlex.quote(str(_write_waiter(Path(state['project_dir']), port)))} {LISTENER}"
+        lane = agents.lane_of(ctx.session.client_params.clientInfo.name, load_config(client.shared.config_path).agents)
+        if lane is not None:
+            # An agent the configuration names waits in a lane of its own and takes no presses
+            # from the listening session.
+            command = waiter.lane_command(TOOL, port, lane)
+        else:
+            session = plugin_monitor.claude_pid()
+            await client.request_json("POST", f"/wait-review/listen?listener={LISTENER}"
+                                      + (f"&session={session}" if session is not None else ""))
+            command = waiter.command(TOOL, port, LISTENER)
         return {
             "command": command,
             "how": (
-                _wait_method(ctx, command)
+                _wait_method(ctx, command, lane)
                 + " On [review], call read_comments(new=True) for the reported artifact and handle the review. "
-                "[gone] means the review server is unreachable; the script keeps retrying. "
-                "[back] means it is reachable again. [moved] means another session took over "
-                "listening, and the script has ended. "
+                "[gone] means the review server is unreachable; the waiter keeps retrying. "
+                "[back] means it is reachable again. [moved] means a newer waiter took over "
+                "listening, in another session or in this one as the line says, and this waiter has ended. "
                 f"Once listening is active, give the user the full review page address, http://localhost:{port}, "
                 "and ask them to open it in their browser."
             ),
@@ -648,18 +597,18 @@ def read_cursor(project_dir: Path, artifact: str) -> str | None:
     path = _cursor_path(project_dir)
     if not path.exists():
         return None
-    cursors = json.loads(path.read_text(encoding="utf-8"))
+    cursors = json.loads(shared_file.read_text(path))
     return cursors[artifact] if artifact in cursors else None
 
 
 def write_cursor(project_dir: Path, artifact: str, at: str) -> None:
     path = _cursor_path(project_dir)
-    cursors = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    cursors = json.loads(shared_file.read_text(path)) if path.exists() else {}
     cursors[artifact] = at
     path.parent.mkdir(parents=True, exist_ok=True)
     staging = path.with_name(path.name + ".new")
     staging.write_text(json.dumps(cursors), encoding="utf-8")
-    staging.replace(path)
+    shared_file.replace(staging, path)
 
 
 # How long the startup waits for the plugin's monitor, which Claude Code starts beside it.
@@ -672,18 +621,16 @@ def _listen_from_start(port: int) -> None:
     if plugin_monitor.claude_pid() is None:
         return
     deadline = time.monotonic() + MONITOR_START
-    while plugin_monitor.monitored_session() is None:
+    while (session := plugin_monitor.monitored_session(TOOL)) is None:
         if time.monotonic() > deadline:
             return
         time.sleep(1)
     request = urllib.request.Request(
-        f"http://127.0.0.1:{port}/wait-review/listen?listener={LISTENER}&if_free=1", method="POST")
+        f"http://127.0.0.1:{port}/wait-review/listen?listener={LISTENER}&if_free=1&session={session}", method="POST")
     with urllib.request.urlopen(request, timeout=10) as response:
         if not json.loads(response.read())["listening"]:
             return
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}/state", timeout=10) as response:
-        project_dir = Path(json.loads(response.read())["project_dir"])
-    plugin_monitor.hand_over(f"{shlex.quote(str(_write_waiter(project_dir, port)))} {LISTENER}")
+    plugin_monitor.hand_over(TOOL, waiter.command(TOOL, port, LISTENER))
 
 
 def _listen_in_background(port: int) -> None:

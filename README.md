@@ -68,6 +68,28 @@ to handle your comments when you press **Call agent**. Open that address in your
 Presses go to one session per folder. A Claude Code session that starts while another listens
 leaves the presses to it, and `do html listen` in any session moves them there.
 
+### Calling a second agent
+
+To have a second agent answer in the same folder, name it under `agents` in
+`.html-mcp-web.yaml`:
+
+```yaml
+agents:
+  gemini:
+    clients: [gemini, antigravity]
+    efforts: [low, medium, high]
+```
+
+A choice then appears beside the bell: **Agent**, the session that is listening, and each
+agent you named. The bell is green when the agent you chose is waiting, and a press reaches
+that agent alone. A client whose name contains one of `clients` waits as that agent when it
+is asked to listen. `clients` defaults to the agent's own name. `models` and `efforts` are
+optional lists. When an agent has them, you choose one of each beside the bell, and the agent
+is told your choice with the press, to pass on to the work it starts.
+
+Such an agent waits with a command that ends after one press, for a client whose shell runs
+a command to its end, and starts it again after it has answered.
+
 ## Reviewing
 
 - Select text on the rendered page and press the **Comment** button beside it. **Add a note
@@ -171,6 +193,7 @@ port: 8765
 | `watch` | Files whose saves refresh the page. |
 | `ignore` | Patterns excluded even when they match `watch`. |
 | `port` | This folder's review page port. Any free port works. Init picks the first free one from 8765, so each folder can have its own. |
+| `agents` | Agents the bell can call beside the session that is listening. See [Calling a second agent](#calling-a-second-agent). |
 
 ## Your own templates and guidelines
 

@@ -398,6 +398,43 @@ def test_the_line_above_the_list_says_how_comments_reach_the_agent(tmp_path: Pat
 
 
 @needs_firefox
+def test_the_bell_calls_an_agent_the_configuration_names(tmp_path: Path) -> None:
+    """With agents in the configuration, the reviewer picks beside the bell which agent it
+    calls, with the effort that agent lists. Naming them while the page is open brings the
+    choice. The bell is green for the agent picked while that agent waits, and the press
+    reaches its waiter alone."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    with review_page(tmp_path) as (browser, base):
+        script = lambda code, *args: browser.execute_script(code, script_args=list(args))
+        shown = lambda: script('''return ["#call-agent-select", "#agent-effort-select"].map((id) => {
+            const box = document.querySelector(id);
+            return box.classList.contains("hidden") ? null
+              : [...box.options].map((option) => option.textContent).join() + "=" + box.value;
+          });''')
+        assert shown() == [None, None]
+        config_path = tmp_path / ".html-mcp-web.yaml"
+        data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        data["agents"] = {"second": {"efforts": ["low", "high"]}}
+        config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+        wait_until(lambda: shown() == ["Agent,Second=", None])
+        pick = lambda box, value: script('const box = document.querySelector(arguments[0]); box.value = arguments[1];'
+                                         ' box.dispatchEvent(new Event("change", {bubbles: true}));', box, value)
+        pick("#call-agent-select", "second")
+        assert shown() == ["Agent,Second=second", "low,high=low"]
+        pick("#agent-effort-select", "high")
+        ready = lambda: script('return document.querySelector("#call-agent-btn").classList.contains("agent-ready")')
+        assert not ready()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            waiter = pool.submit(lambda: urllib.request.urlopen(
+                f"{base}/wait-review?agent=second&listener=-&pid={os.getpid()}", timeout=20).read())
+            wait_until(ready)
+            script('document.querySelector("#call-agent-btn").click()')
+            assert waiter.result(timeout=20).endswith(b"[effort=high]")
+        assert SERVERS[base].runner.app["review_server"].review.calls == 0
+
+
+@needs_firefox
 def test_undo_puts_the_last_change_of_status_back(tmp_path: Path) -> None:
     """A change of status made from the row or on a card is said in a line above the list with
     Undo, which puts each comment back to the status it had, a resolved one with the moment it

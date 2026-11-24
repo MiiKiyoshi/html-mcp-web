@@ -10,6 +10,7 @@ from aiohttp.test_utils import TestClient, TestServer
 
 from html_mcp_web.config import ArtifactConfig, Config, artifact_address
 from html_mcp_web.server import HtmlReviewServer
+from html_mcp_web.shared.calls import Calls
 from html_mcp_web.space import maximal_free_regions
 
 
@@ -1452,23 +1453,23 @@ async def test_call_button_wakes_a_parked_waiter_and_keeps_an_early_press(client
     # running the script in a loop is safe.
     acked = await (await test_client.post("/wait-review/ack?upto=2")).json()
     assert acked == {"calls": 2, "consumed": 2}
-    review.REVIEW_POLL_TIMEOUT = 0.05
+    review.review.POLL_TIMEOUT = 0.05
     assert (await test_client.get(wait)).status == 204
-    review.REVIEW_POLL_TIMEOUT = HtmlReviewServer.REVIEW_POLL_TIMEOUT
+    review.review.POLL_TIMEOUT = Calls.POLL_TIMEOUT
 
     # A parked waiter is released by the press.
     parked = asyncio.ensure_future(test_client.get(wait))
     for _ in range(50):
-        if review.review_waiters == 1:
+        if review.review.waiters == 1:
             break
         await asyncio.sleep(0.02)
-    assert review.review_waiters == 1
+    assert review.review.waiters == 1
     reply = await (await test_client.post("/review-request")).json()
     assert reply == {"calls": 3, "delivered": True}
     released = await parked
     assert released.status == 200
     assert (await released.text()).startswith("[review] reviewer called (press #3)")
-    assert review.review_waiters == 0
+    assert review.review.waiters == 0
 
     # An ack from a script that outlived a server restart clamps to what exists and a
     # stale repeat never moves the watermark back.
@@ -1476,7 +1477,7 @@ async def test_call_button_wakes_a_parked_waiter_and_keeps_an_early_press(client
     assert over == {"calls": 3, "consumed": 3}
     stale = await (await test_client.post("/wait-review/ack?upto=1")).json()
     assert stale == {"calls": 3, "consumed": 3}
-    review.REVIEW_POLL_TIMEOUT = 0.05
+    review.review.POLL_TIMEOUT = 0.05
     assert (await test_client.get(wait)).status == 204
 
 
@@ -1487,8 +1488,8 @@ async def test_presses_survive_a_server_restart(client, tmp_path: Path) -> None:
     test_client, review = client
     await test_client.post("/review-request")
     reborn = HtmlReviewServer(review.config)
-    assert (reborn.review_calls, reborn.review_consumed) == (1, 0)
-    reborn.REVIEW_POLL_TIMEOUT = 0.05
+    assert (reborn.review.calls, reborn.review.consumed) == (1, 0)
+    reborn.review.POLL_TIMEOUT = 0.05
     app = reborn.create_app()
     app.on_startup.clear()
     app.on_cleanup.clear()
@@ -1500,7 +1501,7 @@ async def test_presses_survive_a_server_restart(client, tmp_path: Path) -> None:
         assert offered.headers["X-Press"] == "1"
         await second_client.post("/wait-review/ack?upto=1")
         third = HtmlReviewServer(review.config)
-        assert (third.review_calls, third.review_consumed) == (1, 1)
+        assert (third.review.calls, third.review.consumed) == (1, 1)
     finally:
         await second_client.close()
 
@@ -1515,10 +1516,10 @@ async def test_presses_go_to_one_listener(client) -> None:
     # A waiter with no listener named before it is the one.
     parked = asyncio.ensure_future(test_client.get(f"/wait-review?listener=one&pid={pid}"))
     for _ in range(50):
-        if review.review_waiters == 1:
+        if review.review.waiters == 1:
             break
         await asyncio.sleep(0.02)
-    assert review.review_listener == "one"
+    assert review.review.listener == "one"
     # A session starting up leaves the presses to a waiter that runs.
     refused = await test_client.post("/wait-review/listen?listener=two&if_free=1")
     assert await refused.json() == {"listening": False}
@@ -1538,16 +1539,81 @@ async def test_presses_go_to_one_listener(client) -> None:
     # A listener whose waiter has ended leaves the presses to the next session that starts.
     ended = await asyncio.create_subprocess_exec("true")
     await ended.wait()
-    review.REVIEW_POLL_TIMEOUT = 0.05
+    review.review.POLL_TIMEOUT = 0.05
     assert (await test_client.get(f"/wait-review?listener=two&pid={ended.pid}")).status == 204
     started = await test_client.post("/wait-review/listen?listener=three&if_free=1")
     assert await started.json() == {"listening": True}
     # One that was just named has a while to start its waiter before it counts as ended.
     early = await test_client.post("/wait-review/listen?listener=four&if_free=1")
     assert await early.json() == {"listening": False}
-    review.LISTENER_START = 0
+    review.review.LISTENER_START = 0
     late = await test_client.post("/wait-review/listen?listener=four&if_free=1")
     assert await late.json() == {"listening": True}
+
+
+async def test_a_waiter_its_own_session_replaced_hears_that_this_session_listens_on(client, monkeypatch) -> None:
+    """html-mcp started again in a session listens with a new waiter. The waiter the session
+    ran before hears that its own session took the presses, and one in another session
+    hears that another did."""
+    from html_mcp_web.shared import plugin_monitor
+
+    test_client, review = client
+    pid = os.getpid()
+    monkeypatch.setattr(plugin_monitor, "session_of", lambda waiter: {pid: 111}.get(waiter))
+    await test_client.post("/wait-review/listen?listener=one&session=111")
+    parked = asyncio.ensure_future(test_client.get(f"/wait-review?listener=one&pid={pid}"))
+    for _ in range(50):
+        if review.review.waiters == 1:
+            break
+        await asyncio.sleep(0.02)
+    await test_client.post("/wait-review/listen?listener=two&session=111")
+    moved = await parked
+    assert moved.headers["X-Moved"] == "1"
+    assert await moved.text() == "[moved] this session listens for Call agent with a newer waiter, so this one ends"
+    await test_client.post("/wait-review/listen?listener=three&session=222")
+    taken = await test_client.get(f"/wait-review?listener=two&pid={pid}")
+    assert (await taken.text()).startswith("[moved] another session took over listening")
+
+
+async def test_an_agent_the_configuration_names_waits_in_a_lane_of_its_own(client) -> None:
+    """A press for an agent named under agents goes to that agent's waiter with the model and
+    effort picked from those listed, and a press for the listening session never reaches it,
+    nor it that session's. The page's state names each lane."""
+    test_client, review = client
+    review.review.POLL_TIMEOUT = 0.05
+    assert (await test_client.get("/wait-review?agent=second&listener=-&pid=1")).status == 404
+    assert (await test_client.post("/review-request", json={"agent": "second"})).status == 404
+    review.config.agents = {"second": {"clients": ["second"], "models": ["small", "large"], "efforts": ["low", "high"]},
+                            "third": {"clients": ["third"], "models": [], "efforts": []}}
+    assert (await test_client.get("/wait-review?agent=second&listener=-&pid=1")).status == 204
+    press = await test_client.post("/review-request", json={"agent": "second", "model": "large", "effort": "high"})
+    assert press.status == 200 and (await press.json())["calls"] == 1
+    assert review.review.calls == 0
+    told = await test_client.get("/wait-review?agent=second&listener=-&pid=1")
+    assert told.headers["X-Press"] == "1"
+    assert (await told.text()).endswith("[model=large effort=high]")
+    # Offered again until acknowledged, then not.
+    assert (await test_client.get("/wait-review?agent=second&listener=-&pid=1")).status == 200
+    await test_client.post("/wait-review/ack?upto=1&agent=second")
+    assert (await test_client.get("/wait-review?agent=second&listener=-&pid=1")).status == 204
+    # The listening session's press stays in its own lane, and so does another agent's.
+    await test_client.post("/review-request")
+    await test_client.post("/review-request", json={"agent": "third"})
+    assert (review.review.calls, review.review.lanes["second"].calls, review.review.lanes["third"].calls) == (1, 1, 1)
+    assert (await test_client.get("/wait-review?agent=second&listener=-&pid=1")).status == 204
+    # An agent that lists no model or effort is told none.
+    assert (await (await test_client.get("/wait-review?agent=third&listener=-&pid=1")).text()).endswith("read_comments(new=True)")
+    # A model the configuration does not list is refused, and one left out is the first listed.
+    refused = await test_client.post("/review-request", json={"agent": "second", "model": "rm -rf", "effort": "high"})
+    assert refused.status == 400 and review.review.lanes["second"].calls == 1
+    await test_client.post("/review-request", json={"agent": "second"})
+    assert review.review.lanes["second"].choice == {"model": "small", "effort": "low"}
+    # The page is told of every lane, with what a press for it picks from.
+    assert review.project_state()["review"]["lanes"]["second"] == {
+        "waiters": 0, "models": ["small", "large"], "efforts": ["low", "high"]}
+    # Kept across a restart, as the listening session's are.
+    lane = HtmlReviewServer(review.config).review.lane("second")
+    assert (lane.calls, lane.consumed, lane.choice) == (2, 1, {"model": "small", "effort": "low"})
 
 
 async def test_the_shell_names_its_assets_under_a_tag_that_moves(client) -> None:

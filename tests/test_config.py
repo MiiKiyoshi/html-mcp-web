@@ -106,6 +106,20 @@ def test_unknown_keys_fail() -> None:
         Config.from_dict({"artifacts": {"slides": artifact(label="Slides")}})
 
 
+def test_agents_names_the_agents_the_bell_can_call_beside_the_session_listening() -> None:
+    """Each agent under agents has the client names that wait in its lane, its own name when
+    none is given, and the models and efforts a press picks from; another shape fails."""
+    config = Config.from_dict({"artifacts": {"slides": artifact()}, "agents": {"second": None, "third": {
+        "clients": ["third", "other"], "efforts": ["low", "high"]}}})
+    assert config.agents == {"second": {"clients": ["second"], "models": [], "efforts": []},
+                             "third": {"clients": ["third", "other"], "models": [], "efforts": ["low", "high"]}}
+    assert Config.from_dict(config.to_dict()).agents == config.agents
+    assert "agents" not in Config.from_dict({"artifacts": {"slides": artifact()}}).to_dict()
+    for wrong in (["second"], {"Second": None}, {"second": {"models": "large"}}, {"second": {"tools": []}}):
+        with pytest.raises(ValueError, match="agents must be names"):
+            Config.from_dict({"artifacts": {"slides": artifact()}, "agents": wrong})
+
+
 def test_an_artifact_is_found_by_its_alias_or_the_path_of_its_files(tmp_path: Path) -> None:
     config = Config.from_dict({"artifacts": {
         "Draft 2/3 (초안)": artifact(main="deck/deck.html", template="neutral-slides", content="deck/content.html"),

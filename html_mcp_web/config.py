@@ -8,6 +8,7 @@ from urllib.parse import quote
 
 import yaml
 
+from .shared import agents
 
 DEFAULT_CONFIG_NAME = ".html-mcp-web.yaml"
 DEFAULT_PORT = 8765
@@ -71,11 +72,13 @@ class Config:
     watch: list[str] = field(default_factory=lambda: list(DEFAULT_WATCH))
     ignore: list[str] = field(default_factory=list)
     port: int = DEFAULT_PORT
+    # The agents the bell can call beside the session listening, by name (shared/agents.py).
+    agents: dict[str, dict[str, list[str]]] = field(default_factory=dict)
     config_path: Path | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], config_path: Path | None = None) -> "Config":
-        unknown = set(data) - {"artifacts", "guideline", "watch", "ignore", "port"}
+        unknown = set(data) - {"artifacts", "guideline", "watch", "ignore", "port", "agents"}
         if unknown:
             raise ValueError(f"unknown configuration keys: {', '.join(sorted(unknown))}")
         if "artifacts" not in data or not isinstance(data["artifacts"], dict) or not data["artifacts"]:
@@ -125,7 +128,7 @@ class Config:
         if not 1 <= port <= 65535:
             raise ValueError("port must be between 1 and 65535")
         return cls(artifacts=artifacts, guideline=guideline, watch=watch, ignore=ignore,
-                   port=port, config_path=config_path)
+                   port=port, agents=agents.parse(data.get("agents")), config_path=config_path)
 
     def to_dict(self) -> dict[str, Any]:
         data = {
@@ -136,6 +139,8 @@ class Config:
         }
         if self.guideline is not None:
             data["guideline"] = self.guideline
+        if self.agents:
+            data["agents"] = self.agents
         return data
 
 

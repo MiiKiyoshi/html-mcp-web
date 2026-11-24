@@ -1,7 +1,6 @@
 """Shared ownership of the project review HTTP server."""
 
 import asyncio
-import fcntl
 import json
 import os
 import threading
@@ -13,6 +12,7 @@ from pathlib import Path
 from aiohttp import web
 
 from .config import Config, load_config
+from .shared import filelock
 
 
 class SharedProjectServer:
@@ -103,7 +103,7 @@ class SharedProjectServer:
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         handle = lock_path.open("a+")
         try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            filelock.lock(handle, wait=False)
         except BlockingIOError:
             claimed = False
             for _ in range(50):
@@ -115,16 +115,16 @@ class SharedProjectServer:
                         raise RuntimeError(f"port {self.port} is used by another project: {identity}")
                     handle.close()
                     return
-                # The holder can die mid-poll; flock dies with it, and the takeover is
+                # The holder can die mid-poll; its lock dies with it, and the takeover is
                 # ours rather than an error naming a pid that no longer exists.
                 try:
-                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    filelock.lock(handle, wait=False)
                     claimed = True
                     break
                 except BlockingIOError:
                     continue
             if not claimed:
-                # A holder that serves nothing. flock dies with its process, so this holder
+                # A holder that serves nothing. The lock dies with its process, so this holder
                 # is alive; the file says who it is, so the way out can be named instead of
                 # left to be dug up by hand.
                 handle.seek(0)
@@ -175,6 +175,6 @@ class SharedProjectServer:
     def _release_lock(self) -> None:
         with self.lock_guard:
             if self.lock_handle is not None:
-                fcntl.flock(self.lock_handle.fileno(), fcntl.LOCK_UN)
+                filelock.unlock(self.lock_handle)
                 self.lock_handle.close()
                 self.lock_handle = None
