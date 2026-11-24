@@ -83,6 +83,59 @@ def run_once(label: str, seconds: float) -> None:
             print(f"[{label}] {family}: {fonts[family]} = {by_width.get(fonts[family], ['?'])}")
 
 
+def check_once(label: str) -> None:
+    """The server's own layout check of the browser tests' deck, timed, with the console of the
+    Firefox it starts."""
+    import asyncio
+    import socket
+    from pathlib import Path
+
+    import yaml
+
+    from html_mcp_web.config import load_config
+    from html_mcp_web.project_server import SharedProjectServer
+    from tests.test_browser import slides_html
+
+    folder = Path(tempfile.mkdtemp(prefix="html_mcp_probe_project_"))
+    (folder / "slides.html").write_text(slides_html(), encoding="utf-8")
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    (folder / ".html-mcp-web.yaml").write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}}, "port": port}), encoding="utf-8")
+    console = folder / "check-console.log"
+    real = asyncio.create_subprocess_exec
+
+    async def logged(*args, **kwargs):
+        profile = args[list(args).index("-profile") + 1]
+        Path(profile, "user.js").write_text('user_pref("devtools.console.stdout.content", true);\n', encoding="utf-8")
+        out = open(console, "ab")
+        kwargs["stdout"] = kwargs["stderr"] = out
+        return await real(*args, **kwargs)
+
+    asyncio.create_subprocess_exec = logged
+    shared = SharedProjectServer(load_config(folder / ".html-mcp-web.yaml"))
+    try:
+        shared.ensure()
+        started = time.monotonic()
+        import urllib.request
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
+            data = json.loads(response.read())
+        print(f"[{label}] check answered after {time.monotonic() - started:.1f} s: errors {data.get('errors')}, "
+              f"unchecked {data.get('unchecked')}")
+    except Exception as error:
+        print(f"[{label}] check failed: {error!r}")
+    finally:
+        shared.stop()
+        asyncio.create_subprocess_exec = real
+    said = console.read_text(encoding="utf-8", errors="replace").splitlines() if console.exists() else []
+    print(f"[{label}] check console, {len(said)} lines:")
+    for line in said[-40:]:
+        print(f"[{label}]   {line[:300]}")
+
+
 if __name__ == "__main__":
     run_once("first", 25)
     run_once("second", 20)
+    check_once("check 1")
+    check_once("check 2")
