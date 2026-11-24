@@ -466,22 +466,22 @@ def test_browser_review_contract(tmp_path: Path) -> None:
           return buttons[0].id === "compose-submit" && buttons[1].id === "compose-cancel";
         ''')
         text_area = browser.find_element("css selector", "#compose-text")
-        # Plain enter writes a line, as it does in any box of text.
+        # Shift with enter writes a line.
         text_area.send_keys("Posted with")
-        text_area.send_keys(Keys.ENTER)
+        text_area.send_keys(Keys.SHIFT + Keys.ENTER)
         text_area.send_keys("the keyboard")
         assert browser.execute_script(
             'return document.querySelector("#compose-dialog").open === true')
         assert browser.execute_script(
             'return document.querySelector("#compose-text").value') == "Posted with\nthe keyboard"
-        # Shift with it sends, so the hand never leaves the keyboard.
-        text_area.send_keys(Keys.SHIFT + Keys.ENTER)
+        # Enter sends, so the hand never leaves the keyboard.
+        text_area.send_keys(Keys.ENTER)
         keyboard_comment = wait_until(lambda: next(
             (comment for comment in get_json(f"{base}/artifacts/slides/comments")["comments"]
              if comment["thread"][0]["text"] == "Posted with\nthe keyboard"), None))
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#compose-dialog").open === false'))
-        # A reply is sent the same way: enter writes a line, shift with it sends. Done on
+        # A reply is sent the same way: shift with enter writes a line, enter sends. Done on
         # the comment this block deletes, so the counts asserted later are untouched.
         card = f"[data-comment-id=\"{keyboard_comment['id']}\"]"
         wait_until(lambda: browser.execute_script(
@@ -494,12 +494,23 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         ''')
         reply_box = browser.find_element("css selector", f"{card} .comment-form-input")
         reply_box.send_keys("Read it")
-        reply_box.send_keys(Keys.ENTER)
+        reply_box.send_keys(Keys.SHIFT + Keys.ENTER)
         reply_box.send_keys("and fixed it")
         assert browser.execute_script(
             f'return document.querySelector(\'{card} .comment-form-input\').value;'
         ) == "Read it\nand fixed it"
-        reply_box.send_keys(Keys.SHIFT + Keys.ENTER)
+        # An Enter that ends a word an input method is still composing sends once composing ends.
+        composing = browser.execute_script(f'''
+          const box = document.querySelector(\'{card} .comment-form-input\');
+          const event = new KeyboardEvent("keydown", {{key: "Enter", isComposing: true, bubbles: true, cancelable: true}});
+          box.dispatchEvent(event);
+          return [event.defaultPrevented, box.isConnected];
+        ''')
+        assert composing == [False, True]
+        browser.execute_script(f'''
+          document.querySelector(\'{card} .comment-form-input\')
+            .dispatchEvent(new CompositionEvent("compositionend", {{data: "가"}}));
+        ''')
         wait_until(lambda: any(
             entry["text"] == "Read it\nand fixed it"
             for entry in get_json(

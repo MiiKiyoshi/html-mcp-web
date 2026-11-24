@@ -16,13 +16,18 @@ export function createComments(dependencies) {
     syncSourceCommentMarkers,
   } = dependencies;
 
-  // Enter writes a new line, as it does in any box of text. What sends it is shift with
-  // enter, which keeps the hand on the keyboard, or the command or control key with it,
-  // which is the same key a comment is sent with elsewhere.
+  // Enter sends, and shift with it writes a new line. The command or control key with enter
+  // sends too, as it does elsewhere.
   function sendOn(input, send) {
     input.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter") return;
-      if (!(event.shiftKey || event.metaKey || event.ctrlKey) || event.altKey) return;
+      if (event.key !== "Enter" || event.altKey) return;
+      if (event.shiftKey && !(event.metaKey || event.ctrlKey)) return;
+      // An Enter that ends a word an input method is still composing, as Korean is typed,
+      // comes before the box holds that word, which is sent once composing ends.
+      if (event.isComposing) {
+        input.addEventListener("compositionend", () => setTimeout(send), { once: true });
+        return;
+      }
       event.preventDefault();
       send();
     });
