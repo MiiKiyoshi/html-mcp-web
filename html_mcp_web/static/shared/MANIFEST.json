@@ -1,17 +1,18 @@
 {
-  "source": "tex-mcp-web 8df9a1b",
+  "source": "tex-mcp-web ccadc19",
   "files": {
     "comment-api.js": "08d9852e70c260a2128519ee1ed6ed226a48636f1195ded2d3bcbfee7bb35425",
-    "comment-keys.js": "d1c9f55de6d989d41e325b732455f85e3a0580fa24bd11c5a16f7698f0213df5",
+    "comment-keys.js": "c501ff8a52bcc575634da8f9f57f4fe2d579f48a4303c7ebf2a9a6377fe6f573",
     "comment-panel.css": "a4aac3daed3b688dc78cd8120f122162bf7a9f8302feda4eadaf98c6fcbf27c8",
-    "comment-panel.js": "914011fb235176e3233feceaa45e93cdca48add709a89a936f2373ca4f375ff2",
-    "comment-search.js": "44986ad6457e7af0104a9e9a2f9bca113473a469b2eae49fcce13debab3e9314",
+    "comment-panel.js": "1dd2689ef321c98291eb41a7fd59c4b3fd57df01e50700ff9c0e0e785cf61b44",
+    "comment-search.js": "a6d134c876131e92f1ba7df1e58d046f3e0ffa160e768ab512709827c6521680",
     "dom.js": "9718351a2ffdb405f8a53334d53dfc0cff467e9c9583ad09fc1830e80aaef840",
     "help.css": "363b0d3cac857e8fcdba7d51ed945488e13993ea9c39a4dd20a1b0bfc6fe3905",
-    "help.js": "0f2912e35e7a4486c5ac74691c72da1441e141ec2dd5caa04c9e59bd9a269165",
-    "look-early.js": "53287ed59b013d00491b136b9e0eedab38a6a5917092cedb99570bfe721607fe",
+    "help.js": "a1cc775ce09f6cb0a391ba85eeae609ba39e304aa203a37fffec844afb0a3286",
+    "look-early.js": "9acdc340031262f291857af0461a5d182f475b0b0ceaf61046e5b3d08feac70e",
     "look.css": "ebc95873c3bc527f423be454cc38d3af9e5008e00034b3f4d6310fe7be5271ca",
-    "settings.js": "253c6f01e88cc82d424b3fdbf0dbbb45057c9f59de39b39889f1f50b4cab4889",
-    "tab-strip.js": "01a1c413e337ac61cf39c9ac79dbcf829fc839444e5ded4ad7414cbdef57992f"
+    "settings.js": "d733de013dffe5527f0abbca6eff0c0af6037d79cf2a58ea7b83d3e0487631c9",
+    "tab-strip.css": "12cdfacdbdc6749fe728443153c4217a08c14a3e812210c7d2f22908563cabb0",
+    "tab-strip.js": "7ef0a836c56582a6f75f363fcefd14e24162f2458d983c42eb4dc3004396bfc2"
   }
 }

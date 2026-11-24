@@ -1039,16 +1039,16 @@ def test_the_search_example_in_help_finds_what_help_says(tmp_path: Path) -> None
         term = lambda field, value, no=False: {"not": no, "field": field, "value": value}
         moment = lambda *at: datetime(year, *at).timestamp() * 1000
         readings = {
-            "caption width": [[word("caption"), word("width")]],
-            "figure OR table": [[word("figure")], [word("table")]],
-            '"base case"': [[word("base case")]],
-            "-appendix": [[word("appendix", True)]],
+            "legend color": [[word("legend"), word("color")]],
+            "chart OR table": [[word("chart")], [word("table")]],
+            '"title slide"': [[word("title slide")]],
+            "-backup": [[word("backup", True)]],
             "from:agent": [[term("from", "agent")]],
             "file:slides": [[term("file", "slides")]],
             "after:11-12": [[term("after", moment(11, 12))]],
             "after:11-13": [[term("after", moment(11, 13))]],
             "before:11-14": [[term("before", moment(11, 14))]],
-            "caption width OR table": [[word("caption"), word("width")], [word("table")]],
+            "legend color OR table": [[word("legend"), word("color")], [word("table")]],
             "-from:agent": [[term("from", "agent", True)]],
             "from:me": [[term("from", "me")]],
             "from:me after:11-12": [[term("from", "me"), term("after", moment(11, 12))]],

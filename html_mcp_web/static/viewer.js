@@ -2703,7 +2703,9 @@ const { attach: attachCommentPanel, refreshComments, renderComments, openCompose
 const strip = createTabStrip({ shown: (name, clicked) => panel.showTab(name, clicked) });
 
 // Help, with the artifact's own Start here, search story and keys.
-const help = createHelp({ prefix: PREFIX, pages: [], keys: panel.keys });
+// The Search page's terms in a deck's words, as its example about a chart's legend is.
+const help = createHelp({ prefix: PREFIX, pages: [], keys: panel.keys, words: {
+  both: ["legend", "color"], either: ["chart", "table"], phrase: "title slide", without: "backup" } });
 
 // A card opened at the foot of the list unfolds below the fold, and the reader had to
 // scroll after every open to read what they had just asked for. The list scrolls by
@@ -3108,7 +3110,6 @@ function attachControls() {
   // record over the page when the address carries ?trace.
   if (new URLSearchParams(window.location.search).has("trace")) import("./trace.js");
   attachCommentPanel();
-  panel.keys.attach();
   // Ctrl+Alt+Enter (Cmd+Option+Enter) presses the bell from anywhere on the page, the
   // editor included, but not over a dialog.
   document.addEventListener("keydown", (event) => {
