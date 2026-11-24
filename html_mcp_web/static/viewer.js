@@ -2900,6 +2900,10 @@ function connectWebSocket() {
   socket.onopen = () => {
     announceActiveArtifact();
     updateLayoutUi();
+    // The comments may have changed while the page could not hear the server, or before it
+    // first could: the socket opens after the first reading and the artifact's load, and an
+    // agent's reply written in between was never shown.
+    refreshComments().catch((error) => console.error(error));
   };
   socket.onmessage = (event) => {
     handleSocketMessage(JSON.parse(event.data)).catch((error) => console.error(error));

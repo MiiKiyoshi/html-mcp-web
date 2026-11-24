@@ -110,11 +110,15 @@ def stamp(store: Path, moments: dict[str, list[str]]) -> None:
     store.write_text(json.dumps(data), encoding="utf-8")
 
 
+SERVERS: dict[str, SharedProjectServer] = {}
+
+
 @contextmanager
 def review_page(root: Path, aliases=("slides",), deck=DECK, prefs="", height=1000):
     """The review page of a project of one deck per alias, each in a folder of its own, opened in
     a headless Firefox 1500 wide and 1000 high unless told, with its server's address. `prefs`
-    are Firefox's own settings, as user.js lines."""
+    are Firefox's own settings, as user.js lines. SERVERS names the server by its address while
+    the page is open."""
     for alias in aliases:
         (root / alias).mkdir()
         (root / alias / "slides.html").write_text(deck, encoding="utf-8")
@@ -131,6 +135,7 @@ def review_page(root: Path, aliases=("slides",), deck=DECK, prefs="", height=100
     browser = None
     try:
         shared.ensure()
+        SERVERS[f"http://127.0.0.1:{port}"] = shared
         process = subprocess.Popen(["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
@@ -153,6 +158,7 @@ def review_page(root: Path, aliases=("slides",), deck=DECK, prefs="", height=100
             except subprocess.TimeoutExpired:
                 process.kill()
         shutil.rmtree(profile, ignore_errors=True)
+        SERVERS.pop(f"http://127.0.0.1:{port}", None)
         shared.stop()
 
 
@@ -1187,3 +1193,31 @@ def test_help_fits_a_narrow_window_on_every_page(tmp_path: Path) -> None:
                     .map((node) => node.id || node.tagName);
                   return [out, sideways, box.right <= innerWidth, document.documentElement.scrollWidth <= innerWidth];''')
                 assert spill == [[], [], True, True], (size, page, spill)
+
+
+
+@needs_firefox
+def test_a_reply_written_while_the_page_cannot_hear_its_server_shows_once_it_can(tmp_path: Path) -> None:
+    """The page hears of a reply over its socket. A reply written while the socket is closed,
+    or before it first opens, reaches no page, so each opening reads the comments again."""
+    import asyncio
+
+    kept = CommentStore(store_of(tmp_path, "slides"))
+    asked = kept.add(ArtifactAnchor(), "Shorten the title.").id
+    with review_page(tmp_path) as (browser, base):
+        wait_until(lambda: listed(browser) == [asked])
+        unanswered = lambda: browser.execute_script(
+            f'return document.querySelector(\'[data-comment-id="{asked}"] .cmt-unanswered\') !== null')
+        assert not unanswered()
+        shared = SERVERS[base]
+        review = next(route.handler.__self__ for route in shared.runner.app.router.routes()
+                      if route.resource is not None and route.resource.canonical == "/ws")
+
+        async def close_sockets() -> None:
+            for page in list(review.websockets):
+                await page.close()
+
+        asyncio.run_coroutine_threadsafe(close_sockets(), shared.loop).result(5)
+        # The page asks again a moment later; the reply is written before it does.
+        post_json(f"{base}/artifacts/slides/comments/{asked}/reply", {"text": "Shortened.", "author": "agent"})
+        wait_until(unanswered)
