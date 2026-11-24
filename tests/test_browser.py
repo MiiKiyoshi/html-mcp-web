@@ -315,7 +315,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
           return [button.classList.contains("agent-offline"), button.disabled,
             button.getAttribute("aria-label"), button.title, getComputedStyle(button).color];
         ''') == [True, False, "Queue call for agent",
-                 "Agent is not waiting; queue this call until it reconnects (Ctrl+Alt+Enter)", "rgb(166, 64, 59)"]
+                 "Agent is not waiting; queue this call until it reconnects (Ctrl+Alt+Enter)", "rgb(180, 74, 67)"]
         with ThreadPoolExecutor(max_workers=1) as pool:
             waiter = pool.submit(lambda: urllib.request.urlopen(
                 f"{base}/wait-review?listener=one&pid={os.getpid()}", timeout=10).read())
@@ -324,7 +324,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
               return button.classList.contains("agent-ready")
                 && button.getAttribute("aria-label") === "Call agent"
                 && button.title === "Call the waiting agent now (Ctrl+Alt+Enter)"
-                && getComputedStyle(button).color === "rgb(50, 122, 67)";
+                && getComputedStyle(button).color === "rgb(79, 119, 88)";
             '''))
             browser.execute_script('document.querySelector("#call-agent-btn").click()')
             wait_until(lambda: browser.execute_script(
@@ -451,20 +451,16 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         }
         assert column_widths[3] > 100
 
-        # Tab out of the compose text has to land on Post, so Enter finishes the comment.
+        # Enter in the compose text posts the comment.
         browser.set_window_rect(x=0, y=0, width=1500, height=1000)
         browser.find_element("css selector", "#more-btn").click()
         browser.find_element("css selector", "#artifact-comment-btn").click()
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#compose-dialog").open === true'))
         assert browser.execute_script('return document.querySelector("#more-menu").hidden') is True
-        assert browser.execute_script('''
+        wait_until(lambda: browser.execute_script('''
           return document.activeElement === document.querySelector("#compose-text");
-        ''')
-        assert browser.execute_script('''
-          const buttons = document.querySelectorAll("#compose-form .dialog-actions button");
-          return buttons[0].id === "compose-submit" && buttons[1].id === "compose-cancel";
-        ''')
+        '''))
         text_area = browser.find_element("css selector", "#compose-text")
         # Shift with enter writes a line.
         text_area.send_keys("Posted with")
@@ -487,28 +483,28 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         wait_until(lambda: browser.execute_script(
             f'return document.querySelector(\'{card}\') !== null'))
         browser.execute_script(f'''
-          document.querySelector(\'{card} .comment-summary\').click();
+          document.querySelector(\'{card} .cmt-head\').click();
           const buttons = document.querySelector(\'{card}\').querySelectorAll("button");
           Array.from(buttons).find((button) => button.textContent === "Reply").click();
-          document.querySelector(\'{card} .comment-form-input\').focus();
+          document.querySelector(\'{card} .cmt-form-input\').focus();
         ''')
-        reply_box = browser.find_element("css selector", f"{card} .comment-form-input")
+        reply_box = browser.find_element("css selector", f"{card} .cmt-form-input")
         reply_box.send_keys("Read it")
         reply_box.send_keys(Keys.SHIFT + Keys.ENTER)
         reply_box.send_keys("and fixed it")
         assert browser.execute_script(
-            f'return document.querySelector(\'{card} .comment-form-input\').value;'
+            f'return document.querySelector(\'{card} .cmt-form-input\').value;'
         ) == "Read it\nand fixed it"
         # An Enter that ends a word an input method is still composing sends once composing ends.
         composing = browser.execute_script(f'''
-          const box = document.querySelector(\'{card} .comment-form-input\');
+          const box = document.querySelector(\'{card} .cmt-form-input\');
           const event = new KeyboardEvent("keydown", {{key: "Enter", isComposing: true, bubbles: true, cancelable: true}});
           box.dispatchEvent(event);
           return [event.defaultPrevented, box.isConnected];
         ''')
         assert composing == [False, True]
         browser.execute_script(f'''
-          document.querySelector(\'{card} .comment-form-input\')
+          document.querySelector(\'{card} .cmt-form-input\')
             .dispatchEvent(new CompositionEvent("compositionend", {{data: "가"}}));
         ''')
         wait_until(lambda: any(
@@ -689,7 +685,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         with urllib.request.urlopen(delete, timeout=3):
             pass
         wait_until(lambda: browser.execute_script(
-            'return document.querySelectorAll(".comment-card").length === 0'))
+            'return document.querySelectorAll(".cmt").length === 0'))
 
         # A DOM range and a JavaScript string both count UTF-16 units.  Its boundary can
         # therefore sit before, between, or after the two units of an astral-plane
@@ -743,7 +739,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
                 .querySelector("#unicode-boundary")?.remove();
             ''')
             wait_until(lambda: browser.execute_script(
-                'return document.querySelectorAll(".comment-card").length === 0'))
+                'return document.querySelectorAll(".cmt").length === 0'))
 
         anchor = browser.execute_script('''
           const frame = document.querySelector("#artifact-frame");
@@ -769,7 +765,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
             "text": "Keep this attached",
         })
         wait_until(lambda: browser.execute_script(
-            'return document.querySelectorAll(".comment-card").length === 1'))
+            'return document.querySelectorAll(".cmt").length === 1'))
         wait_until(lambda: browser.execute_script('''
           return document.querySelector("#artifact-frame").contentDocument
             .querySelectorAll(".html-mcp-highlight").length > 0;
@@ -791,10 +787,10 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert all(abs(value) <= 1 for value in shift), shift
 
         browser.execute_script(f'''
-          document.querySelector("[data-comment-id=\\"{comment["id"]}\\"] .comment-summary").click();
+          document.querySelector("[data-comment-id=\\"{comment["id"]}\\"] .cmt-head").click();
           const card = document.querySelector("[data-comment-id=\\"{comment["id"]}\\"]");
           Array.from(card.querySelectorAll("button")).find((button) => button.textContent === "Reply").click();
-          const input = document.querySelector("[data-comment-id=\\"{comment["id"]}\\"] .comment-form-input");
+          const input = document.querySelector("[data-comment-id=\\"{comment["id"]}\\"] .cmt-form-input");
           input.value = "Preserved draft";
           input.dispatchEvent(new Event("input", {{bubbles: true}}));
           input.focus();
@@ -807,9 +803,9 @@ def test_browser_review_contract(tmp_path: Path) -> None:
             .querySelectorAll(".html-mcp-highlight").length > 0;
         '''))
         assert not browser.execute_script(
-            f'return document.querySelector("[data-comment-id=\\"{comment["id"]}\\"]").classList.contains("unattached")')
+            f'return document.querySelector("[data-comment-id=\\"{comment["id"]}\\"] .stale") !== null')
         assert browser.execute_script(f'''
-          const input = document.querySelector("[data-comment-id=\\"{comment["id"]}\\"] .comment-form-input");
+          const input = document.querySelector("[data-comment-id=\\"{comment["id"]}\\"] .cmt-form-input");
           return input?.value === "Preserved draft" && document.activeElement === input;
         ''')
 
@@ -951,7 +947,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert not any("This second paragraph" in error for error in narrow_errors)
         browser.set_window_rect(x=0, y=0, width=1400, height=1000)
         wait_until(lambda: browser.execute_script(
-            f'return document.querySelector("[data-comment-id=\\"{comment["id"]}\\"] .stale-pill") !== null'))
+            f'return document.querySelector("[data-comment-id=\\"{comment["id"]}\\"] .stale") !== null'))
 
         assert browser.execute_script('return document.title') == "slides.html"
         browser.find_element("css selector", '.artifact-tab:nth-child(2)').click()
@@ -993,14 +989,14 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         browser.execute_script(f'''
           const card = Array.from(document.querySelectorAll("[data-comment-id]"))
             .find((node) => node.dataset.commentId === "{comment["id"]}");
-          if (card.querySelector(".thread-entry") === null) card.querySelector(".comment-summary").click();
+          if (card.querySelector(".thread-entry") === null) card.querySelector(".cmt-head").click();
         ''')
         wait_until(lambda: browser.execute_script(
-            f'return document.querySelector("[data-comment-id=\\"{comment["id"]}\\"] .thread-meta .link") !== null'))
+            f'return document.querySelector("[data-comment-id=\\"{comment["id"]}\\"] .cmt-edit") !== null'))
         browser.execute_script(f'''
           const findCard = () => Array.from(document.querySelectorAll("[data-comment-id]"))
             .find((node) => node.dataset.commentId === "{comment["id"]}");
-          findCard().querySelector(".thread-meta .link").click();
+          findCard().querySelector(".cmt-edit").click();
           // The click re-renders the card, so the editor is looked up on the new node.
           const card = findCard();
           const input = card.querySelector(".entry-edit-input");
@@ -1018,7 +1014,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
             .find((button) => button.textContent === "Resolve");
           let card = findCard();
           if (resolveButton(card) === undefined) {{
-            card.querySelector(".comment-summary").click();
+            card.querySelector(".cmt-head").click();
             card = findCard();
           }}
           resolveButton(card).click();
@@ -1057,7 +1053,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         still_open = get_json(f"{base}/artifacts/slides/comments?status=open")["comments"]
         assert len(still_open) == 3
         wait_until(lambda: browser.execute_script(
-            'return document.querySelectorAll(".comment-pick").length === 3'))
+            'return document.querySelectorAll("#comments-list .comment-pick").length === 3'))
 
         def label(button):
             # The buttons are icons; the words live in aria-label.
@@ -1070,7 +1066,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         # Nothing picked, nothing to press: the buttons stay in place, greyed out, so the
         # row keeps one shape rather than shifting as they come and go.
         assert not enabled("#resolve-picked-btn") and label("#resolve-picked-btn") == "Resolve"
-        assert not enabled("#reopen-picked-btn") and label("#reopen-picked-btn") == "Reopen"
+        assert not enabled("#archive-picked-btn") and label("#archive-picked-btn") == "Archive"
         assert enabled("#pick-all-btn") and enabled("#fold-all-btn")
 
         def pick(comment_id):
@@ -1092,14 +1088,14 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         pick(still_open[1]["id"])
 
         # One button opens every card in the view or closes every one, by what they are.
-        opened = ('return Array.from(document.querySelectorAll(".comment-card"))'
-                  '.map((card) => card.querySelector(".comment-body") !== null);')
+        opened = ('return Array.from(document.querySelectorAll(".cmt"))'
+                  '.map((card) => card.querySelector(".cmt-thread") !== null);')
         assert label("#fold-all-btn") == "Expand all"
         browser.find_element("css selector", "#fold-all-btn").click()
         assert browser.execute_script(opened) == [True, True, True]
         assert label("#fold-all-btn") == "Collapse all"
         browser.execute_script("""
-          document.querySelectorAll(".comment-card")[0].querySelector(".comment-summary").click();
+          document.querySelectorAll(".cmt")[0].querySelector(".cmt-head").click();
         """)
         assert browser.execute_script(opened) == [False, True, True]
         assert label("#fold-all-btn") == "Expand all"       # not every card is open now
@@ -1126,13 +1122,14 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         ''')
         resolved = get_json(f"{base}/artifacts/slides/comments?status=resolved")["comments"]
         wait_until(lambda: browser.execute_script(
-            'return document.querySelectorAll(".comment-pick").length') == len(resolved))
+            'return document.querySelectorAll("#comments-list .comment-pick").length') == len(resolved))
         assert label("#pick-all-btn") == "Select all"
         browser.find_element("css selector", "#pick-all-btn").click()
-        wait_until(lambda: label("#reopen-picked-btn") == f"Reopen {len(resolved)}")
-        assert enabled("#reopen-picked-btn") and not enabled("#resolve-picked-btn")
-        assert label("#pick-all-btn") == "Clear"           # pressed again it lets go
-        browser.find_element("css selector", "#reopen-picked-btn").click()
+        # One button resolves or reopens: with only closed comments picked, it reopens them.
+        wait_until(lambda: label("#resolve-picked-btn") == f"Reopen {len(resolved)}")
+        assert enabled("#resolve-picked-btn")
+        assert label("#pick-all-btn") == "Clear selection"           # pressed again it lets go
+        browser.find_element("css selector", "#resolve-picked-btn").click()
         wait_until(lambda: len(
             get_json(f"{base}/artifacts/slides/comments?status=open")["comments"])
             == 1 + len(resolved))
@@ -3091,7 +3088,7 @@ def test_a_bullet_citing_a_visual_from_another_column_is_reported_under_the_neut
 </main></body></html>''', encoding="utf-8")
     reported = [
         'page 1 li "Small design 27 ps, large desi…" cites values of <table#costs> but is not in the list '
-        "directly below it. Put the bullet in a list directly below that visual, in the same column (neutral 5.8) [p1:0.0.0.1.0]",
+        "directly below it. Put the bullet in a list directly below that visual, in the same column (neutral-slides 6.7, neutral-report 5.8) [p1:0.0.0.1.0]",
     ]
     # Where an interpretation goes is a rule of the neutral guideline, not a defect of the rendering.
     for guideline, expected in (("neutral-slides", reported), (None, [])):
@@ -3614,7 +3611,7 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
         browser.set_window_rect(width=1400, height=800)
         browser.navigate(base)
         wait_until(lambda: browser.execute_script(
-            'return document.querySelectorAll(".comment-card").length === 8'))
+            'return document.querySelectorAll(".cmt").length === 8'))
 
         # Scroll to the foot and open the card sitting there.
         browser.execute_script(
@@ -3622,13 +3619,13 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
         time.sleep(0.3)
         browser.execute_script("""
           const list = document.querySelector("#comments-list");
-          const cards = Array.from(list.querySelectorAll(".comment-card"));
-          cards[cards.length - 1].querySelector(".comment-summary").click();
+          const cards = Array.from(list.querySelectorAll(".cmt"));
+          cards[cards.length - 1].querySelector(".cmt-head").click();
         """)
         time.sleep(0.4)
         shown = browser.execute_script("""
           const list = document.querySelector("#comments-list");
-          const cards = Array.from(list.querySelectorAll(".comment-card"));
+          const cards = Array.from(list.querySelectorAll(".cmt"));
           const card = cards[cards.length - 1];
           const listBox = list.getBoundingClientRect();
           const cardBox = card.getBoundingClientRect();
@@ -3646,8 +3643,8 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
         # the box was cut off below and the reader scrolled after every open.
         browser.execute_script("""
           const list = document.querySelector("#comments-list");
-          const cards = Array.from(list.querySelectorAll(".comment-card"));
-          cards[cards.length - 1].querySelector(".comment-summary").click();
+          const cards = Array.from(list.querySelectorAll(".cmt"));
+          cards[cards.length - 1].querySelector(".cmt-head").click();
           list.scrollTop = 0;
         """)
         time.sleep(0.3)
@@ -3669,7 +3666,7 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
           const card = list.querySelector(arguments[0]);
           const listBox = list.getBoundingClientRect();
           const cardBox = card.getBoundingClientRect();
-          return {expanded: card.querySelector(".comment-body") !== null,
+          return {expanded: card.querySelector(".cmt-thread") !== null,
                   sidebarOpen: !document.querySelector(".layout").classList.contains("sidebar-collapsed"),
                   overhang: cardBox.bottom - listBox.bottom, above: listBox.top - cardBox.top,
                   tall: cardBox.height > listBox.height / 2};
@@ -4678,18 +4675,18 @@ def test_a_phone_gives_an_opened_comment_the_room_it_needs(tmp_path: Path) -> No
         browser.set_window_rect(width=390, height=844)      # a phone: comments under the deck
         browser.navigate(base)
         wait_until(lambda: browser.execute_script(
-            'return document.querySelectorAll(".comment-card").length === 1'))
+            'return document.querySelectorAll(".cmt").length === 1'))
         browser.find_element("css selector", "#sidebar-toggle-btn").click()
         wait_until(lambda: browser.execute_script(
             'return !document.querySelector(".layout").classList.contains("sidebar-collapsed")'))
 
         before = browser.execute_script(
             'return document.querySelector("#sidebar").getBoundingClientRect().height;')
-        browser.execute_script('document.querySelector(".comment-summary").click();')
+        browser.execute_script('document.querySelector(".cmt-head").click();')
         time.sleep(0.4)
         shown = browser.execute_script("""
           const list = document.querySelector("#comments-list");
-          const card = document.querySelector(".comment-card");
+          const card = document.querySelector(".cmt");
           const listBox = list.getBoundingClientRect();
           const cardBox = card.getBoundingClientRect();
           return {overhang: cardBox.bottom - listBox.bottom,
@@ -5190,43 +5187,43 @@ def test_archived_threads_have_their_own_view_and_picked_archive_action(tmp_path
 
         options = browser.execute_script(
             'return Array.from(document.querySelectorAll("#comment-filter option")).map((o) => o.value);')
-        assert options == ["open", "resolved", "reference", "all"]
+        assert options == ["open", "unanswered", "archived", "resolved", "all"]
         labels = browser.execute_script(
             'return Array.from(document.querySelectorAll("#comment-filter option")).map((o) => o.textContent);')
-        assert labels == ["open", "resolved", "archived", "all"]
+        assert labels == ["open", "unanswered", "archived", "resolved", "all"]
         assert shown("open", [working, untouched]) == [working, untouched]
-        assert shown("reference", [kept]) == [kept]
-        browser.execute_script(f'document.querySelector("[data-comment-id=\'{kept}\'] .comment-summary").click();')
+        assert shown("archived", [kept]) == [kept]
+        browser.execute_script(f'document.querySelector("[data-comment-id=\'{kept}\'] .cmt-head").click();')
         wait_until(lambda: browser.execute_script(
             f'const card = document.querySelector("[data-comment-id=\'{kept}\']");'
-            'return card.querySelector(".comment-actions") ? true : null;'))
+            'return card.querySelector(".cmt-actions") ? true : null;'))
         assert browser.execute_script(
             f'const card = document.querySelector("[data-comment-id=\'{kept}\']");'
-            'return [card.querySelector(".status-pill").textContent,'
-            '  Array.from(card.querySelectorAll(".comment-actions button")).map((b) => b.textContent)];'
+            'return [card.querySelector(".cmt-status").textContent,'
+            '  Array.from(card.querySelectorAll(".cmt-actions button")).map((b) => b.textContent)];'
         ) == ["[archived]", ["Reply", "Reopen", "Resolve", "Delete"]]
 
         # An open card calls the action Archive, and the archive-box button moves only the
         # picked thread while leaving the other open thread alone.
         assert shown("open", [working, untouched]) == [working, untouched]
-        browser.execute_script(f'document.querySelector("[data-comment-id=\'{working}\'] .comment-summary").click();')
+        browser.execute_script(f'document.querySelector("[data-comment-id=\'{working}\'] .cmt-head").click();')
         assert wait_until(lambda: browser.execute_script(
             f'const card = document.querySelector("[data-comment-id=\'{working}\']");'
-            'return Array.from(card.querySelectorAll(".comment-actions button"))'
+            'return Array.from(card.querySelectorAll(".cmt-actions button"))'
             '  .map((b) => b.textContent).includes("Archive") || null;'))
         browser.execute_script(
             f'document.querySelector("[data-comment-id=\'{working}\'] .comment-pick").click();')
         assert browser.execute_script(
             'const button = document.querySelector("#archive-picked-btn");'
             'return [button.disabled, button.getAttribute("aria-label"), button.title];'
-        ) == [False, "Archive 1", "Archive the picked comments"]
+        ) == [False, "Archive 1", "Archive the selected comments"]
         browser.find_element("css selector", "#archive-picked-btn").click()
         wait_until(lambda: get_json(f"{base}/comments/{working}")["status"] == "reference" or None)
         wait_until(lambda: browser.execute_script(
             f'return document.querySelectorAll("[data-comment-id]").length === 1'
             f' && document.querySelector("[data-comment-id=\'{untouched}\']") ? true : null;'))
         assert get_json(f"{base}/comments/{untouched}")["status"] == "open"
-        assert set(shown("reference", [working, kept])) == {working, kept}
+        assert set(shown("archived", [working, kept])) == {working, kept}
     finally:
         if browser is not None:
             try:
@@ -5503,7 +5500,7 @@ def test_a_comment_whose_text_is_gone_keeps_its_place(tmp_path: Path) -> None:
         # The sentence is rewritten, so the comment has nothing left to sit on.
         slides.write_text(slides_html("Something else entirely now."), encoding="utf-8")
         wait_until(lambda: browser.execute_script(
-            'return !!document.querySelector(".stale-pill")'))
+            'return !!document.querySelector(".stale")'))
         marks = wait_until(lambda: browser.execute_script(f"""
           const doc = document.querySelector("#artifact-frame").contentDocument;
           const lost = doc.querySelector('.html-mcp-lost[data-comment-id="{comment["id"]}"]');
@@ -5518,7 +5515,7 @@ def test_a_comment_whose_text_is_gone_keeps_its_place(tmp_path: Path) -> None:
         assert marks["width"] > 0 and marks["height"] > 0, marks
         assert marks["badge"] == "1", marks
         assert browser.execute_script(
-            'return document.querySelector(".stale-pill").title.length > 0')
+            'return document.querySelector(".stale").title.length > 0')
 
         # Opening the card goes to the mark: it is in view afterwards, and it was not before.
         browser.execute_script("""
@@ -5532,7 +5529,7 @@ def test_a_comment_whose_text_is_gone_keeps_its_place(tmp_path: Path) -> None:
           return box.bottom > 0 && box.top < doc.defaultView.innerHeight;
         """)
         browser.execute_script(
-            f"""document.querySelector('[data-comment-id="{comment["id"]}"] .comment-summary').click();""")
+            f"""document.querySelector('[data-comment-id="{comment["id"]}"] .cmt-head').click();""")
         seen = wait_until(lambda: browser.execute_script(f"""
           const doc = document.querySelector("#artifact-frame").contentDocument;
           const box = doc.querySelector('.html-mcp-lost[data-comment-id="{comment["id"]}"]').getBoundingClientRect();

@@ -22,8 +22,9 @@ button, select {
 }
 
 button { padding: 7px 11px; cursor: pointer; }
-button:hover { border-color: var(--border); background: var(--accent-soft); }
-button:disabled { cursor: default; opacity: .6; }
+/* The comment panel's buttons and its dialog's take their states from shared/comment-panel.css. */
+button:where(:not(#tab-comments *, #compose-dialog *)):hover { border-color: var(--border); background: var(--accent-soft); }
+button:where(:not(#tab-comments *, #compose-dialog *)):disabled { cursor: default; opacity: .6; }
 
 .topbar {
   display: flex;
@@ -436,117 +437,8 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .page-number { color: var(--accent); font-family: var(--mono); font-size: var(--text-small); font-weight: 700; text-align: right; }
 .page-title { overflow: hidden; color: var(--fg); font-size: var(--text-body); text-overflow: ellipsis; white-space: nowrap; }
 
-.filter-row { display: flex; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
-/* A fixed width: grown to fill the row, the select stretched and shrank every time a
-   button beside it came or went, and the row jumped under the reader's eye. */
-.filter-row .pick { flex: none; width: 96px; }
-.filter-row select { flex: none; width: 96px; padding: 5px 8px; font-size: var(--text-body); }
-/* A list on a touch screen takes 16px type so the phone does not zoom in on it, which
-   drew it larger than everything around it. There its choice is drawn in the row's own
-   type, and the list lies clear over that and still opens on a tap. */
-.pick { position: relative; display: inline-flex; min-width: 0; }
-.pick-name { display: none; }
-@media (pointer: coarse) {
-  .pick-name {
-    position: relative;
-    display: block;
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    padding: 0.2rem 1.2rem 0.2rem 0.4rem;
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    background: var(--bg);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: var(--text-body);
-  }
-  .pick-name::after { content: "\25BE"; position: absolute; right: 0.4rem; top: 50%; transform: translateY(-50%); color: var(--fg-dim); }
-  .pick select {
-    position: absolute !important; inset: 0; width: 100% !important; height: 100% !important;
-    min-width: 0 !important; max-width: none !important; opacity: 0;
-  }
-}
-/* Green reaches a parked waiter now; red queues the call for the next waiter. */
-.icon-btn {
-  flex: none; display: inline-flex; align-items: center; gap: 4px;
-  padding: 4px 6px; font-size: var(--text-body); line-height: 1; white-space: nowrap;
-}
-/* The select at the left edge, the buttons at the right: the first button takes the room
-   between, so the buttons keep their places whatever the row's width. */
-#fold-all-btn { margin-left: auto; }
-.icon-btn svg { display: block; }
-.icon-btn .count:empty { display: none; }
-.icon-btn:disabled { opacity: .45; }
-.comment-pick { flex: none; margin: 0; width: 14px; height: 14px; cursor: pointer; }
-.agent-dot { width: 8px; height: 8px; border-radius: 50%; }
-#call-agent-btn.agent-ready { color: #327a43; border-color: #78ad83; background: #eef7ef; }
-#call-agent-btn.agent-ready .agent-dot { background: #3d9a52; }
-#call-agent-btn.agent-offline { color: #a6403b; border-color: #cf918c; background: #faeeee; }
-#call-agent-btn.agent-offline .agent-dot { background: #b44a43; }
-.comments-list { flex: 1; overflow: auto; padding: 10px; }
-
-.comment-card {
-  margin-bottom: 9px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  overflow: hidden;
-  background: var(--bg-elev);
-}
-
-.comment-card.focused { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(83, 111, 138, .12); }
-.comment-card.unattached { border-left: 3px solid #bd6d58; }
-.comment-summary { padding: 10px; cursor: pointer; }
-.comment-summary:hover { background: var(--bg); }
-.anchor-label { display: flex; gap: 7px; align-items: center; color: var(--fg-dim); font-family: var(--mono); font-size: var(--text-small); }
-.comment-preview { margin-top: 5px; color: var(--fg); font-size: var(--text-body); line-height: 1.4; }
-/* Quote shown only when expanded. A left rule sets it apart from the comment text. */
-.anchor-quote { margin: 9px 0 0; padding: 5px 8px; border-left: 2px solid var(--source-comment-dot); color: var(--fg-dim); background: var(--bg); font-size: var(--text-body); line-height: 1.4; }
-.comment-id { color: var(--fg-dim); font-weight: 700; }
-.anchor-kind { margin-left: auto; }
-.status-pill.open { color: #665500; }
-.status-pill.resolved { color: #4f7758; }
-.status-pill.reference { color: #4a5f8a; }
-.comment-body { padding: 0 10px 10px; border-top: 1px solid var(--border); }
-.thread-entry { padding: 9px 0; border-bottom: 1px solid var(--border); }
-.thread-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--fg-dim); font-family: var(--mono); font-size: var(--text-small); }
-.thread-meta .link { padding: 0; border: none; background: none; color: var(--fg-dim); font-size: var(--text-small); text-decoration: underline; cursor: pointer; }
-.thread-meta .link:hover { color: inherit; }
-.thread-text { margin-top: 4px; white-space: pre-wrap; font-size: var(--text-body); line-height: 1.45; }
-.thread-edits { margin: 5px 0 0; padding-left: 18px; font-family: var(--mono); font-size: var(--text-small); }
-.comment-actions { display: flex; flex-wrap: wrap; gap: 5px; padding-top: 9px; }
-.cmt-suggestion { margin-top: 8px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
-  font-family: var(--mono); font-size: var(--text-small); }
-.cmt-suggestion .sugg-old, .cmt-suggestion .sugg-new { display: flex; gap: 6px; padding: 4px 8px;
-  white-space: pre-wrap; overflow-wrap: anywhere; }
-.cmt-suggestion .sugg-old { background: rgba(183, 56, 56, .08); }
-.cmt-suggestion .sugg-new { background: rgba(50, 122, 67, .1); }
-.cmt-suggestion .sugg-marker { flex: none; color: var(--fg-dim); }
-.cmt-suggestion .sugg-actions { display: flex; justify-content: flex-end; padding: 5px 8px;
-  border-top: 1px solid var(--border); }
-.comment-actions button { padding: 5px 8px; font-size: var(--text-small); }
-.danger { color: var(--err); }
-
-.comment-form { margin-top: 9px; }
-.comment-form textarea, #compose-text {
-  width: 100%;
-  resize: vertical;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 8px;
-  color: var(--fg);
-  background: var(--bg);
-}
-.comment-form textarea { font-size: var(--text-body); line-height: 1.45; }
-.comment-form textarea:focus, #compose-text:focus { outline: 2px solid rgba(83, 111, 138, .22); border-color: var(--accent); }
-.form-actions, .dialog-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
-.form-actions button { padding: 5px 8px; font-size: var(--text-small); }
-
-.placeholder { color: var(--fg-dim); text-align: center; font-size: var(--text-body); padding: 28px 12px; }
-.hidden { display: none !important; }
-
-dialog h3 { margin: 0 0 10px; font-size: 1rem; }
-dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid var(--source-comment-dot); background: var(--bg); color: var(--fg-dim); font-size: var(--text-body); max-height: 110px; overflow: auto; white-space: pre-wrap; }
+/* The words an opened comment is on. A left rule sets them apart from the thread. */
+.anchor-quote { margin: 0; padding: 5px 8px; border-left: 2px solid var(--source-comment-dot); color: var(--fg-dim); background: var(--bg); font-size: var(--text-body); line-height: 1.4; }
 
 @media (max-width: 780px) {
   .layout { grid-template-columns: minmax(0, 1fr) 300px; }
@@ -627,10 +519,6 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   .more-menu #settings-menu-btn { display: block; }
 }
 
-
-
-.stale-pill { color: #bd6d58; font-weight: 700; font-size: var(--text-fine); }
-
 /* ----- Dark and warm themes -----
    The colours come from shared/look.css. What follows is for this page's own parts. The
    artifact keeps its colours, on a ground that follows the theme (artifact.css). */
@@ -642,9 +530,4 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
 :root[data-theme="dark"] .problem.clickable:hover { border-color: #7a4c44; background: #3a2926; }
 :root[data-theme="dark"] .problem.warning { border-color: #5a4f2c; background: #2e2a1c; color: #e9dcb5; }
 :root[data-theme="dark"] .problem.warning.clickable:hover { border-color: #786a3a; background: #3a3422; }
-:root[data-theme="dark"] #call-agent-btn.agent-ready { color: #8fcb9c; border-color: #3f6a48; background: #1f2b21; }
-:root[data-theme="dark"] #call-agent-btn.agent-offline { color: #e8968f; border-color: #6a3b38; background: #321f1e; }
-:root[data-theme="dark"] .status-pill.open { color: #d8c25a; }
-:root[data-theme="dark"] .status-pill.resolved { color: #8cc29a; }
-:root[data-theme="dark"] .status-pill.reference { color: #9fb4e0; }
 #source-editor.steady-cursor .ace_cursor { animation: none !important; }

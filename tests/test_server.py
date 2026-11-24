@@ -213,13 +213,19 @@ async def test_source_edit_and_exact_comment_use_the_artifact_edit_file(client) 
     moved = await (await test_client.get(f"/artifacts/slides/comments/{created['id']}")).json()
     assert moved["anchor"]["line_start"] == 2
     assert moved["anchor"]["quote"] == "Selected"
-    assert moved["anchor"]["stale"] is False
+    assert moved["anchor"]["stale"] is False and "stale" not in moved
 
     conflict = await test_client.put("/artifacts/slides/source", json={
         "text": "discarded",
         "revision": opened["revision"],
     })
     assert conflict.status == 409
+
+    # Selected characters no longer found make the comment stale, which the page reads on it.
+    await test_client.put("/artifacts/slides/source", json={
+        "text": changed.replace("Selected", "Chosen"), "revision": (await saved.json())["revision"]})
+    lost = await (await test_client.get(f"/artifacts/slides/comments/{created['id']}")).json()
+    assert lost["anchor"]["stale"] is True and lost["stale"] is True
 
 
 async def test_source_comment_rejects_a_stale_revision(client) -> None:
@@ -673,6 +679,136 @@ async def test_a_thread_kept_as_reference_is_listed_apart_and_only_by_the_review
     reopened = await (await test_client.post(
         f"/artifacts/slides/comments/{comment['id']}/reopen", json={"text": ""})).json()
     assert reopened["status"] == "open" and len(reopened["thread"]) == 2
+
+
+async def test_picked_comments_change_status_in_one_call(client) -> None:
+    """The review page gives the picked comments one status in one call, by its own names:
+    an archived thread is one the store keeps as reference. A status change adds no entry,
+    the page hears of it in one notice, and an id not found changes nothing. An undo
+    resolves a comment again at the moment it was resolved at before."""
+    test_client, _ = client
+    base = "/artifacts/slides/comments"
+    ids = [(await (await test_client.post(base, json={"anchor": {"kind": "artifact"}, "text": text})).json())["id"]
+           for text in ("a", "b", "c")]
+    socket = await test_client.ws_connect("/ws")
+    assert (await socket.receive_json())["type"] == "state"
+    stored_as = {"resolved": "resolved", "archived": "reference", "open": "open"}
+    for status in ("resolved", "archived", "open"):
+        response = await test_client.post(f"{base}/status", json={"ids": ids[:2], "status": status})
+        assert response.status == 200 and await response.json() == {"ids": ids[:2], "status": status}
+        assert await socket.receive_json() == {"type": "comments_updated", "artifact": "slides", "comment_ids": ids[:2]}
+        stored = {c["id"]: c for c in (await (await test_client.get(base)).json())["comments"]}
+        assert [stored[cid]["status"] for cid in ids] == [stored_as[status], stored_as[status], "open"]
+        assert [len(stored[cid]["thread"]) for cid in ids] == [1, 1, 1]  # a status change adds no entry
+    response = await test_client.post(f"{base}/status", json={"ids": [ids[0], "c-00000000"], "status": "resolved"})
+    assert response.status == 404 and "c-00000000" in (await response.json())["error"]
+    assert (await (await test_client.get(f"{base}/{ids[0]}")).json())["status"] == "open"
+    response = await test_client.post(f"{base}/status", json={"ids": ids, "status": "reference"})
+    assert response.status == 400 and await response.json() == {"error": "status must be open, resolved or archived"}
+    # An undo resolves a comment again at the moment it was resolved at before.
+    earlier = "2026-11-13T09:49:00+00:00"
+    response = await test_client.post(f"{base}/status", json={"ids": ids[:1], "status": "resolved",
+                                                               "resolved": {ids[0]: earlier}})
+    assert response.status == 200 and (await (await test_client.get(f"{base}/{ids[0]}")).json())["resolved"] == earlier
+    for wrong in ({ids[1]: earlier}, {ids[0]: "yesterday"}, [earlier]):
+        response = await test_client.post(f"{base}/status", json={"ids": ids[:1], "status": "resolved", "resolved": wrong})
+        assert response.status == 400
+    response = await test_client.post(f"{base}/status", json={"ids": ids[:1], "status": "open", "resolved": {ids[0]: earlier}})
+    assert response.status == 400
+    await socket.close()
+
+
+async def test_the_reviewer_deletes_their_own_messages(client) -> None:
+    """The reviewer deletes a message they wrote, and a thread's first message goes with
+    its thread. What the agent wrote stays. A thread waits for the agent while the reviewer
+    has written in it after the agent's last entry."""
+    test_client, _ = client
+    base = "/artifacts/slides/comments"
+    comment = await (await test_client.post(base, json={"anchor": {"kind": "artifact"}, "text": "Ask"})).json()
+    assert comment["awaits_agent"] is True
+    cid = comment["id"]
+    answered = await (await test_client.post(f"{base}/{cid}/reply", json={"author": "agent", "text": "Answer"})).json()
+    assert "awaits_agent" not in answered
+    for text in ("More", "Never mind."):
+        await test_client.post(f"{base}/{cid}/reply", json={"text": text})
+    socket = await test_client.ws_connect("/ws")
+    assert (await socket.receive_json())["type"] == "state"
+
+    def delete(index: int):
+        return test_client.post(f"{base}/{cid}/delete-entry", json={"index": index})
+
+    response = await delete(3)
+    assert response.status == 200
+    kept = await response.json()
+    assert [entry["text"] for entry in kept["thread"]] == ["Ask", "Answer", "More"] and kept["awaits_agent"] is True
+    assert (await socket.receive_json()) == {"type": "comment_updated", "artifact": "slides", "comment": kept}
+    response = await delete(1)
+    assert response.status == 409 and await response.json() == {"error": "you can only delete your own messages"}
+    assert "awaits_agent" not in await (await delete(2)).json()
+    await socket.receive_json()
+    assert (await delete(2)).status == 404
+    assert (await test_client.post(f"{base}/{cid}/delete-entry", json={})).status == 400
+    assert (await test_client.post(f"{base}/c-00000000/delete-entry", json={"index": 0})).status == 404
+    response = await delete(0)
+    assert response.status == 200 and await response.json() == {"deleted": cid}
+    assert (await socket.receive_json()) == {"type": "comment_deleted", "artifact": "slides", "comment_id": cid}
+    assert (await test_client.get(f"{base}/{cid}")).status == 404
+    await socket.close()
+
+
+async def test_a_suggestion_rejected_or_applied_leaves_a_record_that_asks_nothing(client) -> None:
+    """The reviewer turns down the agent's suggestion: it leaves the thread, and the record
+    left in its place holds the pieces it proposed. A record of a suggestion rejected or
+    applied is marked, leaves the thread waiting for nothing, and is neither rewritten nor
+    deleted. A card read before the thread changed, and one with nothing to reject, are
+    refused. The store keeps the record as the words it is."""
+    test_client, review = client
+    base = "/artifacts/slides/comments"
+    cid = (await (await test_client.post(base, json={"anchor": {"kind": "artifact"}, "text": "Shorter?"})).json())["id"]
+
+    async def stamp() -> str:
+        return (await (await test_client.get(f"{base}/{cid}")).json())["updated"]
+
+    async def suggest(old: str, new: str) -> dict:
+        response = await test_client.post(f"{base}/{cid}/suggest", json={
+            "updated": await stamp(), "text": "Like this.", "changes": [{"old": old, "new": new}]})
+        assert response.status == 200
+        return await response.json()
+
+    async def reject(updated: str, comment_id: str = cid) -> tuple[int, dict]:
+        response = await test_client.post(f"{base}/{comment_id}/reject-suggestion", json={"updated": updated})
+        return response.status, await response.json()
+
+    proposed = await suggest("Selected sentence", "Chosen sentence")
+    assert "awaits_agent" not in proposed
+    assert (await reject(proposed["created"]))[0] == 409
+    assert (await reject(proposed["updated"], "c-00000000"))[0] == 404
+    response = await test_client.post(f"{base}/{cid}/reject-suggestion", json={})
+    assert response.status == 400 and await response.json() == {"error": "updated stamp is required"}
+    status, told = await reject(proposed["updated"])
+    assert status == 200 and "suggestion" not in told and "awaits_agent" not in told
+    assert told["thread"][-1] == {**told["thread"][-1], "author": "human", "rejected": True,
+                                  "text": "Rejected suggestion.\n− Selected sentence\n+ Chosen sentence"}
+    assert await reject(told["updated"]) == (409, {"error": "the comment carries no suggestion"})
+
+    await suggest("Selected sentence", "Chosen sentence")
+    applied = await (await test_client.post(f"{base}/{cid}/apply-suggestion", json={"updated": await stamp()})).json()
+    assert applied["thread"][-1] == {**applied["thread"][-1], "author": "human", "applied": True,
+                                     "text": "Applied suggestion.", "edits": ["artifact.html"]}
+    assert "awaits_agent" not in applied
+    assert "Chosen sentence." in (review.project_dir / "artifact.html").read_text(encoding="utf-8")
+
+    for index in (2, 4):
+        edited = await test_client.post(f"{base}/{cid}/edit", json={"index": index, "text": "Never mind."})
+        assert edited.status == 400 and "records what was done" in await edited.text()
+        deleted = await test_client.post(f"{base}/{cid}/delete-entry", json={"index": index})
+        assert deleted.status == 409
+    stored = json.loads(review.artifacts["slides"].store.path.read_text(encoding="utf-8"))
+    assert [set(entry) for entry in stored["comments"][0]["thread"][2:]] == [
+        {"id", "author", "at", "text"}, {"id", "author", "at", "text"}, {"id", "author", "at", "text", "edits"}]
+    # Why, the reviewer says in a reply, which asks the agent as any reply does.
+    replied = await (await test_client.post(f"{base}/{cid}/reply", json={"text": "Too curt."})).json()
+    assert replied["awaits_agent"] is True
 
 
 async def test_replying_never_reports_the_anchor(client) -> None:
@@ -1313,18 +1449,18 @@ async def test_call_button_wakes_a_parked_waiter_and_keeps_an_early_press(client
     line = await early.text()
     assert line.startswith("[review] reviewer called (press #2)")
     assert "read_comments(new=True)" in line
-    # The line counts threads whose last word is the reviewer's: a count of open threads
-    # sent an agent to read one it had already answered.
-    assert "no unanswered comments" in line
+    # The line counts threads with words for the agent it has not answered: a count of open
+    # threads sent an agent to read one it had already answered.
+    assert "no new comments" in line
     asked = await (await test_client.post(
         "/artifacts/slides/comments",
         json={"anchor": {"kind": "artifact"}, "text": "Is this right?"},
     )).json()
-    assert "unanswered comments: 1 on 'slides'" in review._review_line()
+    assert "new comments: 1 on 'slides'" in review._review_line()
     await test_client.post("/artifacts/slides/comments/update", json={
         "comment_ids": [asked["id"]], "message": "Yes, checked.",
     })
-    assert "no unanswered comments" in review._review_line()
+    assert "no new comments" in review._review_line()
 
     # Not acked yet (the line may never have reached the harness), so it is offered again.
     again = await test_client.get(wait)
@@ -1448,11 +1584,12 @@ async def test_the_shell_names_its_assets_under_a_tag_that_moves(client) -> None
     assert f'href="/static/v{newest}/style.css"' in text
     # The files the review pages share are named under the same tag.
     assert f'href="/static/v{newest}/shared/look.css"' in text and f'src="/static/v{newest}/shared/look-early.js"' in text
+    assert f'href="/static/v{newest}/shared/comment-panel.css"' in text
     assert '"/static/viewer.js"' not in text and '"/static/style.css"' not in text
     # The tag names a moment, not a directory: under it the files themselves are served.
-    tagged = await test_client.get(f"/static/v{newest}/comments.js")
+    tagged = await test_client.get(f"/static/v{newest}/shared/comment-panel.js")
     assert tagged.status == 200
-    assert await tagged.text() == (review.static_dir / "comments.js").read_text(encoding="utf-8")
+    assert await tagged.text() == (review.static_dir / "shared" / "comment-panel.js").read_text(encoding="utf-8")
     assert (await test_client.get(f"/static/v{newest}/nothing.js")).status == 404
 
 

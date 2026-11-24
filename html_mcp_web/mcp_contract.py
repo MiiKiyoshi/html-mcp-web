@@ -5,6 +5,8 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
+from .comments import ThreadEntry, _moment, waiting
+
 
 # How much of the text around a quote a read carries. The browser stores 120 characters
 # each side, of rendered text: across the real stores that context made a quote findable
@@ -186,7 +188,8 @@ def parse_entry_edits(text: str) -> list[tuple[str, str, str, str]]:
 
 
 def is_unanswered(comment: dict[str, Any]) -> bool:
-    return comment["thread"][-1]["author"] == "human"
+    # The server marks a thread whose reviewer wrote to the agent after its last entry.
+    return "awaits_agent" in comment
 
 
 def is_after(comment: dict[str, Any], since: datetime) -> bool:
@@ -198,10 +201,14 @@ def is_after(comment: dict[str, Any], since: datetime) -> bool:
     return at >= since
 
 
-
-def _moment(stamp: str) -> datetime:
-    at = datetime.fromisoformat(stamp)
-    return at if at.tzinfo is not None else at.replace(tzinfo=timezone.utc)
+def _told(entry: ThreadEntry) -> dict[str, Any]:
+    told: dict[str, Any] = {"at": short_time(entry.at), "text": entry.text}
+    # A record of a suggestion applied or rejected asks for no reply, and says so.
+    if entry.applied:
+        told.update(applied=True, edited_files=entry.edits)
+    if entry.rejected:
+        told["rejected"] = True
+    return told
 
 
 def new_requests(comments: list[dict[str, Any]], edge: datetime | None) -> tuple[list[dict[str, Any]], str | None]:
@@ -211,17 +218,15 @@ def new_requests(comments: list[dict[str, Any]], edge: datetime | None) -> tuple
     Unread and unanswered, both: edge says what was handed before, and the agent's last
     entry in a thread says what it has taken up. With no edge the second half alone keeps
     a first call off the whole history. The edge is exact and compared strictly, or the
-    entry it names would be handed over on every call.
+    entry it names would be handed over on every call. The record of a suggestion the
+    reviewer applied or rejected comes once, after an edge.
     """
     fresh: list[dict[str, Any]] = []
     newest: str | None = None
     for comment in comments:
         if comment["status"] != "open":
             continue
-        thread = comment["thread"]
-        answered = max((index for index, entry in enumerate(thread) if entry["author"] == "agent"), default=-1)
-        said = [entry for entry in thread[answered + 1:]
-                if entry["author"] == "human" and (edge is None or _moment(entry["at"]) > edge)]
+        said = waiting([ThreadEntry.from_dict(entry) for entry in comment["thread"]], edge)
         if not said:
             continue
         fresh.append({
@@ -229,9 +234,9 @@ def new_requests(comments: list[dict[str, Any]], edge: datetime | None) -> tuple
             "rev": revision_of(comment["updated"]),
             "anchor": agent_anchor(comment["anchor"]),
             # Every entry here is the reviewer's, on an open thread.
-            "entries": [{"at": short_time(entry["at"]), "text": entry["text"]} for entry in said],
+            "entries": [_told(entry) for entry in said],
         })
-        latest = max((entry["at"] for entry in said), key=_moment)
+        latest = max((entry.at for entry in said), key=_moment)
         if newest is None or _moment(latest) > _moment(newest):
             newest = latest
     return fresh, newest

@@ -1,33 +1,25 @@
 import { createPresentation } from "./presentation.js";
 import { createLayoutChecks } from "./layout-check.js";
 import { createAnchors } from "./anchors.js";
-import { createComments } from "./comments.js";
 import { createSearch } from "./search.js";
 import { displayPath } from "./path-display.mjs";
 import { createSettings } from "./shared/settings.js";
-
-const $ = (selector) => document.querySelector(selector);
+import { $, h, clear } from "./shared/dom.js";
+import { createCommentPanel } from "./shared/comment-panel.js";
 const homePath = document.querySelector('meta[name="html-mcp-home"]')?.content ?? "";
 
 const state = {
+  // The comment panel keeps its own fields here as well, as shared/comment-panel.js sets them out.
   project: null,
   alias: null,
   artifact: null,
-  comments: [],
   revision: null,
   loadedRevision: null,
-  pendingAnchor: null,
-  pendingSourceRevision: null,
   selectionAnchor: null,
-  composeSubmitting: false,
-  expanded: new Set(),
-  picked: new Set(),
-  focusedCommentId: null,
   areaMode: false,
   // Source words shown on the page by → Preview, marked for a moment.
   shownRange: null,
-  activeForm: null,
-  editingEntry: null,
+  // The comments whose words the page no longer finds, which their cards mark stale.
   unattached: new Set(),
   // The place each artifact's next document opens at, by id, kept until it is put back: the
   // page at the top of the window, by its index, and how far into it.
@@ -174,8 +166,7 @@ async function selectArtifact(alias) {
   state.artifact = state.project.artifacts[alias];
   state.revision = state.artifact.revision;
   state.loadedRevision = null;
-  state.comments = [];
-  state.expanded.clear();
+  resetCommentPanel();
   state.unattached.clear();
   state.currentPage = null;
   state.sourcePath = null;
@@ -238,26 +229,6 @@ async function download(button, format) {
     button.disabled = false;
     button.classList.remove("busy");
   }
-}
-
-function h(tag, props = {}, ...children) {
-  const element = document.createElement(tag);
-  for (const [key, value] of Object.entries(props)) {
-    if (key === "class") element.className = value;
-    else if (key === "text") element.textContent = value;
-    else if (key === "data") Object.assign(element.dataset, value);
-    else if (key.startsWith("on")) element.addEventListener(key.slice(2), value);
-    else if (value !== null && value !== undefined) element.setAttribute(key, value);
-  }
-  for (const child of children.flat()) {
-    if (child === null || child === undefined) continue;
-    element.appendChild(typeof child === "string" ? document.createTextNode(child) : child);
-  }
-  return element;
-}
-
-function clear(node) {
-  node.replaceChildren();
 }
 
 async function responseError(response) {
@@ -352,7 +323,7 @@ function syncSourceCommentMarkers() {
   clearSourceCommentMarkers();
   if (state.sourcePath === null || state.sourceDirty) return;
   const Range = window.ace.require("ace/range").Range;
-  for (const comment of state.comments) {
+  for (const comment of state.markedComments) {
     const anchor = comment.anchor;
     if (comment.status !== "open" || anchor.kind !== "source"
         || anchor.file !== state.sourcePath || anchor.stale) continue;
@@ -376,7 +347,7 @@ function syncSourceCommentMarkers() {
   // card's − line shows. The server found each piece once in the file, so a piece an edit
   // has since moved or duplicated is left unmarked rather than marked wrongly.
   const text = state.editor.session.getValue();
-  for (const comment of state.comments) {
+  for (const comment of state.markedComments) {
     const suggestion = comment.suggestion;
     if (comment.status !== "open" || suggestion === undefined || suggestion.file !== state.sourcePath) continue;
     for (const change of suggestion.changes) {
@@ -604,7 +575,6 @@ const settings = createSettings({
     state.editor?.setTheme(editorTheme());
     for (const frame of document.querySelectorAll("iframe")) markFrameTheme(frame);
   },
-  onSendKey: (name) => { $("#compose-submit").title = `Post (${name})`; },
 });
 
 // K with Vim keys, or Ctrl+Alt+K (Cmd+Option+K), opens in the comments the comment the
@@ -619,7 +589,7 @@ function showCommentAtCursor() {
     setSourceStatus("No comment here");
     return;
   }
-  focusComment(chosen.id);
+  focusComment(chosen.id).catch((error) => console.error(error));
 }
 
 // Ctrl+Alt+M (Cmd+Option+M), or gc with Vim keys. Comments wait for the file to be saved,
@@ -677,7 +647,7 @@ async function initializeSourceEditor() {
   editor.on("guttermousedown", (event) => {
     if (event.domEvent.target.classList.contains("source-comment-line")) {
       const comments = state.sourceCommentsByRow.get(event.getDocumentPosition().row) ?? [];
-      if (comments.length > 0) focusComment(comments[0].id);
+      if (comments.length > 0) focusComment(comments[0].id).catch((error) => console.error(error));
     }
   });
   state.editor = editor;
@@ -747,7 +717,7 @@ function openSourceCommentCompose() {
   if (!quote.trim() || range.isEmpty()) return;
   // Back in the editor once the comment is sent or dropped, to go on from where it was.
   $("#compose-dialog").addEventListener("close", () => state.editor.focus(), { once: true });
-  openCompose({
+  commentOn({
     kind: "source",
     file: state.sourcePath,
     quote,
@@ -853,7 +823,8 @@ function renderPages() {
       },
       h("span", { class: "page-number", text: String(number) }),
       h("span", { class: "page-title", text: title })),
-      actionButton("+ comment", () => openCompose({ kind: "page", number, title }), "comment-page-btn")));
+      h("button", { type: "button", class: "comment-page-btn", text: "+ comment",
+                    onclick: () => commentOn({ kind: "page", number, title }) })));
   }
 }
 
@@ -1945,11 +1916,11 @@ function renderHighlights() {
         localStorage.setItem("htmlMcpSidebarCollapsed", "1");
         return;
       }
-      focusComment(comment.id);
+      focusComment(comment.id).catch((error) => console.error(error));
     });
     return badge;
   };
-  for (const comment of state.comments) {
+  for (const comment of state.markedComments) {
     if (comment.status !== "open" || !["text", "area"].includes(comment.anchor.kind)) continue;
     number += 1;
     if (comment.anchor.kind === "area") {
@@ -2024,11 +1995,7 @@ function renderHighlights() {
   }
   const attachmentChanged = previousUnattached.size !== state.unattached.size
     || Array.from(previousUnattached).some((commentId) => !state.unattached.has(commentId));
-  if (attachmentChanged) {
-    const ui = captureCommentUi();
-    renderComments();
-    restoreCommentUi(ui);
-  }
+  if (attachmentChanged) renderComments();
 }
 
 // While the Area button is down, a drag on a page draws a box instead of selecting text,
@@ -2091,7 +2058,7 @@ function installAreaDrawing(doc) {
     if (event.type !== "pointerup" || box.width < 4 || box.height < 4) return;
     const index = artifactPages().indexOf(done.page);
     setAreaMode(false);
-    openCompose({
+    commentOn({
       kind: "area",
       number: index + 1,
       title: pageTitle(done.page, index),
@@ -2595,40 +2562,284 @@ async function refreshState() {
   updateLayoutUi();
 }
 
-const comments = createComments({
-  $,
-  artifactBase,
-  clear,
-  fetchJson,
-  frameDocument,
-  frameWindow,
-  h,
-  hideSelectionButton,
-  openSourceLocation,
-  pageTitleAt: (number) => {
-    const page = frameDocument()?.body ? artifactPages()[number - 1] : undefined;
-    return page === undefined ? "" : pageTitle(page, number - 1);
-  },
-  renderHighlights,
-  resolveAnchor,
-  sendOn: settings.sendOn,
+// ----- Comment panel -----
+// The list of comments, the row above it, its search and its cards are shared with the other
+// review pages, in shared/comment-panel.js. What is this page's own goes in by the hooks
+// below: the server's calls for the artifact shown, its pages and frames, and the editor.
+
+// A comment as the panel reads it: the server keeps a thread archived as one kept as reference.
+function asPanelComment(comment) {
+  return comment.status === "reference" ? { ...comment, status: "archived" } : comment;
+}
+
+// A comment call's answer, as the panel reads it: { ok: true, data } with what the server sent
+// back, or { ok: false, error, conflict }: the refusal in words, which the server sends as
+// JSON { error } or as text, and whether it was a 409, refused because something changed since.
+async function answered(request) {
+  const response = await request;
+  if (response.ok) return { ok: true, data: response.status === 204 ? null : await response.json() };
+  const text = await response.text();
+  let error = text || `${response.status} ${response.statusText}`;
+  try {
+    const refusal = JSON.parse(text);
+    if (typeof refusal.error === "string") error = refusal.error;
+  } catch { /* a refusal in words */ }
+  return { ok: false, error, conflict: response.status === 409 };
+}
+
+function postJson(url, body) {
+  return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+}
+
+// What a comment is on, as its card names it.
+function anchorLabel(anchor) {
+  switch (anchor.kind) {
+    case "artifact": return "artifact";
+    case "text": return "text";
+    case "page": return `p${anchor.number}`;
+    case "area": return `p${anchor.number} area`;
+    case "source": return `${anchor.file}:${anchor.line_start}${anchor.line_end === anchor.line_start ? "" : `-${anchor.line_end}`}`;
+    default: throw new Error(`unknown anchor kind: ${anchor.kind}`);
+  }
+}
+
+// The words a comment is on, which its card shows once opened: the page's title for a page
+// or a box on one, which a comment the agent made may not carry itself.
+function anchorQuote(anchor) {
+  if (anchor.kind === "text" || anchor.kind === "source") return anchor.quote;
+  if (anchor.title) return anchor.title;
+  const page = frameDocument()?.body ? artifactPages()[anchor.number - 1] : undefined;
+  return page === undefined ? "" : pageTitle(page, anchor.number - 1);
+}
+
+// What the new comment dialog says the comment is on.
+function composeAnchorText(anchor) {
+  if (anchor.kind === "text") return anchor.quote;
+  if (anchor.kind === "page") return `Page ${anchor.number}: ${anchor.title}`;
+  if (anchor.kind === "area") return `A box on page ${anchor.number}: ${anchor.title}`;
+  if (anchor.kind === "source") return `${anchor.file}:${anchor.line_start}\n${anchor.quote}`;
+  return "Whole artifact";
+}
+
+// The new comment dialog on *anchor*. A comment on the source goes with the revision its words
+// were selected in, which the server checks against the file.
+function commentOn(anchor) {
+  openCompose(anchor, composeAnchorText(anchor), anchor.kind === "source" ? { source_revision: state.sourceRevision } : {});
+}
+
+const {
+  attach: attachCommentPanel, refreshComments, renderComments, setCommentFilter, closeCommentSearch, openCompose,
+  reset: resetCommentPanel,
+} = createCommentPanel({
   state,
-  syncSourceCommentMarkers,
+  prefix: "htmlMcp",
+  api: {
+    list: async (status) => {
+      const answer = await answered(fetch(status === "all" ? `${artifactBase()}/comments`
+        : `${artifactBase()}/comments?status=${status === "archived" ? "reference" : status}`));
+      return answer.ok ? { ok: true, data: { comments: answer.data.comments.map(asPanelComment) } } : answer;
+    },
+    create: async (body) => {
+      const answer = await answered(postJson(`${artifactBase()}/comments`, body));
+      return answer.ok ? { ok: true, data: asPanelComment(answer.data) } : answer;
+    },
+    setStatus: (ids, status, resolved) => answered(postJson(`${artifactBase()}/comments/status`, { ids, status, resolved })),
+    mutate: (id, action, body) => answered(action === "delete"
+      ? fetch(`${artifactBase()}/comments/${id}`, { method: "DELETE" })
+      : postJson(`${artifactBase()}/comments/${id}/${action}`, body)),
+  },
+  // The views the list offers, as [value, name], the first being the one it opens on. What is
+  // set aside but still open comes before what is finished.
+  tabs: {
+    comments: {
+      views: [["open", "open"], ["unanswered", "unanswered"], ["archived", "archived"], ["resolved", "resolved"], ["all", "all"]],
+      noun: "comment",
+      count: "#comments-tab-count",
+      hint: "To comment, select words on a page or in the Source, press + comment beside a page in Pages, or draw a box "
+        + "with the box tool. Add a note on the whole artifact… in the ⋯ menu comments on the artifact as a whole.",
+    },
+  },
+  labels: {
+    reply: "Reply", replyBox: "Reply for the agent…", firstSort: ["page", "page order"],
+    composeTitle: "New comment", composeBox: "Leave feedback for the agent",
+  },
+  sendOn: settings.sendOn,
+  sendKeyName: settings.sendKeyName,
+  // No key works the comments here: none names a button, holds a range or rings a card.
+  keys: { hint: () => "", rangeIds: () => [], mark: () => {}, placeRing: () => {} },
+  tabOf: () => "comments",
+  readAlong: async () => null,
+  applyAlong: () => {},
+  showTabs: () => {},
+  agentAwaited: () => {},
+  posted: () => {},
+  // The entries carry no writer's name: from:me and from:agent name the two writers.
+  me: () => null,
+  searchWords: () => [],
+  unanswered: (comment, byAgent) => byAgent,
+  settles: () => true,
+  anchorLabel,
+  // Words the page no longer finds, as the highlights last found them, or a selection in the
+  // source the server no longer finds.
+  stale: (comment) => state.unattached.has(comment.id) || Boolean(comment.stale),
+  // An opened card shows whole, and the page or the source shows where the comment is.
+  showPlace: (commentId) => {
+    if (state.expanded.has(commentId)) revealCard(commentId);
+    jumpToComment(commentId);
+  },
+  markPlaces: () => {
+    renderHighlights();
+    syncSourceCommentMarkers();
+  },
+  // An opened card quotes what it is on, cut to a few lines. A left rule sets it apart from the
+  // thread.
+  cardNote: (comment, expanded) => {
+    if (!expanded || comment.anchor.kind === "artifact") return null;
+    const quote = anchorQuote(comment.anchor);
+    return h("div", { class: "anchor-quote", text: quote.length > 180 ? `${quote.slice(0, 177)}…` : quote });
+  },
+  cardReply: () => null,
+  cardActions: (comment, buttons) => buttons,
+  entryMark: () => null,
+  mayChange: () => true,
+  deleteQuestion: (entry, index, question) => question,
+  renderRow: () => {},
+  // The bell goes back to its group before the row is fitted, and once the view list gives up
+  // its room it waits behind the dots.
+  restoreRow: () => {
+    if ($("#call-agent-btn").parentElement !== $("#comment-fetch")) $("#comment-fetch").append($("#call-agent-btn"));
+  },
+  rowSteps: { squeezed: [["uncalled", "#call-agent-btn"]] },
+  confirmRow: () => true,
+  viewChosen: () => {},
+  compose: {
+    opening: () => {},
+    filled: () => ({}),
+    refused: () => false,
+    // The selection the comment was written on goes.
+    posted: async (comment, body) => {
+      state.selectionAnchor = null;
+      if (body.anchor.kind === "source") {
+        state.editor?.clearSelection();
+      } else {
+        frameWindow().getSelection()?.removeAllRanges();
+        hideSelectionButton();
+      }
+      await refreshComments();
+    },
+    closed: () => {},
+  },
 });
-const actionButton = comments.actionButton;
-const captureCommentUi = comments.captureCommentUi;
-const focusComment = comments.focusComment;
-const installComposeKeys = comments.installComposeKeys;
-const openCompose = comments.openCompose;
-const foldAll = comments.foldAll;
-const pickAll = comments.pickAll;
-const renderPickedActions = comments.renderPickedActions;
-const setPickedStatus = comments.setPickedStatus;
-const refreshComments = comments.refreshComments;
-const renderComments = comments.renderComments;
-const restoreCommentUi = comments.restoreCommentUi;
-const submitCompose = comments.submitCompose;
-const switchSidebarTab = comments.switchSidebarTab;
+
+// A card opened at the foot of the list unfolds below the fold, and the reader had to
+// scroll after every open to read what they had just asked for. The list scrolls by
+// what the card overhangs, so the whole of it shows; a card taller than the list is
+// brought to the top instead, which is as much of it as there is room for.
+// The opened card is brought into the list's box: its foot at the box's foot when it
+// fits, its head at the box's head when it does not. Done at once, then again a frame
+// later and once more shortly after: the measurement taken inside the click is not
+// always the one the engine paints (Safari laid the list out again after the click),
+// and the reader was left to scroll after opening the last card of the list.
+function revealCard(commentId) {
+  const settle = () => {
+    const list = $("#comments-list");
+    const card = Array.from(list.querySelectorAll("[data-comment-id]")).find(
+      (node) => node.dataset.commentId === commentId);
+    if (card === undefined || !state.expanded.has(commentId)) return;
+    const margin = 8;
+    growPanelFor(card.getBoundingClientRect().height + margin * 2);
+    const listBox = list.getBoundingClientRect();
+    const cardBox = card.getBoundingClientRect();
+    const overhang = cardBox.bottom - (listBox.bottom - margin);
+    const above = listBox.top + margin - cardBox.top;
+    if (cardBox.height > listBox.height - margin * 2 || above > 0) {
+      list.scrollTop += cardBox.top - listBox.top - margin;
+    } else if (overhang > 0) {
+      list.scrollTop += overhang;
+    }
+    // On the record when the page is traced, for a device that cannot be watched.
+    window.htmlMcpTrace?.(`reveal ${commentId} card=${Math.round(cardBox.top)}..${Math.round(cardBox.bottom)}`
+      + ` list=${Math.round(listBox.top)}..${Math.round(listBox.bottom)} over=${Math.round(overhang)}`
+      + ` scroll=${Math.round(list.scrollTop)}/${list.scrollHeight - list.clientHeight}`);
+  };
+  settle();
+  requestAnimationFrame(settle);
+  setTimeout(settle, 150);
+}
+
+// Under the artifact, the comments get a slice of a phone's screen, and a thread opened
+// there is usually taller than the slice: scrolling cannot show what does not fit, so
+// the reader was left scrolling after every open. The panel takes the room the card
+// needs instead, up to what the drag bar itself allows, and the artifact keeps the
+// rest. Beside the artifact it is already full height, so there is nothing to take.
+function growPanelFor(wanted) {
+  const layout = $(".layout");
+  const sidebar = $("#sidebar");
+  const list = $("#comments-list");
+  const stacked = Math.abs(sidebar.getBoundingClientRect().width
+    - layout.getBoundingClientRect().width) < 2;
+  if (!stacked) return;
+  const shortfall = wanted - list.getBoundingClientRect().height;
+  if (shortfall <= 0) return;
+  const height = sidebar.getBoundingClientRect().height + shortfall;
+  const limited = Math.round(Math.max(90, Math.min(height, window.innerHeight - 140)));
+  layout.style.setProperty("--html-mcp-panel-height", `${limited}px`);
+}
+
+function jumpToComment(commentId) {
+  const comment = state.comments.find((value) => value.id === commentId);
+  if (comment === undefined) return;
+  if (comment.anchor.kind === "source") {
+    openSourceLocation(comment.anchor).catch((error) => alert(`Could not open source: ${error.message}`));
+    return;
+  }
+  if (comment.anchor.kind === "area") {
+    frameDocument().querySelector(`.html-mcp-area[data-comment-id="${CSS.escape(commentId)}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    flashMarks(commentId);
+    return;
+  }
+  if (comment.anchor.kind !== "text") return;
+  const range = resolveAnchor(comment.anchor);
+  // A comment whose text is gone is not stranded: the page carries a dashed mark where
+  // it was written, and the card opens there like any other.
+  const element = range === null
+    ? frameDocument().querySelector(`.html-mcp-lost[data-comment-id="${CSS.escape(commentId)}"]`)
+    : (range.startContainer.nodeType === Node.ELEMENT_NODE
+      ? range.startContainer
+      : range.startContainer.parentElement);
+  element?.scrollIntoView({ behavior: "smooth", block: "center" });
+  flashMarks(commentId);
+}
+
+function flashMarks(commentId) {
+  setTimeout(() => {
+    const marks = frameDocument().querySelectorAll(`[data-comment-id="${CSS.escape(commentId)}"]`);
+    marks.forEach((mark) => mark.classList.add("flash"));
+    setTimeout(() => marks.forEach((mark) => mark.classList.remove("flash")), 1000);
+  }, 350);
+}
+
+// From its mark on a page or beside a line a card opens the same way it does from the list:
+// whole, and at the foot of the box when it sits at the foot of the list. Centred, a tall card
+// at the foot was cut off below and the reader scrolled after every open. The marks are the
+// open comments', so a list that shows another view, or a search, gives way to the open view.
+async function focusComment(commentId) {
+  const layout = $(".layout");
+  if (layout.classList.contains("sidebar-collapsed")) {
+    layout.classList.remove("sidebar-collapsed");
+    localStorage.setItem("htmlMcpSidebarCollapsed", "0");
+  }
+  if (!state.comments.some((comment) => comment.id === commentId)) {
+    closeCommentSearch();
+    setCommentFilter("open");
+    await refreshComments();
+  }
+  state.focusedCommentId = commentId;
+  state.expanded.add(commentId);
+  renderComments();
+  revealCard(commentId);
+}
 
 // Green reaches a parked waiter now; red remains clickable because the server queues the
 // call until the next waiter connects.
@@ -2676,9 +2887,14 @@ async function handleSocketMessage(message) {
   }
   if (["artifacts_changed", "config_reloaded"].includes(message.type)) {
     if (!adoptProject(message)) return;
-    if (state.project.artifacts[state.alias] === undefined) {
+    // An artifact shown that the configuration no longer names gives way to the first, with its
+    // comments.
+    const gone = state.project.artifacts[state.alias] === undefined;
+    if (gone) {
       state.alias = Object.keys(state.project.artifacts)[0];
       state.loadedRevision = null;
+      resetCommentPanel();
+      state.unattached.clear();
     }
     const artifact = state.project.artifacts[state.alias];
     const changed = state.loadedRevision !== artifact.revision || state.revision !== artifact.revision;
@@ -2687,6 +2903,7 @@ async function handleSocketMessage(message) {
     renderArtifactTabs();
     updateArtifactLinks();
     updateLayoutUi();
+    if (gone) await refreshComments();
     if (changed) loadArtifact(true);
     if (message.type === "artifacts_changed" && message.path === state.sourcePath) {
       if (state.sourceDirty) setSourceStatus("Changed on disk · reload", "conflict");
@@ -2841,7 +3058,7 @@ function attachControls() {
     });
   }
   $("#selection-comment-btn").addEventListener("click", () => {
-    if (state.selectionAnchor !== null) openCompose(state.selectionAnchor);
+    if (state.selectionAnchor !== null) commentOn(state.selectionAnchor);
   });
   $("#selection-source-btn").addEventListener("click", () => {
     openSelectionInSource().catch((error) => alert(`Could not open the source: ${error.message}`));
@@ -2891,7 +3108,7 @@ function attachControls() {
   };
   touch.addEventListener("change", placeViewTabs);
   placeViewTabs();
-  $("#artifact-comment-btn").addEventListener("click", () => openCompose({ kind: "artifact" }));
+  $("#artifact-comment-btn").addEventListener("click", () => commentOn({ kind: "artifact" }));
   $("#download-pdf-btn").addEventListener("click", (event) => download(event.currentTarget, "pdf"));
   $("#download-pptx-btn").addEventListener("click", (event) => download(event.currentTarget, "pptx"));
   $("#fullscreen-btn").addEventListener("click", () => {
@@ -2914,37 +3131,7 @@ function attachControls() {
   // A device that cannot be watched from where the code is written draws its own touch
   // record over the page when the address carries ?trace.
   if (new URLSearchParams(window.location.search).has("trace")) import("./trace.js");
-  $("#compose-form").addEventListener("submit", submitCompose);
-  installComposeKeys();
-  $("#compose-cancel").addEventListener("click", () => {
-    $("#compose-dialog").close();
-    state.pendingAnchor = null;
-    state.pendingSourceRevision = null;
-  });
-  $("#comment-filter").addEventListener("change", (event) => {
-    $("#comment-filter-name").textContent = event.target.selectedOptions[0].textContent;
-    refreshComments().catch((error) => alert(error.message));
-  });
-  $("#fold-all-btn").addEventListener("click", foldAll);
-  $("#pick-all-btn").addEventListener("click", pickAll);
-  // Picking is the reviewer's own act, and closing what was picked is the sign-off on a
-  // batch the agent answered and deliberately left open. The buttons carry the ids they
-  // were drawn with, so a press acts on what its label counted.
-  for (const [id, status] of [["#resolve-picked-btn", "resolved"], ["#archive-picked-btn", "reference"], ["#reopen-picked-btn", "open"]]) {
-    $(id).addEventListener("click", async () => {
-      const button = $(id);
-      const ids = button.dataset.ids === "" ? [] : button.dataset.ids.split(" ");
-      if (ids.length === 0) return;
-      button.disabled = true;
-      try {
-        await setPickedStatus(ids, status);
-      } catch (error) {
-        alert(`Could not save: ${error.message}`);
-      } finally {
-        button.disabled = false;
-      }
-    });
-  }
+  attachCommentPanel();
   // Ctrl+Alt+Enter (Cmd+Option+Enter) presses the bell from anywhere on the page, the
   // editor included, but not over a dialog.
   document.addEventListener("keydown", (event) => {
@@ -2971,9 +3158,6 @@ function attachControls() {
       setTimeout(() => { word.textContent = ""; button.disabled = false; }, 2000);
     }
   });
-  for (const button of document.querySelectorAll(".tab-btn")) {
-    button.addEventListener("click", () => switchSidebarTab(button.dataset.tab));
-  }
   $("#sidebar-toggle-btn").addEventListener("click", () => {
     const collapsed = $(".layout").classList.toggle("sidebar-collapsed");
     localStorage.setItem("htmlMcpSidebarCollapsed", collapsed ? "1" : "0");

@@ -81,13 +81,18 @@ leaves the presses to it, and `do html listen` in any session moves them there.
 - Press **Call agent** when your comments are ready. The agent edits the source and replies
   in the same thread.
 - **Resolve** a thread whose edit satisfies you, or **Reply** in it when it does not.
-  **Archive** sets a thread aside, and it still takes replies.
+  **Archive** sets a thread aside, and it still takes replies. A line above the list says
+  what was done, and its **Undo** puts it back.
+- The number on the Comments tab counts the threads the agent answered last, and the
+  **unanswered** view lists them.
+- The search box above the list finds comments in any status by their words, `from:agent`
+  or `from:me`, a source file as `file:`, and a day as `after:11-12` or `before:11-14`.
 
 ## Suggested edits
 
 The thread shows the source the agent would change as a −/+ pair, and the Source view marks
-the same text in red. **Apply suggestion** writes the change into the file. Proposing again
-replaces the proposal.
+the same text in red. **Apply suggestion** writes the change into the file, and **Reject** turns it
+down, which the thread records. Proposing again replaces the proposal.
 
 ## Editor keys
 

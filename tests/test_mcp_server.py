@@ -1194,6 +1194,140 @@ def test_a_suggestion_is_proposed_on_the_page_and_applied_by_the_reviewer(tmp_pa
         binding.stop()
 
 
+def prose(tmp_path: Path) -> None:
+    """A deck whose page holds four sentences, for suggestions to rewrite one each."""
+    (tmp_path / "slides.html").write_text(
+        '<!doctype html><html><body><main class="pages"><section class="page">'
+        + "".join(f"<p>Sentence {n} is long.</p>" for n in range(4))
+        + "</section></main></body></html>", encoding="utf-8")
+
+
+def test_a_press_counts_the_threads_new_gives_by_the_rule_unanswered_lists_by(tmp_path: Path) -> None:
+    """Of five open threads the reviewer wrote in, one waits for the agent: a suggestion
+    applied asks nothing. The line a press prints, read_comments(new=True) and
+    read_comments(unanswered=True) name that one alike. A word written after the record
+    makes its thread wait again. The press and new=True leave out what new=True has
+    carried before, which unanswered=True still lists while it has no answer."""
+    config = project(tmp_path)
+    prose(tmp_path)
+    binding = ProjectBinding(tmp_path)
+    try:
+        mcp = create_server(binding)
+        binding.require_client()
+        server = HtmlReviewServer(config)
+        base = f"http://127.0.0.1:{config.port}/artifacts/slides/comments"
+
+        def ids(**arguments) -> list[str]:
+            told = answer(mcp.call_tool("read_comments", {"artifact": "slides", **arguments}))
+            return [comment["id"] for comment in told["comments"]]
+
+        applied = []
+        for n in range(4):
+            asked = post_json(base, {"anchor": {"kind": "artifact"}, "text": f"Tighten sentence {n}."})
+            proposed = post_json(f"{base}/{asked['id']}/suggest", {
+                "updated": asked["updated"], "text": "Shorter.",
+                "changes": [{"old": f"Sentence {n} is long", "new": f"Sentence {n}"}]})
+            done = post_json(f"{base}/{asked['id']}/apply-suggestion", {"updated": proposed["updated"]})
+            assert done["thread"][-1]["applied"] is True and "awaits_agent" not in done
+            applied.append(asked["id"])
+        request = post_json(base, {"anchor": {"kind": "artifact"}, "text": "Add a citation here."})
+
+        assert "new comments: 1 on 'slides'" in server._review_line()
+        assert ids(unanswered=True) == [request["id"]]
+        assert ids(new=True) == [request["id"]]
+
+        post_json(f"{base}/{applied[0]}/reply", {"text": "And the figure?"})
+        assert "new comments: 1 on 'slides'" in server._review_line()
+        assert ids(new=True) == [applied[0]]
+        assert ids(unanswered=True) == [applied[0], request["id"]]
+        assert "no new comments" in server._review_line()
+    finally:
+        binding.stop()
+
+
+def test_a_suggestion_applied_is_told_to_the_agent_once(tmp_path: Path) -> None:
+    """The reviewer applying a suggestion asks nothing, and the agent hears of it once: the
+    press counts its thread, read_comments(new=True) carries the record with the files it
+    changed, and neither does again though no reply follows. unanswered=True, which lists
+    what waits for an answer, leaves it out."""
+    config = project(tmp_path)
+    prose(tmp_path)
+    binding = ProjectBinding(tmp_path)
+    try:
+        mcp = create_server(binding)
+        binding.require_client()
+        server = HtmlReviewServer(config)
+        base = f"http://127.0.0.1:{config.port}/artifacts/slides/comments"
+
+        def read(**arguments) -> list[dict]:
+            return answer(mcp.call_tool("read_comments", {"artifact": "slides", **arguments}))["comments"]
+
+        asked = post_json(base, {"anchor": {"kind": "artifact"}, "text": "Tighten it."})
+        assert [told["id"] for told in read(new=True)] == [asked["id"]]
+        proposed = post_json(f"{base}/{asked['id']}/suggest", {
+            "updated": asked["updated"], "text": "Shorter.",
+            "changes": [{"old": "Sentence 0 is long", "new": "Sentence 0"}]})
+        assert "no new comments" in server._review_line()
+
+        post_json(f"{base}/{asked['id']}/apply-suggestion", {"updated": proposed["updated"]})
+        assert "new comments: 1 on 'slides'" in server._review_line()
+        assert read(unanswered=True) == []
+        (told,) = read(new=True)
+        assert told["id"] == asked["id"]
+        (entry,) = told["entries"]
+        assert entry["applied"] is True and entry["edited_files"] == ["slides.html"]
+        assert "no new comments" in server._review_line()
+        assert read(new=True) == []
+    finally:
+        binding.stop()
+
+
+def test_a_suggestion_rejected_is_told_to_the_agent_once(tmp_path: Path) -> None:
+    """The reviewer turns down a suggestion. The record it leaves holds what was turned
+    down, which the press counts and read_comments(new=True) carries once, and the thread
+    read by its id still shows. It waits for no answer, and what the reviewer writes after
+    it is asked as ever."""
+    config = project(tmp_path)
+    prose(tmp_path)
+    binding = ProjectBinding(tmp_path)
+    try:
+        mcp = create_server(binding)
+        binding.require_client()
+        server = HtmlReviewServer(config)
+        base = f"http://127.0.0.1:{config.port}/artifacts/slides/comments"
+
+        def read(**arguments) -> list[dict]:
+            return answer(mcp.call_tool("read_comments", {"artifact": "slides", **arguments}))["comments"]
+
+        here = post_json(base, {"anchor": {"kind": "artifact"}, "text": "Tighten it."})
+        assert len(read(new=True)) == 1
+        proposed = post_json(f"{base}/{here['id']}/suggest", {
+            "updated": here["updated"], "text": "Shorter.",
+            "changes": [{"old": "Sentence 0 is long", "new": "Sentence 0"}]})
+        assert "no new comments" in server._review_line()
+        assert read(unanswered=True) == []
+
+        told = post_json(f"{base}/{here['id']}/reject-suggestion", {"updated": proposed["updated"]})
+        assert told["thread"][-1]["text"] == "Rejected suggestion.\n− Sentence 0 is long\n+ Sentence 0"
+        assert "new comments: 1 on 'slides'" in server._review_line()
+        assert read(unanswered=True) == []
+        (fresh,) = read(new=True)
+        assert fresh["id"] == here["id"] and [entry["rejected"] for entry in fresh["entries"]] == [True]
+        assert "no new comments" in server._review_line()
+        assert read(new=True) == []
+        # Read whole later, the thread still says what was turned down.
+        (whole,) = read(ids=[here["id"]])
+        assert whole["thread"][-1]["text"].startswith("Rejected suggestion.")
+
+        # Why, the reviewer says in a reply, which asks the agent as any reply does.
+        post_json(f"{base}/{here['id']}/reply", {"text": "Too curt."})
+        assert [asked["id"] for asked in read(unanswered=True)] == [here["id"]]
+        (told,) = read(new=True)
+        assert [entry["text"] for entry in told["entries"]] == ["Too curt."]
+    finally:
+        binding.stop()
+
+
 def test_layout_says_at_once_when_nothing_can_check(tmp_path: Path, monkeypatch) -> None:
     """With no Firefox and no review page open, waiting could only end in the same answer."""
     import shutil as shutil_module

@@ -1,8 +1,12 @@
 {
-  "source": "tex-mcp-web 22aded4",
+  "source": "tex-mcp-web 5f19cf7",
   "files": {
+    "comment-panel.css": "efc588357f72044d5d58e6f7cc47d45ec460696106b3df5ad169d35f90063fcb",
+    "comment-panel.js": "fdd31757dd41127c9e0a18dd441100e0ca556eee80fe9b3263786688cea8f6e6",
+    "comment-search.js": "ce40bfe54a1339a971ee3fb2b99af4e50876c7fb0f2014ddf793463f69d848cd",
+    "dom.js": "904995435c624951ee920aa88559c6427cdefc1b698e37a7e1d51fcf3e7d59b7",
     "look-early.js": "e736b722e31025a5fa33d4698aaad7796984399a0e96c8d807aa1e3e59799d4e",
-    "look.css": "4028bc142e13368955915b83943dd550f04a7de783efcb59120bd68a7d34db04",
-    "settings.js": "69fb5102832301f20ada6cb6a9054d7cc029f71e0875c9ec263e6bc876d5bb23"
+    "look.css": "138766b3c3928e52f9efb96e9a62330c1f763ca8fc13f294b0c2b68d6282a41c",
+    "settings.js": "c85a5b2401e06e6d53c314946571a9c74091cf5532f2746a8e62c7f1f28f9f24"
   }
 }

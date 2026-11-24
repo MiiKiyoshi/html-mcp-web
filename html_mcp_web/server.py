@@ -19,6 +19,7 @@ import sys
 import tempfile
 import time
 from dataclasses import asdict, dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -29,11 +30,13 @@ from aiohttp import WSMsgType, web
 from .comments import (
     Comment,
     CommentStore,
+    SourceAnchor,
     SuggestedEdit,
     anchor_from_dict,
     capture_source_anchor,
     locate_fragments,
     swap_fragments,
+    waiting,
 )
 from .config import (
     ArtifactConfig,
@@ -75,6 +78,40 @@ AGENT_CLOSE_REFUSED = ("an agent does not resolve a thread: reply, record the ed
                        "leave it open; the reviewer resolves from the page")
 AGENT_REFERENCE_REFUSED = ("an agent does not keep a thread as reference: reply and leave it open; "
                            "the reviewer keeps it from the page")
+# The statuses the review page sets many comments to at once, by the names it gives them,
+# and what the store keeps each as: a thread archived is one kept as reference.
+PAGE_STATUSES = {"open": "open", "resolved": "resolved", "archived": "reference"}
+
+
+def comment_json(comment: Comment) -> dict[str, Any]:
+    """A comment as the review page and the agent's tools read it: as stored, with the
+    records of a suggestion applied or rejected marked, stale on one whose source
+    selection is no longer found, and awaits_agent on a thread whose reviewer wrote to the
+    agent after its last entry."""
+    data = comment.to_dict()
+    if isinstance(comment.anchor, SourceAnchor) and comment.anchor.stale:
+        data["stale"] = True
+    for entry, shown in zip(comment.thread, data["thread"]):
+        if entry.applied:
+            shown["applied"] = True
+        if entry.rejected:
+            shown["rejected"] = True
+    if waiting(comment.thread):
+        data["awaits_agent"] = True
+    return data
+
+
+def refusal(status: int, error: str) -> web.Response:
+    return web.json_response({"error": error}, status=status)
+
+
+async def json_object(request: web.Request) -> dict[str, Any] | None:
+    """The request's JSON object, or None for a body that is not one."""
+    try:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
 
 
 def strip_script_blocks(source: str) -> str:
@@ -1338,7 +1375,7 @@ class HtmlReviewServer:
         status = request.query["status"] if "status" in request.query else None
         if status not in {None, "open", "resolved", "reference"}:
             raise web.HTTPBadRequest(text="invalid status")
-        return web.json_response({"comments": [comment.to_dict() for comment in runtime.store.list(status=status)]})
+        return web.json_response({"comments": [comment_json(comment) for comment in runtime.store.list(status=status)]})
 
     async def get_comment(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
@@ -1346,7 +1383,7 @@ class HtmlReviewServer:
             comment = runtime.store.get(request.match_info["comment_id"])
         except KeyError as error:
             raise web.HTTPNotFound(text=str(error)) from error
-        return web.json_response(comment.to_dict())
+        return web.json_response(comment_json(comment))
 
     async def add_comment(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
@@ -1382,8 +1419,8 @@ class HtmlReviewServer:
             raise
         except (KeyError, TypeError, ValueError) as error:
             raise web.HTTPBadRequest(text=str(error)) from error
-        await self.broadcast({"type": "comment_added", "artifact": runtime.alias, "comment": comment.to_dict()})
-        return web.json_response(comment.to_dict(), status=201)
+        await self.broadcast({"type": "comment_added", "artifact": runtime.alias, "comment": comment_json(comment)})
+        return web.json_response(comment_json(comment), status=201)
 
     async def _thread_mutation(self, request: web.Request, action: str) -> web.Response:
         runtime = self.runtime(request)
@@ -1413,8 +1450,8 @@ class HtmlReviewServer:
             raise web.HTTPNotFound(text=str(error)) from error
         except (TypeError, ValueError) as error:
             raise web.HTTPBadRequest(text=str(error)) from error
-        await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment.to_dict()})
-        return web.json_response(comment.to_dict())
+        await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment_json(comment)})
+        return web.json_response(comment_json(comment))
 
     def _anchor_text_survives(self, runtime: ArtifactRuntime, comment: Comment) -> bool:
         """Whether the spot a comment points at still reads the same in the artifact.
@@ -1537,6 +1574,39 @@ class HtmlReviewServer:
         })
         return web.json_response(result)
 
+    async def set_comment_status(self, request: web.Request) -> web.Response:
+        """The reviewer gives the picked comments one status in one call, and the page one
+        notice. The status goes by the page's name for it (PAGE_STATUSES). An undo that
+        resolves comments again gives each the moment it was resolved at before, by id
+        (resolved)."""
+        runtime = self.runtime(request)
+        data = await json_object(request)
+        if data is None:
+            return refusal(400, "the body must be a JSON object")
+        ids = data["ids"] if "ids" in data else None
+        status = data["status"] if "status" in data else None
+        times = data["resolved"] if "resolved" in data else {}
+        if not isinstance(ids, list) or not all(isinstance(comment_id, str) for comment_id in ids):
+            return refusal(400, "ids must be a list of comment ids")
+        if not isinstance(status, str) or status not in PAGE_STATUSES:
+            return refusal(400, "status must be open, resolved or archived")
+        try:
+            if not isinstance(times, dict) or (times and status != "resolved") or not set(times) <= set(ids):
+                raise ValueError
+            for moment in times.values():
+                datetime.fromisoformat(moment)
+        except (TypeError, ValueError):
+            return refusal(400, "resolved must map ids being resolved to the ISO times they were resolved at before")
+        if ids:
+            try:
+                runtime.store.update_many(ids, "human", "", status=PAGE_STATUSES[status], resolved_at=times)
+            except KeyError as error:
+                return refusal(404, error.args[0])
+            except ValueError as error:
+                return refusal(400, str(error))
+        await self.broadcast({"type": "comments_updated", "artifact": runtime.alias, "comment_ids": ids})
+        return web.json_response({"ids": ids, "status": status})
+
     async def reply_comment(self, request: web.Request) -> web.Response:
         return await self._thread_mutation(request, "reply")
 
@@ -1562,8 +1632,37 @@ class HtmlReviewServer:
             raise web.HTTPNotFound(text=str(error)) from error
         except (IndexError, TypeError, ValueError) as error:
             raise web.HTTPBadRequest(text=str(error)) from error
-        await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment.to_dict()})
-        return web.json_response(comment.to_dict())
+        await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment_json(comment)})
+        return web.json_response(comment_json(comment))
+
+    async def delete_comment_entry(self, request: web.Request) -> web.Response:
+        """The reviewer deletes a message they wrote. A thread's first message goes with its
+        thread. What the agent wrote and the records of applying and rejecting stay."""
+        runtime = self.runtime(request)
+        comment_id = request.match_info["comment_id"]
+        data = await json_object(request)
+        if data is None:
+            return refusal(400, "the body must be a JSON object")
+        try:
+            index = int(data["index"])
+        except (KeyError, TypeError, ValueError):
+            return refusal(400, "index is required")
+        try:
+            thread = runtime.store.get(comment_id).thread
+        except KeyError:
+            thread = []
+        if not 0 <= index < len(thread):
+            return refusal(404, f"no such entry in {comment_id}")
+        entry = thread[index]
+        if entry.author != "human" or entry.applied or entry.rejected:
+            return refusal(409, "you can only delete your own messages")
+        if index == 0:
+            runtime.store.delete(comment_id)
+            await self.broadcast({"type": "comment_deleted", "artifact": runtime.alias, "comment_id": comment_id})
+            return web.json_response({"deleted": comment_id})
+        comment = runtime.store.remove_entry(comment_id, entry.id)
+        await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment_json(comment)})
+        return web.json_response(comment_json(comment))
 
     async def suggest_comment(self, request: web.Request) -> web.Response:
         """The agent proposes a change to the editable source on one thread."""
@@ -1585,8 +1684,8 @@ class HtmlReviewServer:
             raise web.HTTPNotFound(text=str(error)) from error
         except (TypeError, ValueError) as error:
             raise web.HTTPConflict(text=str(error)) from error
-        await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment.to_dict()})
-        return web.json_response(comment.to_dict())
+        await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment_json(comment)})
+        return web.json_response(comment_json(comment))
 
     async def withdraw_suggestion(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
@@ -1598,8 +1697,8 @@ class HtmlReviewServer:
             raise web.HTTPNotFound(text=str(error)) from error
         except (TypeError, ValueError) as error:
             raise web.HTTPConflict(text=str(error)) from error
-        await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment.to_dict()})
-        return web.json_response(comment.to_dict())
+        await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment_json(comment)})
+        return web.json_response(comment_json(comment))
 
     async def apply_suggestion(self, request: web.Request) -> web.Response:
         """The reviewer writes a thread's proposal into the source, as the Source view saves."""
@@ -1624,8 +1723,25 @@ class HtmlReviewServer:
             raise web.HTTPConflict(text=str(error)) from error
         runtime.store.refresh_source_anchors(path, relative)
         comment = runtime.store.get(comment.id)
-        await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment.to_dict()})
-        return web.json_response(comment.to_dict())
+        await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment_json(comment)})
+        return web.json_response(comment_json(comment))
+
+    async def reject_suggestion(self, request: web.Request) -> web.Response:
+        """The reviewer turns down the agent's suggestion: it leaves the thread, and the
+        record in its place says what it was."""
+        runtime = self.runtime(request)
+        comment_id = request.match_info["comment_id"]
+        data = await json_object(request)
+        if data is None or "updated" not in data or not isinstance(data["updated"], str) or not data["updated"]:
+            return refusal(400, "updated stamp is required")
+        try:
+            comment = runtime.store.reject_suggestion(comment_id, data["updated"])
+        except KeyError:
+            return refusal(404, f"no comment {comment_id}")
+        except ValueError as error:
+            return refusal(409, str(error))
+        await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment_json(comment)})
+        return web.json_response(comment_json(comment))
 
     async def delete_comment(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
@@ -1659,14 +1775,19 @@ class HtmlReviewServer:
         staging.replace(self.review_state_path)
 
     def _review_line(self) -> str:
-        # The line counts what a wake-up is for: open threads whose last word is the
-        # reviewer's. A count of open threads sent an agent to read one it had answered.
-        waiting = {alias: sum(comment.status == "open" and comment.thread[-1].author == "human"
-                                    for comment in runtime.store.list())
-                   for alias, runtime in self.artifacts.items()}
-        listed = ", ".join(f"{count} on '{alias}'" for alias, count in waiting.items() if count)
+        # The line counts what a wake-up is for: the open threads read_comments(new=True)
+        # gives, with words for the agent it has neither answered nor carried before. A
+        # count of open threads sent an agent to read one it had answered.
+        from .mcp_server import read_cursor
+
+        counts = {}
+        for alias, runtime in self.artifacts.items():
+            cursor = read_cursor(self.project_dir, alias)
+            edge = datetime.fromisoformat(cursor) if cursor is not None else None
+            counts[alias] = sum(bool(waiting(comment.thread, edge)) for comment in runtime.store.list(status="open"))
+        listed = ", ".join(f"{count} on '{alias}'" for alias, count in counts.items() if count)
         return (f"[review] reviewer called (press #{self.review_calls}): "
-                + (f"unanswered comments: {listed}" if listed else "no unanswered comments")
+                + (f"new comments: {listed}" if listed else "no new comments")
                 + " -- read them with read_comments(new=True)")
 
     def _wake_review_waiters(self) -> None:
@@ -1876,6 +1997,7 @@ class HtmlReviewServer:
         app.router.add_post(f"{base}/source-place", self.source_place)
         app.router.add_post(f"{base}/source-shown", self.source_shown)
         app.router.add_post(f"{base}/comments/update", self.update_comments)
+        app.router.add_post(f"{base}/comments/status", self.set_comment_status)
         app.router.add_post(f"{base}/comments/export", self.export_comments)
         app.router.add_post(f"{base}/comments/{{comment_id}}/reply", self.reply_comment)
         app.router.add_post(f"{base}/comments/{{comment_id}}/resolve", self.resolve_comment)
@@ -1884,7 +2006,9 @@ class HtmlReviewServer:
         app.router.add_post(f"{base}/comments/{{comment_id}}/suggest", self.suggest_comment)
         app.router.add_post(f"{base}/comments/{{comment_id}}/withdraw", self.withdraw_suggestion)
         app.router.add_post(f"{base}/comments/{{comment_id}}/apply-suggestion", self.apply_suggestion)
+        app.router.add_post(f"{base}/comments/{{comment_id}}/reject-suggestion", self.reject_suggestion)
         app.router.add_post(f"{base}/comments/{{comment_id}}/edit", self.edit_comment_entry)
+        app.router.add_post(f"{base}/comments/{{comment_id}}/delete-entry", self.delete_comment_entry)
         app.router.add_delete(f"{base}/comments/{{comment_id}}", self.delete_comment)
         app.router.add_post("/review-request", self.request_review)
         app.router.add_get("/wait-review", self.wait_review)

@@ -26,6 +26,12 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _moment(stamp: str) -> datetime:
+    """A stored time as a moment, one written without a zone being in UTC."""
+    at = datetime.fromisoformat(stamp)
+    return at if at.tzinfo is not None else at.replace(tzinfo=timezone.utc)
+
+
 def _new_id() -> str:
     # Same notation as tex-mcp-web. The prefix makes the id usable verbatim in conversation.
     return f"c-{uuid.uuid4().hex[:8]}"
@@ -372,6 +378,14 @@ def _carry_text_anchor(anchor: TextAnchor, changes: list[tuple[str, str]]) -> No
             anchor.quote = new
 
 
+# The words of the entry that records the reviewer applying the agent's suggestion, with
+# the files it changed, and the start of the one that records them rejecting it, which goes
+# on with the pieces rejected. The store keeps no other mark of either, so these words tell
+# a record from the reviewer's own: a record asks the agent nothing, and it stays as written.
+APPLIED_RECORD = "Applied suggestion."
+REJECTED_RECORD = "Rejected suggestion."
+
+
 @dataclass
 class ThreadEntry:
     author: Author
@@ -382,6 +396,22 @@ class ThreadEntry:
     # its text was rewritten after it was written.
     id: str = field(default_factory=_new_entry_id)
     updated_at: str | None = None
+
+    @property
+    def applied(self) -> bool:
+        """Whether it records the reviewer applying a suggestion."""
+        return self.author == "human" and self.text == APPLIED_RECORD and bool(self.edits)
+
+    @property
+    def rejected(self) -> bool:
+        """Whether it records the reviewer rejecting a suggestion."""
+        return self.author == "human" and self.text.startswith(f"{REJECTED_RECORD}\n− ")
+
+    @property
+    def asks_agent(self) -> bool:
+        """Whether it waits for the agent: the reviewer's word, but not the record of a
+        suggestion applied or rejected."""
+        return self.author == "human" and not self.applied and not self.rejected
 
     def to_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {"id": self.id, "author": self.author, "at": self.at, "text": self.text}
@@ -397,6 +427,17 @@ class ThreadEntry:
         return cls(author=data["author"], at=str(data["at"]), text=str(data["text"]), edits=edits,
                    id=str(data["id"]) if "id" in data else _new_entry_id(),
                    updated_at=str(data["updated_at"]) if "updated_at" in data else None)
+
+
+def waiting(thread: list[ThreadEntry], after: datetime | None = None) -> list[ThreadEntry]:
+    """The entries of a thread that wait for the agent: the reviewer's words after the
+    agent's last entry. *after* leaves only those written after that moment, and with it
+    the record of a suggestion applied or rejected is among them: it asks nothing, and the
+    agent hears once what became of what it proposed."""
+    answered = max((position for position, entry in enumerate(thread) if entry.author == "agent"), default=-1)
+    return [entry for entry in thread[answered + 1:]
+            if (entry.asks_agent or (entry.applied or entry.rejected) and after is not None)
+            and (after is None or _moment(entry.at) > after)]
 
 
 @dataclass
@@ -650,10 +691,13 @@ class CommentStore:
         status: Status | None = None,
         edits: list[str] | None = None,
         expected_updated: dict[str, str] | None = None,
+        resolved_at: dict[str, str] | None = None,
     ) -> list[Comment]:
         # Changing a comment's status may be silent: replies already carry the content, a
         # forced summary duplicates them, and reopening usually says no more than the
         # status itself does. A reply is only its text, so that one still needs some.
+        # A comment resolved is stamped now, or at the moment resolved_at gives it by id,
+        # which an undo puts back.
         texts = text if isinstance(text, dict) else dict.fromkeys(comment_ids, text)
         if any(not value.strip() for value in texts.values()) and status is None:
             raise ValueError("thread text must not be empty")
@@ -682,7 +726,8 @@ class CommentStore:
                     )
                 if status is not None:
                     if status != comment.status:
-                        comment.resolved = now if status == "resolved" else None
+                        given = resolved_at[comment_id] if resolved_at is not None and comment_id in resolved_at else now
+                        comment.resolved = given if status == "resolved" else None
                     comment.status = status
                 comment.updated = now
                 comments[index] = comment
@@ -718,9 +763,27 @@ class CommentStore:
                 entry = comment.thread[index]
                 if entry.author != author:
                     raise ValueError(f"thread entry {index} was written by {entry.author}")
+                if entry.applied or entry.rejected:
+                    raise ValueError(f"thread entry {index} records what was done, which is not rewritten: reply instead")
                 entry.text = text.strip()
                 comment.updated = _now()
                 comments[position] = comment
+                self._save(comments)
+                return comment
+        raise KeyError(f"comment {comment_id!r} not found")
+
+    def remove_entry(self, comment_id: str, entry_id: str) -> Comment:
+        """Take the entry named by its id out of its thread."""
+        with self._locked():
+            comments = self._all()
+            for comment in comments:
+                if comment.id != comment_id:
+                    continue
+                kept = [entry for entry in comment.thread if entry.id != entry_id]
+                if len(kept) == len(comment.thread):
+                    raise KeyError(f"thread entry {entry_id!r} not found in {comment_id!r}")
+                comment.thread = kept
+                comment.updated = _now()
                 self._save(comments)
                 return comment
         raise KeyError(f"comment {comment_id!r} not found")
@@ -797,7 +860,24 @@ class CommentStore:
             if isinstance(comment.anchor, TextAnchor):
                 _carry_text_anchor(comment.anchor, suggestion.changes)
             now = _now()
-            comment.thread.append(ThreadEntry(author="human", at=now, text="Applied suggestion.", edits=edits))
+            comment.thread.append(ThreadEntry(author="human", at=now, text=APPLIED_RECORD, edits=edits))
+            comment.suggestion = None
+            comment.updated = now
+            self._save(comments)
+            return comment
+
+    def reject_suggestion(self, comment_id: str, expected_updated: str) -> Comment:
+        """Take the agent's proposal off a thread as one the reviewer will not apply. The
+        entry it leaves holds the pieces it proposed, so the thread still says what was
+        turned down once the proposal is gone."""
+        with self._locked():
+            comments = self._all()
+            comment = self._current_thread(comments, comment_id, expected_updated)
+            if comment.suggestion is None:
+                raise ValueError("the comment carries no suggestion")
+            pieces = "".join(f"\n− {old}\n+ {new}" for old, new in comment.suggestion.changes)
+            now = _now()
+            comment.thread.append(ThreadEntry(author="human", at=now, text=f"{REJECTED_RECORD}{pieces}"))
             comment.suggestion = None
             comment.updated = now
             self._save(comments)
