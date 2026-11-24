@@ -4627,8 +4627,8 @@ def test_a_touch_screen_keeps_the_two_buttons_in_their_corners(tmp_path: Path) -
                   abovePane: box.bottom <= pane.top};
         """)
         assert reset == {"insideToolbar": True, "abovePane": True}
-        # The comments' status list draws its choice in the row's type, not the 16px a list
-        # takes on a touch screen, and lies clear over it.
+        # The comments' status list draws its choice in the row's type, and the list itself
+        # lies clear over it.
         assert browser.execute_script('''
           const name = getComputedStyle(document.querySelector("#comment-filter-name"));
           const list = getComputedStyle(document.querySelector("#comment-filter"));

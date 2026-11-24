@@ -9,6 +9,8 @@ import { createCommentPanel } from "./shared/comment-panel.js";
 import { createTabStrip } from "./shared/tab-strip.js";
 import { createHelp } from "./shared/help.js";
 import { createUpdate } from "./shared/update.js";
+import { holdZoomOnFields, holdPinchOutside, pageIsZoomed } from "./shared/page-zoom.js";
+import { attachPanelGrips } from "./shared/panel-grips.js";
 const homePath = document.querySelector('meta[name="html-mcp-home"]')?.content ?? "";
 
 // What the browser keeps this page's shared choices under, named once, in index.html.
@@ -59,7 +61,6 @@ const state = {
   presentationLastWheelStep: 0,
   suppressPresentationClick: false,
   draggingPanel: false,
-  panelDraggedAt: -Infinity,
   view: "preview",
   editor: null,
   // Whether a press in the editor is held down, which moves the cursor with the text in place.
@@ -1260,10 +1261,6 @@ function handleArtifactGesture(event) {
 // brings the page back, and every pinch went to the artifact with the sidebar cut off. It
 // is decided when they land and kept until they lift, so a zoom-out that passes the mark
 // on its way down is not taken over short of the end.
-function pageIsZoomed() {
-  return (window.visualViewport?.scale ?? 1) > 1.01;
-}
-
 function leftToPage(event) {
   if (event.type === "gesturestart") state.pageGesture = pageIsZoomed();
   if (!state.pageGesture) return false;
@@ -2756,6 +2753,24 @@ function revealCard(commentId) {
   setTimeout(settle, 150);
 }
 
+// The comments' width beside the artifact and their height under it. A drag resizes the
+// artifact on every frame; measuring the fit of all pages and redrawing the highlight boxes
+// that often is the work that made the bar lag behind the finger, so the drag ends with one
+// of each, as the split's does.
+const grips = attachPanelGrips({
+  prefix: PREFIX,
+  width: "--html-mcp-sidebar-width",
+  height: "--html-mcp-panel-height",
+  split: () => state.split,
+  resizing: () => { state.draggingPanel = true; },
+  resized: () => {
+    state.draggingPanel = false;
+    updatePageScale();
+    scheduleHighlights();
+    scheduleLayoutCheck();
+  },
+});
+
 // Under the artifact, the comments get a slice of a phone's screen, and a thread opened
 // there is usually taller than the slice: scrolling cannot show what does not fit, so
 // the reader was left scrolling after every open. The panel takes the room the card
@@ -2770,9 +2785,7 @@ function growPanelFor(wanted) {
   if (!stacked) return;
   const shortfall = wanted - list.getBoundingClientRect().height;
   if (shortfall <= 0) return;
-  const height = sidebar.getBoundingClientRect().height + shortfall;
-  const limited = Math.round(Math.max(90, Math.min(height, window.innerHeight - 140)));
-  layout.style.setProperty("--html-mcp-panel-height", `${limited}px`);
+  grips.setHeight(sidebar.getBoundingClientRect().height + shortfall);
 }
 
 // Where a comment is, shown from the comments: the page scrolls to it, or the source selects
@@ -3138,89 +3151,6 @@ function attachControls() {
     event.preventDefault();
     $("#sidebar-toggle-btn").click();
   });
-  // On a phone the comments sit under the artifact, and the bar along their top drags the
-  // split so either can be given the screen without the other going away.
-  const grip = $("#sidebar-grip");
-  const layout = $(".layout");
-  const setPanelHeight = (pixels) => {
-    const limited = Math.round(Math.max(90, Math.min(pixels, window.innerHeight - 140)));
-    layout.style.setProperty("--html-mcp-panel-height", `${limited}px`);
-    return limited;
-  };
-  const savedHeight = Number(localStorage.getItem("htmlMcpPanelHeight"));
-  if (savedHeight > 0) layout.style.setProperty("--html-mcp-panel-height", `${savedHeight}px`);
-  // The tab row sits directly under the bar, and dragging moves the panel's edge out from
-  // under the finger: on release the tabs were where the finger now was, and the tap that
-  // ends a drag landed on one of them. A drag is not a tap, so clicks in the comments are
-  // ignored for a moment after one, at the capture phase, before any tab sees them. A
-  // window rather than a one-shot: the drag itself leaves a click behind, and a one-shot
-  // was spent on that one and let the offender through.
-  const dragQuietFor = 400;
-  $("#sidebar").addEventListener("click", (event) => {
-    if (performance.now() - state.panelDraggedAt >= dragQuietFor) return;
-    event.preventDefault();
-    event.stopPropagation();
-  }, true);
-  grip.addEventListener("pointerdown", (event) => {
-    event.preventDefault();
-    grip.setPointerCapture(event.pointerId);
-    // A finger sends more moves than the screen draws, and each one resized the artifact and
-    // wrote the new height to storage, so the bar answered late and the drag read as stuck.
-    // One height per frame is all a drag can show, and the height is kept once, on release.
-    // The edge the height is measured from cannot move during the drag, so it is read once.
-    const bottom = layout.getBoundingClientRect().bottom;
-    // A split stacked above keeps its bar where it is on the screen while this one moves.
-    const splitY = state.split.holdable() ? state.split.centerY() : null;
-    let pointerY = null;
-    let frame = null;
-    let height = null;
-    const apply = () => {
-      frame = null;
-      height = setPanelHeight(bottom - pointerY);
-      if (splitY !== null) state.split.holdAt(splitY);
-    };
-    const move = (moved) => {
-      pointerY = moved.clientY;
-      if (frame === null) frame = requestAnimationFrame(apply);
-    };
-    const done = (ended) => {
-      if (frame !== null) cancelAnimationFrame(frame);
-      if (pointerY !== null) apply();
-      if (ended?.cancelable) ended.preventDefault();
-      if (pointerY !== null) state.panelDraggedAt = performance.now();
-      state.draggingPanel = false;
-      grip.removeEventListener("pointermove", move);
-      grip.removeEventListener("pointerup", done);
-      grip.removeEventListener("pointercancel", done);
-      if (height !== null) localStorage.setItem("htmlMcpPanelHeight", String(height));
-      if (splitY !== null) state.split.keep();
-      updatePageScale();
-      scheduleHighlights();
-      scheduleLayoutCheck();
-    };
-    state.draggingPanel = true;
-    grip.addEventListener("pointermove", move);
-    grip.addEventListener("pointerup", done);
-    grip.addEventListener("pointercancel", done);
-  });
-  // The keys move the bar as the split's do: up and down by a step, Home and End to the
-  // ends. A split stacked above keeps its bar where it is, as it does through a drag.
-  grip.addEventListener("keydown", (event) => {
-    if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
-    event.preventDefault();
-    const splitY = state.split.holdable() ? state.split.centerY() : null;
-    const current = $("#sidebar").getBoundingClientRect().height;
-    const height = setPanelHeight(event.key === "Home" ? Infinity : event.key === "End" ? 0
-      : current + (event.key === "ArrowUp" ? 40 : -40));
-    localStorage.setItem("htmlMcpPanelHeight", String(height));
-    if (splitY !== null) {
-      state.split.holdAt(splitY);
-      state.split.keep();
-    }
-    updatePageScale();
-    scheduleHighlights();
-    scheduleLayoutCheck();
-  });
   $("#zoom-reset-btn").addEventListener("click", () => {
     resetArtifactZoom();
   });
@@ -3232,6 +3162,10 @@ function attachControls() {
 }
 
 async function init() {
+  holdZoomOnFields();
+  // The artifact zooms with a pinch: in its frame about the fingers, and anywhere else on the
+  // page about its middle (handleViewerWheel).
+  holdPinchOutside("#artifact-frame");
   attachControls();
   await refreshState();
   await refreshComments();
