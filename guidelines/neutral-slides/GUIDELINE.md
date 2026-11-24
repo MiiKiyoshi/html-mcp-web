@@ -221,7 +221,7 @@ Do not read out displayed measurements or calculated values. Interpret them for 
 
 In the script, avoid advance apologies and wording that diminishes the presenter, including accurate statements of how much was borrowed or added or of the scale or resources behind a choice. This limit covers speech only. The page's attribution still distinguishes adopted material from original work.
 
-6.5 **Keep cover, divider, and contents scripts minimal.** A cover script may include one short sentence recalling an earlier presentation or discussion to establish today's starting point, even if the audience already knows it. Otherwise keep the cover script to the opening. A divider script announces only its displayed section, and a contents script only the displayed organization.
+6.5 **Keep cover, divider, and contents scripts minimal.** Keep the cover script to the opening: a greeting and one short sentence that says what the talk presents, in the words the cover shows. Recall an earlier presentation or discussion in one short sentence only when the audience needs it to follow today's subject, and omit it when they already know it. A divider script announces only its displayed section, and a contents script only the displayed organization.
 
 Let speaking time follow the needed explanation. For a specified duration, check at a natural pace with pointing and inspection. Adjust scope or sequence within authorized constraints instead of padding, repeating, rushing, or omitting needed meaning.
 
