@@ -4805,7 +4805,14 @@ def test_a_long_svg_label_wraps_to_its_width(tmp_path: Path) -> None:
 const lines = (id) => Array.from(document.querySelectorAll(`#${id} tspan`)).map((line) => ({
   x: line.getAttribute("x"), dy: Number(line.getAttribute("dy")), width: line.getComputedTextLength(),
   spacing: line.getAttribute("word-spacing"), text: line.textContent}));
-const span = (id) => { const b = document.getElementById(id).getBBox(); return [b.x, b.x + b.width]; };
+// Where the letters are set, from the first one's start to the furthest end: the box of their
+// ink is the font's, and a Mac's system face draws an "a" a little left of where it is set.
+const span = (id) => {
+  const text = document.getElementById(id);
+  const at = Array.from({length: text.getNumberOfChars()}, (_, index) => index);
+  return [Math.min(...at.map((index) => text.getStartPositionOfChar(index).x)),
+          Math.max(...at.map((index) => text.getEndPositionOfChar(index).x))];
+};
 return {left: lines("left"), justify: lines("justify"), center: lines("center"), balance: lines("balance"),
         hyphen: lines("hyphen"), brackets: arguments[0].map(lines),
         anchor: getComputedStyle(document.getElementById("center")).textAnchor,

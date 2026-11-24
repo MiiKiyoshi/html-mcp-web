@@ -134,8 +134,72 @@ def check_once(label: str) -> None:
         print(f"[{label}]   {line[:300]}")
 
 
+def checks_at_once(label: str, count: int) -> None:
+    """*count* servers each running its own layout check at the same time, as the test workers
+    do, timed, with how busy the processors were."""
+    import socket
+    import urllib.request
+    from pathlib import Path
+
+    import psutil
+    import yaml
+
+    from html_mcp_web.config import load_config
+    from html_mcp_web.project_server import SharedProjectServer
+    from tests.test_browser import slides_html
+
+    times: list[str] = []
+
+    def one() -> None:
+        folder = Path(tempfile.mkdtemp(prefix="html_mcp_probe_project_"))
+        (folder / "slides.html").write_text(slides_html(), encoding="utf-8")
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        (folder / ".html-mcp-web.yaml").write_text(yaml.safe_dump({
+            "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}}, "port": port}), encoding="utf-8")
+        shared = SharedProjectServer(load_config(folder / ".html-mcp-web.yaml"))
+        try:
+            shared.ensure()
+            started = time.monotonic()
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
+                data = json.loads(response.read())
+            times.append(f"{time.monotonic() - started:.1f}s{'' if data.get('errors') is not None else ' unchecked'}")
+        except Exception as error:
+            times.append(repr(error)[:80])
+        finally:
+            shared.stop()
+
+    psutil.cpu_percent()
+    threads = [threading.Thread(target=one) for _ in range(count)]
+    for thread in threads:
+        thread.start()
+    busy = []
+    while any(thread.is_alive() for thread in threads):
+        time.sleep(1)
+        busy.append(round(psutil.cpu_percent()))
+    print(f"[{label}] {count} checks at once answered after {times}, processors busy {busy} %")
+
+
+def defender(enabled: bool | None = None) -> None:
+    """Windows Defender's real-time scanning: said, or turned on or off."""
+    command = ("Get-MpComputerStatus | Select-Object -Property RealTimeProtectionEnabled,AntivirusEnabled | Format-List"
+               if enabled is None else f"Set-MpPreference -DisableRealtimeMonitoring ${str(not enabled).lower()}")
+    done = subprocess.run(["powershell", "-NoProfile", "-Command", command], capture_output=True, text=True)
+    print(f"[defender] {command}: {(done.stdout + done.stderr).strip()}")
+
+
 if __name__ == "__main__":
+    import sys
+
     run_once("first", 25)
     run_once("second", 20)
     check_once("check 1")
     check_once("check 2")
+    checks_at_once("load", 4)
+    if sys.platform == "win32":
+        defender()
+        defender(False)
+        defender()
+        checks_at_once("load without scanning", 4)
+        defender(True)

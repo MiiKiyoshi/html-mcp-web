@@ -10,6 +10,7 @@ prints. Run by the CI as python -m tests.fonts."""
 import hashlib
 import io
 import os
+import re
 import sys
 import tarfile
 import urllib.request
@@ -65,8 +66,15 @@ def install(name: str, data: bytes) -> None:
 
 def firefox_defaults() -> Path:
     """The folder of default preferences Firefox reads at every start, beside its program, or
-    in a Mac application's Resources."""
+    in a Mac application's Resources. Homebrew's firefox on the PATH is a script that runs the
+    application's program, which it names."""
     program = Path(FIREFOX).resolve()
+    if sys.platform == "darwin" and program.parent.name != "MacOS":
+        script = program.read_text(encoding="utf-8")
+        named = re.search(r"(/[^'\"\s]*?\.app)/Contents/MacOS/firefox", script)
+        if named is None:
+            sys.exit(f"{program} names no Firefox application:\n{script[:1000]}")
+        program = Path(named.group(1), "Contents", "MacOS", "firefox")
     resources = program.parent.parent / "Resources" if program.parent.name == "MacOS" else program.parent
     return resources / "defaults" / "pref"
 

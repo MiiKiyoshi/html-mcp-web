@@ -65,7 +65,7 @@ def test_a_draft_saved_with_windows_line_ends_is_read(store):
     result = store.export_comments([comment.id])
     path = Path(result["path"])
     fill(path, ["first line\nsecond line"])
-    path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+    path.write_bytes(path.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
     updated = store.reply_file(result["path"])
     assert [entry.text for entry in updated[0].thread] == ["질문\n두 번째 줄", "first line\nsecond line"]
 
