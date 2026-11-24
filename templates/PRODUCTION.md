@@ -38,7 +38,7 @@ Size the figure's box for readable detail and the relationships it must show, wi
 
 ## Article 3. Check an edit
 
-3.1 **Render affected pages and run content checks.** Render affected pages with `image()`, with `grayscale=false` when colour is in question, and perform the content guideline's checks in the scope and order of neutral clauses 2.5, 2.8 and 3.6 (report Article 7).
+3.1 **Read pages from `image()`, in order, never from the edit file.** A page counts as read only from its `image()` render. Reading the HTML, or a record that the page was checked, is not a check of the page. For a new or rebuilt document, and whenever the renders are no longer in your context, as in a new session or after compaction, call `image()` for every page from the first, in order, and read each one before judging any page or reporting on the document. For a smaller edit, render the affected pages with `image()`, with `grayscale=false` when colour is in question, and perform the content guideline's checks in the scope and order of neutral clauses 2.5, 2.8 and 3.6 (report Article 7).
 
 3.2 **Check affected pages for layout errors.** Use `layout(artifact=..., page=...)` to check each affected page's errors. Consult [layout check reports](KITS.md#article-11-layout-check-reports) to interpret the result. Read the returned blocks and free space only when the rendered page leaves a placement or spacing question unresolved.
 

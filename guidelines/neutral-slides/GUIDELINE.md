@@ -33,13 +33,13 @@ When an item fails, change the order or add what is missing, and go down the who
 
 2.4 **Draw, then write.** On each page show the thing itself and the relation the answer is about. Then add only the words the picture does not give.
 
-2.5 **Read from page one.** Render the deck and read it in order as someone who has seen only the earlier pages. On each page read in the order of 2.3, one item at a time, asking the same questions of the rendered page. At each page, check first whether what the audience knew and what the earlier pages actually gave is enough to follow this page's answer. When it is not, fix the missing premise or relation, or the question the page took, before anything else: polishing the wording or layout of an explanation that does not connect only polishes the wrong explanation. Then fix wording, then layout. When the presenter knows less than the author, read each page also as the presenter, who must be able to find its question and answer on the page and explain every element.
+2.5 **Read from page one.** Render the deck and read it in order as someone who has seen only the earlier pages. Read the rendered pages themselves, every page, one after another from the first. The markup or source shows the words, but not what the eye meets first, what a figure shows or what stands beside what, so reading it is never reading the deck, whatever the hurry. A note or a summary saying that a page was read is not a reading either. When the rendered pages are no longer in front of you, as in a new session or after your context was compacted, render and read every page in order again before you judge a page, answer for the deck or hand it over. On each page read in the order of 2.3, one item at a time, asking the same questions of the rendered page. At each page, check first whether what the audience knew and what the earlier pages actually gave is enough to follow this page's answer. When it is not, fix the missing premise or relation, or the question the page took, before anything else: polishing the wording or layout of an explanation that does not connect only polishes the wrong explanation. Then fix wording, then layout. When the presenter knows less than the author, read each page also as the presenter, who must be able to find its question and answer on the page and explain every element.
 
 2.6 **Script.** Write each page's script while looking at the rendered page.
 
 2.7 **Cold reader.** Before handing over a new or rebuilt deck, have someone who did not build it read the rendered pages in order, knowing only what the audience knows, and report where they stop following.
 
-2.8 **Done.** The work is done when, on every page, the audience has been given each thing the page uses, can get from those things to the page's one answer, and can do so at speaking pace. A clean build, a clean layout check, complete notes or a reviewer's pass does not show that.
+2.8 **Done.** The work is done when, on every page, the audience has been given each thing the page uses, can get from those things to the page's one answer, and can do so at speaking pace. A clean build, a clean layout check, complete notes, a reviewer's pass, a reading of the source or a record of an earlier reading does not show that.
 
 ## Article 3. When this happens, do this
 
@@ -53,7 +53,7 @@ When an item fails, change the order or add what is missing, and go down the who
 
 3.5 **An explanation is reported unclear again, or one report already shows a missing premise or a wrong order.** Stop changing words. Read all the questions about it together, write the one thing the audience is missing (a relation, a premise or a distinction), and rebuild the explanation around it, keeping the terms already established. Put no note about the revision on the page.
 
-3.6 **You change a sentence or a page.** Before handing it back, read the whole sentence or page again as the audience, starting from the page before it. Read also the page after it and every other page that uses what you changed, such as a term, a symbol, a value or an order.
+3.6 **You change a sentence or a page.** Before handing it back, read the whole sentence or page again as the audience, on the rendered page, starting from the page before it. Read also the page after it and every other page that uses what you changed, such as a term, a symbol, a value or an order.
 
 3.7 **You move, add or remove a page.** Check that every later page still gets each thing it uses before it uses it, and update the page list in the notes file (10.1).
 
