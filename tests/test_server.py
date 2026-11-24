@@ -1758,10 +1758,10 @@ async def test_an_agent_rewrites_its_own_entries_through_the_batch_update(client
 
 
 async def test_a_result_from_older_checker_code_is_checked_again(client, monkeypatch) -> None:
-    import shutil
+    from html_mcp_web import firefox
 
     test_client, review = client
-    monkeypatch.setattr(shutil, "which", lambda name: None)
+    monkeypatch.setattr(firefox, "binary", lambda: None)
     posted = await test_client.post(
         "/artifacts/slides/layout", json=server_check(review, errors=["page 1 exceeds the slides height"]))
     assert posted.status == 200

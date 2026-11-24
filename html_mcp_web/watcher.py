@@ -24,7 +24,7 @@ class HtmlFileHandler(FileSystemEventHandler):
         callback: Callable[[str], Coroutine[Any, Any, None]],
         loop: asyncio.AbstractEventLoop,
         debounce_seconds: float = 0.25,
-        on_new_directory: Callable[[str], None] | None = None,
+        on_new_directory: Callable[[], None] | None = None,
     ):
         super().__init__()
         self.watch_dir = watch_dir.resolve()
@@ -112,15 +112,21 @@ class HtmlFileHandler(FileSystemEventHandler):
             self.running.cancel()
 
     def on_modified(self, event: FileSystemEvent) -> None:
-        if not event.is_directory:
-            path = self._path(event)
-            if self._should_process(path):
-                self._schedule(path)
+        if event.is_directory:
+            # On macOS a folder made in the project shows only as this change to the project's
+            # own folder: watchdog's FSEvents emitter drops the folder's creation as an event
+            # below the flat watch.
+            if self.on_new_directory is not None:
+                self.on_new_directory()
+            return
+        path = self._path(event)
+        if self._should_process(path):
+            self._schedule(path)
 
     def on_created(self, event: FileSystemEvent) -> None:
         if event.is_directory:
             if self.on_new_directory is not None:
-                self.on_new_directory(self._path(event))
+                self.on_new_directory()
             return
         path = self._path(event)
         if self._should_process(path):
@@ -138,8 +144,7 @@ class HtmlFileHandler(FileSystemEventHandler):
         destination = event.dest_path
         if event.is_directory:
             if self.on_new_directory is not None:
-                self.on_new_directory(
-                    destination.decode("utf-8", errors="replace") if isinstance(destination, bytes) else destination)
+                self.on_new_directory()
             return
         # A rename is a change at both ends: the file that appeared, and the artifact that
         # just lost its main to the reviewer renaming it away.
@@ -223,7 +228,7 @@ class Watcher:
             self.on_change,
             loop,
             self.debounce_seconds,
-            self._watch_new_directory,
+            self._watch_new_roots,
         )
         self.observer = Observer()
         self._watches = {}
@@ -291,20 +296,18 @@ class Watcher:
             "fs.inotify.max_user_watches."
         )
 
-    def _watch_new_directory(self, path: str) -> None:
-        """A root that appeared under the project after the watch began.
+    def _watch_new_roots(self) -> None:
+        """The roots that appeared under the project after the watch began, on any change to a
+        folder the watch sees.
 
         The project root is watched flat, so a root created later (an artifact directory
         written by a build) gets no watch of its own until it is scheduled here.
         """
-        entry = Path(path)
-        if self.observer is None or entry.parent.resolve() != self.watch_dir:
+        if self.observer is None:
             return
-        if entry.is_symlink():
-            return
-        entry = entry.resolve()
-        if entry in self.roots and entry not in self._watches:
-            self._schedule(entry)
+        for root in self.roots:
+            if root not in self._watches:
+                self._schedule(root)
 
     def stop(self) -> None:
         if self.handler is not None:

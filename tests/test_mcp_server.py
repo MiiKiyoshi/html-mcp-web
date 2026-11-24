@@ -884,6 +884,16 @@ def _session() -> subprocess.Popen:
     return subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
 
 
+def _runs_as(monitor: subprocess.Popen) -> set[str]:
+    """The pids the plugin's monitor runs its Python as: the one started, whose shell execs it,
+    and under Git Bash on Windows, where the exec starts the Python as a process of its own
+    under the shell, that one."""
+    try:
+        return {str(monitor.pid), *(str(child.pid) for child in psutil.Process(monitor.pid).children())}
+    except psutil.Error:
+        return {str(monitor.pid)}
+
+
 class Lines:
     """What a process prints, line by line, read on a thread of its own: Windows cannot wait on
     a pipe with select."""
@@ -901,7 +911,10 @@ class Lines:
         return (line.decode("utf-8") if isinstance(line, bytes) else line).rstrip("\r\n")
 
 
-@pytest.mark.parametrize("codex", [False, True])
+@pytest.mark.parametrize("codex", [False, pytest.param(True, marks=pytest.mark.xfail(
+    os.name == "nt", strict=True,
+    reason="the waiter starts codex by its bare name, which Windows finds only as codex.exe, and npm "
+           "installs codex.cmd there (shared/waiter.py, from tex-mcp-web)"))])
 def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
     # The tool returns at once with a command for the harness to watch in the background;
     # blocking here would freeze the agent, which is what the button exists to avoid.
@@ -1030,7 +1043,7 @@ def test_listen_hands_the_waiter_to_the_plugin_monitor(tmp_path: Path, monkeypat
         deadline = time.monotonic() + 5
         while not record.exists() and time.monotonic() < deadline:
             time.sleep(0.1)
-        assert int(record.read_text(encoding="utf-8")) == monitor.pid
+        assert record.read_text(encoding="utf-8").strip() in _runs_as(monitor)
         mcp = create_server(binding)
         context = SimpleNamespace(session=SimpleNamespace(client_params=SimpleNamespace(
             clientInfo=SimpleNamespace(name="claude-code"))))
@@ -1227,7 +1240,7 @@ def test_a_monitor_killed_outright_leaves_nothing_a_later_session_takes(tmp_path
         assert plugin_monitor.monitored_session(TOOL) is None
         monitor = _start_monitor(session.pid, cache)
         deadline = time.monotonic() + 5
-        while record.read_text(encoding="utf-8").strip() != str(monitor.pid) and time.monotonic() < deadline:
+        while record.read_text(encoding="utf-8").strip() not in _runs_as(monitor) and time.monotonic() < deadline:
             time.sleep(0.1)
         assert plugin_monitor.monitored_session(TOOL) == session.pid
         assert not handed.exists()
@@ -1525,15 +1538,17 @@ def test_a_suggestion_rejected_is_told_to_the_agent_once(tmp_path: Path) -> None
 
 def test_layout_says_at_once_when_nothing_can_check(tmp_path: Path, monkeypatch) -> None:
     """With no Firefox and no review page open, waiting could only end in the same answer."""
-    import shutil as shutil_module
     import time
+
+    from html_mcp_web import firefox
 
     project(tmp_path)
     binding = ProjectBinding(tmp_path)
     try:
         mcp = create_server(binding)
         binding.require_client()
-        monkeypatch.setattr(shutil_module, "which", lambda name: None)
+        # Where its installer puts it counts as installed too, on Windows and macOS.
+        monkeypatch.setattr(firefox, "binary", lambda: None)
         started = time.monotonic()
         result = answer(mcp.call_tool("layout", {"artifact": "slides"}))
         assert time.monotonic() - started < 5

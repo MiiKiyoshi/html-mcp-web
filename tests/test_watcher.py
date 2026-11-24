@@ -96,6 +96,27 @@ def test_a_root_that_appears_later_is_watched(tmp_path: Path) -> None:
         watcher.stop()
 
 
+def test_a_root_is_watched_when_only_the_project_folder_reports_a_change(tmp_path: Path) -> None:
+    """On macOS a folder made in the project reaches the flat watch only as a change to the
+    project's own folder: watchdog's FSEvents emitter drops the folder's creation as an event
+    below the watch. That change alone gives a root that appeared its watch."""
+    from watchdog.events import DirModifiedEvent
+
+    class Observer:
+        def schedule(self, handler, path, recursive):
+            scheduled.append((path, recursive))
+            return path
+
+    scheduled: list[tuple[str, bool]] = []
+    watcher = Watcher(tmp_path, ["*.html"], [], _unused_change, [tmp_path / "html"])
+    watcher.observer = Observer()
+    watcher.handler = HtmlFileHandler(tmp_path, ["*.html"], [], _unused_change, asyncio.new_event_loop(),
+                                      on_new_directory=watcher._watch_new_roots)
+    (tmp_path / "html").mkdir()
+    watcher.handler.dispatch(DirModifiedEvent(str(tmp_path)))
+    assert scheduled == [(str(tmp_path / "html"), True)]
+
+
 async def _unused_change(path: str) -> None:
     raise AssertionError("no file was changed in this test")
 

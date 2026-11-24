@@ -70,6 +70,13 @@ def _read(fd, name: str) -> str:
         return stream.read()
 
 
+def _lines(text: str) -> str:
+    """*text* with its line ends as the draft is written. A Windows editor, or Python writing in
+    text mode there, saves a filled draft with CRLF line ends, and the draft's fixed parts then
+    no longer matched what was written."""
+    return text.replace("\r\n", "\n")
+
+
 def _anchor_line(anchor: dict) -> str:
     anchor = agent_anchor(anchor)
     if anchor["kind"] == "text":
@@ -146,9 +153,9 @@ def load(root: Path, path: str) -> tuple[dict[str, str], list[tuple[str, str, st
     try:
         with _directory(root) as fd:
             snapshot = json.loads(_read(fd, candidate.stem + ".snapshot"))
-            body = _read(fd, candidate.name)
+            body = _lines(_read(fd, candidate.name))
         # Exact immutable segments protect IDs, snapshot timestamps and thread text.
-        match = re.fullmatch("(.*?)".join(re.escape(s) for s in snapshot["segments"]), body, re.DOTALL)
+        match = re.fullmatch("(.*?)".join(re.escape(_lines(s)) for s in snapshot["segments"]), body, re.DOTALL)
         if match is None or len(match.groups()) != len(snapshot["slots"]):
             raise ValueError("malformed draft: edit only Reply and Edit blocks")
         replies: dict[str, str] = {}
@@ -157,7 +164,7 @@ def load(root: Path, path: str) -> tuple[dict[str, str], list[tuple[str, str, st
             if slot[0] == "reply":
                 if value.strip():
                     replies[slot[1]] = value.strip()
-            elif value.strip() != slot[3].strip():
+            elif value.strip() != _lines(slot[3]).strip():
                 if not value.strip():
                     raise ValueError(f"the Edit block for {slot[2]} must not be emptied")
                 entry_edits.append((slot[1], slot[2], value.strip()))

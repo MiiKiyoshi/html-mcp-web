@@ -794,7 +794,7 @@ def build(content_path: Path, output_path: Path, skin_dir: Path) -> None:
 </html>
 ''', encoding="utf-8")
     try:
-        output_path.write_text(set_pages(poured), encoding="utf-8")
+        output_path.write_text(set_pages(poured), encoding="utf-8", newline="")
     finally:
         poured.unlink()
     print(f"{output_path}: {len(content.sections)} sections, {figures} figures, {tables} tables")

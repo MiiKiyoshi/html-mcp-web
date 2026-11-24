@@ -18,7 +18,7 @@ from html_mcp_web.config import load_config
 from html_mcp_web.firefox import stop
 from html_mcp_web.kits import CENTER
 from html_mcp_web.project_server import SharedProjectServer
-from tests.firefox import Browser, launch, needs_firefox
+from tests.firefox import MOD, MOD_ALT, Browser, launch, needs_firefox
 
 
 def available_port() -> int:
@@ -310,7 +310,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
           return [button.classList.contains("agent-offline"), button.disabled,
             button.getAttribute("aria-label"), button.title, getComputedStyle(button).color];
         ''') == [True, False, "Queue call for agent",
-                 "No agent is listening. The call will be queued until one connects (Ctrl+Alt+Enter)", "rgb(180, 74, 67)"]
+                 f"No agent is listening. The call will be queued until one connects ({MOD_ALT}+Enter)", "rgb(180, 74, 67)"]
         with ThreadPoolExecutor(max_workers=1) as pool:
             waiter = pool.submit(lambda: urllib.request.urlopen(
                 f"{base}/wait-review?listener=one&pid={os.getpid()}", timeout=10).read())
@@ -318,9 +318,9 @@ def test_browser_review_contract(tmp_path: Path) -> None:
               const button = document.querySelector("#call-agent-btn");
               return button.classList.contains("agent-ready")
                 && button.getAttribute("aria-label") === "Call agent"
-                && button.title === "Call the agent (Ctrl+Alt+Enter)"
+                && button.title === `Call the agent (${arguments[0]}+Enter)`
                 && getComputedStyle(button).color === "rgb(79, 119, 88)";
-            '''))
+            ''', script_args=[MOD_ALT]))
             browser.execute_script('document.querySelector("#call-agent-btn").click()')
             wait_until(lambda: browser.execute_script(
                 'return document.querySelector("#call-agent-word").textContent === "Called"'))
@@ -1259,6 +1259,13 @@ return {gaps: items.slice(1).map((item, at) => item.top - items[at].bottom),
         assert filled["bottom"] >= -0.01, filled
         assert near(natural["column"] + 4.4)["gaps"] == filled["gaps"]
         assert all(abs(gap - 8) < 0.01 for gap in near(natural["column"] + 10)["gaps"]), natural
+        # A column whose height is no whole number of pixels spreads alike: one 155.08px tall
+        # was read as 155px, and its notes got a pixel less than the room they had.
+        browser.execute_script("document.querySelector('#near-notes').previousElementSibling.style.height = '21.4px'")
+        natural = near(40)
+        assert all(abs(gap - 3) < 0.01 for gap in natural["gaps"]), natural
+        filled = near(natural["column"] + 4)
+        assert all(abs(gap - 5) < 0.01 for gap in filled["gaps"]), (natural, filled)
         # Inline math is drawn larger than the text, and lines of it in one item touched: an
         # item holding math leaves the lines of math apart, and a plain item keeps its pitch.
         wait_until(lambda: browser.execute_script("return !!document.querySelector('#math-item .katex')"))
@@ -1893,8 +1900,8 @@ def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path
           editor.focus();
         ''')
         # Its keys, Ctrl+Alt+P, do what the button does.
-        ActionSequence(browser, "key", "keyboard").key_down("\ue009").key_down("\ue00a") \
-            .key_down("p").key_up("p").key_up("\ue00a").key_up("\ue009").perform()
+        ActionSequence(browser, "key", "keyboard").key_down(MOD).key_down("\ue00a") \
+            .key_down("p").key_up("p").key_up("\ue00a").key_up(MOD).perform()
         marked = wait_until(lambda: browser.execute_script('''
           const doc = document.querySelector("#artifact-frame").contentDocument;
           const mark = doc.querySelector(".html-mcp-shown");
@@ -5636,10 +5643,14 @@ def test_an_edit_replaces_the_deck_with_no_blank_and_no_jump(tmp_path: Path) -> 
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#artifact-status")?.textContent === "ready"'))
-        # The preview column is open too, and the drawn place of its first preview is held.
+        # The preview column is open too, and the drawn place of its first preview is held, read
+        # once its document has loaded as the samples below require: read before, on a loaded
+        # runner, it was a place the column then left.
         browser.execute_script('document.querySelector("#thumbs-btn").click();')
         previews_at = wait_until(lambda: browser.execute_script(
-            'const page = document.querySelector("#thumbs-frame").contentDocument?.querySelector("section.page");'
+            'const doc = document.querySelector("#thumbs-frame").contentDocument;'
+            'const page = doc?.readyState === "complete" && doc.fonts.status === "loaded"'
+            ' ? doc.querySelector("section.page") : null;'
             'return page ? page.getBoundingClientRect().top + 0.001 : null;'))
         frame_window = 'document.querySelector("#artifact-frame")?.contentWindow'
         browser.execute_script(f'{frame_window}.scrollTo(0, 400);')

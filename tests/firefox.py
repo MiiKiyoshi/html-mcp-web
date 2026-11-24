@@ -19,6 +19,11 @@ FIREFOX = binary()
 needs_firefox = pytest.mark.skipif(FIREFOX is None, reason="Firefox is required")
 # What the page writes to its console, in its profile, for keep_failure.
 CONSOLE = "console.log"
+# The key the page's own shortcuts are held with: Cmd on a Mac, where Option stands for Alt, and
+# Ctrl elsewhere (shared/dom.js).
+MOD = "\ue03d" if sys.platform == "darwin" else "\ue009"
+# The names the page gives those keys, in its tooltips and its notes.
+MOD_ALT = "Cmd+Option" if sys.platform == "darwin" else "Ctrl+Alt"
 
 
 def launch(profile: str, *arguments: str) -> subprocess.Popen:

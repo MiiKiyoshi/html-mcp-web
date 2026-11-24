@@ -472,10 +472,12 @@ class HtmlReviewServer:
         self.check_tasks: set[asyncio.Task] = set()
         # One catch-up at a time: a rebuild takes seconds, and every state read asks.
         self.catching_up = asyncio.Lock()
-        self.artifacts = self._create_artifacts(config)
+        # Built by the first catch-up, once the server serves: a report's build sets its pages
+        # in Firefox, which on a slow machine took longer than the server is given to start.
+        self.artifacts = self._create_artifacts(config, build=False)
         self.watcher = self._create_watcher(config)
 
-    def _create_artifacts(self, config: Config) -> dict[str, ArtifactRuntime]:
+    def _create_artifacts(self, config: Config, build: bool = True) -> dict[str, ArtifactRuntime]:
         runtimes: dict[str, ArtifactRuntime] = {}
         for alias, artifact in config.artifacts.items():
             comment_path = self.project_dir / ".html-mcp-web" / "comments" / f"{alias_file_name(alias)}.json"
@@ -488,13 +490,18 @@ class HtmlReviewServer:
                 template_dir=get_template_dir(config, alias),
                 store=CommentStore(comment_path),
             )
-            if runtime.content_file is not None and runtime.content_file.is_file():
-                if not runtime.main_file.is_file() or runtime.content_file.stat().st_mtime > runtime.main_file.stat().st_mtime:
-                    runtime.rebuild()
+            stale = runtime.content_file is not None and runtime.content_file.is_file() and (
+                not runtime.main_file.is_file()
+                or runtime.content_file.stat().st_mtime > runtime.main_file.stat().st_mtime)
+            if stale and build:
+                runtime.rebuild()
             # A missing main is reported on the artifact (state carries the error), not
             # raised: raising here took the whole server down over one artifact while the
             # reviewer was renaming its file, and blocked every healthy one with it.
             runtime.note_files()
+            if stale and not build:
+                # Content not yet built reads as a change the next catch-up takes.
+                runtime.seen_content = None
             runtimes[alias] = runtime
         return runtimes
 

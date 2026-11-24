@@ -119,9 +119,15 @@ NOTES_SPREAD_SCRIPT = """<script>
     const gaps = items.reduce((sum, members) => sum + Math.max(0, members.length - 1), 0);
     if (gaps === 0 || box.offsetHeight === 0) return;
     // Heights in the page's own pixels: an svg has no offsetHeight, so each block is measured
-    // as drawn and the scale of the page, the deck's or the viewer's, taken back out.
-    const scale = box.getBoundingClientRect().height / box.offsetHeight;
+    // as drawn and the scale of the page, the deck's or the viewer's, taken back out. The
+    // scale is the box as drawn over its height as laid out, which its style gives exactly:
+    // offsetHeight rounds it to a whole pixel, and a column 155.08px tall read as 155px left
+    // a pixel of its room unspread.
     const style = getComputedStyle(box);
+    const laid = parseFloat(style.height) + (style.boxSizing === "border-box" ? 0
+      : parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+        + parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth));
+    const scale = box.getBoundingClientRect().height / laid;
     let used = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
     for (const child of box.children) {
       const own = getComputedStyle(child);
@@ -134,9 +140,11 @@ NOTES_SPREAD_SCRIPT = """<script>
     // whole pixel, a column that filled the rounded room made the row up to half a pixel
     // taller, and the other column spread into that. A gap that would move by less than half
     // a pixel keeps the one it was given, so no such step is taken again.
-    const inner = box.getBoundingClientRect().height / scale
-      - parseFloat(style.borderTopWidth) - parseFloat(style.borderBottomWidth);
-    const room = Math.floor(inner - used);
+    const inner = laid - parseFloat(style.borderTopWidth) - parseFloat(style.borderBottomWidth);
+    // Each height comes rounded to single precision, and a room of 4px read as 3.99999 would
+    // leave a whole pixel unspread: a thousandth of a pixel is far below any height a page
+    // sets and far above that rounding.
+    const room = Math.floor(inner - used + 0.001);
     lists.forEach((list, at) => {
       const own = getComputedStyle(list);
       const line = parseFloat(own.lineHeight) || parseFloat(own.fontSize) * 1.2;
@@ -483,9 +491,10 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
     # plain write truncates first, so the other build's stat read 0KB off a file that was
     # complete a moment later. The swap is atomic and the report counts what was written,
     # not what a stat happens to catch. On Windows it waits for a moment while the server
-    # reads the file it replaces (shared_file).
+    # reads the file it replaces (shared_file). The document is written as made, its newlines
+    # unchanged on Windows too, so the size reported is the size of the file.
     staging = out_path.with_name(out_path.name + ".building")
-    staging.write_text(document, encoding="utf-8")
+    staging.write_text(document, encoding="utf-8", newline="")
     shared_file.replace(staging, out_path)
     scripts = sum(1 for section in content.sections if section.script_html) + bool(content.cover_script_html)
     print(f"{out_path}: cover + {len(content.sections)} slides, {scripts} scripts, "

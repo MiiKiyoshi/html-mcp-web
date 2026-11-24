@@ -23,7 +23,7 @@ from html_mcp_web.comments import ArtifactAnchor, CommentStore, PageAnchor, Sour
 from html_mcp_web.config import load_config
 from html_mcp_web.firefox import stop
 from html_mcp_web.project_server import SharedProjectServer
-from tests.firefox import Browser, launch, needs_firefox
+from tests.firefox import MOD, MOD_ALT, Browser, launch, needs_firefox
 
 DECK = ('<!doctype html><html><head><meta charset="utf-8"><title>Slides</title></head><body><main class="pages">'
         '<section class="page"><h1>First</h1><p>Tea is served.</p></section></main></body></html>')
@@ -166,7 +166,7 @@ def listed(browser) -> list[str]:
         'return [...document.querySelectorAll("#comments-list .cmt")].map((card) => card.dataset.commentId)')
 
 
-ESCAPE, HOME, END, DOWN, CONTROL, ALT, SHIFT = "\ue00c", "\ue011", "\ue010", "\ue015", "\ue009", "\ue00a", "\ue008"
+ESCAPE, HOME, END, DOWN, ALT, SHIFT = "\ue00c", "\ue011", "\ue010", "\ue015", "\ue00a", "\ue008"
 
 
 def press(browser, *keys) -> None:
@@ -372,7 +372,7 @@ def test_the_line_above_the_list_says_how_comments_reach_the_agent(tmp_path: Pat
         wait_until(lambda: script('return document.querySelector("#compose-dialog").open'))
         script('const box = document.querySelector("#compose-text"); box.value = "Tighten the opening.";'
                ' box.dispatchEvent(new Event("input", {bubbles: true})); document.querySelector("#compose-form").requestSubmit();')
-        reminder = "Your comments reach the agent when you press the bell (Ctrl+Alt+Enter)."
+        reminder = f"Your comments reach the agent when you press the bell ({MOD_ALT}+Enter)."
         wait_until(lambda: script(note) == reminder)
         # Ctrl+Alt+Enter presses the bell, and no agent listens.
         script('document.body.dispatchEvent(new KeyboardEvent("keydown", {key: "Enter", ctrlKey: true, altKey: true, bubbles: true}))')
@@ -731,13 +731,13 @@ def test_the_comment_list_goes_by_keys(tmp_path: Path) -> None:
         keys("K")
         wait_until(lambda: script(f'{editor} return editor.isFocused()'))
         assert script(f'{editor} return editor.getSelectedText()') == "Tea is served."
-        chord(browser, CONTROL, ALT, "k")
+        chord(browser, MOD, ALT, "k")
         wait_until(lambda: script('return document.activeElement.id') == "comments-list")
         assert ring() == source
         # Ctrl+Alt+K goes from the list as K does, and back.
-        chord(browser, CONTROL, ALT, "k")
+        chord(browser, MOD, ALT, "k")
         wait_until(lambda: script(f'{editor} return editor.isFocused()'))
-        chord(browser, CONTROL, ALT, "k")
+        chord(browser, MOD, ALT, "k")
         wait_until(lambda: script('return document.activeElement.id') == "comments-list")
         # A comment on a page has its words there, not in the source: K shows its place and
         # the keys stay with the list.
@@ -751,7 +751,7 @@ def test_the_comment_list_goes_by_keys(tmp_path: Path) -> None:
         script(f"{editor} editor.focus();")
         script('document.querySelector("#sidebar-toggle-btn").click()')
         assert script('return document.querySelector(".layout").classList.contains("sidebar-collapsed")') is True
-        chord(browser, CONTROL, ALT, "k")
+        chord(browser, MOD, ALT, "k")
         wait_until(lambda: script('return document.activeElement.id') == "comments-list")
         assert script('return document.querySelector(".layout").classList.contains("sidebar-collapsed")') is False
         assert ring() == source

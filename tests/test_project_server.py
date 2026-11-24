@@ -1,9 +1,11 @@
 """Startup of the shared project server: a slow or failing start must not leak."""
 
 import asyncio
+import json
 import socket
 import threading
 import time
+import urllib.request
 from pathlib import Path
 
 import pytest
@@ -137,6 +139,42 @@ async def test_config_reload_watches_a_newly_declared_artifact_directory(tmp_pat
         assert watches() == {(str(tmp_path), False), (str(tmp_path / "html"), True)}
     finally:
         review.watcher.stop()
+
+
+def test_a_build_due_at_start_runs_once_the_server_serves(tmp_path: Path, monkeypatch) -> None:
+    """A report whose content was newer than its built file was built before the server
+    reported its start, and a report's build sets its pages in Firefox: on a slow machine the
+    start gave up first. The server now starts, and builds next, a request asked meanwhile
+    waiting for the build."""
+    from html_mcp_web import config as config_module
+
+    monkeypatch.setattr(config_module, "USER_CONFIG_DIR", tmp_path / "user")
+    template = tmp_path / "user" / "templates" / "slow"
+    template.mkdir(parents=True)
+    (template / "build.py").write_text(
+        "import sys, time\nfrom pathlib import Path\ntime.sleep(1.5)\n"
+        "Path(sys.argv[2]).write_text(Path(sys.argv[1]).read_text())\n", encoding="utf-8")
+    (tmp_path / "content.html").write_text("<p>built</p>", encoding="utf-8")
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        port = int(listener.getsockname()[1])
+    path = tmp_path / ".html-mcp-web.yaml"
+    path.write_text(yaml.safe_dump({
+        "artifacts": {"report": {"layout": "report", "main": "report.html",
+                                 "template": "slow", "content": "content.html"}},
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(path))
+    monkeypatch.setattr(SharedProjectServer, "START_TIMEOUT", 1)
+    try:
+        shared.ensure()
+        assert not (tmp_path / "report.html").exists()
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/state", timeout=10) as response:
+            state = json.loads(response.read().decode("utf-8"))["artifacts"]["report"]
+        assert (tmp_path / "report.html").read_text(encoding="utf-8") == "<p>built</p>"
+        assert state["build_error"] is None and "error" not in state
+    finally:
+        shared.stop()
 
 
 def test_a_failed_start_names_its_cause_and_frees_the_lock(tmp_path: Path, monkeypatch) -> None:

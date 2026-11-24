@@ -25,10 +25,18 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Python packages
         run: pip install -e ".[mcp,dev]"
+      # The fonts the browser tests were written with: Ubuntu sets serif, sans-serif and
+      # monospace in Noto Serif, Noto Sans and DejaVu Sans Mono once these are installed.
+      - name: Fonts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-core fonts-noto-mono fonts-dejavu-core fonts-dejavu-mono
       # The runner's own Firefox, which the tests find as the package does. Without one every
       # browser test would be skipped and the job would pass, so this step fails instead.
       - name: Firefox
         run: python -m tests.firefox
+      - name: Probe
+        run: python -m tests.probe_ci || true
       - name: Tests
         env:
           HTML_MCP_FAILURES: ${{ runner.temp }}/failures
@@ -68,8 +76,14 @@ jobs:
           python-version: "3.13"
       - name: Python packages
         run: pip install -e ".[mcp,dev]"
+      # The same fonts as on Linux, set in Firefox's generic families (tests/fonts.py).
+      - name: Fonts
+        run: python -m tests.fonts
       - name: Firefox
         run: python -m tests.firefox
+      - name: Probe
+        shell: bash
+        run: python -m tests.probe_ci || true
       - name: Tests
         shell: bash
         env:

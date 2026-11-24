@@ -58,6 +58,18 @@ def test_round_trip(store):
         store.reply_file(result["path"])
 
 
+def test_a_draft_saved_with_windows_line_ends_is_read(store):
+    """A Windows editor, or Python writing in text mode there, saves the filled draft with CRLF
+    line ends. Its fixed parts are the same text, and its replies come in with plain newlines."""
+    comment = add(store)
+    result = store.export_comments([comment.id])
+    path = Path(result["path"])
+    fill(path, ["first line\nsecond line"])
+    path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+    updated = store.reply_file(result["path"])
+    assert [entry.text for entry in updated[0].thread] == ["질문\n두 번째 줄", "first line\nsecond line"]
+
+
 @pytest.mark.parametrize("mutation", ["reply", "delete", "edit", "resolve"])
 def test_stale_batch_is_all_or_nothing(store, mutation):
     a, b = add(store), add(store)

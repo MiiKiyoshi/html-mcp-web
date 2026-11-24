@@ -12,7 +12,7 @@ from marionette_driver.marionette import ActionSequence
 from html_mcp_web.config import load_config
 from html_mcp_web.firefox import stop
 from html_mcp_web.project_server import SharedProjectServer
-from tests.firefox import Browser, launch, needs_firefox
+from tests.firefox import MOD, Browser, launch, needs_firefox
 
 
 def type_keys(browser, keys):
@@ -245,8 +245,8 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         assert browser.execute_script(f"return {editor}.textInput.getElement().readOnly;") is False
         # Without Vim keys, Ctrl+Alt+M comments on the selection.
         browser.execute_script(f"{editor}.focus(); {editor}.selection.selectLine();")
-        ActionSequence(browser, "key", "keyboard").key_down("\ue009").key_down("\ue00a").key_down("m") \
-            .key_up("m").key_up("\ue00a").key_up("\ue009").perform()
+        ActionSequence(browser, "key", "keyboard").key_down(MOD).key_down("\ue00a").key_down("m") \
+            .key_up("m").key_up("\ue00a").key_up(MOD).perform()
         wait_until(lambda: browser.execute_script('return document.querySelector("#compose-dialog").open'))
         # Ctrl+[ drops the comment being written, as Escape does where Safari keeps Escape.
         ActionSequence(browser, "key", "keyboard").key_down("\ue009").key_down("[") \
@@ -285,8 +285,8 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
           editor.focus();
           editor.moveCursorTo(0, editor.getValue().indexOf("SELECT START") + 5);
         ''')
-        ActionSequence(browser, "key", "keyboard").key_down("\ue009").key_down("\ue00a").key_down("k") \
-            .key_up("k").key_up("\ue00a").key_up("\ue009").perform()
+        ActionSequence(browser, "key", "keyboard").key_down(MOD).key_down("\ue00a").key_down("k") \
+            .key_up("k").key_up("\ue00a").key_up(MOD).perform()
         wait_until(lambda: browser.execute_script(
             'return document.querySelector(".cmt.is-focused")?.dataset.commentId') == comments[0]["id"])
 

@@ -49,10 +49,14 @@ class SharedProjectServer:
         self.loop = loop
         asyncio.set_event_loop(loop)
 
+        review = None
+
         async def start() -> None:
+            nonlocal review
             try:
                 config = load_config(self.config_path)
-                self.runner = web.AppRunner(HtmlReviewServer(config).create_app())
+                review = HtmlReviewServer(config)
+                self.runner = web.AppRunner(review.create_app())
                 await self.runner.setup()
                 await web.TCPSite(self.runner, "127.0.0.1", self.port).start()
             except BaseException as error:
@@ -70,6 +74,9 @@ class SharedProjectServer:
             self.start_task = loop.create_task(start())
             loop.run_until_complete(self.start_task)
             if self.start_error is None:
+                # What is not built yet is built now, the server serving and its start
+                # reported: whoever asks meanwhile waits for the build.
+                loop.create_task(review.catch_up())
                 loop.run_forever()
                 if self.runner is not None:
                     loop.run_until_complete(self.runner.cleanup())
