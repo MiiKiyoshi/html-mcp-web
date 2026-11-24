@@ -2663,6 +2663,7 @@ const panel = createCommentPanel({
   },
   whole: () => $("#artifact-comment-btn").click(),
   help: (page) => help.show(page),
+  bell: { call: () => fetchJson("/review-request", { method: "POST" }) },
   bringIntoView: (commentId) => revealCard(commentId),
   labels: { document: "artifact" },
   tabs: {
@@ -2672,8 +2673,6 @@ const panel = createCommentPanel({
         + "with the box tool. Add a note on the whole artifact… in the ⋯ menu comments on the artifact as a whole.",
     },
   },
-  // Once the view list gives up its room, the bell waits behind the dots.
-  row: { steps: { squeezed: [["uncalled", "#call-agent-btn"]] } },
   compose: {
     // The selection the comment was written on goes.
     posted: (comment, body) => {
@@ -2815,19 +2814,6 @@ function focusComment(commentId) {
   return panel.showComment(commentId);
 }
 
-// Green reaches a parked waiter now; red remains clickable because the server queues the
-// call until the next waiter connects.
-function showAgentWaiting(waiters) {
-  const waiting = waiters > 0;
-  const button = $("#call-agent-btn");
-  button.classList.toggle("agent-ready", waiting);
-  button.classList.toggle("agent-offline", !waiting);
-  button.setAttribute("aria-label", waiting ? "Call agent" : "Queue call for agent");
-  button.title = waiting
-    ? "Call the waiting agent now (Ctrl+Alt+Enter)"
-    : "Agent is not waiting; queue this call until it reconnects (Ctrl+Alt+Enter)";
-}
-
 async function handleSocketMessage(message) {
   if (message.type === "config_error") {
     $("#artifact-status").textContent = `config error: ${message.error}`;
@@ -2835,7 +2821,7 @@ async function handleSocketMessage(message) {
   }
   if (message.type === "state") {
     if (!adoptProject(message)) return;
-    if (message.review !== undefined) showAgentWaiting(message.review.waiters);
+    if (message.review !== undefined) panel.bell.show({ waiters: message.review.waiters });
     const artifact = message.artifacts[state.alias];
     if (artifact !== undefined && state.revision !== artifact.revision) {
       state.artifact = artifact;
@@ -2846,7 +2832,7 @@ async function handleSocketMessage(message) {
     return;
   }
   if (message.type === "review_waiters") {
-    showAgentWaiting(message.waiters);
+    panel.bell.show({ waiters: message.waiters });
     return;
   }
   // The server finished its check of a revision: the review page shows that result.
@@ -2911,7 +2897,7 @@ function connectWebSocket() {
     handleSocketMessage(JSON.parse(event.data)).catch((error) => console.error(error));
   };
   socket.onclose = () => {
-    showAgentWaiting(0);
+    panel.bell.show({ waiters: 0 });
     $("#artifact-status").textContent = "reconnecting";
     setTimeout(connectWebSocket, 1500);
   };
@@ -3110,32 +3096,6 @@ function attachControls() {
   // record over the page when the address carries ?trace.
   if (new URLSearchParams(window.location.search).has("trace")) import("./trace.js");
   attachCommentPanel();
-  // Ctrl+Alt+Enter (Cmd+Option+Enter) presses the bell from anywhere on the page, the
-  // editor included, but not over a dialog.
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" || !event.altKey || !(event.ctrlKey || event.metaKey)) return;
-    if (document.querySelector("dialog[open]")) return;
-    event.preventDefault();
-    event.stopPropagation();
-    if (!$("#call-agent-btn").disabled) $("#call-agent-btn").click();
-  }, true);
-  $("#call-agent-btn").addEventListener("click", async () => {
-    const button = $("#call-agent-btn");
-    const word = $("#call-agent-word");
-    button.disabled = true;
-    try {
-      const reply = await fetchJson("/review-request", { method: "POST" });
-      // Delivered went straight to a parked agent; queued is kept by the server and
-      // answers the agent's next wait at once. The word shows beside the bell for a
-      // moment, which is the only time the button carries one.
-      word.textContent = reply.delivered ? "Called" : "Queued";
-    } catch (error) {
-      word.textContent = "Failed";
-      console.error(error);
-    } finally {
-      setTimeout(() => { word.textContent = ""; button.disabled = false; }, 2000);
-    }
-  });
   $("#sidebar-toggle-btn").addEventListener("click", () => {
     const collapsed = $(".layout").classList.toggle("sidebar-collapsed");
     localStorage.setItem("htmlMcpSidebarCollapsed", collapsed ? "1" : "0");

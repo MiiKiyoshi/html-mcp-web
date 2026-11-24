@@ -4,6 +4,7 @@ keeps its own comments, the keys that work the list beside the slides' own, Help
 Settings for the key letters and the editor's cursor."""
 
 import json
+import os
 import shutil
 import socket
 import subprocess
@@ -358,6 +359,42 @@ def test_the_row_stays_one_line_at_every_text_size_with_the_bell_in_it(tmp_path:
         assert script('return document.querySelector("#call-agent-btn").getAttribute("aria-label")') == "Queue call for agent"
         browser.find_element("css selector", "#call-agent-btn").click()
         wait_until(lambda: get_json(f"{base}/state")["review"]["calls"] == 1)
+
+
+@needs_firefox
+def test_the_line_above_the_list_says_how_comments_reach_the_agent(tmp_path: Path) -> None:
+    """After a comment is posted while comments wait for the agent, the line above the list says
+    they reach it at the bell, with its key, until the bell is pressed. A press no agent hears is
+    queued, which the line says until an agent listens and takes it, and the reminder is not
+    said again in this visit. The server names no agents beside the session listening, so the
+    bell has no lists of them, and with one way to call no button for the way."""
+    with review_page(tmp_path) as (browser, base):
+        script = lambda code: browser.execute_script(code)
+        note = 'const note = document.querySelector("#call-agent-why"); return note.hidden ? null : note.textContent'
+        assert script(note) is None
+        assert script('''return ["#call-agent-select", "#agent-model-select", "#agent-effort-select"]
+          .every((id) => document.querySelector(id).classList.contains("hidden"))
+          && document.querySelector("#call-by-btn") === null''')
+        script('document.querySelector("#artifact-comment-btn").click()')
+        wait_until(lambda: script('return document.querySelector("#compose-dialog").open'))
+        script('const box = document.querySelector("#compose-text"); box.value = "Tighten the opening.";'
+               ' box.dispatchEvent(new Event("input", {bubbles: true})); document.querySelector("#compose-form").requestSubmit();')
+        reminder = "Your comments reach the agent when you press the bell (Ctrl+Alt+Enter)."
+        wait_until(lambda: script(note) == reminder)
+        # Ctrl+Alt+Enter presses the bell, and no agent listens.
+        script('document.body.dispatchEvent(new KeyboardEvent("keydown", {key: "Enter", ctrlKey: true, altKey: true, bubbles: true}))')
+        wait_until(lambda: script('return document.querySelector("#call-agent-word").textContent') == "Queued")
+        assert script(note) == "No agent is listening yet, so the call is queued until one listens."
+        with urllib.request.urlopen(f"{base}/wait-review?listener=one&pid={os.getpid()}", timeout=10) as waited:
+            assert waited.read().startswith(b"[review]")
+        wait_until(lambda: script(note) is None)
+        script('document.querySelector("#artifact-comment-btn").click()')
+        wait_until(lambda: script('return document.querySelector("#compose-dialog").open'))
+        script('const box = document.querySelector("#compose-text"); box.value = "And the closing.";'
+               ' box.dispatchEvent(new Event("input", {bubbles: true})); document.querySelector("#compose-form").requestSubmit();')
+        wait_until(lambda: len(listed(browser)) == 2)
+        time.sleep(0.3)
+        assert script(note) is None
 
 
 @needs_firefox
