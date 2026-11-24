@@ -2,6 +2,8 @@
 
 ## First pass: the pages
 
+Read the pages in order. At each page, use only the supplied audience knowledge and what the earlier pages actually showed. Report first where that is not enough to follow the page's answer: an object, term, value or relation the page uses that you were not given. Report it even when you know the missing step yourself.
+
 Review every supplied page as the supplied audience, using the rendered document, that audience's knowledge, and the requester's decisions supplied with it. If a presenter's knowledge is supplied, also report each page whose question and answer that presenter could not find on the page or whose elements they could not explain.
 
 Use the supplied decisions as constraints, not as explanations of missing content. Do not report an approved choice itself as a defect. If understanding remains blocked within those constraints, report the specific problem without prescribing a conflicting change. Requested focus areas may set priorities but do not limit the checks below.
@@ -16,7 +18,7 @@ Request any other definition, derivation, or initial value only when its absence
 
 Read for wording and relationships that block understanding, including unexplained terms needed for the answer, implementation names that replace explanations, missing actors or actions, and inconsistent names. Read titles, leads, and takeaways in order for jumps, repetition, and conclusions without premises. Check whether figures support the takeaway, whether a comparison identifies both sides and explains how their difference supports the conclusion, and whether overviews agree with the body.
 
-For measurement results, check that the takeaway states what they show about the claim or mechanism tested. If the tested or displayed cases cover only part of the cases introduced in the document, check that the selection reason is clear and that the conclusion covers only that part. Report a conclusion broader than its displayed evidence as a defect of its wording, not a missing caveat, and request no limitation, caveat, or scope qualifier beyond one limitation the displayed values themselves make self-evident, stated once, and never one that presents an effect as a limitation of the method. Flag any other, and any repetition, as unnecessary. Flag unsupported evaluative claims only when they affect the page's answer.
+For measurement results, check that the takeaway states what they show about the claim or mechanism tested. If the tested or displayed cases cover only part of the cases introduced in the document, check that the selection reason is clear and that the conclusion covers only that part. Report a conclusion broader than its displayed evidence as a defect of its wording, not a missing caveat, and request no limitation, caveat, or scope qualifier beyond one limitation the displayed values themselves make self-evident, stated once. Flag a stated limitation that presents an effect of the method as the method's limitation, unless it names an alternative, possible under the same constraints, that would avoid the effect. Flag any other, and any repetition, as unnecessary. Flag unsupported evaluative claims only when they affect the page's answer.
 
 Do not verify numerical accuracy, recompute sums or ratios, or audit the sources and derivations of numerical values. Those checks belong to the author.
 
@@ -26,7 +28,7 @@ If scripts are supplied, review them in spoken order alongside their pages. Keep
 
 Check that the presenter can speak from the page currently shown and the audience's established context. Flag previews of later titles or content not shown on that page. A forward reference may only locate the answer to a deliberately open question. A divider script should announce only its displayed section, and a contents script should introduce only its displayed organization.
 
-A cover may include one short sentence recalling an earlier presentation or discussion to establish today's starting point. Preserve that orientation even when the audience already knows the recalled context. Judge the sentence's role, not only whether it adds new information.
+A cover script is a greeting and one short sentence that says what the talk presents, in the words the cover shows. Flag a sentence recalling an earlier presentation or discussion unless the audience needs it to follow today's subject.
 
 Check that each reference identifies what is being discussed, terms have clear and consistent meanings, and sentences follow the visible explanation without jumps or contradictions. For each sentence, check whether removing it would lose information or guidance the audience needs. Flag unnecessary sentences, reasons, transitions, readings of visible text, and source recitation. Before requesting an addition, identify what the audience cannot understand without it.
 

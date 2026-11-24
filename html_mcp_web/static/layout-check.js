@@ -134,7 +134,7 @@ export function createLayoutChecks(dependencies) {
   const HEAD_CLEARANCE = 0.2;
 
   // What to do with a bullet that interprets a table or figure from elsewhere on the page.
-  const INTERPRETATION_ADVICE = "Put the bullet in a list directly below that visual, in the same column (neutral 5.8)";
+  const INTERPRETATION_ADVICE = "Put the bullet in a list directly below that visual, in the same column (neutral-slides 6.7, neutral-report 5.8)";
 
   // Whether a reader sees an element: rendered, neither hidden nor transparent, and not in
   // an SVG container that is never drawn where it is written.

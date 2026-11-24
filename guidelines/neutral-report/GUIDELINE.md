@@ -1,6 +1,6 @@
 # Neutral Technical Report: Content Guideline
 
-This guideline is for a report set as a two-column paper. It shares its principles with neutral-slides and numbers the clauses the two share alike, so a clause cited by number means the same in both. Article 6 holds what only a paper has.
+This guideline is for a report set as a two-column paper. Its clause numbers are its own and differ from those of neutral-slides. Article 6 holds what only a paper has.
 
 ## Article 1. Priorities and shared terms
 
