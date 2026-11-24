@@ -1442,9 +1442,12 @@ async def test_the_shell_names_its_assets_under_a_tag_that_moves(client) -> None
     response = await test_client.get("/")
     text = await response.text()
     assert response.headers["Cache-Control"] == "no-store"
-    newest = max(int(path.stat().st_mtime) for path in review.static_dir.iterdir() if path.is_file())
+    newest = max(int(path.stat().st_mtime) for folder in (review.static_dir, review.static_dir / "shared")
+                 for path in folder.iterdir() if path.is_file())
     assert f'src="/static/v{newest}/viewer.js"' in text
     assert f'href="/static/v{newest}/style.css"' in text
+    # The files the review pages share are named under the same tag.
+    assert f'href="/static/v{newest}/shared/look.css"' in text and f'src="/static/v{newest}/shared/look-early.js"' in text
     assert '"/static/viewer.js"' not in text and '"/static/style.css"' not in text
     # The tag names a moment, not a directory: under it the files themselves are served.
     tagged = await test_client.get(f"/static/v{newest}/comments.js")

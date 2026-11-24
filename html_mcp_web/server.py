@@ -607,9 +607,11 @@ class HtmlReviewServer:
         relative import resolves against its module's URL with the query dropped, so a
         viewer.js named with a fresh query still pulled the stylesheet and the sidebar
         the browser already held. Safari served a sidebar several versions old however
-        often the page was reloaded.
+        often the page was reloaded. The files the review pages share sit in a folder of
+        their own and count as well.
         """
-        newest = max((path.stat().st_mtime for path in self.static_dir.iterdir() if path.is_file()), default=0)
+        newest = max((path.stat().st_mtime for folder in (self.static_dir, self.static_dir / "shared")
+                      for path in folder.iterdir() if path.is_file()), default=0)
         return f"v{int(newest)}"
 
     async def index(self, request: web.Request) -> web.Response:

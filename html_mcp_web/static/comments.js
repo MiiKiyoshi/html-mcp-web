@@ -12,26 +12,10 @@ export function createComments(dependencies) {
     pageTitleAt,
     renderHighlights,
     resolveAnchor,
+    sendOn,
     state,
     syncSourceCommentMarkers,
   } = dependencies;
-
-  // Enter sends, and shift with it writes a new line. The command or control key with enter
-  // sends too, as it does elsewhere.
-  function sendOn(input, send) {
-    input.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" || event.altKey) return;
-      if (event.shiftKey && !(event.metaKey || event.ctrlKey)) return;
-      // An Enter that ends a word an input method is still composing, as Korean is typed,
-      // comes before the box holds that word, which is sent once composing ends.
-      if (event.isComposing) {
-        input.addEventListener("compositionend", () => setTimeout(send), { once: true });
-        return;
-      }
-      event.preventDefault();
-      send();
-    });
-  }
 
   function filteredCommentsPath() {
     const status = $("#comment-filter").value;

@@ -4,17 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>html-web</title>
+  <link rel="stylesheet" href="/static/shared/look.css">
   <link rel="stylesheet" href="/static/style.css">
-  <script>
-    // The theme is set before the page is drawn, so a dark page does not flash light: the
-    // reader's last choice, else the system's.
-    try {
-      document.documentElement.dataset.theme = localStorage.getItem("htmlMcpTheme")
-        ?? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    } catch {
-      document.documentElement.dataset.theme = "light";
-    }
-  </script>
+  <script src="/static/shared/look-early.js" data-key="htmlMcpTheme"></script>
 </head>
 <body>
   <div id="app">
@@ -32,13 +24,16 @@
       <nav id="artifact-tabs" class="artifact-tabs" aria-label="Artifacts"></nav>
       <div class="topbar-actions">
         <button id="fullscreen-btn" type="button" title="Full screen" aria-label="Full screen"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9V3h6M15 3h6v6M21 15v6h-6M9 21H3v-6"/></svg></button>
+        <!-- Settings: the page's look and the key that sends a comment. On a phone the ⋯ menu
+             offers it instead. -->
+        <button id="settings-btn" type="button" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
         <span class="more">
           <button id="more-btn" type="button" title="More" aria-label="More" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
           <div id="more-menu" class="more-menu" role="menu" hidden>
             <button id="download-pdf-btn" class="download-btn" type="button" role="menuitem" data-label="Export PDF" title="Export the artifact as a PDF">Export PDF</button>
             <button id="download-pptx-btn" class="download-btn" type="button" role="menuitem" data-label="Export PPTX" title="Export the deck as an editable pptx">Export PPTX</button>
             <button id="artifact-comment-btn" type="button" role="menuitem">Add a note on the whole artifact…</button>
-            <button id="theme-btn" type="button" role="menuitem" aria-pressed="false">Dark mode</button>
+            <button id="settings-menu-btn" type="button" role="menuitem">Settings…</button>
           </div>
         </span>
         <button id="sidebar-toggle-btn" type="button" title="Toggle comments (\)">⇥</button>
@@ -183,12 +178,23 @@
     </main>
   </div>
 
+  <dialog id="settings-dialog">
+    <form method="dialog" id="settings-form">
+      <h3>Settings</h3>
+      <!-- Theme, text size and the key that sends a comment, filled in by shared/settings.js. -->
+      <div id="settings-look"></div>
+      <div class="dialog-actions">
+        <button value="close" autofocus>Close</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="compose-dialog">
     <form id="compose-form">
       <h3>New comment</h3>
       <blockquote id="compose-anchor"></blockquote>
       <textarea id="compose-text" rows="5" required
-                placeholder="Leave feedback for the agent (Enter to post)"></textarea>
+                placeholder="Leave feedback for the agent"></textarea>
       <!-- The action that finishes the comment comes first, so Tab out of the text lands
            on it and Enter posts. -->
       <div class="dialog-actions">

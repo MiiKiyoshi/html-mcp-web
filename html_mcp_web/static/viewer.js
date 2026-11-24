@@ -4,6 +4,7 @@ import { createAnchors } from "./anchors.js";
 import { createComments } from "./comments.js";
 import { createSearch } from "./search.js";
 import { displayPath } from "./path-display.mjs";
+import { createSettings } from "./shared/settings.js";
 
 const $ = (selector) => document.querySelector(selector);
 const homePath = document.querySelector('meta[name="html-mcp-home"]')?.content ?? "";
@@ -577,8 +578,6 @@ function attachVimInputMethod(editor) {
   };
 }
 
-// Dark or light, as the reader last chose, else as the system is. The review page's own
-// parts change; the artifact is drawn as written, on a dark ground in the dark.
 function darkTheme() {
   return document.documentElement.dataset.theme === "dark";
 }
@@ -596,13 +595,17 @@ function markFrameTheme(frame) {
   }
 }
 
-function applyTheme(theme) {
-  document.documentElement.dataset.theme = theme;
-  $("#theme-btn").setAttribute("aria-pressed", String(theme === "dark"));
-  $("#theme-btn").textContent = theme === "dark" ? "Light mode" : "Dark mode";
-  state.editor?.setTheme(editorTheme());
-  for (const frame of document.querySelectorAll("iframe")) markFrameTheme(frame);
-}
+// The theme, the text size and the key that sends a comment, as Settings keeps them. The
+// review page's own parts follow the theme; the artifact is drawn as written, on a ground that
+// follows it.
+const settings = createSettings({
+  prefix: "htmlMcp",
+  onTheme: () => {
+    state.editor?.setTheme(editorTheme());
+    for (const frame of document.querySelectorAll("iframe")) markFrameTheme(frame);
+  },
+  onSendKey: (name) => { $("#compose-submit").title = `Post (${name})`; },
+});
 
 // K with Vim keys, or Ctrl+Alt+K (Cmd+Option+K), opens in the comments the comment the
 // cursor is on, as a click on its mark beside the line does: the narrowest when several
@@ -2608,6 +2611,7 @@ const comments = createComments({
   },
   renderHighlights,
   resolveAnchor,
+  sendOn: settings.sendOn,
   state,
   syncSourceCommentMarkers,
 });
@@ -2872,21 +2876,12 @@ function attachControls() {
     if (!event.target.closest(".more")
       || event.target.closest(".more-menu button:not(.download-btn)")) closeMore();
   });
-  $("#theme-btn").addEventListener("click", () => {
-    const theme = darkTheme() ? "light" : "dark";
-    try { localStorage.setItem("htmlMcpTheme", theme); } catch { /* the choice lasts this visit */ }
-    applyTheme(theme);
-  });
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (event) => {
-    let chosen = null;
-    try { chosen = localStorage.getItem("htmlMcpTheme"); } catch { /* none kept */ }
-    if (chosen === null) applyTheme(event.matches ? "dark" : "light");
-  });
+  $("#settings-btn").addEventListener("click", () => settings.open());
+  $("#settings-menu-btn").addEventListener("click", () => settings.open());
   // Each artifact and preview frame takes the theme as its document loads.
   document.addEventListener("load", (event) => {
     if (event.target instanceof HTMLIFrameElement) markFrameTheme(event.target);
   }, true);
-  applyTheme(document.documentElement.dataset.theme);
   // On a touch screen the view tabs sit in the artifact's bar by the thumbs button, where a
   // thumb reaches them; with a mouse, on the left of the top bar.
   const touch = window.matchMedia("(pointer: coarse)");

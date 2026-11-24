@@ -19,6 +19,10 @@ html[data-html-mcp-layout][data-html-mcp-theme="dark"] body { background: #403f3
 /* Only the scroll bar darkens with it: a dark colour scheme would also turn the default
    colour of the artifact's own words light. */
 html[data-html-mcp-layout][data-html-mcp-theme="dark"] { scrollbar-color: #8a867c #403f3b; }
+/* The warm theme lays the pages on a warm paper ground, as tex-mcp-web lays its PDF. */
+html[data-html-mcp-layout][data-html-mcp-theme="warm"],
+html[data-html-mcp-layout][data-html-mcp-theme="warm"] body { background: #d9d2c5 !important; }
+html[data-html-mcp-layout][data-html-mcp-theme="warm"] { scrollbar-color: #b3a896 #d9d2c5; }
 /* A sideways wheel with nothing to scroll is not a step back through history. */
 html[data-html-mcp-layout] { overscroll-behavior-x: none !important; }
 

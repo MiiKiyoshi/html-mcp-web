@@ -1,18 +1,7 @@
+/* The colours, their themes and the sizes of the page's text are the review pages' shared
+   look, in shared/look.css. What follows is this page's own. */
 :root {
   color-scheme: light;
-  --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
-  --sans: -apple-system, "Helvetica Neue", system-ui, sans-serif;
-  font-family: var(--sans);
-  font-size: 14px;
-  color: #302e29;
-  background: #faf8f2;
-  --bg: #faf8f2;
-  --paper: #fffdf8;
-  --line: #ddd7ca;
-  --muted: #6f6a61;
-  --accent: #647b95;
-  --accent-soft: #ebe8df;
-  --yellow: #f6d84a;
   /* The bar along the top of each panel: the artifact's, the editor's and the comments'. */
   --panel-bar: 2.2rem;
 }
@@ -26,14 +15,14 @@ button, select, textarea { font: inherit; }
 #app { display: flex; flex-direction: column; }
 
 button, select {
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--bg);
-  color: #302e29;
+  color: var(--fg);
 }
 
 button { padding: 7px 11px; cursor: pointer; }
-button:hover { border-color: var(--line); background: var(--accent-soft); }
+button:hover { border-color: var(--border); background: var(--accent-soft); }
 button:disabled { cursor: default; opacity: .6; }
 
 .topbar {
@@ -46,31 +35,33 @@ button:disabled { cursor: default; opacity: .6; }
   flex-wrap: wrap;
   gap: 1rem;
   padding: .2rem .8rem;
-  border-bottom: 1px solid var(--line);
-  background: var(--paper);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
 }
 
 .topbar h1 { margin: 0; font-size: .9rem; font-weight: 600; letter-spacing: .01em; }
-.artifact-meta { align-self: stretch; display: flex; align-items: center; padding: 0 1rem; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.artifact-meta { align-self: stretch; display: flex; align-items: center; padding: 0 1rem; border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
 /* More tabs than the row holds scroll sideways, each label on one line: on a phone the
    labels broke over three lines and the tabs past the screen's right edge could not be
    reached. */
 /* The view tabs sit on the left, as in the LaTeX review page, and the artifacts' tabs on the
    right beside the actions. */
-.artifact-tabs { display: flex; align-self: stretch; min-width: 0; gap: 2px; margin-left: auto; padding-left: .75rem; border-left: 1px solid var(--line); overflow-x: auto; scrollbar-width: thin; }
-.artifact-tab { flex: none; white-space: nowrap; min-width: 72px; padding: .1rem .8rem; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: .82rem; }
-.artifact-tab.active { border-bottom-color: var(--accent); background: var(--accent-soft); color: #302e29; font-weight: 600; }
+.artifact-tabs { display: flex; align-self: stretch; min-width: 0; gap: 2px; margin-left: auto; padding-left: .75rem; border-left: 1px solid var(--border); overflow-x: auto; scrollbar-width: thin; }
+.artifact-tab { flex: none; white-space: nowrap; min-width: 72px; padding: .1rem .8rem; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--fg-dim); font-size: var(--text-fine); }
+.artifact-tab.active { border-bottom-color: var(--accent); background: var(--accent-soft); color: var(--fg); font-weight: 600; }
 .view-tabs { display: flex; align-self: stretch; }
-.topbar .view-tabs { padding-right: .75rem; border-right: 1px solid var(--line); }
-.view-tab { min-width: 58px; padding: .1rem .6rem; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: .82rem; }
-.view-tab.active { border-bottom-color: var(--accent); background: var(--accent-soft); color: #302e29; }
-.main-file { padding-right: .75rem; color: var(--muted); font-family: var(--mono); font-size: .82rem; }
-.artifact-status { align-self: stretch; display: flex; align-items: center; padding-left: .75rem; border-left: 1px solid var(--line); color: var(--muted); font-size: .82rem; }
-.artifact-status.error { color: #a23f34; }
-.topbar-actions { display: flex; flex: 0 0 auto; align-self: stretch; gap: .5rem; align-items: center; padding-left: .75rem; border-left: 1px solid var(--line); }
+.topbar .view-tabs { padding-right: .75rem; border-right: 1px solid var(--border); }
+.view-tab { min-width: 58px; padding: .1rem .6rem; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--fg-dim); font-size: var(--text-fine); }
+.view-tab.active { border-bottom-color: var(--accent); background: var(--accent-soft); color: var(--fg); }
+.main-file { padding-right: .75rem; color: var(--fg-dim); font-family: var(--mono); font-size: var(--text-fine); }
+.artifact-status { align-self: stretch; display: flex; align-items: center; padding-left: .75rem; border-left: 1px solid var(--border); color: var(--fg-dim); font-size: var(--text-body); }
+.artifact-status.error { color: var(--err); }
+.topbar-actions { display: flex; flex: 0 0 auto; align-self: stretch; gap: .5rem; align-items: center; padding-left: .75rem; border-left: 1px solid var(--border); }
 .topbar h1, .topbar-actions button, .download-btn { white-space: nowrap; }
-#more-btn, #fullscreen-btn { display: inline-flex; align-items: center; line-height: 1; }
-#more-btn svg, #fullscreen-btn svg { display: block; }
+#more-btn, #fullscreen-btn, #settings-btn { display: inline-flex; align-items: center; line-height: 1; }
+#more-btn svg, #fullscreen-btn svg, #settings-btn svg { display: block; }
+/* The ⋯ menu offers Settings only on a phone, where the top bar has no room for its button. */
+.more-menu #settings-menu-btn { display: none; }
 .more { position: relative; display: inline-flex; }
 .more-menu {
   position: absolute;
@@ -81,15 +72,15 @@ button:disabled { cursor: default; opacity: .6; }
   flex-direction: column;
   min-width: 15rem;
   padding: .25rem;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background: var(--paper);
+  background: var(--bg-elev);
   box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
 }
 .more-menu[hidden] { display: none; }
 .topbar-actions .more-menu button { border: 0; border-radius: 3px; background: transparent; text-align: left; padding: .35rem .6rem; }
 .topbar-actions .more-menu button:hover { background: var(--accent-soft); }
-.topbar-actions button { padding: .1rem .55rem; border-radius: 3px; font-size: .82rem; }
+.topbar-actions button { padding: .1rem .55rem; border-radius: 3px; font-size: var(--text-fine); }
 /* The scripts button is an icon that reads as a switch: lit while scripts show, plain
    while they hide. */
 #scripts-btn { display: inline-flex; align-items: center; padding: .1rem .4rem; line-height: 1; }
@@ -97,9 +88,9 @@ button:disabled { cursor: default; opacity: .6; }
 #scripts-btn.active { background: var(--accent-soft); border-color: var(--accent); }
 #scripts-btn:disabled { opacity: .45; }
 /* Download is an anchor, styled to match the buttons next to it */
-.download-btn { padding: .1rem .55rem; border: 1px solid var(--line); border-radius: 3px; background: var(--bg); color: #302e29; font-size: .82rem; text-decoration: none; }
+.download-btn { padding: .1rem .55rem; border: 1px solid var(--border); border-radius: 3px; background: var(--bg); color: var(--fg); font-size: var(--text-body); text-decoration: none; }
 .download-btn:hover { background: var(--accent-soft); }
-button.download-btn { font: inherit; font-size: .82rem; cursor: pointer; }
+button.download-btn { font: inherit; font-size: var(--text-body); cursor: pointer; }
 button.download-btn.busy { color: #8a867d; cursor: progress; }
 
 .layout {
@@ -127,15 +118,15 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
   gap: 1rem;
   min-height: var(--panel-bar);
   padding: 0 .8rem;
-  border-bottom: 1px solid var(--line);
-  background: var(--paper);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
 }
 /* The artifact's bar sits over the artifact alone. The editor and the bar between the two
    run from the top, so the editor's bar stands level with it. */
 #artifact-pane { grid-row: 2; }
 #source-pane, #split-grip { grid-row: 1 / -1; }
 .layout.view-source .workspace-toolbar { display: none; }
-#artifact-pane { position: relative; min-width: 0; min-height: 0; background: #faf8f2; }
+#artifact-pane { position: relative; min-width: 0; min-height: 0; background: var(--bg-pdf); }
 .layout.view-preview #source-pane { display: none; }
 .layout.view-source #artifact-pane { display: none; }
 #split-grip { display: none; }
@@ -150,15 +141,15 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
   touch-action: none;
   background: var(--bg);
 }
-#split-grip::after { content: ""; width: 3px; height: 32px; border-radius: 2px; background: var(--line); }
+#split-grip::after { content: ""; width: 3px; height: 32px; border-radius: 2px; background: var(--border); }
 #split-grip:hover::after, #split-grip:focus-visible::after { background: var(--accent); }
 #source-pane {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  border-left: 1px solid var(--line);
-  background: var(--paper);
+  border-left: 1px solid var(--border);
+  background: var(--bg-elev);
 }
 /* A narrow editor takes its buttons onto a second row rather than past its edge. */
 .source-toolbar {
@@ -168,20 +159,24 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
   gap: .45rem;
   min-height: var(--panel-bar);
   padding: .15rem .5rem;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--border);
   background: var(--bg);
 }
-.source-file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: .8rem var(--mono); }
-.source-status { flex: 1; color: var(--muted); text-align: right; white-space: nowrap; font: .78rem var(--mono); }
-.source-status.dirty { color: #9a6b0d; }
-.source-status.conflict { color: #a23f34; }
+.source-file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--text-small) var(--mono); }
+.source-status { flex: 1; color: var(--fg-dim); text-align: right; white-space: nowrap; font: var(--text-body) var(--mono); }
+.source-status.dirty { color: var(--warn); }
+.source-status.conflict { color: var(--err); }
 .source-toolbar button { border-radius: 3px; }
 .source-toolbar button { display: inline-flex; align-items: center; padding: .25rem .4rem; line-height: 1; }
 .source-toolbar button svg { display: block; }
 #source-vim-btn.active,
 #source-wrap-btn.active { background: var(--accent-soft); border-color: var(--accent); }
 #source-editor { flex: 1; min-height: 0; font-family: var(--mono); }
-#source-editor .ace_marker-layer .source-comment-highlight { position: absolute; background: rgba(246, 216, 74, .32); }
+#source-editor .ace_marker-layer .source-comment-highlight {
+  position: absolute;
+  background: var(--source-comment);
+  box-shadow: inset 0 -2px 0 var(--source-comment-edge);
+}
 #source-editor .ace_gutter-cell.source-comment-line::before {
   content: "";
   position: absolute;
@@ -189,17 +184,17 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
   top: 50%;
   width: 7px;
   height: 7px;
-  border: 1px solid #9e8210;
+  border: 1px solid var(--source-comment-dot-edge);
   border-radius: 50%;
-  background: var(--yellow);
+  background: var(--source-comment-dot);
   transform: translateY(-50%);
 }
 #source-editor .ace_gutter-cell.source-comment-line { cursor: pointer; }
 /* What an open suggestion would replace, in the red of the card's − line. */
 #source-editor .ace_marker-layer .source-suggestion-highlight {
   position: absolute;
-  background: rgba(183, 56, 56, .14);
-  box-shadow: inset 0 -2px 0 rgba(183, 56, 56, .55);
+  background: var(--source-suggestion);
+  box-shadow: inset 0 -2px 0 var(--source-suggestion-edge);
 }
 #source-editor .ace_gutter-cell.source-suggestion-line::before { border-color: #9c3a33; background: #e0857c; }
 /* One frame per artifact, all the size of the pane and stacked in it; the active one is
@@ -210,7 +205,7 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
    a frame hidden with visibility no more (its bug 272727), and a frame raised over the
    others after a spell underneath came back blank in Safari as well, until the reader
    scrolled inside it. */
-.artifact-frame { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; background: #faf8f2; will-change: transform; }
+.artifact-frame { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; background: var(--bg-pdf); will-change: transform; }
 .artifact-frame.active { z-index: 1; }
 .artifact-frame:not(.active) { z-index: 0; pointer-events: none; }
 /* The frame a new revision replaces, kept over it until the new one is drawn at the reader's place. */
@@ -237,13 +232,13 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .search-bar {
   position: absolute; z-index: 35; top: 8px; right: 18px; max-width: calc(100% - 36px);
   display: flex; align-items: center; gap: 4px; padding: 4px 6px;
-  border: 1px solid var(--line); border-radius: 4px; background: var(--paper);
+  border: 1px solid var(--border); border-radius: 4px; background: var(--bg-elev);
   box-shadow: 0 2px 8px rgba(0, 0, 0, .14);
 }
-.search-bar input { flex: 1 1 220px; width: 220px; min-width: 0; padding: 3px 6px; font-size: 13px; }
-.search-count { flex: none; min-width: 3.6em; color: var(--muted); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+.search-bar input { flex: 1 1 220px; width: 220px; min-width: 0; padding: 3px 6px; font-size: var(--text-body); }
+.search-count { flex: none; min-width: 3.6em; color: var(--fg-dim); font-size: var(--text-small); text-align: right; font-variant-numeric: tabular-nums; }
 .search-bar button { flex: none; padding: 2px 7px; line-height: 1.2; }
-#thumbs-pane { display: none; position: absolute; top: 0; bottom: 0; left: 0; width: 200px; border-right: 1px solid var(--line); background: #efede6; z-index: 2; }
+#thumbs-pane { display: none; position: absolute; top: 0; bottom: 0; left: 0; width: 200px; border-right: 1px solid var(--border); background: #efede6; z-index: 2; }
 #thumbs-pane iframe { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; background: #efede6; }
 #thumbs-frame { z-index: 1; }
 #thumbs-pane iframe:not(#thumbs-frame) { z-index: 0; pointer-events: none; }
@@ -307,7 +302,7 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
   padding: 6px 10px;
   border-color: var(--accent);
   color: var(--accent);
-  background: white;
+  background: var(--bg-elev);
   box-shadow: 0 4px 16px rgba(0, 0, 0, .2);
 }
 
@@ -318,7 +313,7 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .zoom-reset {
   padding: .1rem .55rem;
   border-radius: 3px;
-  font-size: .82rem;
+  font-size: var(--text-small);
   background: var(--bg);
 }
 
@@ -358,8 +353,8 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 #sidebar {
   min-width: 0;
   overflow: hidden;
-  border-left: 1px solid var(--line);
-  background: var(--paper);
+  border-left: 1px solid var(--border);
+  background: var(--bg-elev);
   display: flex;
   flex-direction: column;
 }
@@ -367,7 +362,7 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .sidebar-tabs {
   display: flex;
   min-height: var(--panel-bar);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--border);
   background: var(--bg);
 }
 
@@ -377,13 +372,13 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
-  color: var(--muted);
+  color: var(--fg-dim);
   background: none;
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 .tab-btn:hover { border-color: transparent; background: var(--accent-soft); }
-.tab-btn.active { color: #302e29; border-bottom-color: var(--accent); background: var(--paper); }
-.tab-count { margin-left: .35rem; padding: 0 .32rem; border-radius: 8px; color: white; background: var(--accent); font-size: .72rem; font-weight: 700; }
+.tab-btn.active { color: var(--fg); border-bottom-color: var(--accent); background: var(--bg-elev); }
+.tab-count { margin-left: .35rem; padding: 0 .32rem; border-radius: 8px; color: white; background: var(--accent); font-size: var(--text-fine); font-weight: 700; }
 .tab-pane { display: none; flex: 1; min-height: 0; overflow: hidden; }
 .tab-pane.active { display: flex; flex-direction: column; }
 
@@ -392,11 +387,11 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
   display: flex; align-items: baseline; gap: .5rem;
   padding: .5rem .6rem; margin-bottom: .5rem; border-radius: 8px;
   border: 1px solid #e3c7c2; background: #fdf4f2;
-  font-size: .84rem; line-height: 1.45; color: #4a2f2a;
+  font-size: var(--text-body); line-height: 1.45; color: #4a2f2a;
 }
 .problem-kind {
   flex: none; padding: 0 .35rem; border-radius: 6px;
-  background: #a23f34; color: white; font-size: .7rem; font-weight: 700;
+  background: #a23f34; color: white; font-size: var(--text-fine); font-weight: 700;
 }
 .problem.clickable { cursor: pointer; }
 .problem.clickable:hover { border-color: #c87869; background: #fbeae6; }
@@ -427,25 +422,25 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .page-nav-item:hover { border-color: transparent; background: var(--accent-soft); }
 /* The + comment button only appears while the pointer rests on the row */
 .page-nav-row { display: flex; align-items: center; gap: 4px; }
-.page-nav-row.active .page-nav-item { border-left-color: var(--accent); background: var(--paper); }
+.page-nav-row.active .page-nav-item { border-left-color: var(--accent); background: var(--bg-elev); }
 .comment-page-btn {
   flex: 0 0 auto;
   padding: 2px 6px;
   border-radius: 3px;
-  color: var(--muted);
-  font-size: 11px;
+  color: var(--fg-dim);
+  font-size: var(--text-small);
   opacity: 0;
 }
 .page-nav-row:hover .comment-page-btn, .comment-page-btn:focus-visible { opacity: 1; }
 .comment-page-btn:hover { color: white; border-color: var(--accent); background: var(--accent); }
-.page-number { color: var(--accent); font-family: var(--mono); font-size: 11px; font-weight: 700; text-align: right; }
-.page-title { overflow: hidden; color: #302e29; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.page-number { color: var(--accent); font-family: var(--mono); font-size: var(--text-small); font-weight: 700; text-align: right; }
+.page-title { overflow: hidden; color: var(--fg); font-size: var(--text-body); text-overflow: ellipsis; white-space: nowrap; }
 
-.filter-row { display: flex; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.filter-row { display: flex; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
 /* A fixed width: grown to fill the row, the select stretched and shrank every time a
    button beside it came or went, and the row jumped under the reader's eye. */
 .filter-row .pick { flex: none; width: 96px; }
-.filter-row select { flex: none; width: 96px; padding: 5px 8px; font-size: 12px; }
+.filter-row select { flex: none; width: 96px; padding: 5px 8px; font-size: var(--text-body); }
 /* A list on a touch screen takes 16px type so the phone does not zoom in on it, which
    drew it larger than everything around it. There its choice is drawn in the row's own
    type, and the list lies clear over that and still opens on a tap. */
@@ -459,14 +454,14 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
     min-width: 0;
     overflow: hidden;
     padding: 0.2rem 1.2rem 0.2rem 0.4rem;
-    border: 1px solid var(--line);
+    border: 1px solid var(--border);
     border-radius: 3px;
     background: var(--bg);
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 0.8rem;
+    font-size: var(--text-body);
   }
-  .pick-name::after { content: "\25BE"; position: absolute; right: 0.4rem; top: 50%; transform: translateY(-50%); color: var(--muted); }
+  .pick-name::after { content: "\25BE"; position: absolute; right: 0.4rem; top: 50%; transform: translateY(-50%); color: var(--fg-dim); }
   .pick select {
     position: absolute !important; inset: 0; width: 100% !important; height: 100% !important;
     min-width: 0 !important; max-width: none !important; opacity: 0;
@@ -475,7 +470,7 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 /* Green reaches a parked waiter now; red queues the call for the next waiter. */
 .icon-btn {
   flex: none; display: inline-flex; align-items: center; gap: 4px;
-  padding: 4px 6px; font-size: 12px; line-height: 1; white-space: nowrap;
+  padding: 4px 6px; font-size: var(--text-body); line-height: 1; white-space: nowrap;
 }
 /* The select at the left edge, the buttons at the right: the first button takes the room
    between, so the buttons keep their places whatever the row's width. */
@@ -493,76 +488,65 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 
 .comment-card {
   margin-bottom: 9px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 9px;
   overflow: hidden;
-  background: var(--paper);
+  background: var(--bg-elev);
 }
 
 .comment-card.focused { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(83, 111, 138, .12); }
 .comment-card.unattached { border-left: 3px solid #bd6d58; }
 .comment-summary { padding: 10px; cursor: pointer; }
-.comment-summary:hover { background: #faf7f0; }
-.anchor-label { display: flex; gap: 7px; align-items: center; color: var(--muted); font-family: var(--mono); font-size: 11px; }
-.comment-preview { margin-top: 5px; color: #302e29; font-size: 12px; line-height: 1.4; }
+.comment-summary:hover { background: var(--bg); }
+.anchor-label { display: flex; gap: 7px; align-items: center; color: var(--fg-dim); font-family: var(--mono); font-size: var(--text-small); }
+.comment-preview { margin-top: 5px; color: var(--fg); font-size: var(--text-body); line-height: 1.4; }
 /* Quote shown only when expanded. A left rule sets it apart from the comment text. */
-.anchor-quote { margin: 9px 0 0; padding: 5px 8px; border-left: 2px solid var(--yellow); color: #4c4942; background: #faf7f0; font-size: 12px; line-height: 1.4; }
-.comment-id { color: #4c4942; font-weight: 700; }
+.anchor-quote { margin: 9px 0 0; padding: 5px 8px; border-left: 2px solid var(--source-comment-dot); color: var(--fg-dim); background: var(--bg); font-size: var(--text-body); line-height: 1.4; }
+.comment-id { color: var(--fg-dim); font-weight: 700; }
 .anchor-kind { margin-left: auto; }
 .status-pill.open { color: #665500; }
 .status-pill.resolved { color: #4f7758; }
 .status-pill.reference { color: #4a5f8a; }
-.comment-body { padding: 0 10px 10px; border-top: 1px solid #ebe5d9; }
-.thread-entry { padding: 9px 0; border-bottom: 1px solid #eee8dd; }
-.thread-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--muted); font-family: var(--mono); font-size: 10px; }
-.thread-meta .link { padding: 0; border: none; background: none; color: var(--muted); font-size: 10px; text-decoration: underline; cursor: pointer; }
+.comment-body { padding: 0 10px 10px; border-top: 1px solid var(--border); }
+.thread-entry { padding: 9px 0; border-bottom: 1px solid var(--border); }
+.thread-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--fg-dim); font-family: var(--mono); font-size: var(--text-small); }
+.thread-meta .link { padding: 0; border: none; background: none; color: var(--fg-dim); font-size: var(--text-small); text-decoration: underline; cursor: pointer; }
 .thread-meta .link:hover { color: inherit; }
-.thread-text { margin-top: 4px; white-space: pre-wrap; font-size: 12px; line-height: 1.45; }
-.thread-edits { margin: 5px 0 0; padding-left: 18px; font-family: var(--mono); font-size: 10px; }
+.thread-text { margin-top: 4px; white-space: pre-wrap; font-size: var(--text-body); line-height: 1.45; }
+.thread-edits { margin: 5px 0 0; padding-left: 18px; font-family: var(--mono); font-size: var(--text-small); }
 .comment-actions { display: flex; flex-wrap: wrap; gap: 5px; padding-top: 9px; }
-.cmt-suggestion { margin-top: 8px; border: 1px solid var(--line); border-radius: 4px; overflow: hidden;
-  font-family: var(--mono); font-size: 11px; }
+.cmt-suggestion { margin-top: 8px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+  font-family: var(--mono); font-size: var(--text-small); }
 .cmt-suggestion .sugg-old, .cmt-suggestion .sugg-new { display: flex; gap: 6px; padding: 4px 8px;
   white-space: pre-wrap; overflow-wrap: anywhere; }
 .cmt-suggestion .sugg-old { background: rgba(183, 56, 56, .08); }
 .cmt-suggestion .sugg-new { background: rgba(50, 122, 67, .1); }
-.cmt-suggestion .sugg-marker { flex: none; color: var(--muted); }
+.cmt-suggestion .sugg-marker { flex: none; color: var(--fg-dim); }
 .cmt-suggestion .sugg-actions { display: flex; justify-content: flex-end; padding: 5px 8px;
-  border-top: 1px solid var(--line); }
-.comment-actions button { padding: 5px 8px; font-size: 11px; }
-.danger { color: #a23f34; }
+  border-top: 1px solid var(--border); }
+.comment-actions button { padding: 5px 8px; font-size: var(--text-small); }
+.danger { color: var(--err); }
 
 .comment-form { margin-top: 9px; }
 .comment-form textarea, #compose-text {
   width: 100%;
   resize: vertical;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 7px;
   padding: 8px;
-  color: #2f2c27;
-  background: white;
+  color: var(--fg);
+  background: var(--bg);
 }
-.comment-form textarea { font-size: 12px; line-height: 1.45; }
+.comment-form textarea { font-size: var(--text-body); line-height: 1.45; }
 .comment-form textarea:focus, #compose-text:focus { outline: 2px solid rgba(83, 111, 138, .22); border-color: var(--accent); }
 .form-actions, .dialog-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
-.form-actions button { padding: 5px 8px; font-size: 11px; }
+.form-actions button { padding: 5px 8px; font-size: var(--text-small); }
 
-.placeholder { color: var(--muted); text-align: center; font-size: 12px; padding: 28px 12px; }
+.placeholder { color: var(--fg-dim); text-align: center; font-size: var(--text-body); padding: 28px 12px; }
 .hidden { display: none !important; }
 
-dialog {
-  width: min(520px, calc(100vw - 32px));
-  border: 1px solid #bfb6a7;
-  border-radius: 11px;
-  padding: 0;
-  background: var(--paper);
-  box-shadow: 0 20px 70px rgba(0, 0, 0, .24);
-}
-
-dialog::backdrop { background: rgba(37, 34, 29, .3); }
-dialog form { padding: 18px; }
-dialog h3 { margin: 0 0 10px; font-size: 16px; }
-dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid var(--yellow); background: #fff9d9; color: #575147; font-size: 12px; max-height: 110px; overflow: auto; white-space: pre-wrap; }
+dialog h3 { margin: 0 0 10px; font-size: 1rem; }
+dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid var(--source-comment-dot); background: var(--bg); color: var(--fg-dim); font-size: var(--text-body); max-height: 110px; overflow: auto; white-space: pre-wrap; }
 
 @media (max-width: 780px) {
   .layout { grid-template-columns: minmax(0, 1fr) 300px; }
@@ -579,7 +563,7 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   .layout.view-split #source-pane { grid-row: 4; }
   .layout.view-split #split-grip { cursor: row-resize; }
   .layout.view-split #split-grip::after { width: 32px; height: 3px; }
-  .layout.view-split #source-pane { border-left: 0; border-top: 1px solid var(--line); }
+  .layout.view-split #source-pane { border-left: 0; border-top: 1px solid var(--border); }
 }
 
 @media (max-width: 1100px) {
@@ -600,9 +584,9 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   cursor: row-resize;
   touch-action: none;
   background: var(--bg);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--border);
 }
-.sidebar-grip::before { content: ""; width: 32px; height: 3px; border-radius: 2px; background: var(--line); }
+.sidebar-grip::before { content: ""; width: 32px; height: 3px; border-radius: 2px; background: var(--border); }
 .sidebar-grip:hover::before, .sidebar-grip:focus-visible::before { background: var(--accent); }
 
 /* Beside the artifact or under it is decided by the shape of the screen rather than its
@@ -627,7 +611,7 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   .source-toolbar { flex-wrap: nowrap; gap: 0.25rem; padding: 0.1rem 0.35rem; }
   .source-toolbar button { padding: 0.2rem 0.25rem; }
   .source-toolbar button svg { width: 14px; height: 14px; }
-  .source-status { order: 2; flex: 0 0 auto; font-size: 0.62rem; }
+  .source-status { order: 2; flex: 0 0 auto; font-size: var(--text-fine); }
   /* The room the row has to spare goes between the file and the buttons, which keep to
      the right beside Saved. */
   #source-font-smaller-btn { margin-left: auto; }
@@ -639,72 +623,28 @@ dialog blockquote { margin: 0 0 11px; padding: 8px 10px; border-left: 3px solid 
   .artifact-tabs { flex: 1 1 auto; padding-left: 0; border-left: 0; }
   .topbar-actions { gap: .3rem; padding-left: .4rem; }
   .topbar-actions button { padding: .1rem .35rem; }
+  .topbar #settings-btn { display: none; }
+  .more-menu #settings-menu-btn { display: block; }
 }
 
 
 
-.stale-pill { color: #bd6d58; font-weight: 700; font-size: 11px; }
+.stale-pill { color: #bd6d58; font-weight: 700; font-size: var(--text-fine); }
 
-/* ----- Dark theme -----
-   The review page's own parts on a dark ground. The artifact keeps its colours. */
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  scrollbar-color: #8a867c #4a4944;
-  color: #f5f2eb;
-  background: #4a4944;
-  --bg: #4a4944;
-  --paper: #54524d;
-  --line: #7a766e;
-  --muted: #d8d2c6;
-  --accent: #8ea5bf;
-  --accent-soft: #5b636d;
-  --yellow: #c9ad3a;
-}
-:root[data-theme="dark"] :is(button, select, .download-btn, .artifact-tab.active, .view-tab.active,
-  .tab-btn.active, .page-title, .comment-preview) { color: #f5f2eb; }
-:root[data-theme="dark"] #artifact-pane,
-:root[data-theme="dark"] .artifact-frame { background: #403f3b; }
+/* ----- Dark and warm themes -----
+   The colours come from shared/look.css. What follows is for this page's own parts. The
+   artifact keeps its colours, on a ground that follows the theme (artifact.css). */
 :root[data-theme="dark"] #thumbs-pane,
 :root[data-theme="dark"] #thumbs-pane iframe { background: #4c4a45; }
-:root[data-theme="dark"] .selection-source { background: var(--paper); }
-:root[data-theme="dark"] :is(.artifact-status.error, .source-status.conflict, .danger) { color: #e0857c; }
-:root[data-theme="dark"] .source-status.dirty { color: #d6a64a; }
+:root[data-theme="warm"] #thumbs-pane,
+:root[data-theme="warm"] #thumbs-pane iframe { background: #d0c8ba; }
 :root[data-theme="dark"] .problem { border-color: #5a3a35; background: #2d2220; color: #e8cfc9; }
 :root[data-theme="dark"] .problem.clickable:hover { border-color: #7a4c44; background: #3a2926; }
 :root[data-theme="dark"] .problem.warning { border-color: #5a4f2c; background: #2e2a1c; color: #e9dcb5; }
 :root[data-theme="dark"] .problem.warning.clickable:hover { border-color: #786a3a; background: #3a3422; }
 :root[data-theme="dark"] #call-agent-btn.agent-ready { color: #8fcb9c; border-color: #3f6a48; background: #1f2b21; }
 :root[data-theme="dark"] #call-agent-btn.agent-offline { color: #e8968f; border-color: #6a3b38; background: #321f1e; }
-:root[data-theme="dark"] :is(.comment-summary:hover, .anchor-quote) { background: #5c5a54; }
-:root[data-theme="dark"] :is(.anchor-quote, .comment-id) { color: #cfc8bb; }
 :root[data-theme="dark"] .status-pill.open { color: #d8c25a; }
 :root[data-theme="dark"] .status-pill.resolved { color: #8cc29a; }
 :root[data-theme="dark"] .status-pill.reference { color: #9fb4e0; }
-:root[data-theme="dark"] :is(.comment-body, .thread-entry) { border-color: var(--line); }
-:root[data-theme="dark"] :is(.comment-form textarea, #compose-text) { color: #f5f2eb; background: #4a4944; }
-:root[data-theme="dark"] dialog { border-color: #615d55; color: #f5f2eb; }
-:root[data-theme="dark"] dialog::backdrop { background: rgba(0, 0, 0, .5); }
-:root[data-theme="dark"] dialog blockquote { background: #2e2a1c; color: #e0d8c4; }
-/* The editor's One Dark keeps its words' colours on the page's gray rather than its own
-   near-black ground. */
-:root[data-theme="dark"] .ace-one-dark,
-:root[data-theme="dark"] .ace-one-dark .ace_gutter { background: #403f3b; }
-:root[data-theme="dark"] .ace-one-dark .ace_gutter { color: #c4beb1; }
-:root[data-theme="dark"] .ace-one-dark .ace_marker-layer .ace_active-line,
-:root[data-theme="dark"] .ace-one-dark .ace_gutter-active-line { background: #4a4944; }
-:root[data-theme="dark"] .ace-one-dark .ace_marker-layer .ace_selection { background: #5b636d; }
-/* One Dark's words, a step lighter for the gray ground; its comments, a dark gray meant for
-   near-black, read as a light gray. */
-:root[data-theme="dark"] .ace-one-dark { color: #fbfaf6; }
-:root[data-theme="dark"] .ace-one-dark .ace_comment { color: #d8d3c8; font-style: italic; }
-:root[data-theme="dark"] .ace-one-dark :is(.ace_keyword, .ace_storage) { color: #dcaaf0; }
-:root[data-theme="dark"] .ace-one-dark :is(.ace_constant.ace_language, .ace_constant.ace_numeric,
-  .ace_support.ace_constant, .ace_variable.ace_parameter, .ace_keyword.ace_other.ace_unit) { color: #ecbb8c; }
-:root[data-theme="dark"] .ace-one-dark :is(.ace_constant.ace_character, .ace_constant.ace_other) { color: #86d4de; }
-:root[data-theme="dark"] .ace-one-dark :is(.ace_support.ace_function, .ace_entity.ace_name.ace_function) { color: #93c9f7; }
-:root[data-theme="dark"] .ace-one-dark :is(.ace_support.ace_class, .ace_support.ace_type) { color: #f0d49a; }
-:root[data-theme="dark"] .ace-one-dark :is(.ace_string, .ace_markup.ace_heading) { color: #bcdb9e; }
-:root[data-theme="dark"] .ace-one-dark :is(.ace_variable, .ace_meta.ace_tag, .ace_entity.ace_name.ace_tag,
-  .ace_entity.ace_other.ace_attribute-name, .ace_string.ace_regexp) { color: #f2a0a7; }
-:root[data-theme="dark"] .ace-one-dark .ace_cursor { color: #9cbcff; }
 #source-editor.steady-cursor .ace_cursor { animation: none !important; }
