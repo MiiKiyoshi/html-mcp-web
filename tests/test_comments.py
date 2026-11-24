@@ -1,8 +1,10 @@
+import json
 from pathlib import Path
 
 import pytest
 
 from html_mcp_web.comments import (
+    STORE_VERSION,
     Comment,
     CommentStore,
     DomPosition,
@@ -13,6 +15,7 @@ from html_mcp_web.comments import (
     anchor_from_dict,
     capture_source_anchor,
     source_offset,
+    waiting,
 )
 
 
@@ -31,13 +34,54 @@ def test_thread_lifecycle_is_persisted(tmp_path: Path) -> None:
     store = CommentStore(tmp_path / "comments.json")
     created = store.add(anchor(), "Please verify this claim")
     replied = store.reply(created.id, "I checked the source data", "agent", ["artifact.html"])
-    resolved = store.resolve(created.id, "Updated the sentence", "agent", ["artifact.html"])
+    [resolved] = store.update_many([created.id], "human", "Updated the sentence", status="resolved",
+                                   edits=["artifact.html"])
 
     loaded = CommentStore(tmp_path / "comments.json").get(created.id)
     assert replied.thread[-1].author == "agent"
     assert resolved.status == "resolved"
     assert loaded.status == "resolved"
     assert loaded.thread[-1].edits == ["artifact.html"]
+
+
+def test_a_version_2_store_is_raised_once_and_its_records_are_marked(tmp_path: Path) -> None:
+    """Version 2 named an archived thread "reference" and told the records of a suggestion
+    applied or rejected from the reviewer's words only by their text. The upgrade renames
+    the one and marks the others, once, so they ask the agent nothing. Words the reviewer
+    writes after it are their own, whatever they say."""
+    path = tmp_path / "comments.json"
+
+    def entry(number: int, author: str, text: str, **more) -> dict:
+        return {"id": f"e-0000000{number}", "author": author, "at": f"2026-01-01T00:0{number}:00+00:00",
+                "text": text, **more}
+
+    path.write_text(json.dumps({"version": 2, "comments": [{
+        "id": "c-00000001", "anchor": {"kind": "artifact"}, "status": "open",
+        "created": "2026-01-01T00:00:00+00:00", "updated": "2026-01-01T00:05:00+00:00", "resolved": None,
+        "thread": [entry(0, "human", "Shorter?"), entry(1, "agent", "Like this."),
+                   entry(2, "human", "Rejected suggestion.\n− Long line\n+ Line"), entry(3, "agent", "Then this."),
+                   entry(4, "human", "Applied suggestion.", edits=["slides.html"])],
+    }, {
+        "id": "c-00000002", "anchor": {"kind": "artifact"}, "status": "reference",
+        "created": "2026-01-01T00:00:00+00:00", "updated": "2026-01-01T00:00:00+00:00", "resolved": None,
+        "thread": [entry(0, "human", "Applied suggestion.")],
+    }]}, ensure_ascii=False), encoding="utf-8")
+    store = CommentStore(path)
+    raised = path.read_bytes()
+    assert json.loads(raised)["version"] == STORE_VERSION == 3
+    proposed, kept = store.list()
+    assert [(item.applied, item.rejected) for item in proposed.thread] == [
+        (False, False), (False, False), (False, True), (False, False), (True, False)]
+    assert waiting(proposed.thread) == []
+    # Without the files it changed, the same words were never a record.
+    assert kept.status == "archived" and waiting(kept.thread) == kept.thread
+    CommentStore(path)
+    assert path.read_bytes() == raised
+
+    for words, edits in (("Applied suggestion.", ["slides.html"]), ("Rejected suggestion.\n− Line\n+ Long line", None)):
+        replied = store.reply(proposed.id, words, "human", edits)
+        assert not replied.thread[-1].applied and not replied.thread[-1].rejected
+        assert waiting(replied.thread)[-1].text == words
 
 
 def test_a_store_removed_while_in_use_starts_empty_again(tmp_path: Path) -> None:
@@ -159,20 +203,20 @@ def test_silent_close_flips_status_without_thread_entry(tmp_path: Path) -> None:
     store = CommentStore(tmp_path / "comments.json")
     created = store.add(anchor(), "fix wording")
 
-    resolved = store.resolve(created.id, "", "agent")
+    [resolved] = store.update_many([created.id], "human", "", status="resolved")
     assert resolved.status == "resolved"
     assert len(resolved.thread) == 1
 
-    reopened = store.reopen(created.id, "needs another pass", "human")
+    [reopened] = store.update_many([created.id], "human", "needs another pass", status="open")
     assert reopened.status == "open"
 
-    resolved_with_edits = store.resolve(created.id, "", "agent", ["artifact.html"])
+    [resolved_with_edits] = store.update_many([created.id], "human", "", status="resolved", edits=["artifact.html"])
     assert resolved_with_edits.thread[-1].text == ""
     assert resolved_with_edits.thread[-1].edits == ["artifact.html"]
 
     # Reopening is a status change like the close above, and the reason asked for was
     # usually the status said twice; a reply is only its text, so that one still needs some.
-    silently_reopened = store.reopen(created.id, "", "human")
+    [silently_reopened] = store.update_many([created.id], "human", "", status="open")
     assert silently_reopened.status == "open"
     assert len(silently_reopened.thread) == len(resolved_with_edits.thread)
 
@@ -186,12 +230,12 @@ def test_a_close_leaves_its_time_and_a_reopen_takes_it_back(tmp_path: Path) -> N
     store = CommentStore(tmp_path / "comments.json")
     created = store.add(anchor(), "Please verify this claim")
     assert created.resolved is None
-    closed = store.resolve(created.id, "", "human")
+    [closed] = store.update_many([created.id], "human", "", status="resolved")
     assert closed.resolved == closed.updated
     replied = store.reply(created.id, "A word after the close", "agent")
     assert replied.resolved == closed.resolved
     assert CommentStore(tmp_path / "comments.json").get(created.id).resolved == closed.resolved
-    assert store.reopen(created.id, "", "human").resolved is None
+    assert store.update_many([created.id], "human", "", status="open")[0].resolved is None
 
     # A record stored before the field carries none.
     stored = closed.to_dict()
@@ -199,22 +243,26 @@ def test_a_close_leaves_its_time_and_a_reopen_takes_it_back(tmp_path: Path) -> N
     assert Comment.from_dict(stored).resolved is None
 
 
-def test_a_thread_kept_as_reference_stays_readable_and_comes_back(tmp_path: Path) -> None:
-    """Reference is a third status beside open and resolved, for a thread worth reading
+def test_an_archived_thread_stays_readable_and_comes_back(tmp_path: Path) -> None:
+    """Archived is a third status beside open and resolved, for a thread worth reading
     again: it takes replies without changing, and goes back to either with one flip."""
     store = CommentStore(tmp_path / "comments.json")
     created = store.add(anchor(), "Keep this reasoning")
-    kept = store.keep_as_reference(created.id, "human")
-    assert kept.status == "reference" and kept.resolved is None
+
+    def flip(status: str):
+        return store.update_many([created.id], "human", "", status=status)[0]
+
+    kept = flip("archived")
+    assert kept.status == "archived" and kept.resolved is None
     assert len(kept.thread) == 1                      # a status flip adds no entry
-    assert [comment.id for comment in store.list(status="reference")] == [created.id]
+    assert [comment.id for comment in store.list(status="archived")] == [created.id]
     assert store.list(status="open") == [] and store.list(status="resolved") == []
 
     replied = store.reply(created.id, "One more thought", "agent")
-    assert replied.status == "reference" and len(replied.thread) == 2
-    assert store.resolve(created.id, "", "human").status == "resolved"
-    assert store.keep_as_reference(created.id, "human").resolved is None  # resolved -> reference
-    assert store.reopen(created.id, "", "human").status == "open"
+    assert replied.status == "archived" and len(replied.thread) == 2
+    assert flip("resolved").status == "resolved"
+    assert flip("archived").resolved is None  # resolved -> archived
+    assert flip("open").status == "open"
     assert len(store.get(created.id).thread) == 2      # the flips left the thread alone
 
     # A store written before the status existed holds only open and resolved, and loads.
@@ -266,7 +314,7 @@ def test_a_thread_carries_one_proposal_below_its_conversation(tmp_path: Path) ->
 
     replied = store.reply(comment.id, "Why that short?", author="human")
     assert replied.suggestion == second.suggestion
-    closed = store.resolve(comment.id, "", author="human")
+    [closed] = store.update_many([comment.id], "human", "", status="resolved")
     assert closed.suggestion == second.suggestion
     with pytest.raises(ValueError, match="open"):
         store.suggest(comment.id, closed.updated, "Again.", SuggestedEdit("a.html", [("Long title", "X")]))

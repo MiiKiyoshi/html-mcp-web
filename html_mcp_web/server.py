@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import functools
 import hashlib
 import html
 import json
@@ -21,7 +22,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
 from urllib.parse import urlencode
 
 import yaml
@@ -70,32 +71,21 @@ logger = logging.getLogger(__name__)
 
 PRINT_PAGE_SIZES = {"slides": "13.333in 7.5in", "report": "A4 portrait"}
 NO_CACHE = {"Cache-Control": "no-cache"}
-# Closing a thread is the reviewer's act, made from the page once the reply and the edit
+# A thread's status is the reviewer's to set, from the page, once the reply and the edit
 # have been read: an agent that closed its own work hid the reasoning it is judged by,
 # and a rule that only the instructions carried was read by some sessions and not others.
-# Reopening one stays the agent's to do.
-AGENT_CLOSE_REFUSED = ("an agent does not resolve a thread: reply, record the edited files and "
-                       "leave it open; the reviewer resolves from the page")
-AGENT_REFERENCE_REFUSED = ("an agent does not keep a thread as reference: reply and leave it open; "
-                           "the reviewer keeps it from the page")
-# The statuses the review page sets many comments to at once, by the names it gives them,
-# and what the store keeps each as: a thread archived is one kept as reference.
-PAGE_STATUSES = {"open": "open", "resolved": "resolved", "archived": "reference"}
+STATUS_FROM_PAGE = ("an agent does not change a thread's status: reply, record the edited files and "
+                    "leave it open; the reviewer resolves, archives or reopens it from the page")
+STATUSES = ("open", "resolved", "archived")
 
 
 def comment_json(comment: Comment) -> dict[str, Any]:
-    """A comment as the review page and the agent's tools read it: as stored, with the
-    records of a suggestion applied or rejected marked, stale on one whose source
-    selection is no longer found, and awaits_agent on a thread whose reviewer wrote to the
-    agent after its last entry."""
+    """A comment as the review page and the agent's tools read it: as stored, with stale on
+    one whose source selection is no longer found, and awaits_agent on a thread whose
+    reviewer wrote to the agent after its last entry."""
     data = comment.to_dict()
     if isinstance(comment.anchor, SourceAnchor) and comment.anchor.stale:
         data["stale"] = True
-    for entry, shown in zip(comment.thread, data["thread"]):
-        if entry.applied:
-            shown["applied"] = True
-        if entry.rejected:
-            shown["rejected"] = True
     if waiting(comment.thread):
         data["awaits_agent"] = True
     return data
@@ -103,6 +93,18 @@ def comment_json(comment: Comment) -> dict[str, Any]:
 
 def refusal(status: int, error: str) -> web.Response:
     return web.json_response({"error": error}, status=status)
+
+
+def refused_as_json(handler: Callable[[Any, web.Request], Awaitable[web.StreamResponse]]):
+    """A comment route, which refuses as JSON {"error": words} as the review page and the
+    agent's tools read it, whatever part of the route refused."""
+    @functools.wraps(handler)
+    async def answer(self: Any, request: web.Request) -> web.StreamResponse:
+        try:
+            return await handler(self, request)
+        except web.HTTPError as error:
+            return refusal(error.status, error.text)
+    return answer
 
 
 async def json_object(request: web.Request) -> dict[str, Any] | None:
@@ -347,10 +349,7 @@ class ArtifactRuntime:
 
     def state(self) -> dict[str, Any]:
         comments = self.store.list()
-        comment_counts = {
-            status: sum(comment.status == status for comment in comments)
-            for status in ("open", "resolved", "reference")
-        }
+        comment_counts = {status: sum(comment.status == status for comment in comments) for status in STATUSES}
         data: dict[str, Any] = {
             "layout": self.config.layout,
             "main_file": self.config.main,
@@ -1370,13 +1369,15 @@ class HtmlReviewServer:
                 }
         return web.json_response(result)
 
+    @refused_as_json
     async def list_comments(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         status = request.query["status"] if "status" in request.query else None
-        if status not in {None, "open", "resolved", "reference"}:
-            raise web.HTTPBadRequest(text="invalid status")
+        if status is not None and status not in STATUSES:
+            raise web.HTTPBadRequest(text="status must be open, resolved or archived")
         return web.json_response({"comments": [comment_json(comment) for comment in runtime.store.list(status=status)]})
 
+    @refused_as_json
     async def get_comment(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         try:
@@ -1385,6 +1386,7 @@ class HtmlReviewServer:
             raise web.HTTPNotFound(text=str(error)) from error
         return web.json_response(comment_json(comment))
 
+    @refused_as_json
     async def add_comment(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         data = await request.json()
@@ -1422,30 +1424,17 @@ class HtmlReviewServer:
         await self.broadcast({"type": "comment_added", "artifact": runtime.alias, "comment": comment_json(comment)})
         return web.json_response(comment_json(comment), status=201)
 
-    async def _thread_mutation(self, request: web.Request, action: str) -> web.Response:
+    @refused_as_json
+    async def reply_comment(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         data = await request.json()
         comment_id = request.match_info["comment_id"]
         author = data["author"] if "author" in data else "human"
         if author not in {"human", "agent"}:
             raise web.HTTPBadRequest(text="invalid author")
-        if author == "agent" and action == "resolve":
-            raise web.HTTPBadRequest(text=AGENT_CLOSE_REFUSED)
-        if author == "agent" and action == "reference":
-            raise web.HTTPBadRequest(text=AGENT_REFERENCE_REFUSED)
         try:
-            if action == "reply":
-                comment = runtime.store.reply(comment_id, str(data["text"]), author,
-                                              [str(value) for value in data["edits"]] if "edits" in data else None)
-            elif action == "resolve":
-                comment = runtime.store.resolve(comment_id, str(data["summary"]), author,
-                                                [str(value) for value in data["edits"]] if "edits" in data else None)
-            elif action == "reopen":
-                comment = runtime.store.reopen(comment_id, str(data["text"]), author)
-            elif action == "reference":
-                comment = runtime.store.keep_as_reference(comment_id, author)
-            else:
-                raise RuntimeError(f"unknown mutation: {action}")
+            comment = runtime.store.reply(comment_id, str(data["text"]), author,
+                                          [str(value) for value in data["edits"]] if "edits" in data else None)
         except KeyError as error:
             raise web.HTTPNotFound(text=str(error)) from error
         except (TypeError, ValueError) as error:
@@ -1478,6 +1467,7 @@ class HtmlReviewServer:
         except FileNotFoundError:
             return False
 
+    @refused_as_json
     async def export_comments(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         data = await request.json()
@@ -1491,46 +1481,41 @@ class HtmlReviewServer:
         except (OSError, TypeError, ValueError) as error:
             raise web.HTTPBadRequest(text=str(error)) from error
 
+    @refused_as_json
     async def update_comments(self, request: web.Request) -> web.Response:
+        """The agent's batch: replies, a draft of replies, or rewrites of its own entries.
+        A thread's status is the reviewer's, set by /comments/status from the page."""
         runtime = self.runtime(request)
         data = await request.json()
         try:
+            if "status" in data:
+                raise ValueError(STATUS_FROM_PAGE)
+            if "author" in data:
+                raise ValueError("the batch is the agent's; the reviewer replies on a thread of its own")
             replies_file = data.get("replies_file")
             entry_edits = data.get("entry_edits")
             comment_ids = data["comment_ids"] if replies_file is None and entry_edits is None else []
             message = data["message"] if "message" in data else ""
-            status = data["status"] if "status" in data else None
             edited_files = data["edited_files"] if "edited_files" in data else None
-            # The reviewer closes a batch from the page as well, and a thread that reads
-            # "agent resolved" over the reviewer's own click misreports who decided.
-            author = data["author"] if "author" in data else "agent"
-            if author not in {"human", "agent"}:
-                raise ValueError("author must be human or agent")
             if not isinstance(comment_ids, list) or not all(isinstance(value, str) for value in comment_ids):
                 raise ValueError("comment_ids must be a list of strings")
             if not isinstance(message, str):
                 raise ValueError("message must be a string")
-            if status not in {None, "open", "resolved", "reference"}:
-                raise ValueError("status must be open, resolved or reference")
-            if author == "agent" and status == "resolved":
-                raise ValueError(AGENT_CLOSE_REFUSED)
-            if author == "agent" and status == "reference":
-                raise ValueError(AGENT_REFERENCE_REFUSED)
             if edited_files is not None and (
                 not isinstance(edited_files, list) or not all(isinstance(value, str) for value in edited_files)
             ):
                 raise ValueError("edited_files must be a list of strings")
             if replies_file is not None:
-                if not isinstance(replies_file, str) or author != "agent" or any(
-                    key in data for key in ("comment_ids", "message", "status", "entry_edits")
+                if not isinstance(replies_file, str) or any(
+                    key in data for key in ("comment_ids", "message", "entry_edits")
                 ):
-                    raise ValueError("a draft is given alone and only by the agent")
+                    raise ValueError("a draft is given alone")
                 comments = runtime.store.reply_file(replies_file, edits=edited_files)
             elif entry_edits is not None:
                 # Rewrites of the agent's own entries: {comment, entry, updated, text} each,
                 # the updated stamp being the comment's as the agent read it.
-                if author != "agent" or any(key in data for key in ("comment_ids", "message", "status")):
-                    raise ValueError("entry_edits excludes other updates and requires agent author")
+                if any(key in data for key in ("comment_ids", "message")):
+                    raise ValueError("entry_edits excludes other updates")
                 if not isinstance(entry_edits, list) or not all(
                     isinstance(item, dict) and isinstance(item.get("comment"), str)
                     and isinstance(item.get("entry"), str)
@@ -1542,9 +1527,7 @@ class HtmlReviewServer:
                     [(item["comment"], item["entry"], item["text"]) for item in entry_edits],
                     {item["comment"]: item["updated"] for item in entry_edits})
             else:
-                comments = runtime.store.update_many(
-                    comment_ids, author, message, status=status, edits=edited_files,
-                )
+                comments = runtime.store.update_many(comment_ids, "agent", message, edits=edited_files)
         except KeyError as error:
             raise web.HTTPNotFound(text=str(error)) from error
         except (TypeError, ValueError) as error:
@@ -1558,9 +1541,8 @@ class HtmlReviewServer:
         # An agent reporting an edit, with the files it touched, is told where the quoted
         # text is still in the artifact unchanged: normal when the fix landed elsewhere (a
         # heading anchored over the body it asked about), and the one hint that the edit
-        # went to the wrong place when it was not. The reviewer's close carries no such
-        # check: they have just read the thread.
-        if author == "agent" and edited_files:
+        # went to the wrong place when it was not.
+        if edited_files:
             untouched = [comment.id for comment in comments if self._anchor_text_survives(runtime, comment)]
             if untouched:
                 result["note"] = (
@@ -1574,11 +1556,11 @@ class HtmlReviewServer:
         })
         return web.json_response(result)
 
+    @refused_as_json
     async def set_comment_status(self, request: web.Request) -> web.Response:
         """The reviewer gives the picked comments one status in one call, and the page one
-        notice. The status goes by the page's name for it (PAGE_STATUSES). An undo that
-        resolves comments again gives each the moment it was resolved at before, by id
-        (resolved)."""
+        notice. An undo that resolves comments again gives each the moment it was resolved
+        at before, by id (resolved)."""
         runtime = self.runtime(request)
         data = await json_object(request)
         if data is None:
@@ -1588,7 +1570,7 @@ class HtmlReviewServer:
         times = data["resolved"] if "resolved" in data else {}
         if not isinstance(ids, list) or not all(isinstance(comment_id, str) for comment_id in ids):
             return refusal(400, "ids must be a list of comment ids")
-        if not isinstance(status, str) or status not in PAGE_STATUSES:
+        if status not in STATUSES:
             return refusal(400, "status must be open, resolved or archived")
         try:
             if not isinstance(times, dict) or (times and status != "resolved") or not set(times) <= set(ids):
@@ -1599,7 +1581,7 @@ class HtmlReviewServer:
             return refusal(400, "resolved must map ids being resolved to the ISO times they were resolved at before")
         if ids:
             try:
-                runtime.store.update_many(ids, "human", "", status=PAGE_STATUSES[status], resolved_at=times)
+                runtime.store.update_many(ids, "human", "", status=status, resolved_at=times)
             except KeyError as error:
                 return refusal(404, error.args[0])
             except ValueError as error:
@@ -1607,18 +1589,7 @@ class HtmlReviewServer:
         await self.broadcast({"type": "comments_updated", "artifact": runtime.alias, "comment_ids": ids})
         return web.json_response({"ids": ids, "status": status})
 
-    async def reply_comment(self, request: web.Request) -> web.Response:
-        return await self._thread_mutation(request, "reply")
-
-    async def resolve_comment(self, request: web.Request) -> web.Response:
-        return await self._thread_mutation(request, "resolve")
-
-    async def reopen_comment(self, request: web.Request) -> web.Response:
-        return await self._thread_mutation(request, "reopen")
-
-    async def reference_comment(self, request: web.Request) -> web.Response:
-        return await self._thread_mutation(request, "reference")
-
+    @refused_as_json
     async def edit_comment_entry(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         data = await request.json()
@@ -1635,6 +1606,7 @@ class HtmlReviewServer:
         await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment_json(comment)})
         return web.json_response(comment_json(comment))
 
+    @refused_as_json
     async def delete_comment_entry(self, request: web.Request) -> web.Response:
         """The reviewer deletes a message they wrote. A thread's first message goes with its
         thread. What the agent wrote and the records of applying and rejecting stay."""
@@ -1664,6 +1636,7 @@ class HtmlReviewServer:
         await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment_json(comment)})
         return web.json_response(comment_json(comment))
 
+    @refused_as_json
     async def suggest_comment(self, request: web.Request) -> web.Response:
         """The agent proposes a change to the editable source on one thread."""
         runtime = self.runtime(request)
@@ -1687,6 +1660,7 @@ class HtmlReviewServer:
         await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment_json(comment)})
         return web.json_response(comment_json(comment))
 
+    @refused_as_json
     async def withdraw_suggestion(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         data = await request.json()
@@ -1700,6 +1674,7 @@ class HtmlReviewServer:
         await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment_json(comment)})
         return web.json_response(comment_json(comment))
 
+    @refused_as_json
     async def apply_suggestion(self, request: web.Request) -> web.Response:
         """The reviewer writes a thread's proposal into the source, as the Source view saves."""
         runtime = self.runtime(request)
@@ -1726,6 +1701,7 @@ class HtmlReviewServer:
         await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment_json(comment)})
         return web.json_response(comment_json(comment))
 
+    @refused_as_json
     async def reject_suggestion(self, request: web.Request) -> web.Response:
         """The reviewer turns down the agent's suggestion: it leaves the thread, and the
         record in its place says what it was."""
@@ -1743,6 +1719,7 @@ class HtmlReviewServer:
         await self.broadcast({"type": "comment_updated", "artifact": runtime.alias, "comment": comment_json(comment)})
         return web.json_response(comment_json(comment))
 
+    @refused_as_json
     async def delete_comment(self, request: web.Request) -> web.Response:
         runtime = self.runtime(request)
         comment_id = request.match_info["comment_id"]
@@ -2000,9 +1977,6 @@ class HtmlReviewServer:
         app.router.add_post(f"{base}/comments/status", self.set_comment_status)
         app.router.add_post(f"{base}/comments/export", self.export_comments)
         app.router.add_post(f"{base}/comments/{{comment_id}}/reply", self.reply_comment)
-        app.router.add_post(f"{base}/comments/{{comment_id}}/resolve", self.resolve_comment)
-        app.router.add_post(f"{base}/comments/{{comment_id}}/reopen", self.reopen_comment)
-        app.router.add_post(f"{base}/comments/{{comment_id}}/reference", self.reference_comment)
         app.router.add_post(f"{base}/comments/{{comment_id}}/suggest", self.suggest_comment)
         app.router.add_post(f"{base}/comments/{{comment_id}}/withdraw", self.withdraw_suggestion)
         app.router.add_post(f"{base}/comments/{{comment_id}}/apply-suggestion", self.apply_suggestion)

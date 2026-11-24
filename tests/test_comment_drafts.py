@@ -57,7 +57,7 @@ def test_stale_batch_is_all_or_nothing(store, mutation):
     elif mutation == "edit":
         store.edit_entry(b.id, 0, "human edit", "human")
     elif mutation == "resolve":
-        store.resolve(b.id, "done", "human")
+        store.update_many([b.id], "human", "done", status="resolved")
     else:
         store.reply(b.id, "human reply", "human")
     before = store.path.read_bytes()

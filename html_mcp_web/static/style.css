@@ -283,29 +283,35 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .presentation-controls button:hover { border-color: rgba(255, 255, 255, .16); background: rgba(255, 255, 255, .12); }
 #presentation-page { min-width: 58px; padding: 0 6px; text-align: center; font-variant-numeric: tabular-nums; font-size: .8rem; }
 
-.selection-comment {
+/* What words selected on a page offer: one raised box beside them, holding Comment and Source,
+   each an icon with its word, as the PDF viewer of the paper review page offers them. */
+.selection-menu {
   position: absolute;
   z-index: 20;
-  padding: 6px 10px;
-  border-color: var(--accent);
-  color: white;
-  background: var(--accent);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, .2);
-}
-
-.selection-comment:hover { color: white; background: #506277; }
-
-.selection-source {
-  position: absolute;
-  z-index: 20;
-  padding: 6px 10px;
-  border-color: var(--accent);
-  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--border) 55%, var(--bg-elev));
+  border-radius: 8px;
   background: var(--bg-elev);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, .2);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, .1), 0 4px 6px -4px rgba(0, 0, 0, .1);
 }
-
-.selection-source:hover { background: var(--accent-soft); }
+.selection-menu button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 5px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--fg);
+  background: none;
+  font-size: 15px;
+  white-space: nowrap;
+}
+.selection-menu button:hover { background: var(--accent-soft); }
+.selection-menu svg { flex: none; }
 
 /* Fit sizes the artifact, so Source has none. */
 .layout.view-source #zoom-reset-btn { display: none; }
@@ -317,18 +323,15 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 }
 
 /* A touch screen answers a long press with a bar of its own (copy, look up, share) drawn
-   over the words, and a button placed by the selection sits under it. Held in the corner
-   it is always reachable, and the phone's bar has nothing to cover. */
+   over the words, and a menu placed by the selection sits under it. Held in the corner it
+   is always reachable, and the phone's bar has nothing to cover. */
 @media (pointer: coarse) {
-  .selection-comment {
+  .selection-menu {
     top: 8px !important;
     right: 10px !important;
     left: auto !important;
     bottom: auto !important;
   }
-  /* Comment first, then Source on the corner, as the buttons read beside a selection. */
-  .selection-comment { right: calc(16px + var(--selection-source-width, 70px)) !important; }
-  .selection-source { top: 8px !important; right: 10px !important; left: auto !important; }
   /* The view tabs sit in the artifact's bar, by the thumbs button, which then runs across
      the editor too and stays in Source, where the artifact's own buttons step aside. */
   .workspace-toolbar { grid-column: 1 / -1; }
@@ -344,10 +347,8 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
     font-size: 16px !important;
   }
 }
-#artifact-pane:fullscreen .selection-comment,
-#artifact-pane:fullscreen .selection-source,
-#artifact-pane.fills-page .selection-comment,
-#artifact-pane.fills-page .selection-source { display: none !important; }
+#artifact-pane:fullscreen .selection-menu,
+#artifact-pane.fills-page .selection-menu { display: none !important; }
 
 #sidebar {
   min-width: 0;
@@ -435,8 +436,6 @@ button.download-btn.busy { color: #8a867d; cursor: progress; }
 .page-number { color: var(--accent); font-family: var(--mono); font-size: var(--text-small); font-weight: 700; text-align: right; }
 .page-title { overflow: hidden; color: var(--fg); font-size: var(--text-body); text-overflow: ellipsis; white-space: nowrap; }
 
-/* The words an opened comment is on. A left rule sets them apart from the thread. */
-.anchor-quote { margin: 0; padding: 5px 8px; border-left: 2px solid var(--source-comment-dot); color: var(--fg-dim); background: var(--bg); font-size: var(--text-body); line-height: 1.4; }
 
 @media (max-width: 780px) {
   .layout { grid-template-columns: minmax(0, 1fr) 300px; }

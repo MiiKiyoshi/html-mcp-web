@@ -14,12 +14,12 @@ from typing import Any, Callable, Iterable, Iterator, Literal
 
 
 Author = Literal["human", "agent"]
-# A thread is open, resolved, or kept as reference: a thread worth reading again after
-# the work it asked for is done, or instead of it, listed on its own. A dismissed state
-# once closed a thread without acting on it; the reviewer never used it, and it was the
-# one close an agent still had for its own work, so a comment not worth acting on is
-# resolved or deleted like any other.
-Status = Literal["open", "resolved", "reference"]
+# A thread is open, resolved, or archived: a thread worth reading again after the work it
+# asked for is done, or instead of it, listed on its own. A dismissed state once closed a
+# thread without acting on it; the reviewer never used it, and it was the one close an
+# agent still had for its own work, so a comment not worth acting on is resolved or
+# deleted like any other.
+Status = Literal["open", "resolved", "archived"]
 
 
 def _now() -> str:
@@ -378,14 +378,6 @@ def _carry_text_anchor(anchor: TextAnchor, changes: list[tuple[str, str]]) -> No
             anchor.quote = new
 
 
-# The words of the entry that records the reviewer applying the agent's suggestion, with
-# the files it changed, and the start of the one that records them rejecting it, which goes
-# on with the pieces rejected. The store keeps no other mark of either, so these words tell
-# a record from the reviewer's own: a record asks the agent nothing, and it stays as written.
-APPLIED_RECORD = "Applied suggestion."
-REJECTED_RECORD = "Rejected suggestion."
-
-
 @dataclass
 class ThreadEntry:
     author: Author
@@ -396,16 +388,11 @@ class ThreadEntry:
     # its text was rewritten after it was written.
     id: str = field(default_factory=_new_entry_id)
     updated_at: str | None = None
-
-    @property
-    def applied(self) -> bool:
-        """Whether it records the reviewer applying a suggestion."""
-        return self.author == "human" and self.text == APPLIED_RECORD and bool(self.edits)
-
-    @property
-    def rejected(self) -> bool:
-        """Whether it records the reviewer rejecting a suggestion."""
-        return self.author == "human" and self.text.startswith(f"{REJECTED_RECORD}\n− ")
+    # Set on the entry that records the reviewer applying the agent's suggestion, with the
+    # files it changed, and on the one that records them rejecting it, whose text holds the
+    # pieces rejected. A record asks the agent nothing, and it stays as written.
+    applied: bool = False
+    rejected: bool = False
 
     @property
     def asks_agent(self) -> bool:
@@ -419,6 +406,10 @@ class ThreadEntry:
             data["edits"] = list(self.edits)
         if self.updated_at is not None:
             data["updated_at"] = self.updated_at
+        if self.applied:
+            data["applied"] = True
+        if self.rejected:
+            data["rejected"] = True
         return data
 
     @classmethod
@@ -426,7 +417,8 @@ class ThreadEntry:
         edits = [str(value) for value in data["edits"]] if "edits" in data else []
         return cls(author=data["author"], at=str(data["at"]), text=str(data["text"]), edits=edits,
                    id=str(data["id"]) if "id" in data else _new_entry_id(),
-                   updated_at=str(data["updated_at"]) if "updated_at" in data else None)
+                   updated_at=str(data["updated_at"]) if "updated_at" in data else None,
+                   applied="applied" in data, rejected="rejected" in data)
 
 
 def waiting(thread: list[ThreadEntry], after: datetime | None = None) -> list[ThreadEntry]:
@@ -483,7 +475,7 @@ class Comment:
         )
 
 
-STORE_VERSION = 2
+STORE_VERSION = 3
 
 
 class CommentStore:
@@ -494,7 +486,34 @@ class CommentStore:
         if not self.path.exists():
             self._write({"version": STORE_VERSION, "comments": []})
         else:
+            self._upgrade()
             self._assign_entry_ids()
+
+    def _upgrade(self) -> None:
+        """Raise a store written by version 2 to STORE_VERSION, once, under the lock.
+        Version 2 called an archived thread "reference", and told the records of a
+        suggestion applied or rejected from the reviewer's words only by their text:
+        "Applied suggestion." with the files it changed, and "Rejected suggestion." followed
+        by the pieces rejected, each line of them starting "− ". Version 3 marks those."""
+        with self._locked():
+            try:
+                data = json.loads(self.path.read_text(encoding="utf-8"))
+                if data["version"] != 2:
+                    return
+                for comment in data["comments"]:
+                    if comment["status"] == "reference":
+                        comment["status"] = "archived"
+                    for entry in comment["thread"]:
+                        if entry["author"] != "human":
+                            continue
+                        if entry["text"] == "Applied suggestion." and entry.get("edits"):
+                            entry["applied"] = True
+                        elif entry["text"].startswith("Rejected suggestion.\n− "):
+                            entry["rejected"] = True
+            except (OSError, ValueError, KeyError, TypeError, AttributeError):
+                return  # an unreadable store fails on its first operation, as before
+            data["version"] = STORE_VERSION
+            self._write(data)
 
     def _ready(self) -> None:
         """A store removed while the server runs, as when a reader empties the project folder
@@ -738,17 +757,6 @@ class CommentStore:
     def reply(self, comment_id: str, text: str, author: Author, edits: list[str] | None = None) -> Comment:
         return self._append(comment_id, author, text, edits=edits)
 
-    def resolve(self, comment_id: str, summary: str, author: Author, edits: list[str] | None = None) -> Comment:
-        return self._append(comment_id, author, summary, status="resolved", edits=edits)
-
-
-    def reopen(self, comment_id: str, text: str, author: Author) -> Comment:
-        return self._append(comment_id, author, text, status="open")
-
-    def keep_as_reference(self, comment_id: str, author: Author) -> Comment:
-        """Set the thread aside to be read again; its entries stay as they are."""
-        return self._append(comment_id, author, "", status="reference")
-
     def edit_entry(self, comment_id: str, index: int, text: str, author: Author) -> Comment:
         """Rewrite one thread entry in place, keeping its author and time."""
         if not text.strip():
@@ -860,7 +868,8 @@ class CommentStore:
             if isinstance(comment.anchor, TextAnchor):
                 _carry_text_anchor(comment.anchor, suggestion.changes)
             now = _now()
-            comment.thread.append(ThreadEntry(author="human", at=now, text=APPLIED_RECORD, edits=edits))
+            comment.thread.append(ThreadEntry(author="human", at=now, text="Applied suggestion.", edits=edits,
+                                              applied=True))
             comment.suggestion = None
             comment.updated = now
             self._save(comments)
@@ -877,7 +886,8 @@ class CommentStore:
                 raise ValueError("the comment carries no suggestion")
             pieces = "".join(f"\n− {old}\n+ {new}" for old, new in comment.suggestion.changes)
             now = _now()
-            comment.thread.append(ThreadEntry(author="human", at=now, text=f"{REJECTED_RECORD}{pieces}"))
+            comment.thread.append(ThreadEntry(author="human", at=now, text=f"Rejected suggestion.{pieces}",
+                                              rejected=True))
             comment.suggestion = None
             comment.updated = now
             self._save(comments)

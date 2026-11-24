@@ -365,7 +365,7 @@ def test_undo_puts_the_last_change_of_status_back(tmp_path: Path) -> None:
     first, second, third, done, archived = (kept.add(ArtifactAnchor(), text).id
                                             for text in ("One.", "Two.", "Three.", "Done.", "Kept."))
     kept.update_many([done], "human", "", status="resolved")
-    kept.update_many([archived], "human", "", status="reference")
+    kept.update_many([archived], "human", "", status="archived")
     with review_page(tmp_path) as (browser, base):
         comments = f"{base}/artifacts/slides/comments"
         resolved_at = get_json(f"{comments}/{done}")["resolved"]
@@ -415,7 +415,7 @@ def test_undo_puts_the_last_change_of_status_back(tmp_path: Path) -> None:
         click('.tab-btn[data-tab="comments"]')
         assert line() == "Reopened 2 comments."
         click("#undo-btn")
-        wait_until(lambda: statuses(done, archived) == ["resolved", "reference"] and line() is None)
+        wait_until(lambda: statuses(done, archived) == ["resolved", "archived"] and line() is None)
         assert statuses(first, second, third) == ["resolved"] * 3
         assert get_json(f"{comments}/{done}")["resolved"] == resolved_at
         # A comment deleted after the change cannot be put back: Undo restores the other and
@@ -446,7 +446,7 @@ def test_undo_puts_the_last_change_of_status_back(tmp_path: Path) -> None:
         wait_until(lambda: browser.execute_script('return document.querySelector("#comment-filter").options.length > 1'))
         show_view(browser, "all")
         wait_until(lambda: len(shown()) == 4)
-        assert line() is None and statuses(second) == ["reference"]
+        assert line() is None and statuses(second) == ["archived"]
 
 
 @needs_firefox
@@ -540,10 +540,9 @@ def test_a_change_made_on_one_artifact_is_never_undone_on_another(tmp_path: Path
 
 @needs_firefox
 def test_a_refused_suggestion_says_the_servers_words(tmp_path: Path) -> None:
-    """The server refuses a change made to a thread that changed since the card was drawn, in
-    words sent as JSON, and a suggestion the file no longer fits, in words sent as text. Either
-    way the reviewer reads the server's words: the first in an alert, the second on the card,
-    under the suggestion."""
+    """The server refuses a change made to a thread that changed since the card was drawn, and a
+    suggestion the file no longer fits, each in words sent as JSON. The reviewer reads the
+    server's words: the first in an alert, the second on the card, under the suggestion."""
     kept = CommentStore(store_of(tmp_path, "slides"))
     comment = kept.add(ArtifactAnchor(), "Tea is a weak verb.")
     kept.suggest(comment.id, comment.updated, "Poured reads better.",
@@ -572,7 +571,7 @@ def test_a_refused_suggestion_says_the_servers_words(tmp_path: Path) -> None:
         with pytest.raises(urllib.error.HTTPError) as refused:
             urllib.request.urlopen(request, timeout=3)
         assert refused.value.code == 409
-        why = refused.value.read().decode("utf-8")
+        why = json.loads(refused.value.read().decode("utf-8"))["error"]
         script(f'document.querySelector(\'{card} .sugg-apply\').click()')
         wait_until(lambda: script(f'return document.querySelector(\'{card} .sugg-unfit\')?.textContent')
                    == "The file has changed since this was suggested, so it no longer applies. "
@@ -768,7 +767,7 @@ def test_the_comment_list_goes_by_keys(tmp_path: Path) -> None:
         wait_until(lambda: script('return document.querySelector("#comment-filter").value') == "open"
                    and len(listed(browser)) == 4)
         keys("G", "A")
-        wait_until(lambda: status(fourth) == "reference")
+        wait_until(lambda: status(fourth) == "archived")
         # dd deletes once the reader says yes, and a d not doubled is dropped.
         script("window.asked = []; window.confirm = (message) => window.asked.push(message) && false;")
         keys("g", "g")

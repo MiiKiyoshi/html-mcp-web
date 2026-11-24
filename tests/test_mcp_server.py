@@ -446,11 +446,20 @@ def test_clients_with_same_config_share_server_and_follower_takes_over(tmp_path:
         assert measured["children"][0]["ref"] == "p1:0"
         assert measured["clearance"] == 12
 
-        # A thread's status is the reviewer's, from the page: the server refuses a resolve
-        # from an agent, and the tool that only reopened is gone with it.
-        post_json(f"http://127.0.0.1:{binding._shared.port}/artifacts/slides/comments/update", {
-            "comment_ids": [created["id"]], "status": "resolved", "author": "human",
-        })
+        # A thread's status is the reviewer's, set from the page, and the agent reads it by
+        # the page's names: an archived thread is listed, read and drafted as archived.
+        page = f"http://127.0.0.1:{binding._shared.port}/artifacts/slides/comments"
+        post_json(f"{page}/status", {"ids": [created["id"]], "status": "archived"})
+        archived = [answer(mcp.call_tool("read_comments", {"artifact": "slides", "status": status}))
+                    for status in ("archived", "all")]
+        assert [row["id"] for row in archived[0]["comments"]] == [created["id"]]
+        assert {row["id"]: row["status"] for row in archived[1]["comments"]}[created["id"]] == "archived"
+        archived_read = answer(mcp.call_tool("read_comments", {"artifact": "slides", "ids": [created["id"]]}))
+        assert archived_read["comments"][0]["status"] == "archived"
+        drafted = answer(mcp.call_tool("read_comments", {"artifact": "slides", "ids": [created["id"]], "save": True}))
+        told = json.dumps([archived, archived_read]) + Path(drafted["path"]).read_text(encoding="utf-8")
+        assert "archived" in told and "reference" not in told
+        post_json(f"{page}/status", {"ids": [created["id"]], "status": "resolved"})
         closed_read = answer(mcp.call_tool("read_comments", {
             "artifact": "slides",
             "ids": [created["id"]],
@@ -529,8 +538,7 @@ def test_read_new_hands_over_what_is_unread_and_unanswered(tmp_path: Path) -> No
 
         # A closed thread is not where a request arrives.
         post_json(f"{base}/artifacts/slides/comments/{answered['id']}/reply", {"text": "One more"})
-        post_json(f"{base}/artifacts/slides/comments/update",
-                  {"comment_ids": [answered["id"]], "status": "resolved", "author": "human"})
+        post_json(f"{base}/artifacts/slides/comments/status", {"ids": [answered["id"]], "status": "resolved"})
         assert read_new(since=follow["from"])["comments"][0]["id"] == asked["id"]
         assert len(read_new(since=follow["from"])["comments"]) == 1
         with pytest.raises(Exception, match="takes no ids"):
@@ -1101,12 +1109,12 @@ def test_a_session_with_the_plugin_listens_from_its_start(tmp_path: Path, monkey
         binding.stop()
 
 
-def test_read_comments_offers_the_reference_view(tmp_path: Path) -> None:
-    """A thread the reviewer keeps as reference is listed apart from open and resolved,
-    and the agent asks for that view by name."""
+def test_read_comments_offers_the_archived_view(tmp_path: Path) -> None:
+    """A thread the reviewer archives is listed apart from open and resolved, and the agent
+    asks for that view by the name the page gives it."""
     mcp = create_server(ProjectBinding(tmp_path))
     schemas = {tool.name: tool.inputSchema for tool in asyncio.run(mcp.list_tools())}
-    assert schemas["read_comments"]["properties"]["status"]["enum"] == ["open", "resolved", "reference", "all"]
+    assert schemas["read_comments"]["properties"]["status"]["enum"] == ["open", "resolved", "archived", "all"]
 
 
 def test_write_comments_takes_edits_of_the_agents_own_entries(tmp_path: Path) -> None:

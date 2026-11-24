@@ -303,7 +303,7 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
         since: Annotated[str | None, Field(description=(
             "'MM-DD HH:MM'. With new: read from that minute. In a listing: only threads the "
             "reviewer wrote to in or after it."))] = None,
-        status: Literal["open", "resolved", "reference", "all"] = "open",
+        status: Literal["open", "resolved", "archived", "all"] = "open",
         unanswered: Annotated[bool, Field(description="In a listing: only threads where the reviewer wrote to you after your last entry.")] = False,
         save: Annotated[bool, Field(description=(
             "With ids: write them as a Markdown draft and return its path. Edit only its "

@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/static/shared/comment-panel.css">
   <link rel="stylesheet" href="/static/shared/help.css">
   <link rel="stylesheet" href="/static/style.css">
-  <script src="/static/shared/look-early.js" data-key="htmlMcpTheme"></script>
+  <script src="/static/shared/look-early.js" data-prefix="htmlMcp"></script>
 </head>
 <body>
   <div id="app">
@@ -92,9 +92,12 @@
             <button id="search-next-btn" type="button" aria-label="Next match" title="Next match (Enter)" disabled>↓</button>
             <button id="search-close-btn" type="button" aria-label="Close find" title="Close (Esc)">×</button>
           </div>
-          <button id="selection-comment-btn" class="selection-comment hidden" type="button">Comment</button>
-          <button id="selection-source-btn" class="selection-source hidden" type="button"
-                  title="Show these words in the source">Source</button>
+          <!-- What words selected on a page offer, in one box beside them: a comment on them, or
+               their place in the source. -->
+          <div id="selection-menu" class="selection-menu hidden" role="toolbar" aria-label="Selected words">
+            <button id="selection-comment-btn" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 11v.01M8 11v.01M16 11v.01"/><path d="M18 4a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-5l-5 3v-3h-2a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3z"/></svg>Comment</button>
+            <button id="selection-source-btn" type="button" title="Show these words in the source"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg>Source</button>
+          </div>
           <div id="presentation-controls" class="presentation-controls" aria-label="Slide show controls">
             <button id="presentation-prev-btn" type="button" aria-label="Previous slide">←</button>
             <span id="presentation-page" aria-live="polite"></span>
@@ -140,11 +143,8 @@
           <div id="problems-list" class="problems-list"></div>
         </div>
 
-        <!-- The comment panel draws itself here (shared/comment-panel.js), with the link to Help
-             under the search's conditions. -->
-        <div id="tab-comments" class="tab-pane active">
-          <button id="search-help-btn" data-slot="search" class="search-help" type="button" tabindex="-1" title="Search help">more…</button>
-        </div>
+        <!-- The comment panel draws itself here (shared/comment-panel.js). -->
+        <div id="tab-comments" class="tab-pane active"></div>
       </aside>
     </main>
   </div>

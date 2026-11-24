@@ -397,7 +397,7 @@ async def test_comment_and_agent_reply_round_trip(client) -> None:
     assert state["artifacts"]["slides"]["comment_counts"] == {
         "open": 1,
         "resolved": 0,
-        "reference": 0,
+        "archived": 0,
     }
 
     reply = await test_client.post(
@@ -546,8 +546,7 @@ async def test_an_edit_reported_on_an_untouched_anchor_is_noted(client) -> None:
     text is still in the artifact unchanged, the reply comes back with a note: normal when
     the fix landed elsewhere (a heading anchored over the body it asked about), and the
     one hint that the edit went to the wrong place when it was not. A reply that reports
-    no edit claims nothing, and the reviewer's own close carries no check: they have just
-    read the thread."""
+    no edit claims nothing."""
     test_client, review = client
     digest = review.artifacts["slides"].digest()
     untouched = await (await test_client.post(
@@ -616,89 +615,87 @@ async def test_an_edit_reported_on_an_untouched_anchor_is_noted(client) -> None:
     })).json()
     assert "note" not in reworded
 
-    # The reviewer's close carries no check of its own.
-    closed = await (await test_client.post("/artifacts/slides/comments/update", json={
-        "comment_ids": [untouched["id"]],
-        "status": "resolved",
-        "author": "human",
-        "message": "read",
-    })).json()
-    assert "note" not in closed and "warning" not in closed
-
-async def test_reopening_needs_no_words(client) -> None:
-    """Reopening asked for a reason where resolving asks for nothing, and the reason was
-    usually the status said twice. A reply is only its text, so that one still needs some."""
+async def test_a_status_change_says_nothing_and_a_reply_needs_words(client) -> None:
+    """Resolving and reopening add no entry: the status is the news. A reply is only its
+    text, so that one needs some."""
     test_client, review = client
+    base = "/artifacts/slides/comments"
     comment = await (await test_client.post(
-        "/artifacts/slides/comments",
-        json={"anchor": text_anchor(review.artifacts["slides"].digest()), "text": "Look again"},
-    )).json()
-    await test_client.post(f"/artifacts/slides/comments/{comment['id']}/resolve", json={"summary": ""})
+        base, json={"anchor": text_anchor(review.artifacts["slides"].digest()), "text": "Look again"})).json()
+    for status in ("resolved", "open"):
+        assert (await test_client.post(f"{base}/status", json={"ids": [comment["id"]], "status": status})).status == 200
+    reopened = await (await test_client.get(f"{base}/{comment['id']}")).json()
+    assert reopened["status"] == "open" and len(reopened["thread"]) == 1
 
-    reopened = await (await test_client.post(
-        f"/artifacts/slides/comments/{comment['id']}/reopen", json={"text": ""})).json()
-    assert reopened["status"] == "open"
-    assert len(reopened["thread"]) == 1          # nothing added: the status is the news
-
-    empty_reply = await test_client.post(
-        f"/artifacts/slides/comments/{comment['id']}/reply", json={"text": "   "})
-    assert empty_reply.status == 400
+    empty_reply = await test_client.post(f"{base}/{comment['id']}/reply", json={"text": "   "})
+    assert empty_reply.status == 400 and await empty_reply.json() == {"error": "thread text must not be empty"}
 
 
-async def test_a_thread_kept_as_reference_is_listed_apart_and_only_by_the_reviewer(client) -> None:
+async def test_an_archived_thread_is_listed_apart_and_only_by_the_reviewer(client) -> None:
+    """The reviewer archives a thread from the page; an agent cannot. The list, its counts,
+    the threads and the agent's draft all name the status archived, and none says
+    anything else for it."""
     test_client, review = client
     digest = review.artifacts["slides"].digest()
-    comment = await (await test_client.post(
-        "/artifacts/slides/comments", json={"anchor": text_anchor(digest), "text": "Keep"})).json()
-    other = await (await test_client.post(
-        "/artifacts/slides/comments", json={"anchor": text_anchor(digest), "text": "Work"})).json()
+    base = "/artifacts/slides/comments"
+    answers: list[str] = []
 
-    refused = await test_client.post(
-        f"/artifacts/slides/comments/{comment['id']}/reference", json={"author": "agent"})
-    assert refused.status == 400 and "an agent does not keep a thread as reference" in await refused.text()
-    refused = await test_client.post("/artifacts/slides/comments/update", json={
-        "comment_ids": [comment["id"]], "status": "reference"})
-    assert refused.status == 400 and "an agent does not keep a thread as reference" in await refused.text()
+    async def read(response) -> dict:
+        answers.append(await response.text())
+        return json.loads(answers[-1])
 
-    kept = await (await test_client.post(
-        f"/artifacts/slides/comments/{comment['id']}/reference", json={})).json()
-    assert kept["status"] == "reference" and kept["resolved"] is None and len(kept["thread"]) == 1
-    listed = await (await test_client.get("/artifacts/slides/comments?status=reference")).json()
+    comment = await read(await test_client.post(base, json={"anchor": text_anchor(digest), "text": "Keep"}))
+    other = await read(await test_client.post(base, json={"anchor": text_anchor(digest), "text": "Work"}))
+
+    refused = await test_client.post(f"{base}/update", json={"comment_ids": [comment["id"]], "status": "archived"})
+    assert refused.status == 400 and "an agent does not change a thread's status" in (await refused.json())["error"]
+    assert (await test_client.post(f"{base}/{comment['id']}/reference", json={})).status == 404
+
+    assert (await test_client.post(f"{base}/status", json={"ids": [comment["id"]], "status": "archived"})).status == 200
+    kept = await read(await test_client.get(f"{base}/{comment['id']}"))
+    assert kept["status"] == "archived" and kept["resolved"] is None and len(kept["thread"]) == 1
+    listed = await read(await test_client.get(f"{base}?status=archived"))
     assert [entry["id"] for entry in listed["comments"]] == [comment["id"]]
-    listed = await (await test_client.get("/artifacts/slides/comments?status=open")).json()
+    listed = await read(await test_client.get(f"{base}?status=open"))
     assert [entry["id"] for entry in listed["comments"]] == [other["id"]]
-    state = await (await test_client.get("/state")).json()
-    assert state["artifacts"]["slides"]["comment_counts"] == {"open": 1, "resolved": 0, "reference": 1}
+    every = await read(await test_client.get(base))
+    assert sorted(entry["status"] for entry in every["comments"]) == ["archived", "open"]
+    old_name = await test_client.get(f"{base}?status=reference")
+    assert old_name.status == 400 and await old_name.json() == {"error": "status must be open, resolved or archived"}
+    state = await read(await test_client.get("/state"))
+    assert state["artifacts"]["slides"]["comment_counts"] == {"open": 1, "resolved": 0, "archived": 1}
 
-    replied = await (await test_client.post(
-        f"/artifacts/slides/comments/{comment['id']}/reply", json={"text": "Still true", "author": "agent"})).json()
-    assert replied["status"] == "reference"
-    batch = await (await test_client.post("/artifacts/slides/comments/update", json={
-        "comment_ids": [other["id"]], "status": "reference", "author": "human", "message": ""})).json()
-    assert [entry["status"] for entry in batch["updated"]] == ["reference"]
-    reopened = await (await test_client.post(
-        f"/artifacts/slides/comments/{comment['id']}/reopen", json={"text": ""})).json()
-    assert reopened["status"] == "open" and len(reopened["thread"]) == 2
+    replied = await read(await test_client.post(
+        f"{base}/{comment['id']}/reply", json={"text": "Still true", "author": "agent"}))
+    assert replied["status"] == "archived"
+    batch = await read(await test_client.post(f"{base}/update", json={"comment_ids": [comment["id"]], "message": "Noted"}))
+    assert [entry["status"] for entry in batch["updated"]] == ["archived"]
+    draft = await read(await test_client.post(f"{base}/export", json={"comment_ids": [comment["id"]]}))
+    answers.append(Path(draft["path"]).read_text(encoding="utf-8"))
+    assert f"## {comment['id']} (archived)" in answers[-1]
+    assert not [answer for answer in answers if "reference" in answer]
+
+    assert (await test_client.post(f"{base}/status", json={"ids": [comment["id"]], "status": "open"})).status == 200
+    reopened = await read(await test_client.get(f"{base}/{comment['id']}"))
+    assert reopened["status"] == "open" and len(reopened["thread"]) == 3
 
 
 async def test_picked_comments_change_status_in_one_call(client) -> None:
-    """The review page gives the picked comments one status in one call, by its own names:
-    an archived thread is one the store keeps as reference. A status change adds no entry,
-    the page hears of it in one notice, and an id not found changes nothing. An undo
-    resolves a comment again at the moment it was resolved at before."""
+    """The review page gives the picked comments one status in one call. A status change
+    adds no entry, the page hears of it in one notice, and an id not found changes nothing.
+    An undo resolves a comment again at the moment it was resolved at before."""
     test_client, _ = client
     base = "/artifacts/slides/comments"
     ids = [(await (await test_client.post(base, json={"anchor": {"kind": "artifact"}, "text": text})).json())["id"]
            for text in ("a", "b", "c")]
     socket = await test_client.ws_connect("/ws")
     assert (await socket.receive_json())["type"] == "state"
-    stored_as = {"resolved": "resolved", "archived": "reference", "open": "open"}
     for status in ("resolved", "archived", "open"):
         response = await test_client.post(f"{base}/status", json={"ids": ids[:2], "status": status})
         assert response.status == 200 and await response.json() == {"ids": ids[:2], "status": status}
         assert await socket.receive_json() == {"type": "comments_updated", "artifact": "slides", "comment_ids": ids[:2]}
         stored = {c["id"]: c for c in (await (await test_client.get(base)).json())["comments"]}
-        assert [stored[cid]["status"] for cid in ids] == [stored_as[status], stored_as[status], "open"]
+        assert [stored[cid]["status"] for cid in ids] == [status, status, "open"]
         assert [len(stored[cid]["thread"]) for cid in ids] == [1, 1, 1]  # a status change adds no entry
     response = await test_client.post(f"{base}/status", json={"ids": [ids[0], "c-00000000"], "status": "resolved"})
     assert response.status == 404 and "c-00000000" in (await response.json())["error"]
@@ -761,7 +758,7 @@ async def test_a_suggestion_rejected_or_applied_leaves_a_record_that_asks_nothin
     left in its place holds the pieces it proposed. A record of a suggestion rejected or
     applied is marked, leaves the thread waiting for nothing, and is neither rewritten nor
     deleted. A card read before the thread changed, and one with nothing to reject, are
-    refused. The store keeps the record as the words it is."""
+    refused. The store marks each record as one."""
     test_client, review = client
     base = "/artifacts/slides/comments"
     cid = (await (await test_client.post(base, json={"anchor": {"kind": "artifact"}, "text": "Shorter?"})).json())["id"]
@@ -805,7 +802,8 @@ async def test_a_suggestion_rejected_or_applied_leaves_a_record_that_asks_nothin
         assert deleted.status == 409
     stored = json.loads(review.artifacts["slides"].store.path.read_text(encoding="utf-8"))
     assert [set(entry) for entry in stored["comments"][0]["thread"][2:]] == [
-        {"id", "author", "at", "text"}, {"id", "author", "at", "text"}, {"id", "author", "at", "text", "edits"}]
+        {"id", "author", "at", "text", "rejected"}, {"id", "author", "at", "text"},
+        {"id", "author", "at", "text", "edits", "applied"}]
     # Why, the reviewer says in a reply, which asks the agent as any reply does.
     replied = await (await test_client.post(f"{base}/{cid}/reply", json={"text": "Too curt."})).json()
     assert replied["awaits_agent"] is True
@@ -900,7 +898,7 @@ async def test_an_artifact_is_served_and_kept_under_its_alias(tmp_path: Path) ->
         assert (await (await test_client.get("/artifacts/artifact.html/alias")).json()) == {"alias": alias}
         missing = await test_client.get("/artifacts/slides/comments")
         assert missing.status == 404
-        assert await missing.text() == "unknown artifact: slides. The artifacts are 'Draft 2/3 (초안)'"
+        assert await missing.json() == {"error": "unknown artifact: slides. The artifacts are 'Draft 2/3 (초안)'"}
     finally:
         await test_client.close()
 
@@ -1380,51 +1378,34 @@ async def test_one_broken_artifact_does_not_take_the_server_down(tmp_path: Path)
         await test_client.close()
 
 
-async def test_the_reviewer_closes_a_batch_under_their_own_name(client) -> None:
+async def test_the_reviewer_closes_a_batch_and_an_agent_cannot(client) -> None:
     """The agent answers and leaves the thread open so its reasoning stays readable; the
-    reviewer closes what they have read. A batch closed from the page is the reviewer's
-    act, so the thread records them, and the agent's did-my-edit-land check stays out."""
+    reviewer closes what they have read, from the page. Closing is the reviewer's act: an
+    agent that closed its own work hid the reasoning it is judged by, and a rule that only
+    the instructions carried was read by some sessions and not others. The agent's batch
+    takes no status and no other writer, and the routes that set one thread's status are
+    gone."""
     test_client, review = client
     digest = review.artifacts["slides"].digest()
+    base = "/artifacts/slides/comments"
     ids = []
     for number in range(2):
-        made = await (await test_client.post(
-            "/artifacts/slides/comments",
-            json={"anchor": text_anchor(digest), "text": f"Look at {number}"},
-        )).json()
+        made = await (await test_client.post(base, json={"anchor": text_anchor(digest), "text": f"Look at {number}"})).json()
         ids.append(made["id"])
 
-    closed = await (await test_client.post("/artifacts/slides/comments/update", json={
-        "comment_ids": ids, "status": "resolved", "author": "human", "message": "read, all fine",
-    })).json()
-    assert [entry["status"] for entry in closed["updated"]] == ["resolved", "resolved"]
-    # The anchors all survive here, and that is not news to the reviewer who just read them.
-    assert "warning" not in closed
-    thread = await (await test_client.get(f"/artifacts/slides/comments/{ids[0]}")).json()
-    assert thread["thread"][-1] == {**thread["thread"][-1], "author": "human", "text": "read, all fine"}
+    for body in ({"comment_ids": ids, "status": "resolved"}, {"comment_ids": ids, "status": "open"},
+                 {"comment_ids": ids, "message": "read, all fine", "author": "human"}):
+        refused = await test_client.post(f"{base}/update", json=body)
+        assert refused.status == 400 and "error" in await refused.json()
+    for action in ("resolve", "reopen", "reference"):
+        assert (await test_client.post(f"{base}/{ids[0]}/{action}", json={"summary": "", "text": ""})).status == 404
+    assert [(await (await test_client.get(f"{base}/{cid}")).json())["status"] for cid in ids] == ["open", "open"]
 
-    # Closing is the reviewer's act: an agent that closed its own work hid the reasoning
-    # it is judged by, and a rule that only the instructions carried was read by some
-    # sessions and not others. The server refuses it, on the batch and on one thread.
-    reopened = await (await test_client.post("/artifacts/slides/comments/update", json={
-        "comment_ids": ids, "status": "open", "author": "human", "message": "not yet",
-    })).json()
-    assert [entry["status"] for entry in reopened["updated"]] == ["open", "open"]
-    agent_closed = await test_client.post("/artifacts/slides/comments/update", json={
-        "comment_ids": ids, "status": "resolved",
-    })
-    assert agent_closed.status == 400
-    assert "an agent does not resolve" in await agent_closed.text()
-    one_closed = await test_client.post(f"/artifacts/slides/comments/{ids[0]}/resolve", json={
-        "summary": "", "author": "agent",
-    })
-    assert one_closed.status == 400
-    assert (await (await test_client.get(f"/artifacts/slides/comments/{ids[0]}")).json())["status"] == "open"
-
-    bad = await test_client.post("/artifacts/slides/comments/update", json={
-        "comment_ids": ids, "status": "resolved", "author": "someone",
-    })
-    assert bad.status == 400
+    closed = await test_client.post(f"{base}/status", json={"ids": ids, "status": "resolved"})
+    assert closed.status == 200
+    threads = [await (await test_client.get(f"{base}/{cid}")).json() for cid in ids]
+    assert [thread["status"] for thread in threads] == ["resolved", "resolved"]
+    assert [len(thread["thread"]) for thread in threads] == [1, 1]
 
 
 async def test_call_button_wakes_a_parked_waiter_and_keeps_an_early_press(client) -> None:

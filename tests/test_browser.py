@@ -544,7 +544,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
           const frame = document.querySelector("#artifact-frame").getBoundingClientRect();
           const words = document.querySelector("#artifact-frame").contentWindow
             .getSelection().getRangeAt(0).getBoundingClientRect();
-          const button = document.querySelector("#selection-comment-btn").getBoundingClientRect();
+          const button = document.querySelector("#selection-menu").getBoundingClientRect();
           return {fromLeft: button.left - (frame.left + words.left),
                   belowWords: button.top - (frame.top + words.bottom),
                   wouldOverflow: frame.top + words.bottom + 8 + button.height > pane.bottom - 8,
@@ -567,7 +567,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
           selection.addRange(range);          // no mouseup follows, as on a touch screen
         ''')
         wait_until(lambda: browser.execute_script(
-            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+            'return !document.querySelector("#selection-menu").classList.contains("hidden")'))
         # It comes out under the words, against their left edge, where the hand that made the
         # selection already is.
         placed = browser.execute_script(measure_selection_button)
@@ -592,7 +592,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
           doc.dispatchEvent(new view.MouseEvent("mouseup", {bubbles: true}));
         ''')
         wait_until(lambda: browser.execute_script(
-            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+            'return !document.querySelector("#selection-menu").classList.contains("hidden")'))
         edge = browser.execute_script(measure_selection_button)
         assert edge["wouldOverflow"]        # the words really are at the bottom of the pane
         assert edge["inside"]               # and the whole button is still on it
@@ -622,7 +622,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         ''')
         assert split_selection == 2  # Gecko keeps both, which is what a cell drag leaves
         wait_until(lambda: browser.execute_script(
-            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+            'return !document.querySelector("#selection-menu").classList.contains("hidden")'))
 
         # Released on the edge between two inline boxes, which a rendered formula is full
         # of, the drag leaves the element as the boundary and the offset counting its
@@ -645,9 +645,9 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert element_boundary["start"] == "P"  # an element boundary, as the drag leaves it
         assert element_boundary["quote"].strip()
         wait_until(lambda: browser.execute_script(
-            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+            'return !document.querySelector("#selection-menu").classList.contains("hidden")'))
         wait_until(lambda: browser.execute_script(
-            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+            'return !document.querySelector("#selection-menu").classList.contains("hidden")'))
         browser.execute_script(
             'document.querySelector("#artifact-frame").contentWindow.getSelection().removeAllRanges();')
 
@@ -667,7 +667,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
           doc.dispatchEvent(new view.MouseEvent("mouseup", {bubbles: true}));
         ''')
         wait_until(lambda: browser.execute_script(
-            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+            'return !document.querySelector("#selection-menu").classList.contains("hidden")'))
         browser.find_element("css selector", "#selection-comment-btn").click()
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#compose-dialog").open === true'))
@@ -717,7 +717,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
               doc.dispatchEvent(new view.MouseEvent("mouseup", {bubbles: true}));
             ''', script_args=[selection_end, filler_length])
             wait_until(lambda: browser.execute_script(
-                'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+                'return !document.querySelector("#selection-menu").classList.contains("hidden")'))
             browser.execute_script('document.querySelector("#selection-comment-btn").click();')
             wait_until(lambda: browser.execute_script(
                 'return document.querySelector("#compose-dialog").open === true'))
@@ -1911,7 +1911,7 @@ def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path
       range.setEnd(words, 8);
       selection.addRange(range);
     '''
-    shown = 'return !document.querySelector("#selection-{}-btn").classList.contains("hidden")'
+    shown = 'return !document.querySelector("#selection-menu").classList.contains("hidden")'
     try:
         shared.ensure()
         browser_process = subprocess.Popen(
@@ -1925,8 +1925,7 @@ def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path
             'return document.querySelector("#artifact-status")?.textContent === "ready"'))
         # Pressed in the Preview alone, Source turns the view to Split and selects the words.
         browser.execute_script(select)
-        wait_until(lambda: browser.execute_script(shown.format("comment")))
-        wait_until(lambda: browser.execute_script(shown.format("source")))
+        wait_until(lambda: browser.execute_script(shown))
         browser.find_element("css selector", "#selection-source-btn").click()
         wait_until(lambda: browser.execute_script(
             'return document.querySelector(".layout").classList.contains("view-split")'))
@@ -2036,7 +2035,7 @@ def test_source_and_page_find_a_formula_by_the_tex_katex_keeps(tmp_path: Path) -
           selection.addRange(range);
         ''')
         wait_until(lambda: browser.execute_script(
-            'return !document.querySelector("#selection-source-btn").classList.contains("hidden")'))
+            'return !document.querySelector("#selection-menu").classList.contains("hidden")'))
         browser.find_element("css selector", "#selection-source-btn").click()
         picked = wait_until(lambda: browser.execute_script(
             'return (window.wrappedJSObject || window).ace.edit("source-editor").getSelectedText() || false'))
@@ -3383,7 +3382,7 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
             'const d = document.querySelector("#artifact-frame").contentDocument;'
             'return d.querySelectorAll(".html-mcp-highlight").length === 0'))
         wait_until(lambda: browser.execute_script(
-            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+            'return !document.querySelector("#selection-menu").classList.contains("hidden")'))
         browser.execute_script('document.querySelector("#selection-comment-btn").click()')
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#compose-dialog").open === true'))
@@ -3444,7 +3443,7 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
         # The button from the selection before is still up, so the wait is for this one's place.
         def placed_now():
             box = browser.execute_script(
-                'const b = document.querySelector("#selection-comment-btn").getBoundingClientRect();'
+                'const b = document.querySelector("#selection-menu").getBoundingClientRect();'
                 'return [b.left, b.top];')
             return box if abs(box[0] - (spanned["frame"][0] + spanned["leftEdge"])) <= 3 else None
         placed = wait_until(placed_now)
@@ -4080,7 +4079,7 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
           view.getSelection().addRange(range);
           doc.dispatchEvent(new view.MouseEvent("mouseup", {bubbles: true}));
         """)
-        button_hidden = ('return document.querySelector("#selection-comment-btn")'
+        button_hidden = ('return document.querySelector("#selection-menu")'
                          '.classList.contains("hidden");')
         wait_until(lambda: not browser.execute_script(button_hidden))
 
@@ -4561,7 +4560,7 @@ def test_the_artifact_stays_selectable_under_the_zoom(tmp_path: Path) -> None:
           send("touchend", []);
         """)
         wait_until(lambda: browser.execute_script(
-            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+            'return !document.querySelector("#selection-menu").classList.contains("hidden")'))
         assert browser.execute_script(
             'return document.querySelector("#artifact-frame").contentWindow'
             '.getSelection().toString().length') == 8
@@ -4768,9 +4767,10 @@ def test_a_touch_screen_keeps_the_two_buttons_in_their_corners(tmp_path: Path) -
           doc.dispatchEvent(new view.MouseEvent("mouseup", {bubbles: true}));
         """)
         wait_until(lambda: browser.execute_script(
-            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+            'return !document.querySelector("#selection-menu").classList.contains("hidden")'))
         placed = browser.execute_script("""
           const pane = document.querySelector("#artifact-pane").getBoundingClientRect();
+          const menu = document.querySelector("#selection-menu").getBoundingClientRect();
           const button = document.querySelector("#selection-comment-btn").getBoundingClientRect();
           const words = (() => {
             const frame = document.querySelector("#artifact-frame");
@@ -4778,13 +4778,13 @@ def test_a_touch_screen_keeps_the_two_buttons_in_their_corners(tmp_path: Path) -
             return frame.getBoundingClientRect().top + box.top;
           })();
           const source = document.querySelector("#selection-source-btn").getBoundingClientRect();
-          return {fromTop: button.top - pane.top, sourceFromRight: pane.right - source.right,
+          return {fromTop: menu.top - pane.top, menuFromRight: pane.right - menu.right,
                   commentBeforeSource: button.right <= source.left, selectionTop: words - pane.top};
         """)
         assert placed["selectionTop"] > 150, placed      # the words are well down the page
-        assert placed["fromTop"] <= 12, placed           # the buttons are not
-        # Comment then Source, Source holding the right corner.
-        assert placed["sourceFromRight"] <= 14 and placed["commentBeforeSource"], placed
+        assert placed["fromTop"] <= 12, placed           # the menu is not
+        # Comment then Source, the menu holding the right corner.
+        assert placed["menuFromRight"] <= 14 and placed["commentBeforeSource"], placed
 
         # Fit belongs to the workspace controls, outside the artifact where selections live.
         reset = browser.execute_script("""
@@ -4892,7 +4892,7 @@ def test_a_selection_the_browser_took_over_still_brings_the_button(tmp_path: Pat
           words.dispatchEvent(new view.TouchEvent("touchcancel", {bubbles: true}));
         """)
         wait_until(lambda: browser.execute_script(
-            'return !document.querySelector("#selection-comment-btn").classList.contains("hidden")'))
+            'return !document.querySelector("#selection-menu").classList.contains("hidden")'))
     finally:
         if browser is not None:
             try:
@@ -5091,8 +5091,8 @@ def test_the_resolved_and_mixed_views_lead_with_the_latest(tmp_path: Path) -> No
         # The first is resolved last of all, so it is the comment closed most recently
         # while being the one written first. That tells the orders apart: by when it was
         # closed it leads the resolved view, and by when it was written it trails the mixed.
-        post_json(f"{base}/comments/{written[1]}/resolve", {"summary": ""})
-        post_json(f"{base}/comments/{written[0]}/resolve", {"summary": ""})
+        post_json(f"{base}/comments/status", {"ids": [written[1]], "status": "resolved"})
+        post_json(f"{base}/comments/status", {"ids": [written[0]], "status": "resolved"})
 
         browser_process = subprocess.Popen(
             ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
@@ -5163,7 +5163,7 @@ def test_archived_threads_have_their_own_view_and_picked_archive_action(tmp_path
         kept = post_json(f"{base}/comments", {"anchor": {"kind": "artifact"}, "text": "keep me"})["id"]
         working = post_json(f"{base}/comments", {"anchor": {"kind": "artifact"}, "text": "work on me"})["id"]
         untouched = post_json(f"{base}/comments", {"anchor": {"kind": "artifact"}, "text": "leave me"})["id"]
-        post_json(f"{base}/comments/{kept}/reference", {})
+        post_json(f"{base}/comments/status", {"ids": [kept], "status": "archived"})
 
         browser_process = subprocess.Popen(
             ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
@@ -5218,7 +5218,7 @@ def test_archived_threads_have_their_own_view_and_picked_archive_action(tmp_path
             'return [button.disabled, button.getAttribute("aria-label"), button.title];'
         ) == [False, "Archive 1", "Archive the selected comments"]
         browser.find_element("css selector", "#archive-picked-btn").click()
-        wait_until(lambda: get_json(f"{base}/comments/{working}")["status"] == "reference" or None)
+        wait_until(lambda: get_json(f"{base}/comments/{working}")["status"] == "archived" or None)
         wait_until(lambda: browser.execute_script(
             f'return document.querySelectorAll("[data-comment-id]").length === 1'
             f' && document.querySelector("[data-comment-id=\'{untouched}\']") ? true : null;'))

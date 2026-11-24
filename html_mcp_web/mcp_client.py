@@ -57,7 +57,11 @@ class ProjectClient:
         except (httpx.HTTPError, RuntimeError) as error:
             raise RuntimeError(f"project server request failed: {error}") from error
         if response.status_code >= 400:
-            raise RuntimeError(f"project server request failed ({response.status_code}): {response.text}")
+            # The comment routes refuse as JSON {"error": words}; the others in words.
+            words = response.text
+            if response.headers.get("content-type", "").startswith("application/json"):
+                words = response.json()["error"]
+            raise RuntimeError(f"project server request failed ({response.status_code}): {words}")
         return response
 
 
