@@ -1,4 +1,4 @@
-import shutil
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -7,10 +7,11 @@ import pytest
 
 from html_mcp_web import config as config_module
 from html_mcp_web.cli import main
+from tests.firefox import FIREFOX
 
 REPO = Path(__file__).resolve().parents[1]
 # The template shims import the engine from this checkout, whichever package is installed.
-BUILD_ENV = {"PYTHONPATH": str(REPO), "PATH": "/usr/bin:/bin"}
+BUILD_ENV = {**os.environ, "PYTHONPATH": str(REPO)}
 
 
 
@@ -196,7 +197,7 @@ def test_init_creates_a_viewable_plain_document(tmp_path, monkeypatch, layout, w
     from html_mcp_web.template_content import ContentParser, Element
     monkeypatch.chdir(tmp_path)
     assert main(["init", "--layout", layout, "--main", "html/brief.html"]) == 0
-    text = (tmp_path / "html/brief.html").read_text()
+    text = (tmp_path / "html/brief.html").read_text(encoding="utf-8")
     parser = ContentParser()
     parser.feed(text)
     parser.close()
@@ -210,7 +211,7 @@ def test_init_creates_a_viewable_plain_document(tmp_path, monkeypatch, layout, w
 
 
 @pytest.mark.parametrize("layout", ["slides", pytest.param("report", marks=pytest.mark.skipif(
-    shutil.which("firefox") is None, reason="a report is set in Firefox"))])
+    FIREFOX is None, reason="a report is set in Firefox"))])
 def test_init_builds_missing_template_output(tmp_path, monkeypatch, layout):
     from html_mcp_web.template_content import parse_template_content
     monkeypatch.chdir(tmp_path)
@@ -218,7 +219,7 @@ def test_init_builds_missing_template_output(tmp_path, monkeypatch, layout):
                  "--template", f"neutral-{layout}", "--content", "source/content.html"]) == 0
     parsed = parse_template_content(tmp_path / "source/content.html")
     assert len(parsed.sections) == 1
-    output = (tmp_path / "output/main.html").read_text()
+    output = (tmp_path / "output/main.html").read_text(encoding="utf-8")
     assert '<main class="pages">' in output
     if layout == "slides":
         assert output.count('<section class="page') == 2
@@ -243,12 +244,12 @@ def test_init_preserves_existing_sources_and_outputs(tmp_path, monkeypatch):
 
 def test_init_refuses_to_pair_new_content_with_existing_output(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "main.html").write_text("existing main")
+    (tmp_path / "main.html").write_text("existing main", encoding="utf-8")
     assert main(["init", "--layout", "slides", "--main", "main.html",
                  "--template", "neutral-slides", "--content", "content.html"]) == 1
     assert not (tmp_path / ".html-mcp-web.yaml").exists()
     assert not (tmp_path / "content.html").exists()
-    assert (tmp_path / "main.html").read_text() == "existing main"
+    assert (tmp_path / "main.html").read_text(encoding="utf-8") == "existing main"
 
 
 def test_init_rejects_missing_template_before_creating_files(tmp_path, monkeypatch):
@@ -256,3 +257,51 @@ def test_init_rejects_missing_template_before_creating_files(tmp_path, monkeypat
     assert main(["init", "--layout", "slides", "--template", "missing-template",
                  "--content", "content.html"]) == 1
     assert list(tmp_path.iterdir()) == []
+
+
+def _own_calls():
+    """Each call in the package's own modules, with the file it is in. The modules shared with
+    the other review tools are checked where they are written."""
+    import ast
+
+    package = REPO / "html_mcp_web"
+    for path in sorted(package.rglob("*.py")):
+        if "shared" in path.relative_to(package).parts:
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Call):
+                yield path.relative_to(package).as_posix(), node
+
+
+def test_no_process_the_package_starts_is_given_the_servers_own_input() -> None:
+    """Under an agent the server's input is the pipe the agent talks to it through. A child
+    that inherits it holds it, and on Windows a child then may never start: every process the
+    package starts is given stdin=DEVNULL."""
+    import ast
+
+    missing = []
+    for name, node in _own_calls():
+        if not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr in ("create_subprocess_exec", "Popen") or (
+                node.func.attr == "run" and getattr(node.func.value, "id", "") == "subprocess"):
+            stdin = {keyword.arg: keyword.value for keyword in node.keywords}.get("stdin")
+            if not (isinstance(stdin, ast.Attribute) and stdin.attr == "DEVNULL"):
+                missing.append(f"{name}:{node.lineno}")
+    assert missing == []
+
+
+def test_what_a_child_process_prints_is_never_read_in_the_systems_code_page() -> None:
+    """Windows reads a child's output in its code page unless told otherwise, which has no
+    letter of a Korean folder's name on most systems: no call asks for text without naming
+    the encoding."""
+    import ast
+
+    unnamed = []
+    for name, node in _own_calls():
+        keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+        as_text = any(isinstance(keywords.get(word), ast.Constant) and keywords[word].value is True
+                      for word in ("text", "universal_newlines"))
+        if as_text and "encoding" not in keywords:
+            unnamed.append(f"{name}:{node.lineno}")
+    assert unnamed == []

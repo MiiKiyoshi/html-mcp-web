@@ -1,20 +1,18 @@
 import json
+import os
 import shutil
-import subprocess
 import tempfile
 import time
 import urllib.request
 from pathlib import Path
 
-import pytest
 import yaml
+from marionette_driver.marionette import ActionSequence
 
 from html_mcp_web.config import load_config
+from html_mcp_web.firefox import stop
 from html_mcp_web.project_server import SharedProjectServer
-
-
-marionette = pytest.importorskip("marionette_driver.marionette")
-from marionette_driver.marionette import ActionSequence  # noqa: E402
+from tests.firefox import Browser, launch, needs_firefox
 
 
 def type_keys(browser, keys):
@@ -56,12 +54,13 @@ def get_json(url: str) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path, monkeypatch) -> None:
     target = "SELECT START " + "exact wrapped characters " * 12 + "SELECT END"
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))   # the home folder on Windows
     source = home / "slides.html"
     source.write_text(
         '<!doctype html><html><head><title>Source</title></head><body><main class="pages">'
@@ -84,10 +83,8 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=1200, height=760)
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -95,7 +92,7 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
             'return document.querySelector("#artifact-status")?.textContent === "ready"'))
         assert browser.execute_script(
             'return [document.querySelector("#main-file").textContent, document.querySelector("#main-file").title]'
-        ) == ["slides.html", "~/slides.html"]
+        ) == ["slides.html", f"~{os.sep}slides.html"]
         assert get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]["main_file"] == str(source)
         placement = browser.execute_script('''
           const tabs = document.querySelector(".view-tabs");
@@ -318,10 +315,6 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()

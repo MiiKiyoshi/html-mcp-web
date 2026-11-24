@@ -74,8 +74,10 @@ def cmd_init(args: argparse.Namespace) -> int:
             with source.open("x", encoding="utf-8") as stream:
                 stream.write(document)
         if content is not None and not main.exists():
-            result = subprocess.run([sys.executable, str(builder), str(content), str(main)],
-                                    capture_output=True, text=True, timeout=120)
+            # In UTF-8 mode, which the output is read in, as the server builds (server.py).
+            result = subprocess.run([sys.executable, "-X", "utf8", str(builder), str(content), str(main)],
+                                    stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8",
+                                    errors="replace", timeout=120)
             if result.returncode:
                 raise ValueError(f"template build failed: {(result.stderr or result.stdout).strip()}")
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:
@@ -182,3 +184,9 @@ def main(argv: list[str] | None = None) -> int:
 def main_mcp(argv: list[str] | None = None) -> int:
     values = list(sys.argv[1:] if argv is None else argv)
     return main(["mcp", *values])
+
+
+# Run as a module, `python -m html_mcp_web.cli mcp`, the server holds no program file of its own,
+# which Windows would keep an update from replacing (INSTALL.md).
+if __name__ == "__main__":
+    sys.exit(main())

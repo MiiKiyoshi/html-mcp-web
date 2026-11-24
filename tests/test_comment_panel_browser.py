@@ -7,7 +7,6 @@ import json
 import os
 import shutil
 import socket
-import subprocess
 import tempfile
 import time
 import urllib.error
@@ -18,14 +17,13 @@ from pathlib import Path
 
 import pytest
 import yaml
+from marionette_driver.marionette import ActionSequence
 
 from html_mcp_web.comments import ArtifactAnchor, CommentStore, PageAnchor, SourceAnchor, SuggestedEdit
 from html_mcp_web.config import load_config
+from html_mcp_web.firefox import stop
 from html_mcp_web.project_server import SharedProjectServer
-
-marionette = pytest.importorskip("marionette_driver.marionette")
-from marionette_driver.marionette import ActionSequence  # noqa: E402
-needs_firefox = pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+from tests.firefox import Browser, launch, needs_firefox
 
 DECK = ('<!doctype html><html><head><meta charset="utf-8"><title>Slides</title></head><body><main class="pages">'
         '<section class="page"><h1>First</h1><p>Tea is served.</p></section></main></body></html>')
@@ -137,9 +135,8 @@ def review_page(root: Path, aliases=("slides",), deck=DECK, prefs="", height=100
     try:
         shared.ensure()
         SERVERS[f"http://127.0.0.1:{port}"] = shared
-        process = subprocess.Popen(["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=1500, height=height)
         base = f"http://127.0.0.1:{port}"
@@ -153,11 +150,7 @@ def review_page(root: Path, aliases=("slides",), deck=DECK, prefs="", height=100
             except Exception:
                 pass
         if process is not None:
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
+            stop(process)
         shutil.rmtree(profile, ignore_errors=True)
         SERVERS.pop(f"http://127.0.0.1:{port}", None)
         shared.stop()

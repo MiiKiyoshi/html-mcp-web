@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -33,6 +34,16 @@ async def client(tmp_path: Path):
     await test_client.start_server()
     yield test_client, review
     await test_client.close()
+
+
+def _symlink(link: Path, target: Path, **kwargs) -> None:
+    """Make a symlink; on Windows without the privilege to, skip the test."""
+    try:
+        link.symlink_to(target, **kwargs)
+    except OSError as error:
+        if os.name == "nt":
+            pytest.skip(f"symlinks need a privilege on Windows: {error}")
+        raise
 
 
 def text_anchor(digest: str) -> dict:
@@ -166,6 +177,7 @@ def test_absolute_artifact_path_stays_absolute_outside_the_ui(tmp_path: Path, mo
     main = home / "artifact.html"
     main.write_text("<!doctype html><p>absolute artifact</p>", encoding="utf-8")
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))   # the home folder on Windows
     config = Config(
         artifacts={"slides": ArtifactConfig(layout="slides", main=str(main))},
         config_path=home / ".html-mcp-web.yaml",
@@ -432,7 +444,7 @@ async def test_headless_check_runs_while_a_different_artifact_is_reviewed(client
 async def test_the_servers_own_check_answers_while_a_review_page_is_open(client, monkeypatch) -> None:
     """A review page does not measure for the record, so layout() runs the server's own
     check whether a page is open or not, and opens it with the token the record requires."""
-    import shutil
+    from html_mcp_web import firefox
 
     test_client, review = client
     idle_viewer = object()
@@ -442,8 +454,7 @@ async def test_the_servers_own_check_answers_while_a_review_page_is_open(client,
     launched: list[tuple[str, str]] = []
 
     class Headless:
-        def terminate(self) -> None:
-            pass
+        pid, returncode = 0, None
 
         async def wait(self) -> int:
             return 0
@@ -455,19 +466,20 @@ async def test_the_servers_own_check_answers_while_a_review_page_is_open(client,
         runtime.layout_errors = []
         return Headless()
 
-    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(firefox, "binary", lambda: "/opt/firefox/firefox")
+    monkeypatch.setattr(firefox, "end", lambda pid: None)
     monkeypatch.setattr(asyncio, "create_subprocess_exec", headless_browser)
     state = await (await test_client.get("/artifacts/slides/layout")).json()
-    assert [program for program, _ in launched] == ["firefox"]
+    assert [program for program, _ in launched] == ["/opt/firefox/firefox"]
     assert "?artifact=slides&check=" in launched[0][1]
     assert state["errors"] == [] and "unchecked" not in state
 
 
 async def test_layout_says_at_once_when_nothing_can_check(client, monkeypatch) -> None:
-    import shutil
+    from html_mcp_web import firefox
 
     test_client, review = client
-    monkeypatch.setattr(shutil, "which", lambda name: None)
+    monkeypatch.setattr(firefox, "binary", lambda: None)
     state = await (await test_client.get("/artifacts/slides/layout")).json()
     assert state["errors"] is None
     assert "Firefox is not installed" in state["unchecked"]
@@ -904,10 +916,17 @@ async def test_an_artifact_is_served_and_kept_under_its_alias(tmp_path: Path) ->
         await test_client.close()
 
 
-async def test_control_data_is_not_served(client) -> None:
+async def test_control_data_is_not_served(client, tmp_path: Path) -> None:
+    """The comments and the configuration stay with the server, however the path names them:
+    macOS and Windows take a name in any case of its letters for the same file, and Windows a
+    backslash for a slash."""
     test_client, _ = client
-    response = await test_client.get("/project/.html-mcp-web/comments.json")
-    assert response.status == 404
+    (tmp_path / ".html-mcp-web.yaml").write_text("artifacts: {}\n", encoding="utf-8")
+    hidden = next((tmp_path / ".html-mcp-web").rglob("*.json")).relative_to(tmp_path).as_posix()
+    for path in (hidden, hidden.upper(), hidden.replace("/", "%5C"), ".html-mcp-web.yaml", ".HTML-MCP-WEB.YAML"):
+        response = await test_client.get(f"/project/{path}")
+        assert response.status == 404, path
+    assert (await test_client.get("/project/artifact.html")).status == 200
 
 
 async def test_config_change_adds_artifact_and_invalid_config_keeps_current_state(tmp_path: Path) -> None:
@@ -1101,7 +1120,7 @@ def test_watcher_schedules_only_the_artifact_roots(tmp_path):
     # A tree that holds no artifact, and a link that resolves outside the project, are
     # neither scheduled nor walked: the root is watched flat, the artifact directory alone
     # recursively.
-    (tmp_path / "engine").symlink_to(outside)
+    _symlink(tmp_path / "engine", outside)
     watcher, scheduled = started_watcher(tmp_path, [tmp_path / "docs"])
     assert scheduled == [(tmp_path.name, False), ("docs", True)]
 
@@ -1774,7 +1793,7 @@ async def test_check_profiles_and_browsers_do_not_outlive_their_check(client, tm
     await review.sweep_check_profiles(None)
     assert not stale.exists() and fresh.exists()
     # A server that stops mid-check ends the browser and removes its profile.
-    process = await asyncio.create_subprocess_exec("sleep", "30")
+    process = await asyncio.create_subprocess_exec(sys.executable, "-c", "import time; time.sleep(30)")
     review.check_runs.add((process, str(fresh)))
     await review.stop_checks(None)
     assert process.returncode is not None and not fresh.exists() and not review.check_runs

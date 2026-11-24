@@ -1,7 +1,6 @@
 """Startup of the shared project server: a slow or failing start must not leak."""
 
 import asyncio
-import fcntl
 import socket
 import threading
 import time
@@ -13,6 +12,7 @@ import yaml
 from html_mcp_web.config import load_config
 from html_mcp_web.project_server import SharedProjectServer
 from html_mcp_web.server import HtmlReviewServer
+from html_mcp_web.shared import filelock
 
 
 def _config(tmp_path: Path):
@@ -37,12 +37,12 @@ def _server_threads() -> int:
 
 
 def _lock_is_free(config) -> bool:
-    with (config.config_path.parent / ".html-mcp-web" / "server.lock").open("a+") as handle:
+    with (config.config_path.parent / ".html-mcp-web" / "server.lock").open("a+", encoding="utf-8") as handle:
         try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            filelock.lock(handle, wait=False)
         except BlockingIOError:
             return False
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        filelock.unlock(handle)
         return True
 
 

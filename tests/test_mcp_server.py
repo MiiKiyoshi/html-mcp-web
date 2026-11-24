@@ -1,17 +1,18 @@
 import asyncio
 import json
 import os
-import shutil
+import queue
 import socket
-import select
 import shlex
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from pathlib import Path
 from types import SimpleNamespace
 
+import psutil
 import pytest
 import yaml
 from mcp import ClientSession, StdioServerParameters
@@ -26,6 +27,7 @@ from html_mcp_web.project_server import SharedProjectServer
 from html_mcp_web.server import HtmlReviewServer
 from html_mcp_web.shared import plugin_monitor
 from html_mcp_web.tool import TOOL
+from tests.firefox import needs_firefox
 
 
 def available_port() -> int:
@@ -559,7 +561,7 @@ def test_pages_name_single_pages_and_ranges_in_order_each_once() -> None:
             page_numbers(spec, 8)
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_image_save_writes_a_png_and_returns_its_path(tmp_path: Path) -> None:
     # save exists so a page can be handed to the user without the image entering the
     # transcript; the tool returns a path, not pixels.
@@ -611,30 +613,33 @@ def test_image_save_writes_a_png_and_returns_its_path(tmp_path: Path) -> None:
 def test_the_lock_names_its_holder(tmp_path: Path) -> None:
     """A lock held by a process that serves nothing used to say only that it was held,
     and finding the holder was a by-hand dig through /proc. The holder writes its pid
-    into the file, and the refusal names it with the way out."""
+    into a file beside the lock, which Windows lets others read while the lock is held, and
+    the refusal names it with the way out."""
     from html_mcp_web.project_server import SharedProjectServer
 
     config = project(tmp_path)
     lock_path = tmp_path / ".html-mcp-web" / "server.lock"
+    holder_path = lock_path.with_name("server.holder")
     shared = SharedProjectServer(load_config(config.config_path))
     try:
         shared.ensure()
-        assert f"pid {os.getpid()}, port {config.port}" == lock_path.read_text()
+        assert f"pid {os.getpid()}, port {config.port}" == holder_path.read_text(encoding="utf-8")
     finally:
         shared.stop()
 
     # Another process holds the lock and serves nothing, the way a wedged session does.
+    holding = ("import sys, time\n"
+               "from pathlib import Path\n"
+               "from html_mcp_web.shared import filelock\n"
+               "handle = open(sys.argv[1], 'a+', encoding='utf-8')\n"
+               "filelock.lock(handle)\n")
     holder = subprocess.Popen(
-        [sys.executable, "-c",
-         "import fcntl, sys, time\n"
-         "handle = open(sys.argv[1], 'a+')\n"
-         "fcntl.flock(handle.fileno(), fcntl.LOCK_EX)\n"
-         "handle.truncate(0); handle.seek(0)\n"
-         "handle.write('pid 424242, port 65000'); handle.flush()\n"
+        [sys.executable, "-c", holding +
+         "Path(sys.argv[1]).with_name('server.holder').write_text('pid 424242, port 65000', encoding='utf-8')\n"
          "print('holding', flush=True)\n"
          "time.sleep(60)\n",
          str(lock_path)],
-        stdout=subprocess.PIPE, text=True)
+        stdout=subprocess.PIPE, text=True, encoding="utf-8")
     try:
         assert holder.stdout.readline().strip() == "holding"
         fresh = SharedProjectServer(load_config(config.config_path))
@@ -649,20 +654,17 @@ def test_the_lock_names_its_holder(tmp_path: Path) -> None:
     # A holder that dies while the contender is polling frees the lock with it, and the
     # contender takes over instead of reporting a dead pid as alive.
     dying = subprocess.Popen(
-        [sys.executable, "-c",
-         "import fcntl, sys, time\n"
-         "handle = open(sys.argv[1], 'a+')\n"
-         "fcntl.flock(handle.fileno(), fcntl.LOCK_EX)\n"
+        [sys.executable, "-c", holding +
          "print('holding', flush=True)\n"
          "time.sleep(1)\n",
          str(lock_path)],
-        stdout=subprocess.PIPE, text=True)
+        stdout=subprocess.PIPE, text=True, encoding="utf-8")
     try:
         assert dying.stdout.readline().strip() == "holding"
         taker = SharedProjectServer(load_config(config.config_path))
         taker.ensure()   # the holder dies about a second in; the poll claims the lock
         try:
-            assert f"pid {os.getpid()}" in lock_path.read_text()
+            assert f"pid {os.getpid()}" in holder_path.read_text(encoding="utf-8")
         finally:
             taker.stop()
     finally:
@@ -877,6 +879,28 @@ def test_guide_lists_the_configured_guideline_after_the_one_it_extends(
         binding.stop()
 
 
+def _session() -> subprocess.Popen:
+    """A process that stands in for a session's Claude Code, alive until it is killed."""
+    return subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+
+
+class Lines:
+    """What a process prints, line by line, read on a thread of its own: Windows cannot wait on
+    a pipe with select."""
+
+    def __init__(self, stream) -> None:
+        self.lines: queue.Queue = queue.Queue()
+        threading.Thread(target=lambda: [self.lines.put(line) for line in stream], daemon=True).start()
+
+    def next(self, timeout: float) -> str:
+        """The next line, without its end, or "" when none comes within *timeout* seconds."""
+        try:
+            line = self.lines.get(timeout=timeout)
+        except queue.Empty:
+            return ""
+        return (line.decode("utf-8") if isinstance(line, bytes) else line).rstrip("\r\n")
+
+
 @pytest.mark.parametrize("codex", [False, True])
 def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
     # The tool returns at once with a command for the harness to watch in the background;
@@ -925,18 +949,32 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
 
         args = []
         if codex:
-            stub = tmp_path / "codex"
-            stub.write_text("#!/bin/sh\n"
-                            '[ "$1" = queue ] && [ "$2" = --thread ] && [ "$3" = test-thread ] && [ "$4" = --message ] || exit 2\n'
-                            '[ -f "$0.ready" ] || { touch "$0.failed"; exit 1; }\n'
-                            'printf "%s\\n" "$5" | tail -n +2\n')
-            stub.chmod(0o755)
-            monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+            # Stands in for codex queue: it fails until codex.ready exists, and then prints the
+            # message after its first line, the event's name.
+            stub = tmp_path / "codex.py"
+            stub.write_text(
+                "import sys\n"
+                "from pathlib import Path\n"
+                f"here = Path({str(tmp_path / 'codex')!r})\n"
+                "if sys.argv[1:5] != ['queue', '--thread', 'test-thread', '--message'] or len(sys.argv) != 6:\n"
+                "    sys.exit(2)\n"
+                "if not Path(f'{here}.ready').exists():\n"
+                "    Path(f'{here}.failed').touch()\n"
+                "    sys.exit(1)\n"
+                "print('\\n'.join(sys.argv[5].split('\\n')[1:]), flush=True)\n", encoding="utf-8")
+            if os.name == "nt":
+                (tmp_path / "codex.cmd").write_text(f'@"{sys.executable}" "{stub}" %*\r\n', encoding="utf-8")
+            else:
+                (tmp_path / "codex").write_text(f'#!/bin/sh\nexec "{sys.executable}" "{stub}" "$@"\n', encoding="utf-8")
+                (tmp_path / "codex").chmod(0o755)
+            monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
             args = ["--codex", "test-thread"]
         press()
         # Each listen() call names a new listener, and the last one is the one presses go to.
         waiter = subprocess.Popen([*shlex.split(selected["command"]), *args],
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        printed = Lines(waiter.stdout)
+        line = printed.next
         try:
             if codex:
                 deadline = time.monotonic() + 5
@@ -945,27 +983,6 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
                 assert (tmp_path / "codex.failed").exists()
                 assert review()["consumed"] == 0
                 (tmp_path / "codex.ready").touch()
-            pending = b""
-
-            def line(timeout):
-                # Read raw and keep the remainder: two lines written together left the
-                # second in a buffered reader, where select on the pipe could not see it.
-                nonlocal pending
-                deadline = time.monotonic() + timeout
-                while b"\n" not in pending:
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
-                        return ""
-                    ready, _, _ = select.select([waiter.stdout], [], [], remaining)
-                    if not ready:
-                        return ""
-                    chunk = os.read(waiter.stdout.fileno(), 4096)
-                    if not chunk:
-                        return ""
-                    pending += chunk
-                head, pending = pending.split(b"\n", 1)
-                return head.decode("utf-8")
-
             assert line(15).startswith("[review]")
             time.sleep(1.0)
             assert waiter.poll() is None
@@ -1002,18 +1019,18 @@ def test_listen_hands_the_waiter_to_the_plugin_monitor(tmp_path: Path, monkeypat
     project(tmp_path)
     cache = tmp_path / "cache"
     monkeypatch.setattr(TOOL, "monitors", cache / "html-mcp-web" / "monitor")
-    session = subprocess.Popen(["sleep", "60"])
+    session = _session()
     monkeypatch.setattr(plugin_monitor, "claude_pid", lambda: session.pid)
     monitor = subprocess.Popen(
         ["sh", str(Path(__file__).parents[1] / "plugin" / "monitors" / "review.sh"), str(session.pid)],
-        stdout=subprocess.PIPE, text=True, env={**os.environ, "XDG_CACHE_HOME": str(cache)})
+        stdout=subprocess.PIPE, text=True, encoding="utf-8", env={**os.environ, "XDG_CACHE_HOME": str(cache)})
     binding = ProjectBinding(tmp_path)
     try:
         record = TOOL.monitors / f"{session.pid}.monitor"
         deadline = time.monotonic() + 5
         while not record.exists() and time.monotonic() < deadline:
             time.sleep(0.1)
-        assert int(record.read_text()) == monitor.pid
+        assert int(record.read_text(encoding="utf-8")) == monitor.pid
         mcp = create_server(binding)
         context = SimpleNamespace(session=SimpleNamespace(client_params=SimpleNamespace(
             clientInfo=SimpleNamespace(name="claude-code"))))
@@ -1021,12 +1038,11 @@ def test_listen_hands_the_waiter_to_the_plugin_monitor(tmp_path: Path, monkeypat
         told = answer(mcp.call_tool("listen", {}))
         assert "plugin's monitor now runs the command" in told["how"]
         assert "Monitor(" not in told["how"] and "On [review]" in told["how"]
-        handed = (TOOL.monitors / f"{session.pid}.command").read_text().splitlines()
+        handed = (TOOL.monitors / f"{session.pid}.command").read_text(encoding="utf-8").splitlines()
         assert handed[1] == told["command"]
         base = f"http://127.0.0.1:{binding._shared.port}"
         urllib.request.urlopen(urllib.request.Request(f"{base}/review-request", method="POST")).close()
-        ready, _, _ = select.select([monitor.stdout], [], [], 15)
-        assert ready and monitor.stdout.readline().startswith("[review]")
+        assert Lines(monitor.stdout).next(15).startswith("[review]")
         # The session ending ends the monitor, its waiter, and its record.
         session.kill()
         session.wait()                  # reaped, or kill -0 still finds it
@@ -1046,12 +1062,12 @@ def test_a_session_with_the_plugin_listens_from_its_start(tmp_path: Path, monkey
     project(tmp_path)
     cache = tmp_path / "cache"
     monkeypatch.setattr(TOOL, "monitors", cache / "html-mcp-web" / "monitor")
-    session = subprocess.Popen(["sleep", "60"])
+    session = _session()
     monkeypatch.setattr(plugin_monitor, "claude_pid", lambda: session.pid)
     monitor = subprocess.Popen(
         ["sh", str(Path(__file__).parents[1] / "plugin" / "monitors" / "review.sh"), str(session.pid)],
-        stdout=subprocess.PIPE, text=True, env={**os.environ, "XDG_CACHE_HOME": str(cache)})
-    ended = subprocess.Popen(["true"])
+        stdout=subprocess.PIPE, text=True, encoding="utf-8", env={**os.environ, "XDG_CACHE_HOME": str(cache)})
+    ended = subprocess.Popen([sys.executable, "-c", ""])
     ended.wait()
     binding = ProjectBinding(tmp_path)
     try:
@@ -1072,10 +1088,10 @@ def test_a_session_with_the_plugin_listens_from_its_start(tmp_path: Path, monkey
             assert reply.headers["X-Press"] == "1"
         post("/wait-review/ack?upto=1")
         _listen_from_start(port)
-        assert shlex.split(handed.read_text().splitlines()[1])[1:3] == ["-m", "html_mcp_web.waiter"]
+        assert shlex.split(handed.read_text(encoding="utf-8").splitlines()[1])[1:3] == ["-m", "html_mcp_web.waiter"]
         post("/review-request")
-        ready, _, _ = select.select([monitor.stdout], [], [], 15)
-        assert ready and monitor.stdout.readline().startswith("[review] reviewer called (press #2)")
+        relayed = Lines(monitor.stdout)
+        assert relayed.next(15).startswith("[review] reviewer called (press #2)")
         # Asked to listen again, the session restarts its waiter, which hears of no takeover.
         mcp = create_server(binding)
         context = SimpleNamespace(session=SimpleNamespace(client_params=SimpleNamespace(
@@ -1083,8 +1099,7 @@ def test_a_session_with_the_plugin_listens_from_its_start(tmp_path: Path, monkey
         monkeypatch.setattr(mcp, "get_context", lambda: context)
         assert "plugin's monitor now runs the command" in answer(mcp.call_tool("listen", {}))["how"]
         post("/review-request")
-        ready, _, _ = select.select([monitor.stdout], [], [], 15)
-        assert ready and monitor.stdout.readline().startswith("[review] reviewer called (press #3)")
+        assert relayed.next(15).startswith("[review] reviewer called (press #3)")
         session.kill()
         session.wait()
         monitor.wait(timeout=10)
@@ -1190,7 +1205,7 @@ def _start_monitor(session: int, cache: Path) -> subprocess.Popen:
     """The plugin's monitor, as Claude Code starts it, for the session whose pid is *session*."""
     return subprocess.Popen(
         ["sh", str(Path(__file__).parents[1] / "plugin" / "monitors" / "review.sh"), str(session)],
-        stdout=subprocess.PIPE, text=True, env={**os.environ, "XDG_CACHE_HOME": str(cache)})
+        stdout=subprocess.PIPE, text=True, encoding="utf-8", env={**os.environ, "XDG_CACHE_HOME": str(cache)})
 
 
 def test_a_monitor_killed_outright_leaves_nothing_a_later_session_takes(tmp_path: Path, monkeypatch) -> None:
@@ -1200,8 +1215,8 @@ def test_a_monitor_killed_outright_leaves_nothing_a_later_session_takes(tmp_path
     cache = tmp_path / "cache"
     monkeypatch.setattr(TOOL, "monitors", cache / "html-mcp-web" / "monitor")
     TOOL.monitors.mkdir(parents=True)
-    session = subprocess.Popen(["sleep", "60"])
-    other = subprocess.Popen(["sleep", "60"])
+    session = _session()
+    other = _session()
     monkeypatch.setattr(plugin_monitor, "claude_pid", lambda: session.pid)
     record = TOOL.monitors / f"{session.pid}.monitor"
     handed = TOOL.monitors / f"{session.pid}.command"
@@ -1231,18 +1246,19 @@ def test_the_monitor_ends_a_replaced_waiter_and_all_it_started(tmp_path: Path) -
     first, second = f"61.{os.getpid()}", f"62.{os.getpid()}"
     cache = tmp_path / "cache"
     directory = cache / "html-mcp-web" / "monitor"
-    session = subprocess.Popen(["sleep", "60"])
+    session = _session()
     monitor = _start_monitor(session.pid, cache)
+    # The waiter it is handed starts a process that sleeps, and starts it again whenever it ends.
+    sleep = "import sys, time; time.sleep(float(sys.argv[1]))"
+    waiter = f"import subprocess, sys; [subprocess.run([sys.executable, '-c', {sleep!r}, sys.argv[1]]) for _ in iter(int, 1)]"
 
     def sleeping(seconds: str) -> bool:
-        rows = subprocess.run(["ps", "-eo", "args="], capture_output=True, text=True).stdout.splitlines()
-        return f"sleep {seconds}" in [row.strip() for row in rows]
+        return any((process.info["cmdline"] or [])[-2:] == [sleep, seconds]
+                   for process in psutil.process_iter(["cmdline"]))
 
     def hand(name: str, seconds: str) -> None:
-        script = tmp_path / f"{name}.sh"
-        script.write_text(f"#!/bin/sh\nwhile :; do out=$(printf x | sleep {seconds}); done\n", encoding="utf-8")
-        script.chmod(0o755)
-        (directory / f"{session.pid}.command.new").write_text(f"{name}\n{script}\n", encoding="utf-8")
+        command = f"{shlex.quote(Path(sys.executable).as_posix())} -c {shlex.quote(waiter)} {seconds}"
+        (directory / f"{session.pid}.command.new").write_text(f"{name}\n{command}\n", encoding="utf-8")
         (directory / f"{session.pid}.command.new").replace(directory / f"{session.pid}.command")
         deadline = time.monotonic() + 5
         while not sleeping(seconds) and time.monotonic() < deadline:

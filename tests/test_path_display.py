@@ -19,11 +19,14 @@ def test_home_path_display_boundaries() -> None:
         displayPath("/srv/paper/artifact.html", home),
         displayPath("/srv/home-link/artifact.html", home),
         displayPath("relative/artifact.html", home),
+        displayPath("C:\\\\Users\\\\alice\\\\paper\\\\artifact.html", "C:\\\\Users\\\\alice"),
+        displayPath("C:\\\\Users\\\\alice2\\\\artifact.html", "C:\\\\Users\\\\alice"),
+        displayPath("/srv/artifact.html", "/"),
       ]));
     """
 
     result = subprocess.run(
-        ["node", "--input-type=module", "-"], input=script, text=True,
+        ["node", "--input-type=module", "-"], input=script, text=True, encoding="utf-8",
         capture_output=True, check=True,
     )
 
@@ -34,4 +37,7 @@ def test_home_path_display_boundaries() -> None:
         "/srv/paper/artifact.html",
         "/srv/home-link/artifact.html",
         "relative/artifact.html",
+        "~\\paper\\artifact.html",
+        "C:\\Users\\alice2\\artifact.html",
+        "~/srv/artifact.html",
     ]

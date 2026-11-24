@@ -2,6 +2,7 @@
 
 import json
 import multiprocessing
+import os
 import re
 from pathlib import Path
 
@@ -93,7 +94,7 @@ def test_concurrent_edits_of_one_entry_let_exactly_one_through(store):
     comment = add(store)
     entry = store.reply(comment.id, "answer", "agent").thread[1]
     stamps = {comment.id: store.get(comment.id).updated}
-    ctx = multiprocessing.get_context("fork")
+    ctx = multiprocessing.get_context("fork" if hasattr(os, "fork") else "spawn")
     ready, results, start = ctx.Queue(), ctx.Queue(), ctx.Event()
     processes = [ctx.Process(target=_edit, args=(str(store.path), comment.id, entry.id, stamps, ready, start, results))
                  for _ in range(2)]

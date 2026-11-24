@@ -3,7 +3,6 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import tempfile
 import time
 import urllib.request
@@ -12,14 +11,14 @@ from pathlib import Path
 
 import pytest
 import yaml
+from marionette_driver.keys import Keys
+from marionette_driver.marionette import ActionSequence
 
 from html_mcp_web.config import load_config
+from html_mcp_web.firefox import stop
 from html_mcp_web.kits import CENTER
 from html_mcp_web.project_server import SharedProjectServer
-
-
-marionette = pytest.importorskip("marionette_driver.marionette")
-Keys = pytest.importorskip("marionette_driver.keys").Keys
+from tests.firefox import Browser, launch, needs_firefox
 
 
 def available_port() -> int:
@@ -269,7 +268,7 @@ def post_json(url: str, payload: dict) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_browser_review_contract(tmp_path: Path) -> None:
     slides = tmp_path / "slides.html"
     report = tmp_path / "paper" / "report.html"
@@ -298,12 +297,8 @@ def test_browser_review_contract(tmp_path: Path) -> None:
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         base = f"http://127.0.0.1:{port}"
         browser.navigate(base)
@@ -1143,16 +1138,12 @@ def test_browser_review_contract(tmp_path: Path) -> None:
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_short_column_spreads_over_the_height_of_the_tall_one(tmp_path: Path) -> None:
     """Beside a 350px figure, a stack of two cards 120px tall sat in a clump at the top of
     its column and left the rest empty; the row's height is now shared, and the column
@@ -1208,10 +1199,8 @@ def test_a_short_column_spreads_over_the_height_of_the_tall_one(tmp_path: Path) 
     browser_process = None
     browser = None
     try:
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(html.as_uri())
         wait_until(lambda: browser.execute_script("return !!document.querySelector('.two .card')"))
@@ -1290,15 +1279,11 @@ return {gaps: boxes.slice(1).map((box, at) => box.top - boxes[at].bottom),
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_korean_deck_breaks_lines_only_between_words(tmp_path: Path) -> None:
     """A Korean list item wrapped inside a word and left one syllable on its last line;
     content declared Korean breaks its body text only at the spaces between words."""
@@ -1322,10 +1307,8 @@ def test_a_korean_deck_breaks_lines_only_between_words(tmp_path: Path) -> None:
     browser_process = None
     browser = None
     try:
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(html.as_uri())
         wait_until(lambda: browser.execute_script("return !!document.querySelector('#ko')"))
@@ -1356,15 +1339,11 @@ return starts;
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_contents_with_sub_items_take_two_columns_only_when_one_overflows(tmp_path: Path) -> None:
     """Three sections with a few sub-items each were set in two columns as two and one,
     the third beside the first and the lower half of the page empty. A list with sub-items
@@ -1392,10 +1371,8 @@ def test_contents_with_sub_items_take_two_columns_only_when_one_overflows(tmp_pa
     browser_process = None
     browser = None
     try:
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(html.as_uri())
         wait_until(lambda: browser.execute_script("return document.fonts.status === 'loaded'"))
@@ -1418,15 +1395,11 @@ return Array.from(document.querySelectorAll("section.page.contents")).map((page)
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_html_lifted_from_a_figure_stays_on_its_place_in_the_drawing(tmp_path: Path) -> None:
     """Safari drew the HTML in a figure's foreignObject away from its place on a scaled
     page. The builder lifts it into a layer over the svg, and the deck's script maps the
@@ -1455,10 +1428,8 @@ def test_html_lifted_from_a_figure_stays_on_its_place_in_the_drawing(tmp_path: P
     browser_process = None
     browser = None
     try:
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(html.as_uri())
         wait_until(lambda: browser.execute_script("return !!document.querySelector('.svg-html-box')"))
@@ -1488,15 +1459,11 @@ return [at(document.getElementById("label")), at(document.querySelector(".svg-ht
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_compact_table_keeps_its_size_in_the_middle_of_the_page(tmp_path: Path) -> None:
     """A table fills its container, so a small table on its own page stretched to the body's
     width and its columns stood far apart. Wrapped in div.table-fit it keeps the width its
@@ -1527,10 +1494,8 @@ def test_a_compact_table_keeps_its_size_in_the_middle_of_the_page(tmp_path: Path
     browser_process = None
     browser = None
     try:
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(html.as_uri())
         wait_until(lambda: browser.execute_script("return !!document.getElementById('fit')"))
@@ -1569,15 +1534,11 @@ def test_a_compact_table_keeps_its_size_in_the_middle_of_the_page(tmp_path: Path
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_highlight_fits_its_letters_in_text_and_in_a_figure(tmp_path: Path) -> None:
     """Spans of a file's lines were coloured in a figure by rectangles drawn under svg text,
     each sized from a letter count and a guessed letter width, and the guess missed the face
@@ -1616,10 +1577,8 @@ def test_a_highlight_fits_its_letters_in_text_and_in_a_figure(tmp_path: Path) ->
     browser_process = None
     browser = None
     try:
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(html.as_uri())
         wait_until(lambda: browser.execute_script("return !!document.querySelector('.svg-html-box #fits')"))
@@ -1653,11 +1612,7 @@ return {
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
 
     port = available_port()
@@ -1686,7 +1641,7 @@ return {
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_takeaway_keeps_lead_typography_and_body_geometry_across_skins(tmp_path: Path) -> None:
     """A final takeaway uses the lead's face while the body keeps its opening and spread.
 
@@ -1732,10 +1687,8 @@ def test_takeaway_keeps_lead_typography_and_body_geometry_across_skins(tmp_path:
     browser_process = None
     browser = None
     try:
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "about:blank"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         rendered = {}
         for name, skin in skins:
@@ -1813,15 +1766,11 @@ return {withLead: read(pages[1]), withoutLead: read(pages[2])};
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_display_math_matches_its_paragraph(tmp_path: Path) -> None:
     """KaTeX enlarges maths to 1.21em. That suits inline maths in a line of text, but a
     display equation standing alone then overpowers the body, so it takes the paragraph's
@@ -1845,10 +1794,8 @@ def test_display_math_matches_its_paragraph(tmp_path: Path) -> None:
     browser_process = None
     browser = None
     try:
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(html.as_uri())
         wait_until(lambda: browser.execute_script(
@@ -1874,11 +1821,7 @@ return {paragraph: size(page.querySelector('p')),
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
 
 
@@ -1914,10 +1857,8 @@ def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path
     shown = 'return !document.querySelector("#selection-menu").classList.contains("hidden")'
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=1400, height=900)
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -1952,7 +1893,7 @@ def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path
           editor.focus();
         ''')
         # Its keys, Ctrl+Alt+P, do what the button does.
-        marionette.ActionSequence(browser, "key", "keyboard").key_down("\ue009").key_down("\ue00a") \
+        ActionSequence(browser, "key", "keyboard").key_down("\ue009").key_down("\ue00a") \
             .key_down("p").key_up("p").key_up("\ue00a").key_up("\ue009").perform()
         marked = wait_until(lambda: browser.execute_script('''
           const doc = document.querySelector("#artifact-frame").contentDocument;
@@ -1975,11 +1916,7 @@ def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
@@ -2010,10 +1947,8 @@ def test_source_and_page_find_a_formula_by_the_tex_katex_keeps(tmp_path: Path) -
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=1400, height=900)
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -2067,11 +2002,7 @@ def test_source_and_page_find_a_formula_by_the_tex_katex_keeps(tmp_path: Path) -
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
@@ -2101,10 +2032,8 @@ def test_the_area_button_draws_a_box_to_comment_on(tmp_path: Path) -> None:
     try:
         shared.ensure()
         base = f"http://127.0.0.1:{port}"
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=1400, height=900)
         browser.navigate(base)
@@ -2125,7 +2054,7 @@ def test_the_area_button_draws_a_box_to_comment_on(tmp_path: Path) -> None:
         assert browser.execute_script(
             'return document.querySelector("#area-btn").getAttribute("aria-pressed")') == "true"
         start, end = at(30, 40), at(430, 240)   # from the heading's words into empty page
-        marionette.ActionSequence(browser, "pointer", "mouse", {"pointerType": "mouse"}) \
+        ActionSequence(browser, "pointer", "mouse", {"pointerType": "mouse"}) \
             .pointer_move(*start).pointer_down() \
             .pointer_move(end[0], end[1], duration=300).pointer_up().perform()
         wait_until(lambda: browser.execute_script('return document.querySelector("#compose-dialog").open'))
@@ -2167,16 +2096,12 @@ def test_the_area_button_draws_a_box_to_comment_on(tmp_path: Path) -> None:
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) -> None:
     """Side by side, a phone left the artifact 150px of a 450px screen and pushed the row of
     controls past the right edge, the control that hides the comments among them. A phone is
@@ -2200,11 +2125,8 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "420", "-height", "800", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "420", "-height", "800")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=420, height=800)
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -2396,16 +2318,12 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_slide_previews_open_from_the_first_button_and_lead_to_a_page(tmp_path: Path) -> None:
     """Scrolling a long deck to one page was slow. The first button of the workspace bar,
     with Fit right after it, opens a column of slide previews at the pane's left that
@@ -2444,11 +2362,8 @@ def test_slide_previews_open_from_the_first_button_and_lead_to_a_page(tmp_path: 
     '''
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "1400", "-height", "900", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "1400", "-height", "900")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=1400, height=900)
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -2528,16 +2443,12 @@ def test_slide_previews_open_from_the_first_button_and_lead_to_a_page(tmp_path: 
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_hiding_the_comments_keeps_the_page_being_read(tmp_path: Path) -> None:
     """Hiding the comments widens the artifact, and every page is drawn larger. Left at the
     same scroll position, the window showed page 9 where the reader had been on page 12,
@@ -2576,11 +2487,8 @@ def test_hiding_the_comments_keeps_the_page_being_read(tmp_path: Path) -> None:
         shared.ensure()
         # Narrower than a page with the comments hidden too, so the page is drawn smaller
         # in both states and each toggle changes its size.
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "1000", "-height", "800", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "1000", "-height", "800")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=1000, height=800)
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -2619,16 +2527,12 @@ def test_hiding_the_comments_keeps_the_page_being_read(tmp_path: Path) -> None:
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_layout_problem_leads_to_its_element(tmp_path: Path) -> None:
     """A layout error in the Problems tab scrolls to the element behind it. The review page
     no longer measures, so it had no element of its own for an error and went only to the
@@ -2650,11 +2554,8 @@ def test_a_layout_problem_leads_to_its_element(tmp_path: Path) -> None:
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "1400", "-height", "900", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "1400", "-height", "900")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=1400, height=900)
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -2682,16 +2583,12 @@ def test_a_layout_problem_leads_to_its_element(tmp_path: Path) -> None:
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_svg_text_moved_in_a_way_firefox_ignores_is_reported(tmp_path: Path) -> None:
     """Subscripts written with baseline-shift dropped through their boxes in a reviewer's
     Chromium, while Firefox, which this check and the PDF use, drew them on the baseline
@@ -2730,7 +2627,7 @@ def test_svg_text_moved_in_a_way_firefox_ignores_is_reported(tmp_path: Path) -> 
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_an_arrowhead_that_leaves_too_little_line_is_reported(tmp_path: Path) -> None:
     """A routed arrow ended with 9 units of line after its last bend under a head about
     11 units long, and the head sat over the corner. A drop from a bus was a straight
@@ -2784,7 +2681,7 @@ def test_an_arrowhead_that_leaves_too_little_line_is_reported(tmp_path: Path) ->
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_box_that_runs_past_the_box_it_is_drawn_in_is_reported(tmp_path: Path) -> None:
     """A step box drawn inside an execution box ended 2 units below it once the outer box
     was shortened, and the check said nothing. That box is reported. Boxes that cross or
@@ -2837,7 +2734,7 @@ def test_a_box_that_runs_past_the_box_it_is_drawn_in_is_reported(tmp_path: Path)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_semicolons_and_stretching_are_reported_and_normal_cases_are_not(tmp_path: Path) -> None:
     """Rules a machine can check are checked rather than left to the guideline: semicolons
     in what the reader sees, empty spacing paragraphs in a script, a picture drawn in
@@ -2903,7 +2800,7 @@ def test_semicolons_and_stretching_are_reported_and_normal_cases_are_not(tmp_pat
             shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_panel_stretched_far_past_its_content_is_reported_under_the_neutral_guideline(tmp_path: Path) -> None:
     """Grid and flex rows stretch their items to the row's height by default, so a boxed
     panel beside a taller one drew its border far past its content and the check passed it.
@@ -2976,7 +2873,7 @@ def test_a_panel_stretched_far_past_its_content_is_reported_under_the_neutral_gu
             shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_table_column_saying_the_same_in_every_row_is_reported_under_the_neutral_guideline(tmp_path: Path) -> None:
     """A results table carried a condition column that said the same words in every row, and
     the check passed it. A column covered by one cell spanning every row says the same too.
@@ -3045,7 +2942,7 @@ def test_a_table_column_saying_the_same_in_every_row_is_reported_under_the_neutr
             shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_bullet_citing_a_visual_from_another_column_is_reported_under_the_neutral_guideline(tmp_path: Path) -> None:
     """Bullets that read a table's numbers were placed under an equation in the next column,
     and the check passed them. Normal cases that look alike must pass: the table's own list
@@ -3110,7 +3007,7 @@ def test_a_bullet_citing_a_visual_from_another_column_is_reported_under_the_neut
             shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_pdf_export_drives_a_browser_of_its_own() -> None:
     """Every export started its browser on marionette's default port and then attached to
     whatever held that port. Two projects printing at once each have a server of their own,
@@ -3149,7 +3046,7 @@ def test_a_pdf_export_drives_a_browser_of_its_own() -> None:
         assert "the page this export was asked for" in doc[0].get_text()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_space_is_measured_with_no_review_ui_open(tmp_path: Path) -> None:
     """A headless session has nobody's browser on the page, and every measurement 409'd
     until someone opened the UI. The server runs the check itself: the same page scripts,
@@ -3180,7 +3077,7 @@ def test_space_is_measured_with_no_review_ui_open(tmp_path: Path) -> None:
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_built_deck_keeps_its_page_size_when_opened_as_a_file(tmp_path: Path) -> None:
     """Nothing in the file stated the page size: the viewer imposed it. Opened on its own
     a page was a plain block, taking the window's width while its height stayed with its
@@ -3203,11 +3100,8 @@ def test_a_built_deck_keeps_its_page_size_when_opened_as_a_file(tmp_path: Path) 
     browser_process = None
     browser = None
     try:
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "1400", "-height", "900", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "1400", "-height", "900")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=1400, height=900)
         browser.navigate(html.as_uri())
@@ -3233,15 +3127,11 @@ return [Math.round(box.width), Math.round(box.height)];
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_body_image_keeps_its_proportions(tmp_path: Path) -> None:
     """The body is a column flex box, and its default stretch handed an image with no
     stated width the whole column while max-height cut only the height: a 4:3 figure came
@@ -3271,11 +3161,8 @@ def test_a_body_image_keeps_its_proportions(tmp_path: Path) -> None:
     browser_process = None
     browser = None
     try:
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "1500", "-height", "1000", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "1500", "-height", "1000")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=1500, height=1000)
         browser.navigate(html.as_uri())
@@ -3304,15 +3191,11 @@ return {small: read('#small'), huge: read('#huge')};
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Path) -> None:
     """A Range inside an svg does not report the characters it holds: nine letters of a
     label gave the whole element's box, and a selection starting mid-label gave an empty
@@ -3336,11 +3219,8 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "1400", "-height", "1000", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "1400", "-height", "1000")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=1400, height=1000)
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -3551,16 +3431,12 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
     """A card opened at the foot of the list unfolded below the fold, and the reader had to
     scroll after every open to read what they had just asked for."""
@@ -3601,11 +3477,8 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
             body = "A short note." if number < 7 else ("A long one. " * 40)
             post_json(f"{base}/artifacts/slides/comments",
                       {"anchor": {"kind": "artifact"}, "text": f"{number}: {body}"})
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "1400", "-height", "800", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "1400", "-height", "800")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=1400, height=800)
         browser.navigate(base)
@@ -3688,16 +3561,12 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_without_full_screen_the_show_lies_over_the_page(tmp_path: Path) -> None:
     """Safari on an iPhone gives a page no full screen, and Full screen stayed greyed out
     there. Where the browser has none, the pane lies over the whole page in the slide show,
@@ -3721,10 +3590,8 @@ def test_without_full_screen_the_show_lies_over_the_page(tmp_path: Path) -> None
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=900, height=700)
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -3755,11 +3622,11 @@ def test_without_full_screen_the_show_lies_over_the_page(tmp_path: Path) -> None
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
+            stop(browser_process)
         shared.stop()
         shutil.rmtree(profile, ignore_errors=True)
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_two_fingers_in_the_slide_show_carry_nothing(tmp_path: Path) -> None:
     """In the slide show the stylesheet fits the page and centres it. Two fingers there
     carried the holder of the pages after them all the same, and on a tablet the slide was
@@ -3788,11 +3655,8 @@ def test_two_fingers_in_the_slide_show_carry_nothing(tmp_path: Path) -> None:
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "900", "-height", "1200", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "900", "-height", "1200")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -3864,7 +3728,7 @@ def test_two_fingers_in_the_slide_show_carry_nothing(tmp_path: Path) -> None:
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
+            stop(browser_process)
         shared.stop()
         shutil.rmtree(profile, ignore_errors=True)
 
@@ -3892,11 +3756,8 @@ def test_a_sideways_wheel_stays_in_the_artifact(tmp_path: Path) -> None:
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "900", "-height", "1200", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "900", "-height", "1200")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -3940,7 +3801,7 @@ def test_a_sideways_wheel_stays_in_the_artifact(tmp_path: Path) -> None:
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
+            stop(browser_process)
         shared.stop()
         shutil.rmtree(profile, ignore_errors=True)
 
@@ -3972,11 +3833,8 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "900", "-height", "1200", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "900", "-height", "1200")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -4465,16 +4323,12 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_the_artifact_stays_selectable_under_the_zoom(tmp_path: Path) -> None:
     """A long press starts with one finger landing and staying. Answering every touch to
     own the zoom gesture cancelled that touchstart, and a press that catches no words can
@@ -4498,11 +4352,8 @@ def test_the_artifact_stays_selectable_under_the_zoom(tmp_path: Path) -> None:
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "900", "-height", "1200", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "900", "-height", "1200")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -4571,16 +4422,12 @@ def test_the_artifact_stays_selectable_under_the_zoom(tmp_path: Path) -> None:
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_fitted_page_sits_evenly_on_a_phone(tmp_path: Path) -> None:
     """The fit took the window's width less a guessed margin, and on a phone the guess was
     8px where the stylesheet spends 48: the page came out 40px too wide, hung off the
@@ -4603,11 +4450,8 @@ def test_a_fitted_page_sits_evenly_on_a_phone(tmp_path: Path) -> None:
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "390", "-height", "844", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "390", "-height", "844")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=390, height=844)      # a phone, in CSS pixels
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -4630,16 +4474,12 @@ def test_a_fitted_page_sits_evenly_on_a_phone(tmp_path: Path) -> None:
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_phone_gives_an_opened_comment_the_room_it_needs(tmp_path: Path) -> None:
     """Under the artifact the comments get a slice of the screen, and a thread opened there
     is usually taller than the slice: scrolling cannot show what does not fit, so the
@@ -4665,11 +4505,8 @@ def test_a_phone_gives_an_opened_comment_the_room_it_needs(tmp_path: Path) -> No
         base = f"http://127.0.0.1:{port}"
         post_json(f"{base}/artifacts/slides/comments",
                   {"anchor": {"kind": "artifact"}, "text": "A wordy one. " * 60})
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "390", "-height", "844", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "390", "-height", "844")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=390, height=844)      # a phone: comments under the deck
         browser.navigate(base)
@@ -4702,16 +4539,12 @@ def test_a_phone_gives_an_opened_comment_the_room_it_needs(tmp_path: Path) -> No
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_touch_screen_keeps_the_two_buttons_in_their_corners(tmp_path: Path) -> None:
     """A phone answers a long press with a bar of its own drawn over the words, so a
     comment button placed by the selection sits under it however it is placed. The comment
@@ -4738,11 +4571,8 @@ def test_a_touch_screen_keeps_the_two_buttons_in_their_corners(tmp_path: Path) -
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "900", "-height", "1200", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "900", "-height", "1200")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -4821,16 +4651,12 @@ def test_a_touch_screen_keeps_the_two_buttons_in_their_corners(tmp_path: Path) -
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_selection_the_browser_took_over_still_brings_the_button(tmp_path: Path) -> None:
     """Holding a word hands the touch over to the browser's own selection, and the sequence
     that started it ends as a cancel: no release arrives. The button has to come from the
@@ -4856,11 +4682,8 @@ def test_a_selection_the_browser_took_over_still_brings_the_button(tmp_path: Pat
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "900", "-height", "1200", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "900", "-height", "1200")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -4900,16 +4723,12 @@ def test_a_selection_the_browser_took_over_still_brings_the_button(tmp_path: Pat
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_long_svg_label_wraps_to_its_width(tmp_path: Path) -> None:
     """A label written as one sentence with data-wrap comes out as lines that fit the
     width, in the deck itself: left ragged, centred on x, justified through the spaces of
@@ -4962,10 +4781,8 @@ def test_a_long_svg_label_wraps_to_its_width(tmp_path: Path) -> None:
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(html.as_uri())
         wait_until(lambda: browser.execute_script(
@@ -5050,16 +4867,12 @@ return {left: lines("left"), justify: lines("justify"), center: lines("center"),
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_the_resolved_and_mixed_views_lead_with_the_latest(tmp_path: Path) -> None:
     """The open view keeps the order the comments were written in, the order the page they
     sit on reads in. The resolved view leads with the comment closed last, the one the
@@ -5094,10 +4907,8 @@ def test_the_resolved_and_mixed_views_lead_with_the_latest(tmp_path: Path) -> No
         post_json(f"{base}/comments/status", {"ids": [written[1]], "status": "resolved"})
         post_json(f"{base}/comments/status", {"ids": [written[0]], "status": "resolved"})
 
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(f"http://127.0.0.1:{port}")
 
@@ -5127,16 +4938,12 @@ def test_the_resolved_and_mixed_views_lead_with_the_latest(tmp_path: Path) -> No
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_archived_threads_have_their_own_view_and_picked_archive_action(tmp_path: Path) -> None:
     """Archive is the third visible status: its view lists kept threads apart, and the
     archive-box action moves only picked threads there."""
@@ -5165,10 +4972,8 @@ def test_archived_threads_have_their_own_view_and_picked_archive_action(tmp_path
         untouched = post_json(f"{base}/comments", {"anchor": {"kind": "artifact"}, "text": "leave me"})["id"]
         post_json(f"{base}/comments/status", {"ids": [kept], "status": "archived"})
 
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(f"http://127.0.0.1:{port}")
 
@@ -5231,16 +5036,12 @@ def test_archived_threads_have_their_own_view_and_picked_archive_action(tmp_path
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 @pytest.mark.skipif(not Path("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf").is_file(),
                     reason="a wide face to arrive late is needed")
 def test_a_label_is_broken_again_when_its_face_arrives_late(tmp_path: Path) -> None:
@@ -5278,10 +5079,8 @@ def test_a_label_is_broken_again_when_its_face_arrives_late(tmp_path: Path) -> N
     lines = """return Array.from(document.querySelectorAll("#late tspan"))
                 .map((line) => [line.textContent, line.getComputedTextLength()]);"""
     try:
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(html.as_uri())
         wait_until(lambda: browser.execute_script(
@@ -5305,15 +5104,11 @@ def test_a_label_is_broken_again_when_its_face_arrives_late(tmp_path: Path) -> N
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_label_given_a_box_takes_the_size_the_box_holds(tmp_path: Path) -> None:
     """data-fit names a box, and the deck chooses the size as well: the largest in the
     range whose lines stay inside the box's height and read tight. Cards of a row then
@@ -5361,10 +5156,8 @@ def test_a_label_given_a_box_takes_the_size_the_box_holds(tmp_path: Path) -> Non
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(html.as_uri())
         wait_until(lambda: browser.execute_script(
@@ -5432,16 +5225,12 @@ return {short: read("short"), long: read("long"), loose: read("loose"), cramped:
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_comment_whose_text_is_gone_keeps_its_place(tmp_path: Path) -> None:
     """Editing away the sentence a comment quotes leaves the comment with nothing to sit
     on, and it says so. It still knows where it was written, though: the page draws a
@@ -5465,10 +5254,8 @@ def test_a_comment_whose_text_is_gone_keeps_its_place(tmp_path: Path) -> None:
     try:
         shared.ensure()
         base = f"http://127.0.0.1:{port}"
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(base)
         wait_until(lambda: browser.execute_script(
@@ -5544,16 +5331,12 @@ def test_a_comment_whose_text_is_gone_keeps_its_place(tmp_path: Path) -> None:
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_svg_labels_are_laid_out_in_the_drawings_own_units(tmp_path: Path) -> None:
     """Chrome shapes an svg label's letters at the size they will appear on screen, and
     reads that size again only when the label's own style changes. A page drawn at another
@@ -5582,10 +5365,8 @@ def test_svg_labels_are_laid_out_in_the_drawings_own_units(tmp_path: Path) -> No
     browser_process = None
     browser = None
     try:
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(html.as_uri())
         wait_until(lambda: browser.execute_script('return !!document.getElementById("label")'))
@@ -5614,15 +5395,11 @@ def test_svg_labels_are_laid_out_in_the_drawings_own_units(tmp_path: Path) -> No
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_short_last_line_is_a_fault_on_a_slide_and_a_page(tmp_path: Path) -> None:
     """A block whose last line holds a few words wastes a line the page needed, on a slide
     and in a report's columns alike. A report paragraph cut at the foot of a column is
@@ -5680,7 +5457,7 @@ def test_a_short_last_line_is_a_fault_on_a_slide_and_a_page(tmp_path: Path) -> N
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_report_head_keeps_its_text_and_a_word_space_stays_narrow(tmp_path: Path) -> None:
     """In a report, a head left at a column's foot without two lines of its text is a
     fault, and so is a justified line that opens a word space past two thirds of the
@@ -5721,7 +5498,7 @@ def test_a_report_head_keeps_its_text_and_a_word_space_stays_narrow(tmp_path: Pa
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path, monkeypatch) -> None:
     """A page keeps the modules it loaded however the server changes under it, and the
     server runs no check of its own while a page is connected. So a page left open across
@@ -5754,10 +5531,8 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path, mo
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
@@ -5825,16 +5600,12 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path, mo
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_an_edit_replaces_the_deck_with_no_blank_and_no_jump(tmp_path: Path) -> None:
     """Each edit loaded the new revision into the frame on screen, so the deck went blank
     while the document loaded and then showed its first page until the scroll was put back.
@@ -5859,10 +5630,8 @@ def test_an_edit_replaces_the_deck_with_no_blank_and_no_jump(tmp_path: Path) -> 
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
@@ -5918,16 +5687,12 @@ def test_an_edit_replaces_the_deck_with_no_blank_and_no_jump(tmp_path: Path) -> 
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_an_edit_changes_only_its_page_and_sets_it_up(tmp_path: Path) -> None:
     """Each edit loaded the whole deck again, in the deck and in the column, and parsing and
     setting up every page held the review page, scrolling included, for seconds. The pages
@@ -5970,10 +5735,8 @@ def test_an_edit_changes_only_its_page_and_sets_it_up(tmp_path: Path) -> None:
     try:
         shared.ensure()
         base = f"http://127.0.0.1:{port}"
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(base)
         wait_until(lambda: browser.execute_script(
@@ -6056,16 +5819,12 @@ def test_an_edit_changes_only_its_page_and_sets_it_up(tmp_path: Path) -> None:
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_find_marks_the_words_in_the_deck_and_steps_through_them(tmp_path: Path) -> None:
     """Find in the artifact opens with Ctrl+F while the deck has the focus, marks every match
     over its letters without touching the document's text, counts from the place being read,
@@ -6123,10 +5882,8 @@ def test_find_marks_the_words_in_the_deck_and_steps_through_them(tmp_path: Path)
     '''
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
@@ -6179,16 +5936,12 @@ def test_find_marks_the_words_in_the_deck_and_steps_through_them(tmp_path: Path)
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
     """The artifact tabs sat over one frame, and a switch loaded the next document into
     it: the whole deck fetched and parsed again, fonts and all, the layout check run
@@ -6218,11 +5971,8 @@ def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "1000", "-height", "700", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "1000", "-height", "700")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=1000, height=700)
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -6311,16 +6061,12 @@ def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_review_page_shows_the_servers_check_and_measures_nothing_itself(tmp_path: Path) -> None:
     """Browsers measure a few pixels apart, and a review page on another pixel ratio turned
     the same content from overflowing to clean and back. The server's own check is the only
@@ -6345,11 +6091,8 @@ def test_a_review_page_shows_the_servers_check_and_measures_nothing_itself(tmp_p
     browser = None
     try:
         shared.ensure()
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "1000", "-height", "600", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "1000", "-height", "600")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.set_window_rect(width=1000, height=600)
         browser.navigate(f"http://127.0.0.1:{port}")
@@ -6397,16 +6140,12 @@ def test_a_review_page_shows_the_servers_check_and_measures_nothing_itself(tmp_p
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_code_is_set_in_the_bundled_face_in_a_korean_document(tmp_path: Path) -> None:
     """Firefox drew code in a Korean document in a CJK face half an em wide per letter,
     while Chrome and Safari drew 0.6 em, so the layout check passed code lines that ran out
@@ -6431,10 +6170,8 @@ def test_code_is_set_in_the_bundled_face_in_a_korean_document(tmp_path: Path) ->
     browser_process = None
     browser = None
     try:
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile)
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(html.as_uri())
         wait_until(lambda: browser.execute_script("return document.fonts.status === 'loaded'"))
@@ -6455,15 +6192,11 @@ return document.fonts.ready.then(() => {
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_report_saved_in_quick_succession_shows_what_a_reload_shows(tmp_path: Path) -> None:
     """A reviewer reported a report whose layout broke on the review page while its content
     was saved again and again, and came back whole on a reload. After saves a third of a
@@ -6516,11 +6249,8 @@ return {served: doc.documentElement.dataset.htmlMcpServed, frames: document.quer
         shared.ensure()
         report = tmp_path / "report.html"
         wait_until(report.is_file, timeout=120)
-        browser_process = subprocess.Popen(
-            ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-             "-width", "1400", "-height", "1000", "about:blank"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = marionette.Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=30)
+        browser_process = launch(profile, "-width", "1400", "-height", "1000")
+        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
         browser.start_session()
         browser.navigate(f"http://127.0.0.1:{port}/?artifact=report")
         wait_until(lambda: browser.execute_script("return (() => {" + shown + "})()"), timeout=60)
@@ -6553,10 +6283,6 @@ return {served: doc.documentElement.dataset.htmlMcpServed, frames: document.quer
             except Exception:
                 pass
         if browser_process is not None:
-            browser_process.terminate()
-            try:
-                browser_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                browser_process.kill()
+            stop(browser_process)
         shutil.rmtree(profile, ignore_errors=True)
         shared.stop()

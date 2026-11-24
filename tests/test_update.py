@@ -23,14 +23,14 @@ def commit(folder: Path) -> str:
     git = ("git", "-C", str(folder), "-c", "user.name=Ann", "-c", "user.email=ann@example.com")
     subprocess.run([*git, "init", "-q"], check=True)
     subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "change"], check=True)
-    return subprocess.run([*git, "rev-parse", "--short", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+    return subprocess.run([*git, "rev-parse", "--short", "HEAD"], check=True, capture_output=True, text=True, encoding="utf-8").stdout.strip()
 
 
 def test_what_runs_and_what_is_on_disk_carry_the_clones_commit(tmp_path: Path) -> None:
     """The version stays the same from one commit to the next, so the commit tells what runs
     from what a pull put on disk."""
     head = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"], check=True,
-                          capture_output=True, text=True).stdout.strip()
+                          capture_output=True, text=True, encoding="utf-8").stdout.strip()
     update = Update(TOOL, __version__, lambda: True)
     assert update.version == f"{__version__}+{head}" == update.on_disk()
     clone = tmp_path / "clone"

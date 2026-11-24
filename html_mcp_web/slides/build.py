@@ -39,6 +39,7 @@ import sys
 from pathlib import Path
 
 from ..kits import COMPONENTS, check_svg_math, document_assets, inline_woff2, prepare_body
+from ..shared import shared_file
 from ..template_content import ContentParser, Element, parse_template_content
 
 HERE = Path(__file__).parent
@@ -191,7 +192,7 @@ def data_uri(path: Path, width: int) -> str:
     key = hashlib.sha256(f"{path.resolve()}|{stat.st_size}|{stat.st_mtime_ns}|{width}".encode("utf-8")).hexdigest()
     cache = Path.home() / ".cache" / "html-mcp-web" / "skin-images" / f"{key}.txt"
     if cache.is_file():
-        return cache.read_text(encoding="ascii")
+        return shared_file.read_text(cache, encoding="ascii")
     from PIL import Image
 
     image = Image.open(path).convert("RGBA")
@@ -203,7 +204,7 @@ def data_uri(path: Path, width: int) -> str:
     cache.parent.mkdir(parents=True, exist_ok=True)
     staging = cache.with_name(f"{cache.name}.{os.getpid()}")
     staging.write_text(uri, encoding="ascii")
-    staging.replace(cache)
+    shared_file.replace(staging, cache)
     return uri
 
 
@@ -481,10 +482,11 @@ def build(content_path: Path, out_path: Path, skin_dir: Path) -> None:
     # Two builds run concurrently: the watcher's on a content save, and a by-hand one. A
     # plain write truncates first, so the other build's stat read 0KB off a file that was
     # complete a moment later. The swap is atomic and the report counts what was written,
-    # not what a stat happens to catch.
+    # not what a stat happens to catch. On Windows it waits for a moment while the server
+    # reads the file it replaces (shared_file).
     staging = out_path.with_name(out_path.name + ".building")
     staging.write_text(document, encoding="utf-8")
-    staging.replace(out_path)
+    shared_file.replace(staging, out_path)
     scripts = sum(1 for section in content.sections if section.script_html) + bool(content.cover_script_html)
     print(f"{out_path}: cover + {len(content.sections)} slides, {scripts} scripts, "
           f"{len(document.encode('utf-8')) // 1024}KB")

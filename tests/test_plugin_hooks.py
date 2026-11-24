@@ -16,10 +16,12 @@ def run(tmp_path: Path):
     cache = tmp_path / "cache"
 
     def hook(kind: str, event: dict) -> dict | None:
+        # The event as Claude Code writes it: UTF-8, with letters beyond ASCII as they are.
         result = subprocess.run(
-            [sys.executable, str(GATE), kind], input=json.dumps(event), capture_output=True, text=True,
-            env={**os.environ, "XDG_CACHE_HOME": str(cache)}, check=True)
-        return json.loads(result.stdout) if result.stdout.strip() else None
+            [sys.executable, str(GATE), kind], input=json.dumps(event, ensure_ascii=False).encode("utf-8"),
+            capture_output=True, env={**os.environ, "XDG_CACHE_HOME": str(cache)}, check=True)
+        said = result.stdout.decode("utf-8")
+        return json.loads(said) if said.strip() else None
 
     return hook
 
@@ -137,6 +139,22 @@ def test_html_mcp_tools_wait_for_the_listed_files_and_wait_again_after_a_compact
     assert "guide() has not succeeded" in reason(run("before-tool", call("s1", project)))
     run("guide-read", guided("s1", content, rules))
     assert reason(run("before-tool", call("s1", project))) is not None
+    for path in rules[:2]:
+        run("file-read", read("s1", path))
+    assert run("before-tool", call("s1", project)) is None
+
+
+def test_a_project_in_a_folder_with_a_korean_name_is_gated_the_same(tmp_path: Path, run) -> None:
+    """The project and the files guide() lists are found by their paths as the event gives
+    them, whatever letters the folders' names are written in."""
+    project = deck_project(tmp_path / "발표 자료")
+    rules = [project / "규칙" / name for name in ("PRODUCTION.md", "GUIDELINE.md", "COMPONENTS.md")]
+    rules[0].parent.mkdir()
+    for path in rules:
+        path.write_text(f"# {path.stem}\n\n한 줄.\n", encoding="utf-8")
+    assert "guide() has not succeeded" in reason(run("before-tool", call("s1", project)))
+    run("guide-read", guided("s1", project / "docs" / "content.html", rules))
+    assert str(rules[0]) in reason(run("before-tool", call("s1", project)))
     for path in rules[:2]:
         run("file-read", read("s1", path))
     assert run("before-tool", call("s1", project)) is None

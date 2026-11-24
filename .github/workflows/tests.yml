@@ -1,0 +1,86 @@
+name: tests
+
+# The tests read neither the README nor the docs, so a change to those alone runs none.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["README.md", "docs/**"]
+  pull_request:
+    paths-ignore: ["README.md", "docs/**"]
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    # A test that waits for ever fails after two minutes (pyproject.toml), so the job ends well
+    # inside this.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Python packages
+        run: pip install -e ".[mcp,dev]"
+      # The runner's own Firefox, which the tests find as the package does. Without one every
+      # browser test would be skipped and the job would pass, so this step fails instead.
+      - name: Firefox
+        run: python -m tests.firefox
+      - name: Tests
+        env:
+          HTML_MCP_FAILURES: ${{ runner.temp }}/failures
+        run: |
+          # A browser test that a loaded runner fails once is run again by itself.
+          python -m pytest -rfs --durations 15 || python -m pytest -rfs --last-failed --last-failed-no-failures none
+      # What the page showed when a browser test failed, a failure that passed when run again
+      # too: its screenshot, markup, fields and console.
+      - name: Pages of failed tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failures-linux-${{ matrix.python }}
+          path: ${{ runner.temp }}/failures
+          if-no-files-found: ignore
+
+  # The page's users are on Windows and macOS too: every test runs there as well, the browser's
+  # in the Firefox each runner has installed where its installer puts it.
+  other-systems:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      # A system's tests run in parts, each on a runner of its own: a runner's few cores are
+      # shared by a Firefox per worker.
+      matrix:
+        include:
+          - {os: windows-latest, part: "1/3"}
+          - {os: windows-latest, part: "2/3"}
+          - {os: windows-latest, part: "3/3"}
+          - {os: macos-latest, part: "1/2"}
+          - {os: macos-latest, part: "2/2"}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Python packages
+        run: pip install -e ".[mcp,dev]"
+      - name: Firefox
+        run: python -m tests.firefox
+      - name: Tests
+        shell: bash
+        env:
+          HTML_MCP_FAILURES: ${{ runner.temp }}/failures
+        run: |
+          python -m pytest -rfs --durations 15 --part ${{ matrix.part }} \
+            || python -m pytest -rfs --last-failed --last-failed-no-failures none
+      - name: Pages of failed tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failures-${{ matrix.os }}-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/failures
+          if-no-files-found: ignore

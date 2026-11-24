@@ -1,12 +1,23 @@
 import hashlib
 import json
 import multiprocessing
+import os
 from pathlib import Path
 import re
 
 import pytest
 
 from html_mcp_web.comments import CommentStore, PageAnchor
+
+
+def _symlink(link: Path, target: Path, **kwargs) -> None:
+    """Make a symlink; on Windows without the privilege to, skip the test."""
+    try:
+        link.symlink_to(target, **kwargs)
+    except OSError as error:
+        if os.name == "nt":
+            pytest.skip(f"symlinks need a privilege on Windows: {error}")
+        raise
 
 
 @pytest.fixture
@@ -106,11 +117,11 @@ def test_path_confinement(store, tmp_path, attack):
         if attack == "hardlink":
             target.hardlink_to(outside)
         else:
-            target.symlink_to(outside)
+            _symlink(target, outside)
     else:
         moved = path.parent.with_name("moved")
         path.parent.rename(moved)
-        path.parent.symlink_to(moved, target_is_directory=True)
+        _symlink(path.parent, moved, target_is_directory=True)
     before = store.path.read_bytes()
     with pytest.raises(ValueError):
         store.reply_file(str(path))
@@ -132,7 +143,7 @@ def test_concurrent_import_checks_snapshot_under_lock(store):
     comments = [add(store), add(store)]
     result = store.export_comments([c.id for c in comments])
     fill(result["path"], ["one", "two"])
-    ctx = multiprocessing.get_context("fork")
+    ctx = multiprocessing.get_context("fork" if hasattr(os, "fork") else "spawn")
     ready, results, start = ctx.Queue(), ctx.Queue(), ctx.Event()
     processes = [ctx.Process(target=_import, args=(str(store.path), result["path"], ready, start, results)) for _ in range(2)]
     try:
@@ -162,9 +173,9 @@ def test_version_and_selection_validation(store):
             store.export_comments(ids)
     result = store.export_comments([comment.id])
     fill(result["path"], ["reply"])
-    data = json.loads(store.path.read_text())
+    data = json.loads(store.path.read_text(encoding="utf-8"))
     data["version"] = -1
-    store.path.write_text(json.dumps(data))
+    store.path.write_text(json.dumps(data), encoding="utf-8")
     before = store.path.read_bytes()
     with pytest.raises(ValueError, match="version"):
         store.reply_file(result["path"])

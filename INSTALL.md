@@ -4,13 +4,19 @@ This file is for the agent the user asked to install html-mcp-web. Fetch it with
 `curl -fsSL`, since a summarizing fetch drops the commands. Inspect first, show one summary,
 install after the user agrees. On a machine that already has it, the same steps update it.
 
+The commands are written for a POSIX shell. On Windows, run them in Git Bash, which is the
+shell Claude Code itself uses there, and write `Scripts` where the commands say `bin`.
+
 ## 1. Inspect (change nothing)
 
 - Python 3.10 or newer (the `mcp` package has no release for older ones): `python3 --version`.
-  When older, `command -v python3.13 python3.12 python3.11 python3.10`. None: stop and tell
-  the user. Use the one found as `python3` below.
-- Firefox: `command -v firefox`, and on macOS also `/Applications/Firefox.app/Contents/MacOS/firefox`.
-  Record its directory. Missing: offer to install it.
+  When older, `command -v python3.13 python3.12 python3.11 python3.10`, or `py -0p` on Windows.
+  None: stop and tell the user. Use the one found as `python3` below. On Windows, that is
+  `py -3.13` or the full path of a Python from python.org or winget, not the `python3` in a
+  `WindowsApps` folder, which only opens the Microsoft Store.
+- Firefox: `command -v firefox`, and on macOS also `/Applications/Firefox.app/Contents/MacOS/firefox`,
+  on Windows `C:\Program Files\Mozilla Firefox\firefox.exe`. Record its directory, unless it is
+  one of these two, where the server finds Firefox by itself. Missing: offer to install it.
 - Install directory: `$HOME/.local/share/html-mcp-web`, unless the user named another.
   Note whether it already holds a checkout. The checkout stays: its templates and guidelines are read from it.
 - Agents: `command -v claude` and `command -v codex`. Register with each one found.
@@ -36,16 +42,22 @@ When Firefox is offered, give both outcomes so the user can choose:
 
 ## 3. Install
 
+On Windows, if step 1 found a registration that runs `html-mcp.exe`, do step 4 first, ask the
+user to restart the agent, and come back to this step after the restart. Windows locks a
+program's file while it runs, the running server is that program, and this step replaces
+its file.
+
     DIR="$HOME/.local/share/html-mcp-web"
     git clone https://github.com/MiiKiyoshi/html-mcp-web.git "$DIR"   # update: git -C "$DIR" pull --ff-only
     python3 -m venv "$DIR/.venv"
-    "$DIR/.venv/bin/pip" install -q -U pip                              # editable installs need a recent pip
-    "$DIR/.venv/bin/pip" install -e "${DIR}[mcp]"
+    "$DIR/.venv/bin/python" -m pip install -q -U pip                    # editable installs need a recent pip
+    "$DIR/.venv/bin/python" -m pip install -e "${DIR}[mcp]"
     "$DIR/.venv/bin/html-mcp-web" mcp --check                          # lists the tools
 
 Firefox, when the user chose to install it:
 
 - macOS: `brew install --cask firefox`. Its directory is `/Applications/Firefox.app/Contents/MacOS`.
+- Windows: `winget install Mozilla.Firefox`, into `C:\Program Files\Mozilla Firefox`.
 - Debian or Ubuntu: from Mozilla's APT repository, since Ubuntu's own package installs a snap,
   which containers and some systems cannot run. As root, or with sudo before each command:
 
@@ -57,8 +69,9 @@ Firefox, when the user chose to install it:
 
 - Elsewhere: the system's own firefox package.
 
-Then `firefox --version` (on macOS, the full path above) confirms it, and its directory goes into
-the PATH below.
+Then `firefox --version` (on macOS, the full path above) confirms it, and on Windows, where
+Firefox prints nothing to a console, that `firefox.exe` is in the folder above. Its directory
+goes into the PATH below as step 1 says.
 
 ## 4. Register
 
@@ -67,8 +80,15 @@ Remove a registration the user agreed to replace (`claude mcp remove --scope use
 
     BIN="$DIR/.venv/bin"
     P="$BIN:<firefox directory, if any>:/usr/bin:/bin"
-    claude mcp add --scope user html-mcp -e PATH="$P" -- "$BIN/html-mcp"
-    codex mcp add html-mcp --env PATH="$P" -- "$BIN/html-mcp"
+    claude mcp add --scope user html-mcp -e PATH="$P" -- "$BIN/python" -m html_mcp_web.cli mcp
+    codex mcp add html-mcp --env PATH="$P" -- "$BIN/python" -m html_mcp_web.cli mcp
+
+The server is registered as a Python module, not as the `html-mcp` program in the same
+folder, so that an update can replace that program's file while the server runs.
+
+On Windows, join the PATH entries with `;` and use Windows folders: the directories above,
+then `C:\Windows\System32` and `C:\Windows`, and the folder of `git`, which the review page's
+update runs.
 
 For Claude Code, also install the plugin from the checkout. It refuses html-mcp's tools other
 than `guide()` and `setup_info()` until that context has read the files `guide()` lists, again

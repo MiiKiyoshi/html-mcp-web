@@ -1,5 +1,4 @@
 import os
-import shutil
 import socket
 import subprocess
 import sys
@@ -9,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from html_mcp_web.firefox import headless_environment
+from html_mcp_web.firefox import stop
+from tests.firefox import Browser, launch, needs_firefox
 
-marionette = pytest.importorskip("marionette_driver.marionette")
 
 REPO = Path(__file__).resolve().parents[1]
 BUILDER = REPO / "templates" / "neutral-report" / "build.py"
@@ -46,21 +45,18 @@ def run_in_report(tmp_path: Path, html: str, script: str, skin: Path | None = No
     command = ([sys.executable, str(BUILDER), str(content), str(report)] if skin is None else
                [sys.executable, "-c", "import sys; from pathlib import Path; from html_mcp_web.report import build; "
                 "build(Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3]))", str(content), str(report), str(skin)])
-    # The PATH of the run, where the Firefox the tests use is found, since the build sets the
-    # pages in Firefox.
-    subprocess.run(command, check=True, capture_output=True, env={"PYTHONPATH": str(REPO), "PATH": os.environ["PATH"]})
+    # The run's own environment, in which the build finds the Firefox the tests use to set the
+    # pages, with the engine imported from this checkout.
+    subprocess.run(command, check=True, capture_output=True, env={**os.environ, "PYTHONPATH": str(REPO)})
 
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
     profile = tempfile.mkdtemp(prefix="report_test_")
     Path(profile, "user.js").write_text(f'user_pref("marionette.port", {port});\n', encoding="utf-8")
-    process = subprocess.Popen(["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-                                "-width", "1200", "-height", "900", "about:blank"],
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                               env=headless_environment())
+    process = launch(profile, "-width", "1200", "-height", "900")
     try:
-        browser = marionette.Marionette(host="127.0.0.1", port=port, startup_timeout=60)
+        browser = Browser(host="127.0.0.1", port=port, startup_timeout=60)
         browser.start_session()
         browser.navigate(report.as_uri())
         for _ in range(50):
@@ -70,10 +66,10 @@ def run_in_report(tmp_path: Path, html: str, script: str, skin: Path | None = No
         time.sleep(0.5)
         return browser.execute_script(script)
     finally:
-        process.kill()
+        stop(process)
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_the_text_runs_on_across_columns_and_pages_whole(tmp_path: Path) -> None:
     """The flow is poured into two columns a page: nothing runs past the foot of a column,
     a paragraph cut at a foot goes on at the head of the next column with not a letter lost
@@ -116,7 +112,7 @@ return {
     assert result["flowLeft"] == 0
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_tables_share_their_width_and_wide_figures_leave_room(tmp_path: Path) -> None:
     """A first row of th becomes the table's head. A column of short labels keeps each
     label on one line beside a column of longer text. Wide figures waiting for a
@@ -163,7 +159,7 @@ return {
     assert result["overflow"] == []
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_korean_text_with_english_words_is_cut_inside_its_column(tmp_path: Path) -> None:
     """In a Korean document the English words are marked as English, and a box of one
     starts lower on its line than the Hangul around it. A paragraph cut at a column's foot
@@ -212,7 +208,7 @@ for (const p of document.querySelectorAll('.column > p + p')) gaps.push(pt(parse
 return {pages: pages.length, feet, last, gaps, pitch: pt(parseFloat(getComputedStyle(document.querySelector('.column > p')).lineHeight))};"""
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 @pytest.mark.parametrize("skin", ["neutral", "another"])
 @pytest.mark.parametrize("lang", ["en", "ko"])
 def test_columns_end_on_their_foot_under_every_skin(tmp_path: Path, skin: str, lang: str) -> None:
@@ -241,7 +237,7 @@ def test_columns_end_on_their_foot_under_every_skin(tmp_path: Path, skin: str, l
     assert abs(first - second) <= pitch * 3, result["last"]
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_korean_line_opens_its_letters_no_further_than_the_cap(tmp_path: Path) -> None:
     """A justified Korean line spreads its slack between letters, but no line opens its
     Hangul past --letter-cap: the rest goes to its word spaces. A number, a bracket and a
@@ -292,7 +288,7 @@ return out;""")
     assert result["others"] and max(result["others"]) < 0.01, max(result["others"])
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_the_set_pages_hold_the_lines_the_pour_made(tmp_path: Path) -> None:
     """The built report holds the pages Firefox poured, line for line: every page keeps
     its lines, each beginning and ending with the same words, so a browser that would
@@ -328,7 +324,7 @@ def test_the_set_pages_hold_the_lines_the_pour_made(tmp_path: Path) -> None:
     assert len(lines["set"]) >= 2 and lines["set"] == lines["live"]
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_set_report_drawn_larger_keeps_its_word_spaces(tmp_path: Path) -> None:
     """The review page draws a report's pages scaled to its pane. A set report opened with
     its pages drawn 1.1 times and 0.75 times their size gives its lines the word spaces it
@@ -366,7 +362,7 @@ def test_a_set_report_drawn_larger_keeps_its_word_spaces(tmp_path: Path) -> None
         assert max(abs(a - b) for a, b in zip(spaces[scale], spaces["1"], strict=True)) < 0.1, scale
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_lines_of_a_figure_s_html_step_by_its_own_font_size(tmp_path: Path) -> None:
     """Two lines of 8px text in a foreignObject, broken by a <br> or set as two divs, stand
     1.35 font sizes apart, or at the leading the divs give, not at the body's 14.6px and
@@ -398,7 +394,7 @@ return out;""")
     assert abs(steps["divs"] - 8 * 1.25) < 0.1, steps
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_centred_label_has_the_middle_of_its_letters_on_its_point(tmp_path: Path) -> None:
     """A label written with data-center at a shape's middle is moved by its letters'
     extent in its face, and the set report keeps the move. The values are those of the
@@ -425,7 +421,7 @@ return Array.from(document.querySelectorAll("text[data-center]")).map((text) =>
     assert b[0] == "B" and b[1] is None and b[2] is not None and b[3] == "alphabetic", moved
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_wrapped_korean_label_breaks_only_at_its_spaces(tmp_path: Path) -> None:
     """A report pours its pages from copies of the content, and a copied label is broken
     from the sentence it was written with, not from the lines it showed: its lines read
@@ -448,7 +444,7 @@ return Array.from(document.querySelectorAll("text[data-wrap]")).map((text) =>
         assert len(shown) >= 2 and " ".join(shown) == sentence, (shown, sentence)
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_figure_prints_alone_on_a_sheet_of_its_size_with_its_text(tmp_path: Path) -> None:
     """Figure N of a report prints as a one-sheet PDF the size of its drawing, with its
     labels and its formula as text a reader copies as written, and nothing of the page
@@ -468,7 +464,7 @@ def test_a_figure_prints_alone_on_a_sheet_of_its_size_with_its_text(tmp_path: Pa
     content.write_text(html, encoding="utf-8")
     report = tmp_path / "report.html"
     subprocess.run([sys.executable, str(BUILDER), str(content), str(report)], check=True, capture_output=True,
-                   env={"PYTHONPATH": str(REPO), "PATH": os.environ["PATH"]})
+                   env={**os.environ, "PYTHONPATH": str(REPO)})
     with pymupdf.open(stream=print_figure_pdf(report.as_uri(), 1), filetype="pdf") as pdf:
         assert pdf.page_count == 1
         sheet = pdf[0]

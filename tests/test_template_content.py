@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -6,7 +7,7 @@ from html_mcp_web.template_content import parse_template_content
 
 REPO = Path(__file__).resolve().parents[1]
 # The template shims import the engine from this checkout, whichever package is installed.
-BUILD_ENV = {"PYTHONPATH": str(REPO), "PATH": "/usr/bin:/bin"}
+BUILD_ENV = {**os.environ, "PYTHONPATH": str(REPO)}
 
 
 
@@ -319,7 +320,7 @@ def test_takeaway_is_outside_the_spread_and_uses_skin_lead_style(tmp_path: Path,
 <!-- A source note after the last block. --></section></body>''', encoding="utf-8")
     output = tmp_path / "slides.html"
     build(content, output, REPO / "templates" / "neutral-slides")
-    body = html.fromstring(output.read_text()).find('.//div[@class="body"]')
+    body = html.fromstring(output.read_text(encoding="utf-8")).find('.//div[@class="body"]')
     closing = body[-1]
     assert closing.tag == "p" and closing.attrib["id"] == "conclusion"
     assert closing.attrib["class"] == "lead takeaway"

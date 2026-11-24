@@ -54,10 +54,11 @@ from .config import (
     get_template_dir,
     load_config,
 )
-from .firefox import headless_environment
+from . import firefox
 from .pdf_export import print_artifact_pdf, print_figure_pdf
 from . import __version__
 from .pptx_export import export_pptx
+from .shared import shared_file
 from .shared.calls import Calls
 from .shared.update import Update
 from .tool import TOOL
@@ -423,9 +424,13 @@ class ArtifactRuntime:
             self.build_error = f"template builder not found: {builder}"
             return
         result = subprocess.run(
-            [sys.executable, str(builder), str(self.content_file), str(self.main_file)],
+            # In UTF-8 mode, which the output is read in: elsewhere Windows writes and reads a
+            # child's output in its code page, which most often has no letter of a Korean name.
+            [sys.executable, "-X", "utf8", str(builder), str(self.content_file), str(self.main_file)],
+            stdin=subprocess.DEVNULL,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=120,
         )
         self.build_error = None if result.returncode == 0 else (result.stderr or result.stdout).strip()[-2000:]
@@ -459,6 +464,9 @@ class HtmlReviewServer:
         # The checking browser and its profile while a check runs, so a server that stops
         # mid-check can still end the browser and remove the profile.
         self.check_runs: set[tuple[asyncio.subprocess.Process, str]] = set()
+        # The one task that ends each checking browser, which a check cancelled while it waits
+        # leaves running, for the stop to wait for.
+        self.check_endings: dict[asyncio.subprocess.Process, asyncio.Task] = {}
         # The tasks running a check. A task left pending when the loop closed never reached
         # its cleanup, and its browser outlived the server.
         self.check_tasks: set[asyncio.Task] = set()
@@ -528,7 +536,7 @@ class HtmlReviewServer:
                        "waiters": self.review.waiters, "lanes": self.review.page_lanes()},
             "artifacts": artifacts,
             # Whether the layout can be checked at all: only the server checks it, with Firefox.
-            "layout_checker": shutil.which("firefox") is not None,
+            "layout_checker": firefox.binary() is not None,
         }
 
     def runtime(self, request: web.Request) -> ArtifactRuntime:
@@ -612,7 +620,7 @@ class HtmlReviewServer:
             runtime.revision += 1
             runtime.reset_layout()
             runtime.note_files()
-        await self.broadcast({"type": "artifacts_changed", "path": str(changed.relative_to(self.project_dir)), **self.project_state()})
+        await self.broadcast({"type": "artifacts_changed", "path": changed.relative_to(self.project_dir).as_posix(), **self.project_state()})
         # A review page shows the server's check, so a revision one is looking at is checked now.
         for runtime in affected:
             host = self.review_host(runtime.alias)
@@ -953,11 +961,12 @@ class HtmlReviewServer:
         return web.json_response({"path": str(self._save_render(request.query["save"], pdf))})
 
     async def project_file(self, request: web.Request) -> web.StreamResponse:
-        relative = request.match_info["path"]
-        if relative == ".html-mcp-web.yaml" or relative.startswith(".html-mcp-web/"):
-            raise web.HTTPNotFound()
-        target = (self.project_dir / relative).resolve()
+        target = (self.project_dir / request.match_info["path"]).resolve()
         if not target.is_relative_to(self.project_dir) or not target.is_file():
+            raise web.HTTPNotFound()
+        # Judged by where the path leads, in any case of its letters: macOS and Windows take
+        # .HTML-MCP-WEB for the same folder, and Windows a backslash for a slash.
+        if target.relative_to(self.project_dir).parts[0].casefold() in (DEFAULT_CONFIG_NAME, ".html-mcp-web"):
             raise web.HTTPNotFound()
         return web.FileResponse(target, headers={"Cache-Control": "no-store"})
 
@@ -1049,7 +1058,7 @@ class HtmlReviewServer:
                 handle.write(encoded)
                 temporary = Path(handle.name)
             temporary.chmod(stat.S_IMODE(path.stat().st_mode))
-            os.replace(temporary, path)
+            shared_file.replace(temporary, path)
         finally:
             if temporary is not None:
                 with contextlib.suppress(FileNotFoundError):
@@ -1175,7 +1184,7 @@ class HtmlReviewServer:
         """
         if runtime.space_revision == runtime.revision:
             return
-        if shutil.which("firefox") is None or self.closing:
+        if firefox.binary() is None or self.closing:
             return
         task = asyncio.current_task()
         self.check_tasks.add(task)
@@ -1193,10 +1202,10 @@ class HtmlReviewServer:
             runtime.check_token = secrets.token_urlsafe(16)
             profile = tempfile.mkdtemp(prefix="html_mcp_check_")
             process = await asyncio.create_subprocess_exec(
-                "firefox", "-headless", "-no-remote", "-profile", profile,
-                f"http://{host}/?{urlencode({'artifact': runtime.alias, 'check': runtime.check_token})}",
-                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
-                env=headless_environment(),
+                *firefox.command("-headless", "-no-remote", "-profile", profile,
+                                 f"http://{host}/?{urlencode({'artifact': runtime.alias, 'check': runtime.check_token})}"),
+                stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+                env=firefox.headless_environment(),
             )
             run = (process, profile)
             self.check_runs.add(run)
@@ -1209,12 +1218,23 @@ class HtmlReviewServer:
                 runtime.check_token = None
                 # Shielded, so a cancelled check still waits for its browser to exit before
                 # the profile goes: removed under a running browser, files came back into it.
-                # A browser that already exited cannot be signalled, and the profile still goes.
-                with contextlib.suppress(ProcessLookupError):
-                    process.terminate()
-                await asyncio.shield(process.wait())
+                await asyncio.shield(self._ending(process))
                 shutil.rmtree(profile, ignore_errors=True)
                 self.check_runs.discard(run)
+                self.check_endings.pop(process, None)
+
+    def _ending(self, process: asyncio.subprocess.Process) -> asyncio.Task:
+        """The task that ends a checking browser and every process under it and waits until
+        they exit, started when first asked for. One that has exited already is not looked for
+        by its pid, which another process may have now."""
+        async def end() -> None:
+            if process.returncode is None:
+                await asyncio.get_running_loop().run_in_executor(None, firefox.end, process.pid)
+            await process.wait()
+
+        if process not in self.check_endings:
+            self.check_endings[process] = asyncio.ensure_future(end())
+        return self.check_endings[process]
 
     async def layout_state(self, request: web.Request) -> web.Response:
         """The current revision's layout errors, once a browser has checked it.
@@ -1227,7 +1247,7 @@ class HtmlReviewServer:
             # Nothing to check: say what is missing now rather than wait on a browser.
             return web.json_response({"revision": runtime.revision, "errors": None,
                                       "error": runtime.missing_file()})
-        no_firefox = shutil.which("firefox") is None
+        no_firefox = firefox.binary() is None
         self.drop_stale_layout()
         if runtime.layout_revision != runtime.revision and not no_firefox:
             await self._ensure_layout_checked(runtime, request.host)
@@ -1770,14 +1790,15 @@ class HtmlReviewServer:
     async def sweep_check_profiles(self, app: web.Application) -> None:
         # A server killed mid-check never reaches its cleanup, and its profile stays in the
         # temporary directory: a machine collected 1232 of them, 12GB, in nine days. Each
-        # start removes this user's stale ones.
+        # start removes this user's stale ones. Windows has no user ids, and there the
+        # temporary directory is this user's own.
         now = time.time()
         for profile in Path(tempfile.gettempdir()).glob("html_mcp_check_*"):
             try:
                 info = profile.stat()
             except FileNotFoundError:
                 continue
-            if info.st_uid == os.getuid() and now - info.st_mtime > self.STALE_PROFILE_SECONDS:
+            if (os.name == "nt" or info.st_uid == os.getuid()) and now - info.st_mtime > self.STALE_PROFILE_SECONDS:
                 shutil.rmtree(profile, ignore_errors=True)
 
     async def stop_checks(self, app: web.Application) -> None:
@@ -1788,13 +1809,12 @@ class HtmlReviewServer:
             task.cancel()
         await asyncio.gather(*running, return_exceptions=True)
         for process, profile in list(self.check_runs):
-            if process.returncode is None:
-                with contextlib.suppress(ProcessLookupError):
-                    process.terminate()
+            if process.returncode is None or process in self.check_endings:
                 with contextlib.suppress(asyncio.TimeoutError):
-                    await asyncio.wait_for(process.wait(), timeout=5)
+                    await asyncio.wait_for(self._ending(process), timeout=10)
             shutil.rmtree(profile, ignore_errors=True)
         self.check_runs.clear()
+        self.check_endings.clear()
 
     def drop_stale_layout(self) -> None:
         # A stored result holds for the checker code that made it. Once the served page

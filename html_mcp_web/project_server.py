@@ -12,7 +12,7 @@ from pathlib import Path
 from aiohttp import web
 
 from .config import Config, load_config
-from .shared import filelock
+from .shared import filelock, shared_file
 
 
 class SharedProjectServer:
@@ -100,8 +100,11 @@ class SharedProjectServer:
                 raise RuntimeError("project server is still cleaning up a cancelled start; try again")
             self.thread = None
         lock_path = self.config_path.parent / ".html-mcp-web" / "server.lock"
+        # Who holds the lock, in a file beside it: Windows lets no other process read the
+        # part of a file that one holds locked.
+        holder_path = lock_path.with_name("server.holder")
         lock_path.parent.mkdir(parents=True, exist_ok=True)
-        handle = lock_path.open("a+")
+        handle = lock_path.open("a+", encoding="utf-8")
         try:
             filelock.lock(handle, wait=False)
         except BlockingIOError:
@@ -125,11 +128,13 @@ class SharedProjectServer:
                     continue
             if not claimed:
                 # A holder that serves nothing. The lock dies with its process, so this holder
-                # is alive; the file says who it is, so the way out can be named instead of
+                # is alive; its file says who it is, so the way out can be named instead of
                 # left to be dug up by hand.
-                handle.seek(0)
-                recorded = handle.read().strip()
                 handle.close()
+                try:
+                    recorded = shared_file.read_text(holder_path).strip()
+                except FileNotFoundError:
+                    recorded = ""
                 holder = f"held by {recorded}" if recorded else "holder unknown (an older version left no note)"
                 raise RuntimeError(
                     f"project server lock is held but port {self.port} is not reachable; {holder}. "
@@ -137,10 +142,7 @@ class SharedProjectServer:
                     "that pid, and the lock frees itself with it."
                 )
         # Who holds it, for the message above when a later claimant finds us absent.
-        handle.truncate(0)
-        handle.seek(0)
-        handle.write(f"pid {os.getpid()}, port {self.port}")
-        handle.flush()
+        holder_path.write_text(f"pid {os.getpid()}, port {self.port}", encoding="utf-8")
         self.lock_handle = handle
         self.ready.clear()
         self.start_error = None

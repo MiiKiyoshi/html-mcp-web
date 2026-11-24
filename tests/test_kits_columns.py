@@ -1,13 +1,10 @@
-import shutil
 import socket
-import subprocess
 import tempfile
 import time
 from pathlib import Path
 
-import pytest
-
-marionette = pytest.importorskip("marionette_driver.marionette")
+from html_mcp_web.firefox import stop
+from tests.firefox import Browser, launch, needs_firefox
 
 REPO = Path(__file__).resolve().parents[1]
 COLUMNS = REPO / "html_mcp_web" / "kits" / "columns.js"
@@ -25,7 +22,7 @@ def page(with_script: bool) -> str:
             f"<div style='width: 320px'><table>{rows}</table></div>{script}")
 
 
-@pytest.mark.skipif(shutil.which("firefox") is None, reason="Firefox is required")
+@needs_firefox
 def test_a_column_of_short_labels_keeps_them_whole(tmp_path: Path) -> None:
     """Left to the browser, a column of short labels beside a column of longer text
     breaks each label in two. The kit's script keeps them whole and the longer column
@@ -35,10 +32,9 @@ def test_a_column_of_short_labels_keeps_them_whole(tmp_path: Path) -> None:
         port = probe.getsockname()[1]
     profile = tempfile.mkdtemp(prefix="columns_test_")
     Path(profile, "user.js").write_text(f'user_pref("marionette.port", {port});\n', encoding="utf-8")
-    process = subprocess.Popen(["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile, "about:blank"],
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    process = launch(profile)
     try:
-        browser = marionette.Marionette(host="127.0.0.1", port=port, startup_timeout=60)
+        browser = Browser(host="127.0.0.1", port=port, startup_timeout=60)
         browser.start_session()
         results = []
         for with_script in (False, True):
@@ -54,7 +50,7 @@ return {
   within: table.offsetWidth <= table.parentElement.offsetWidth,
 };"""))
     finally:
-        process.kill()
+        stop(process)
 
     bare, fitted = results
     assert bare["labels"] != [1, 1, 1]

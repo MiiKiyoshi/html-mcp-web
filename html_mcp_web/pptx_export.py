@@ -1297,10 +1297,9 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
     from marionette_driver.marionette import Marionette
     from pptx import Presentation
 
-    from .firefox import headless_environment
+    from .firefox import command, headless_environment, stop
 
-    if shutil.which("firefox") is None:
-        raise FileNotFoundError("firefox is not installed")
+    browser = command("-marionette", "-headless", "-no-remote", "-profile")
     config = load_pptx_config(skin_dir)
     faces: dict[str, Path] = {}
     if "fonts" in config:
@@ -1324,9 +1323,8 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
         f'user_pref("marionette.port", {marionette_port});\n'
         'user_pref("browser.shell.checkDefaultBrowser", false);\n', encoding="utf-8")
     proc = subprocess.Popen(
-        ["firefox", "-marionette", "-headless", "-no-remote", "-profile", profile,
-         "-width", "1400", "-height", "900", "about:blank"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=headless_environment(),
+        [*browser, profile, "-width", "1400", "-height", "900", "about:blank"],
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=headless_environment(),
     )
     try:
         client = Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=60)
@@ -1430,5 +1428,6 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
         return {"path": str(out_path), "slides": len(prs.slides), "pages": report,
                 "font": font, "embedded_faces": sorted(faces)}
     finally:
-        proc.terminate()
+        # Ended before its profile goes, as in firefox.firefox().
+        stop(proc)
         shutil.rmtree(profile, ignore_errors=True)

@@ -1,12 +1,12 @@
 {
-  "source": "tex-mcp-web c9dfd0a",
+  "source": "tex-mcp-web ceb3c3d",
   "files": {
     "agent-bell.css": "4c4474b0b75c4f41697df70dc22988067b3ae76da2bad550ef551338db713428",
     "agent-bell.js": "0189afbc2a5ce615fbcbd27cc69e9fc0ac78641f69eb8a56503aa46c75d9fc42",
     "comment-api.js": "08d9852e70c260a2128519ee1ed6ed226a48636f1195ded2d3bcbfee7bb35425",
     "comment-keys.js": "c501ff8a52bcc575634da8f9f57f4fe2d579f48a4303c7ebf2a9a6377fe6f573",
     "comment-panel.css": "fd11f39dd1ded6c65809d1b5c912cf8660d5a5905cb6a7bb75a39ca0c5a1779a",
-    "comment-panel.js": "c84800d406ce633f046ee737f8dab3f3843a4ec677805789b1f42f6e633c5910",
+    "comment-panel.js": "ea5bde8483eb0f00faca31df253c5106166a972edeebcb6555b9c2d59874196d",
     "comment-search.js": "a6d134c876131e92f1ba7df1e58d046f3e0ffa160e768ab512709827c6521680",
     "dom.js": "41ff298b5c4b735e094f4d9b8823b958b9f68e912fb195060da3b0b6b8f13013",
     "help.css": "363b0d3cac857e8fcdba7d51ed945488e13993ea9c39a4dd20a1b0bfc6fe3905",
