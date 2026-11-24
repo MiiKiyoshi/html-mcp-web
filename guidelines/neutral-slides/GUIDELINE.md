@@ -27,6 +27,7 @@ Articles 1 to 3 apply to every deck and every change to one. Articles 4 and 5 ap
 - Where does this number come from?
 - What is compared with what?
 - Is anything here explained only further down the list?
+- Why is this item here, at this position? An item placed only to satisfy a rule, with nothing around it that needs it yet, fails.
 
 When an item fails, change the order or add what is missing, and go down the whole list again from the top. Rework the plan this way, discarding it and starting over when patching does not fix it, until no item fails. Build the page only then. You do not feel where a newcomer stops, so the questions have to be asked one by one; a page that only has no wrong statement has not been checked.
 
@@ -84,13 +85,13 @@ When an item fails, change the order or add what is missing, and go down the who
 
 ## Article 5. Words
 
-5.1 **The audience's field terms.** Name each thing the way the audience and the field name it in the deck's language, including the loanwords they actually use. Do not translate a term the audience uses in its original language, replace a term with a plainer-sounding word, or invent a metaphor or a cover word for a group of things. Where no term exists, describe the thing and its relations. Keep the real command, option and data names the audience needs in order to find the subject.
+5.1 **The audience's field terms.** Name each thing the way the audience and the field name it in the deck's language, including the loanwords they actually use. Do not translate a term the audience uses in its original language, replace a term with a plainer-sounding word, or invent a metaphor or a cover word for a group of things. Where no term exists, describe the thing and its relations. Keep the real command, option and data names the audience needs in order to find the subject. For an ordinary object use the word people say in conversation, such as a box, not a stiffer formal word, such as a square, unless the exact shape is the point. When a plain word would be read in its everyday sense, use the word that marks the sense meant, such as methodology for a named research method.
 
 5.2 **What it computes, not what a person does.** Describe an object, program, model or quantity by what it computes, holds or outputs, never with a verb for what a person does, unless that verb is the field's own term for the operation. A model gives an answer a high probability. It does not know the answer. To check, read the verb of every sentence, title and label whose subject is not a person.
 
 5.3 **What acts, and what happens.** Say what acts or changes and what happens to it, close together. Name the operation, such as multiplying by a factor below one, not a vague word for its effect, such as weakening.
 
-5.4 **Define at first use.** Say what kind of thing a new term or symbol is and what it stands for, in words the audience knows. When the thing has a name people commonly use, such as a proportionality constant, write that name and what it relates. Describe it in your own words only when it has no such name. For a quantity, say first what it counts or measures. Expand an abbreviation the audience does not know once, at its first appearance, and leave routine ones alone. Define a thing once; a later use with the same meaning needs no new definition.
+5.4 **Define at first use.** Say what kind of thing a new term or symbol is and what it stands for, in words the audience knows. When the thing has a name people commonly use, such as a proportionality constant, write that name and what it relates. Describe it in your own words only when it has no such name. For a term the audience may not know, give first its plain general definition, the one a textbook gives, and only then what it is in this deck. Do not open with the part that applies only here. Do not define a word the audience already knows. For a quantity, say first what it counts or measures. Expand an abbreviation the audience does not know once, at its first appearance, and leave routine ones alone. Define a thing once; a later use with the same meaning needs no new definition.
 
 5.5 **One term, one meaning.** Keep one name and one notation for one thing through the deck, and keep the qualifiers and indices that tell different things apart. Count things as the audience counts them. Two names are two things only when some page cannot be followed without telling them apart, such as a quantity and its estimate when the deck compares the two. When no page needs the difference, they are one thing to the audience and get one name, even when the sources use different words for them or a stricter reading separates them. Sources that each bring their own word for the same thing do not make the deck need both: pick one and use it everywhere, titles and figures included.
 
@@ -114,7 +115,7 @@ When an item fails, change the order or add what is missing, and go down the who
 
 6.5 **Parts and panels.** Mark several figures or parts (a), (b), (c) in reading order. Give each separately labelled part or stage its own panel, with its label at the top left as a noun phrase, not a question. Things compared on shared axes stay together in one panel. A figure's title is optional and names what is drawn.
 
-6.6 **Axes, marks and legends.** Name each plot axis by its quantity and unit, and say which cases are compared. Explain marks with a legend that shows the mark itself. When a drawing is unclear, fix the drawing, not a note beside it.
+6.6 **Axes, marks and legends.** Name each plot axis by its quantity and unit, and say which cases are compared. Explain marks with a legend that shows the mark itself. Draw a dimension from the point it is measured from to the point it is measured to; a dimension mark that floats beside the objects does not say what it measures. When a drawing is unclear, fix the drawing, not a note beside it.
 
 6.7 **Interpretation below the figure.** Put what the audience should read from a plot, a diagram or a table in bullets directly below it, outside the drawing, and only what they need to get the answer. Do not describe again what the figure already says. Under a drawn object, start from the property the drawing makes visible and say the effect it causes.
 
