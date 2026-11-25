@@ -128,23 +128,29 @@ NOTES_SPREAD_SCRIPT = """<script>
       : parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
         + parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth));
     const scale = box.getBoundingClientRect().height / laid;
-    let used = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
-    for (const child of box.children) {
-      const own = getComputedStyle(child);
-      if (own.display === "none" || own.position === "absolute" || own.position === "fixed") continue;
-      used += child.getBoundingClientRect().height / scale + parseFloat(own.marginTop) + parseFloat(own.marginBottom);
-    }
-    // The room is read from the box's height as laid out, less its borders, and kept to whole
+    // The room is what the box leaves under its last block, as laid out, and kept to whole
     // pixels below it. Two columns of a row that both spread notes took turns without end on
     // a reader's screen, the items moving every frame: clientHeight rounds the height to a
     // whole pixel, a column that filled the rounded room made the row up to half a pixel
     // taller, and the other column spread into that. A gap that would move by less than half
-    // a pixel keeps the one it was given, so no such step is taken again.
-    const inner = laid - parseFloat(style.borderTopWidth) - parseFloat(style.borderBottomWidth);
+    // a pixel keeps the one it was given, so no such step is taken again. The box spreads its
+    // blocks over the room itself, so they are read packed at its top for a moment. Added up
+    // from their styles, their margins came to more than their layout, which Chrome sets in
+    // sixty-fourths of a pixel: a room of 4px read as 3.998 left a pixel unspread.
+    const placed = Array.from(box.children).filter((child) => {
+      const own = getComputedStyle(child);
+      return own.display !== "none" && own.position !== "absolute" && own.position !== "fixed";
+    });
+    const last = placed[placed.length - 1];
+    const justify = box.style.justifyContent;
+    box.style.justifyContent = "flex-start";
+    const under = (box.getBoundingClientRect().bottom - last.getBoundingClientRect().bottom) / scale
+      - parseFloat(style.borderBottomWidth) - parseFloat(style.paddingBottom) - parseFloat(getComputedStyle(last).marginBottom);
+    box.style.justifyContent = justify;
     // Each height comes rounded to single precision, and a room of 4px read as 3.99999 would
     // leave a whole pixel unspread: a thousandth of a pixel is far below any height a page
     // sets and far above that rounding.
-    const room = Math.floor(inner - used + 0.001);
+    const room = Math.floor(under + 0.001);
     lists.forEach((list, at) => {
       const own = getComputedStyle(list);
       const line = parseFloat(own.lineHeight) || parseFloat(own.fontSize) * 1.2;
