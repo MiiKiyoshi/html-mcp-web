@@ -34,10 +34,10 @@
   font-size: var(--size);
   line-height: var(--pitch);
   font-kerning: normal;
-  /* No ligature and no contextual alternate. Firefox writes such a glyph, which no
-     character maps to, into the PDF under a wrong character, and the printed text read
+  /* No ligature and no contextual alternate. A browser may print such a glyph, which no
+     character maps to, into a PDF under a wrong character: printed from one, the text read
      "onice" for "office", "Ýuestion" for "Question" and "(om)" for "(of)" when copied or
-     searched. The page is set in the glyphs it prints. */
+     searched. The page is set, and printed in any browser, in one glyph per letter. */
   font-variant-ligatures: none;
 }
 
@@ -46,8 +46,9 @@
 html:lang(ko) { --leading: 1.0755; }
 
 body { margin: 0; background: #fff; }
-/* Glyphs advance by their own fractional widths, as Firefox sets them: Chromium on Linux
-   rounded each advance to a whole pixel, and a line Firefox set ended up to 14px off. */
+/* Glyphs advance by their own fractional widths, as the headless Chrome that sets the
+   pages advances them: Chromium on a Linux desktop rounded each advance to a whole pixel,
+   and a line set elsewhere ended up to 14px off. */
 main.pages { text-rendering: geometricPrecision; }
 main.pages section.page { width: 210mm; height: 297mm; overflow: hidden; }
 #report-flow { position: absolute; left: -10000px; top: 0; width: 240pt; }
@@ -119,7 +120,7 @@ pre { margin: 6pt 0; font-family: var(--mono); font-size: 7.5pt; line-height: ca
 /* Inline math keeps the line pitch: KaTeX's own line height, measured in its faces, stood
    above a line of this text and pushed the next line down. Its stacks, such as a fraction
    or a root, keep KaTeX's line height inside: at 0 WebKit drew a fraction's rule and its
-   letters 4px above where Firefox and Chromium drew them. */
+   letters 4px above where Chrome drew them. */
 main.pages .katex:not(.katex-display .katex) { line-height: 0; }
 main.pages .katex:not(.katex-display .katex) .vlist-t { line-height: 1.2; }
 

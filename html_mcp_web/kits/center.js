@@ -11,8 +11,8 @@
 // with each change of face. Here the letters' extent is read from the face itself, with a
 // canvas measureText in the label's font, and the label is moved by dx and dy, so x and y
 // keep the middle the content gave. The extent is measured at a hundred times the size,
-// since Firefox gives it in whole pixels: at 13px an x read 0 to 7 where it is drawn from
-// 0.45 to 6.95. data-center="x" or "y" centres one direction only, and the other keeps
+// since a browser may give it in whole pixels: at 13px an x read 0 to 7 where it is drawn
+// from 0.45 to 6.95. data-center="x" or "y" centres one direction only, and the other keeps
 // text-anchor or the baseline. A centred label is one line of plain text, and the
 // builder stops on one holding markup or broken by data-wrap or data-fit.
 //
@@ -52,8 +52,8 @@
     // A run of text is drawn from its box's left edge and round its baseline, which an
     // empty inline-block set before it stands on, and its letters reach as far round
     // that point as measureText says. The face's ascent below the box's top is no
-    // baseline: Firefox rounds the box to whole pixels, and letters so placed were read
-    // half a unit high. A run that draws nothing, such as a zero-width space, is no ink.
+    // baseline: a browser that rounds the box to whole pixels read letters so placed half
+    // a unit high. A run that draws nothing, such as a zero-width space, is no ink.
     // A fraction's rule and a drawn sign, such as a root, are ink all over.
     const range = document.createRange();
     const letters = [];

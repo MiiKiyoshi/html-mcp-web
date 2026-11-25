@@ -5628,10 +5628,10 @@ def test_a_review_page_shows_the_servers_check_and_measures_nothing_itself(tmp_p
 
 @needs_browser
 def test_code_is_set_in_the_bundled_face_in_a_korean_document(tmp_path: Path) -> None:
-    """Firefox drew code in a Korean document in a CJK face half an em wide per letter,
-    while Chrome and Safari drew 0.6 em, so the layout check passed code lines that ran out
-    of their box on the reader's screen. The deck carries its code face, and a line of code
-    measures 0.6 em a letter whatever the document's language."""
+    """Left to the system, code in a Korean document was drawn by one browser in a CJK face
+    half an em wide per letter and by Chrome and Safari at 0.6 em, so the layout check passed
+    code lines that ran out of their box on a reader's screen. The deck carries its code
+    face, and a line of code measures 0.6 em a letter whatever the document's language."""
     from html_mcp_web.slides import build
 
     content = tmp_path / "content.html"

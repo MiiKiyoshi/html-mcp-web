@@ -280,7 +280,7 @@ def mark_text(body_html: str, lang: str) -> str:
 
 def set_families(body_html: str, families: dict[str, str]) -> str:
     # A family is whatever face the reader's machine has under that name: a figure's
-    # monospace label that fit its panel in the layout check's Firefox ran past the
+    # monospace label that fit its panel in the layout check's browser ran past the
     # panel's border and was cut in a reader's browser, which took a wider face. So every
     # family, in an svg font-family attribute or a style, is set in a face the layout
     # embeds, given in families: the first generic family in the list chooses it, and a
@@ -354,10 +354,10 @@ SVG_HTML_SCRIPT = """<script>
 
 
 def mono_face(html_text: str) -> str:
-    """The code face, embedded when the document sets code. Left to the system, Firefox
-    drew code in a Korean document in a CJK face half an em wide per letter while Chrome
-    and Safari drew 0.6 em, so the layout check passed lines that ran out of their box on
-    the reader's screen. Every browser now draws the one face it measures."""
+    """The code face, embedded when the document sets code. Left to the system, code in a
+    Korean document was drawn by one browser in a CJK face half an em wide per letter and
+    by Chrome and Safari at 0.6 em, so the layout check passed lines that ran out of their
+    box on a reader's screen. Every browser draws the one face the check measures."""
     if "<pre" not in html_text and "<code" not in html_text and "var(--mono)" not in html_text:
         return ""
     faces = "".join(
