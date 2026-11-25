@@ -138,7 +138,11 @@ def review_page(root: Path, aliases=("slides",), deck=DECK, height=1000, platfor
             window.platform(platform)
         base = f"http://127.0.0.1:{port}"
         window.navigate(base)
-        wait_until(lambda: window.execute_script('return document.querySelector("#comment-filter").options.length > 1'))
+        # Open once the list has its views and a deck is chosen to comment on: the views come
+        # before the server's state, and an artifact comment written in between was refused on
+        # Windows, the page saying nothing was shown to comment on.
+        wait_until(lambda: window.execute_script('return document.querySelector("#comment-filter").options.length > 1'
+                                                 ' && document.querySelector(".artifact-tab.active") !== null'))
         yield window, base
     finally:
         if window is not None:
