@@ -5241,10 +5241,14 @@ def test_an_edit_replaces_the_deck_with_no_blank_and_no_jump(tmp_path: Path) -> 
         # which its frame's resize sets. A runner slow to draw delivered the resize after the
         # scroll below, and the deck, kept at the place on its page, scrolled to another offset.
         wait_until(lambda: browser.execute_script(deck_scale) != wide_scale)
+        # The reader is halfway along the distance the deck scrolls, which the viewport sets:
+        # with the column open the deck is about 1120px tall, and a fixed 400px lay past its
+        # end in a 1000px viewport.
         frame_window = 'document.querySelector("#artifact-frame")?.contentWindow'
-        browser.execute_script(f'{frame_window}.scrollTo(0, 400);')
+        browser.execute_script(f'const win = {frame_window};'
+                               ' win.scrollTo(0, (win.document.scrollingElement.scrollHeight - win.innerHeight) / 2);')
         read_at = wait_until(lambda: browser.execute_script(
-            f'const win = {frame_window}; return win && win.scrollY > 300 ? win.scrollY : null;'))
+            f'const win = {frame_window}; return win && win.scrollY > 0 ? win.scrollY : null;'))
         # Every animation frame of the review page records, for the deck and for the column,
         # the frame on top: whether it shows a loaded deck, and where, and whether the deck is
         # the edited one.
