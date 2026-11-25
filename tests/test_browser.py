@@ -14,6 +14,7 @@ from selenium.webdriver.common.keys import Keys
 from html_mcp_web.config import load_config
 from html_mcp_web.kits import CENTER
 from html_mcp_web.project_server import SharedProjectServer
+from tests import chrome
 from tests.chrome import MOD, MOD_ALT, not_in_safari
 from tests.html_chrome import CHECK_MARGIN, LAYOUT_CHECK_SECONDS, READY_SEEN, launch, needs_browser
 
@@ -919,17 +920,23 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert not any("svg#beside>" in error and "middle of its shape" in error for error in errors), errors
         # An arrowhead stopped at a label's first letter is an error, and one stopped at the
         # circle a sign sits in is not. The gap is what the ink of that letter leaves before
-        # it, read here as the check reads it, in this system's font: a font sets it its own way.
+        # it, which the server's Chrome measures. A test that drives Chrome reads it here as the
+        # check reads it, in this system's font; another browser sets a letter its own way, and
+        # there the gap reported is only short of what the message asks to leave.
         touch = [error for error in errors if "svg#touch>" in error]
-        gap = browser.execute_script("""
-          const doc = document.querySelector("#artifact-frame").contentDocument;
-          const text = doc.querySelector("#touch text");
-          const style = doc.defaultView.getComputedStyle(text);
-          const ruler = doc.createElement("canvas").getContext("2d");
-          ruler.font = `${style.fontStyle} ${style.fontWeight} ${parseFloat(style.fontSize) * 100}px ${style.fontFamily}`;
-          return (text.getStartPositionOfChar(0).x - ruler.measureText("l").actualBoundingBoxLeft / 100 - 100).toFixed(1);
-        """)
-        assert len(touch) == 1 and f'stops {gap}px from the label "label"' in touch[0], (gap, touch)
+        assert len(touch) == 1, touch
+        stops = re.search(r'stops (\d+\.\d)px from the label "label"\. Leave (\d+\.\d)px or more', touch[0])
+        assert stops and float(stops[1]) < float(stops[2]), touch
+        if chrome.KIND == "chrome":
+            gap = browser.execute_script("""
+              const doc = document.querySelector("#artifact-frame").contentDocument;
+              const text = doc.querySelector("#touch text");
+              const style = doc.defaultView.getComputedStyle(text);
+              const ruler = doc.createElement("canvas").getContext("2d");
+              ruler.font = `${style.fontStyle} ${style.fontWeight} ${parseFloat(style.fontSize) * 100}px ${style.fontFamily}`;
+              return (text.getStartPositionOfChar(0).x - ruler.measureText("l").actualBoundingBoxLeft / 100 - 100).toFixed(1);
+            """)
+            assert stops[1] == gap, (gap, touch)
 
         # The page is zoomed to fit the pane, so a narrower window must not change
         # which layout problems are reported.
@@ -4466,8 +4473,15 @@ def test_a_long_svg_label_wraps_to_its_width(tmp_path: Path) -> None:
             return "".join(word[:-1] if word.endswith("-") else word + " " for word in words).strip()
 
         seen = browser.execute_script("""
+// A line's width is where its letters are set, from its first one's start to its last one's
+// end: Safari's getComputedTextLength() leaves out the word-spacing it draws a justified line
+// with, so a line it drew 196px wide read 166px.
+const setWidth = (line) => {
+  const count = line.getNumberOfChars();
+  return count ? line.getEndPositionOfChar(count - 1).x - line.getStartPositionOfChar(0).x : 0;
+};
 const lines = (id) => Array.from(document.querySelectorAll(`#${id} tspan`)).map((line) => ({
-  x: line.getAttribute("x"), dy: Number(line.getAttribute("dy")), width: line.getComputedTextLength(),
+  x: line.getAttribute("x"), dy: Number(line.getAttribute("dy")), width: setWidth(line),
   spacing: line.getAttribute("word-spacing"), text: line.textContent}));
 // Where the letters are set, from the first one's start to the furthest end: the box of their
 // ink is the font's, and a Mac's system face draws an "a" a little left of where it is set.
