@@ -911,11 +911,7 @@ class Lines:
         return (line.decode("utf-8") if isinstance(line, bytes) else line).rstrip("\r\n")
 
 
-@pytest.mark.parametrize("codex", [False, pytest.param(True, marks=pytest.mark.xfail(
-    os.name == "nt", strict=True,
-    reason="delivery to a Codex installed by npm on Windows is an open problem: the waiter starts codex "
-           "by its bare name, which Windows finds only as codex.exe, while npm installs codex.cmd, and "
-           "cmd.exe would cut the message at its newline and read & | % ^ in it (shared/waiter.py)"))])
+@pytest.mark.parametrize("codex", [False, True])
 def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
     # The tool returns at once with a command for the harness to watch in the background;
     # blocking here would freeze the agent, which is what the button exists to avoid.
@@ -967,6 +963,7 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
             # message after its first line, the event's name.
             stub = tmp_path / "codex.py"
             stub.write_text(
+                "#!python\n"
                 "import sys\n"
                 "from pathlib import Path\n"
                 f"here = Path({str(tmp_path / 'codex')!r})\n"
@@ -976,12 +973,18 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
                 "    Path(f'{here}.failed').touch()\n"
                 "    sys.exit(1)\n"
                 "print('\\n'.join(sys.argv[5].split('\\n')[1:]), flush=True)\n", encoding="utf-8")
+            programs = tmp_path / "bin"
             if os.name == "nt":
-                (tmp_path / "codex.cmd").write_text(f'@"{sys.executable}" "{stub}" %*\r\n', encoding="utf-8")
+                # On Windows the waiter runs a codex.exe, which hands its arguments on whole, as
+                # a program does: here a launcher, of the kind pip makes for a script, that
+                # runs the stand-in with Python.
+                from pip._vendor.distlib.scripts import ScriptMaker
+                ScriptMaker(str(tmp_path), str(programs)).make(stub.name)
             else:
-                (tmp_path / "codex").write_text(f'#!/bin/sh\nexec "{sys.executable}" "{stub}" "$@"\n', encoding="utf-8")
-                (tmp_path / "codex").chmod(0o755)
-            monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+                programs.mkdir()
+                (programs / "codex").write_text(f'#!/bin/sh\nexec "{sys.executable}" "{stub}" "$@"\n', encoding="utf-8")
+                (programs / "codex").chmod(0o755)
+            monkeypatch.setenv("PATH", f"{programs}{os.pathsep}{os.environ['PATH']}")
             args = ["--codex", "test-thread"]
         press()
         # Each listen() call names a new listener, and the last one is the one presses go to.
