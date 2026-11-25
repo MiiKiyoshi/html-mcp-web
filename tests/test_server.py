@@ -1635,7 +1635,7 @@ async def test_an_agent_the_configuration_names_waits_in_a_lane_of_its_own(clien
     # The page is told of every lane, with whether a press waits for its waiter and what a press
     # for it picks from.
     assert review.project_state()["review"]["lanes"]["second"] == {
-        "waiters": 0, "queued": True, "models": ["small", "large"], "efforts": ["low", "high"]}
+        "waiters": 0, "queued": True, "calls": 2, "models": ["small", "large"], "efforts": ["low", "high"]}
     # Kept across a restart, as the listening session's are.
     lane = HtmlReviewServer(review.config).review.lane("second")
     assert (lane.calls, lane.consumed, lane.choice) == (2, 1, {"model": "small", "effort": "low"})
