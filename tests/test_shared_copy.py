@@ -34,3 +34,16 @@ def test_the_shared_hook_files_are_the_copies_their_manifest_names() -> None:
     for name, digest in manifest["files"].items():
         assert hashlib.sha256((hooks / name).read_bytes()).hexdigest() == digest, (
             f"plugin/hooks/{name} differs from the copy of {manifest['source']}")
+
+
+def test_the_browser_the_tests_drive_is_the_copy_its_manifest_names() -> None:
+    """tests/chrome.py, the browser the tests drive, is written in tex-mcp-web and copied here
+    beside this tool's own tests by its scripts/share_page.py, never edited here: it is the copy
+    the manifest in tests names. A change belongs in tex-mcp-web, copied again, and what only
+    this tool's tests use is in tests/html_chrome.py."""
+    tests = Path(__file__).resolve().parent
+    manifest = json.loads((tests / "MANIFEST.json").read_text(encoding="utf-8"))
+    assert "chrome.py" in manifest["files"]
+    for name, digest in manifest["files"].items():
+        assert hashlib.sha256((tests / name).read_bytes()).hexdigest() == digest, (
+            f"tests/{name} differs from the copy of {manifest['source']}")
