@@ -1162,10 +1162,15 @@ def test_the_editor_holds_the_cursor_line_where_settings_says(tmp_path: Path) ->
         script('localStorage.setItem("htmlMcpVimKeys", "1")')
         browser.refresh()
         wait_until(lambda: script('return document.querySelector("#comment-filter").options.length > 1'))
-        script('document.body.dataset.sameLoad = "yes"; document.querySelector("[data-view=source]").click()')
-        wait_until(lambda: script(f'{editor} return editor.getValue().includes("Line 120")')
-                   or script('return document.body.dataset.sameLoad === "yes" ? false : "the page loaded again"'))
-        assert script('return document.body.dataset.sameLoad') == "yes", "the page loaded again"
+        # The Source view opens with the file in it. What else the page does is said: a load of the
+        # page again, or a message it shows.
+        script('document.body.dataset.sameLoad = "yes";'
+               ' window.alert = (text) => { document.body.dataset.said = String(text); };'
+               ' document.querySelector("[data-view=source]").click()')
+        opened = wait_until(lambda: script(f'{editor} return editor.getValue().includes("Line 120")') or script(
+            'return document.body.dataset.sameLoad !== "yes" ? "the page loaded again"'
+            ' : document.body.dataset.said !== undefined ? `the page said: ${document.body.dataset.said}` : false'))
+        assert opened is True, opened
         choice = lambda name: f'document.querySelector(\'[data-cursor-choice="{name}"]\')'
         script(f"{choice('third')}.click()")
         assert script(f'return {choice("third")}.getAttribute("aria-checked")') == "true"
