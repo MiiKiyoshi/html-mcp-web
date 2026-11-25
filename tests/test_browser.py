@@ -3232,7 +3232,9 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
         shared.ensure()
         base = f"http://127.0.0.1:{port}"
         # Enough comments to fill the list, the last one wordy enough to unfold past its foot,
-        # and a wordy one in the middle anchored to the page's text, so it has a badge.
+        # and a wordy one in the middle anchored to the page's text, so it has a badge. That
+        # one is taller than half the list in any face the list is set in: the face a Mac sets
+        # it in is narrower, and forty sentences there came out under half.
         digest = get_json(f"{base}/state")["artifacts"]["slides"]["artifact_digest"]
         for number in range(8):
             if number == 3:
@@ -3243,7 +3245,7 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
                         "end": {"path": [1, 1, 0, 1, 0], "offset": len("Selected sentence.")},
                         "artifact_digest": digest,
                     },
-                    "text": "3: " + ("A long one. " * 40),
+                    "text": "3: " + ("A long one. " * 60),
                 })
                 continue
             body = "A short note." if number < 7 else ("A long one. " * 40)
