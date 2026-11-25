@@ -33,6 +33,8 @@ export function createZoom({ showing, hideSelection, showSelection, redraw }) {
   let pageTouch = false;
   let pinchSettle = null;
   let settledScroll = null;
+  // The comment button comes back 60 ms after the last scroll a settled pinch causes.
+  let placeAfterSettle = null;
 
   function fit() {
     const doc = frameDocument();
@@ -367,10 +369,30 @@ export function createZoom({ showing, hideSelection, showSelection, redraw }) {
     win.scrollTo(win.scrollX + box.left + held.local.x * ratio - held.middle.x,
                  win.scrollY + box.top + held.local.y * ratio - held.middle.y);
     // What the browser moves on its own in the moment after is put back; the reader's own next
-    // touch or wheel ends the watch.
-    settledScroll = { x: win.scrollX, y: win.scrollY, until: performance.now() + 400 };
-    // After the scroll that follows, which hides the button as any scroll does.
-    setTimeout(showSelection, 60);
+    // touch or wheel ends the watch. The moment is 400 ms and three frames, whichever is longer:
+    // the browser's move comes with a frame, which a machine slow to draw gave after 400 ms.
+    const watch = { x: win.scrollX, y: win.scrollY, until: performance.now() + 400, frames: 0 };
+    settledScroll = watch;
+    const count = () => {
+      watch.frames += 1;
+      if (watch.frames < 3) win.requestAnimationFrame(count);
+    };
+    win.requestAnimationFrame(count);
+    // After the scrolls that follow, which hide the button as any scroll does. Their events come
+    // with the frames drawn, later than any fixed delay on a machine slow to draw, where the
+    // button came back before the scroll and stayed hidden: the wait starts at the next frame and
+    // again at each scroll.
+    placeAfterSettle = 0;
+    win.requestAnimationFrame(placeAfterScroll);
+  }
+
+  function placeAfterScroll() {
+    if (placeAfterSettle === null) return;
+    clearTimeout(placeAfterSettle);
+    placeAfterSettle = setTimeout(() => {
+      placeAfterSettle = null;
+      showSelection();
+    }, 60);
   }
 
   function apply() {
@@ -405,10 +427,11 @@ export function createZoom({ showing, hideSelection, showSelection, redraw }) {
     reset,
     pinching: () => pinch !== null,
     scrolled(win) {
+      placeAfterScroll();
       const settled = settledScroll;
       if (settled === null) return;
       settledScroll = null;
-      if (performance.now() < settled.until
+      if ((performance.now() < settled.until || settled.frames < 3)
           && (Math.abs(win.scrollX - settled.x) > 1 || Math.abs(win.scrollY - settled.y) > 1)) {
         win.scrollTo(settled.x, settled.y);
       }

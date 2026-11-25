@@ -62,11 +62,16 @@ export function keepReadingPlace(place) {
 
 // Safari draws a frame come back from underneath in part or not at all until it is scrolled,
 // whatever the frame's visibility or layer meanwhile. So the scroll is done here: one pixel,
-// and back at the next frame, which leaves the reader where they were.
+// and back at the next frame, which leaves the reader where they were. A scroll made before that
+// frame is the reader's and stays: put back where the nudge started, it was undone, and on a
+// machine slow to draw the reader who scrolled just after an edit was taken back up.
 export function scrollToRepaint(win) {
   const { scrollX, scrollY } = win;
   win.scrollTo({ left: scrollX, top: scrollY + (scrollY > 0 ? -1 : 1), behavior: "instant" });
-  requestAnimationFrame(() => win.scrollTo({ left: scrollX, top: scrollY, behavior: "instant" }));
+  const nudged = win.scrollY;
+  requestAnimationFrame(() => {
+    if (win.scrollX === scrollX && win.scrollY === nudged) win.scrollTo({ left: scrollX, top: scrollY, behavior: "instant" });
+  });
 }
 
 // Each revision replaces the frame's history entry rather than adding one: setting src added an
