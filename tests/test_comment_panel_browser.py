@@ -412,6 +412,8 @@ def test_a_call_taken_while_the_page_cannot_hear_its_server_is_not_said_to_wait(
     with review_page(tmp_path) as (browser, base):
         script = lambda code: browser.execute_script(code)
         note = 'const note = document.querySelector("#call-agent-why"); return note.hidden ? null : note.textContent'
+        # The press is made while the page's socket is open, which the page shows nothing of.
+        wait_until(lambda: served and served[0].websockets)
         script('document.querySelector("#call-agent-btn").click()')
         wait_until(lambda: script(note) == "No agent is listening yet, so the call is queued until one listens.")
         letting.clear()
