@@ -2401,12 +2401,11 @@ def test_a_layout_problem_leads_to_its_element(tmp_path: Path) -> None:
 
 
 @needs_browser
-def test_svg_text_moved_in_a_way_firefox_ignores_is_reported(tmp_path: Path) -> None:
-    """Subscripts written with baseline-shift dropped through their boxes in a reviewer's
-    Chromium, while Firefox, which this check and the PDF use, drew them on the baseline
-    and the check passed them. Placement that Firefox ignores is reported, and dy, which
-    both draw alike, is not. Neither is a dominant-baseline on the text element, which
-    Firefox honours."""
+def test_svg_text_moved_in_a_way_some_browsers_ignore_is_reported(tmp_path: Path) -> None:
+    """Text placed with baseline-shift is drawn moved by Chrome, which this check and the PDF
+    use, and on the baseline by a browser that ignores it, so a reader can see it where the
+    check did not measure it. Placement not every browser honours is reported, and dy, which
+    every browser draws alike, is not. Neither is a dominant-baseline on the text element."""
     import urllib.request
 
     (tmp_path / "slides.html").write_text('''<!doctype html>
@@ -2432,8 +2431,9 @@ def test_svg_text_moved_in_a_way_firefox_ignores_is_reported(tmp_path: Path) -> 
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN) as response:
             errors = json.loads(response.read())["errors"]
         moved = [error for error in errors if " places " in error]
-        assert moved == ["page 1 <svg#shifted> places 2 text runs with baseline-shift, which Firefox ignores, "
-                         "so this check and the PDF draw them unmoved. Move them with dy instead, and set a "
+        assert moved == ["page 1 <svg#shifted> places 2 text runs with baseline-shift, which not every browser "
+                         "honours, so a reader may see them where this check and the PDF do not. Move them with "
+                         "dy instead, and set a "
                          "subscript or superscript as KaTeX math in a <foreignObject> [p1:0.0]"], errors
     finally:
         shared.stop()

@@ -558,10 +558,10 @@ export function createLayoutChecks(dependencies) {
         }
       }
       // Text placed with baseline-shift, alignment-baseline, or a tspan's dominant-baseline
-      // is moved by Chromium and left on the baseline by Firefox, the browser this check
-      // and the PDF use. Subscripts dropped through boxes and table rules in a reviewer's
-      // browser while the check, measuring them unmoved, passed them. dy and y move text
-      // the same way in both.
+      // is moved by Chrome, which this check and the PDF use, and left on the baseline by
+      // browsers that ignore these, so a reader's browser can draw it where the check did
+      // not measure it: subscripts once dropped through boxes and table rules that way. dy
+      // and y move text the same way in every browser.
       for (const svg of page.querySelectorAll("svg")) {
         const shifted = new Map();
         for (const text of svg.querySelectorAll("text, tspan, textPath")) {
@@ -574,7 +574,7 @@ export function createLayoutChecks(dependencies) {
         }
         for (const [name, count] of shifted) {
           addError(`page ${index + 1} ${describeElement(svg)} places ${count} text ${count === 1 ? "run" : "runs"} `
-            + `with ${name}, which Firefox ignores, so this check and the PDF draw them unmoved. `
+            + `with ${name}, which not every browser honours, so a reader may see them where this check and the PDF do not. `
             + "Move them with dy instead, and set a subscript or superscript as KaTeX math in a <foreignObject>", svg);
         }
       }
