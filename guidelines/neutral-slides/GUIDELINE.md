@@ -8,7 +8,7 @@ Articles 1 to 3 apply to every deck and every change to one. Articles 4 and 5 ap
 
 1.1 **The audience follows the explanation smoothly.** Each page gives one answer they can take in at speaking pace.
 
-1.2 **Each page fits what the audience knows at that moment.** That is what they knew when they sat down and what earlier pages showed them, nothing else and nothing less. What they already know is used, in their own terms, and is not explained to them again.
+1.2 **Each page fits what the audience knows at that moment.** That is what is still in their heads when they sit down and what earlier pages showed them, nothing else and nothing less. What they already know is used, in their own terms, and is not explained to them again.
 
 1.3 **Everything else comes after.** Last of all come strictness for its own sake, proving accuracy, cross-checking data, how the data was obtained, where a fact came from, and detail the audience did not ask about. None of these takes space on a page or in a script unless the audience needs it to follow the answer.
 
@@ -16,7 +16,7 @@ Articles 1 to 3 apply to every deck and every change to one. Articles 4 and 5 ap
 
 ## Article 2. The order of work
 
-2.1 **Audience.** In the notes file (10.1), write what the audience already knows and what they should be able to say after the talk. Write the frames and the vocabulary they work in every day, such as a model, its parameters and an objective function for people who train models. Do not set the audience below where they are. Assuming that they know nothing is not a safe default: it protects the author from the charge of having skipped a step, makes the explanation longer, and treats the audience as slow. Write the requester's instructions in their own words.
+2.1 **Audience.** In the notes file (10.1), write what the audience already knows and what they should be able to say after the talk. Count as known only what they use day to day. What they once heard, in an earlier lecture, an earlier talk or a paper they were given, is treated as forgotten: having attended is not knowing, and an audience forgets. A term that comes from such an occasion is connected or stated again on the page that uses it. Write the frames and the vocabulary they work in every day, such as a model, its parameters and an objective function for people who train models. Do not set the audience below where they are. Assuming that they know nothing is not a safe default: it protects the author from the charge of having skipped a step, makes the explanation longer, and treats the audience as slow. Write the requester's instructions in their own words.
 
 2.2 **Walk.** First try to say each part of the subject in one sentence inside a frame the audience already has, such as which model is fitted to which data with which objective function. When such a sentence holds, it is the walk for that part: give what each slot of the frame holds here, and stop. Build up in steps only what none of their frames covers. Starting from what the audience knows, write the explanation as steps. Each step is the question a listener has at that point and its answer in one sentence. For each answer, name where the listener got every object, word, value and relation it uses. Whatever they have not been given yet becomes an earlier step. Do not think in pages yet. Explain what the requester asked for, not an easier subject or one the material happens to cover.
 
