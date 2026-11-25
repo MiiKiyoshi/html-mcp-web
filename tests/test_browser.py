@@ -910,11 +910,18 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         assert len(off) == 1 and "stands off the middle of its shape by 0.0px across and -" in off[0], off
         assert not any("svg#beside>" in error and "middle of its shape" in error for error in errors), errors
         # An arrowhead stopped at a label's first letter is an error, and one stopped at the
-        # circle a sign sits in is not. The gap is what the first letter's ink leaves before
-        # it, a fraction of a pixel whose tenths each system's rasterizer sets its own way.
+        # circle a sign sits in is not. The gap is what the ink of that letter leaves before
+        # it, read here as the check reads it, in this system's font: a font sets it its own way.
         touch = [error for error in errors if "svg#touch>" in error]
-        stops = re.search(r'stops (\d+\.\d)px from the label "label"\. Leave 2\.4px or more', touch[0] if touch else "")
-        assert len(touch) == 1 and stops is not None and float(stops.group(1)) < 0.5, touch
+        gap = browser.execute_script("""
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const text = doc.querySelector("#touch text");
+          const style = doc.defaultView.getComputedStyle(text);
+          const ruler = doc.createElement("canvas").getContext("2d");
+          ruler.font = `${style.fontStyle} ${style.fontWeight} ${parseFloat(style.fontSize) * 100}px ${style.fontFamily}`;
+          return (text.getStartPositionOfChar(0).x - ruler.measureText("l").actualBoundingBoxLeft / 100 - 100).toFixed(1);
+        """)
+        assert len(touch) == 1 and f'stops {gap}px from the label "label"' in touch[0], (gap, touch)
 
         # The page is zoomed to fit the pane, so a narrower window must not change
         # which layout problems are reported.

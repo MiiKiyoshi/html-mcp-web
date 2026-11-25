@@ -45,13 +45,18 @@ def test_the_panels_left_edge_sets_its_width_and_keeps_it(tmp_path: Path) -> Non
         assert browser.execute_script(
             'return document.elementFromPoint(arguments[0], arguments[1]).id', script_args=[grip["x"], grip["y"]]
         ) == "sidebar-width-grip"
+        # The tap that ends the drag lands on no tab. It comes just after the release, as a
+        # finger's does, from the page itself: a command sent after the drag may come later.
+        browser.execute_script('''document.addEventListener("pointerup", () => setTimeout(() => {
+            document.querySelector(".tab-btn[data-tab=pages]").click();
+            window.tappedAfterDrag = true;
+          }, 50), {capture: true, once: true});''', sandbox=None)
         drag = browser.actions.sequence("pointer", "mouse", {"pointerType": "mouse"})
         drag.pointer_move(grip["x"], grip["y"]).pointer_down()
         for step in range(1, 5):
             drag.pointer_move(grip["x"] - 30 * step, grip["y"], duration=30)
         drag.pointer_up().perform()
-        # The tap that ends the drag lands on no tab.
-        browser.execute_script('document.querySelector(".tab-btn[data-tab=pages]").click()')
+        wait_until(lambda: browser.execute_script("return window.tappedAfterDrag === true", sandbox=None))
         assert browser.execute_script(active) == "comments"
         dragged = browser.execute_script(width)
         assert abs(dragged - 480) <= 2 and abs(browser.execute_script(stored) - dragged) <= 1

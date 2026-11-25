@@ -1087,7 +1087,9 @@ class HtmlReviewServer:
             if not behind:
                 return
             for runtime in behind:
-                logger.warning("%s changed on disk without the watcher saying so", runtime.alias)
+                # Content never noted is content not yet built since the server started.
+                if runtime.content_file is None or runtime.seen_content is not None:
+                    logger.warning("%s changed on disk without the watcher saying so", runtime.alias)
                 source = runtime.content_file or runtime.main_file
                 source_seen = runtime.seen_content if runtime.content_file is not None else runtime.seen_main
                 if runtime.stamp(source) != source_seen and source.is_file():
