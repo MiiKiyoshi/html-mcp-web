@@ -6,8 +6,9 @@ fetches the driver that fits it. ``launch()`` gives a headless window.
 ``HTML_MCP_BROWSER=headed`` shows it, to watch a test run. ``HTML_MCP_BROWSER_KIND=safari``
 runs the same tests in Safari through safaridriver, which must be enabled once
 (``safaridriver --enable``). Safari has no headless window and runs one automation session at
-a time, so its window shows and the tests take it in turn. What Safari cannot be made to do,
-a test marks with ``not_in_safari``.
+a time, so its window shows and the tests take it in turn. Its driver opens no file from a
+test's temporary folder, so a file is served to it from its folder over HTTP. What Safari cannot
+be made to do, a test marks with ``not_in_safari``.
 
 Every Chrome a test starts, its own and those the package starts for it, sets the generic
 font families in the faces the tests were written with (tests/fonts.py)."""
@@ -15,15 +16,20 @@ font families in the faces the tests were written with (tests/fonts.py)."""
 from __future__ import annotations
 
 import base64
+import functools
+import http.server
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import traceback
 from pathlib import Path
+from urllib.parse import quote, urlsplit
+from urllib.request import url2pathname
 
 import psutil
 import pytest
@@ -261,6 +267,13 @@ def osascript(script: str) -> str:
                           stdin=subprocess.DEVNULL).stdout.strip()
 
 
+class QuietFiles(http.server.SimpleHTTPRequestHandler):
+    """A folder's files for Safari, with no line printed for each request."""
+
+    def log_message(self, format: str, *args) -> None:
+        pass
+
+
 class SafariElement:
     """An element in Safari, clicked as a pointer does it. The driver's own click, and a
     quick pointer press, sometimes reach the page as a release before the press when they
@@ -290,6 +303,7 @@ class Safari(Chrome):
                  fullscreen: bool = True):
         assert downloads is None and not touch and user_agent is None and fullscreen, \
             "a test that needs these is marked not_in_safari"
+        self.files: http.server.ThreadingHTTPServer | None = None
         options = webdriver.SafariOptions()
         options.set_capability("unhandledPromptBehavior", "ignore")
         # One session at a time: the one before may still be closing. One that never closes,
@@ -324,6 +338,31 @@ class Safari(Chrome):
         if self.system_dark is not None:
             self.dark(self.system_dark)
         super().quit()
+        self._serve(None)
+
+    def _serve(self, folder: Path | None) -> None:
+        """Serve *folder* over HTTP on a port of its own, or with None nothing."""
+        if self.files is not None:
+            self.files.shutdown()
+            self.files.server_close()
+            self.files = None
+        if folder is not None:
+            self.files = http.server.ThreadingHTTPServer(
+                ("127.0.0.1", 0), functools.partial(QuietFiles, directory=str(folder)))
+            self.files.folder = folder
+            threading.Thread(target=self.files.serve_forever, daemon=True).start()
+
+    def _reachable(self, url: str) -> str:
+        """The address Safari opens for *url*. Its driver loads no file from outside
+        Safari's sandbox, which a test's temporary folder is, and shows an error page
+        instead: a file is served from its own folder, with what lies beside it, which a
+        page refers to as it would beside the file."""
+        if urlsplit(url).scheme != "file":
+            return url
+        page = Path(url2pathname(urlsplit(url).path))
+        if self.files is None or self.files.folder != page.parent:
+            self._serve(page.parent)
+        return f"http://127.0.0.1:{self.files.server_address[1]}/{quote(page.name)}"
 
     def _loaded(self) -> None:
         """Wait for the page's scripts to have run: Safari's driver gives a page back while
@@ -333,7 +372,7 @@ class Safari(Chrome):
             time.sleep(0.05)
 
     def navigate(self, url: str) -> None:
-        super().navigate(url)
+        super().navigate(self._reachable(url))
         self._loaded()
 
     def refresh(self) -> None:
