@@ -10,7 +10,7 @@ import pytest
 def test_home_path_display_boundaries() -> None:
     module = (Path(__file__).parent.parent / "html_mcp_web" / "static" / "path-display.mjs").as_uri()
     script = f"""
-      import {{ displayPath }} from {json.dumps(module)};
+      import {{ displayPath, fileName }} from {json.dumps(module)};
       const home = "/home/alice";
       console.log(JSON.stringify([
         displayPath(home, home),
@@ -22,6 +22,9 @@ def test_home_path_display_boundaries() -> None:
         displayPath("C:\\\\Users\\\\alice\\\\paper\\\\artifact.html", "C:\\\\Users\\\\alice"),
         displayPath("C:\\\\Users\\\\alice2\\\\artifact.html", "C:\\\\Users\\\\alice"),
         displayPath("/srv/artifact.html", "/"),
+        fileName("/home/alice/paper/artifact.html"),
+        fileName("C:\\\\Users\\\\alice\\\\paper\\\\artifact.html"),
+        fileName("artifact.html"),
       ]));
     """
 
@@ -40,4 +43,7 @@ def test_home_path_display_boundaries() -> None:
         "~\\paper\\artifact.html",
         "C:\\Users\\alice2\\artifact.html",
         "~/srv/artifact.html",
+        "artifact.html",
+        "artifact.html",
+        "artifact.html",
     ]

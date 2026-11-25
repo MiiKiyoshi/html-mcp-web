@@ -2,7 +2,7 @@ import { createPresentation } from "./presentation.js";
 import { createLayoutChecks } from "./layout-check.js";
 import { createAnchors } from "./anchors.js";
 import { createSearch } from "./search.js";
-import { displayPath } from "./path-display.mjs";
+import { displayPath, fileName } from "./path-display.mjs";
 import { createSettings } from "./shared/settings.js";
 import { $, h, clear, COMPOSED, keyByPosition, showMacKeyNames } from "./shared/dom.js";
 import { createCommentPanel } from "./shared/comment-panel.js";
@@ -201,11 +201,11 @@ async function selectArtifact(alias) {
 
 function updateArtifactLinks() {
   // The file's name alone, as the editor shows it; the path is its title.
-  $("#main-file").textContent = state.artifact.main_file.split("/").pop();
+  $("#main-file").textContent = fileName(state.artifact.main_file);
   $("#main-file").title = displayPath(state.artifact.main_file, homePath);
   // The tab carries the file being reviewed, so several projects open at once stay
   // apart in the browser's tab strip.
-  document.title = state.artifact.main_file.split("/").pop();
+  document.title = fileName(state.artifact.main_file);
   $("#download-pptx-btn").hidden = state.artifact.layout !== "slides";
 }
 
@@ -713,7 +713,7 @@ async function loadSource(force = false) {
   state.sourceRevision = source.revision;
   state.sourceDirty = false;
   // The file's name alone, so the bar keeps its buttons on one row; the path is its title.
-  $("#source-file").textContent = source.path.split("/").pop();
+  $("#source-file").textContent = fileName(source.path);
   $("#source-file").title = displayPath(source.path, homePath);
   $("#source-save-btn").disabled = true;
   $("#source-reload-btn").disabled = false;

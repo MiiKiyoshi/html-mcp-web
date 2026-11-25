@@ -62,6 +62,9 @@ def available_port() -> int:
 def wait_until(check, timeout: float = 15.0):
     deadline = time.monotonic() + timeout
     last = None
+    # What the check raised on the way, a dialog the page opened among it, which a later try
+    # that returns a value would hide.
+    raised: list[str] = []
     while time.monotonic() < deadline:
         try:
             last = check()
@@ -69,8 +72,10 @@ def wait_until(check, timeout: float = 15.0):
                 return last
         except Exception as error:
             last = error
+            if f"{error!r}" not in raised:
+                raised.append(f"{error!r}")
         time.sleep(0.1)
-    raise AssertionError(f"condition was not met: {last}")
+    raise AssertionError(f"condition was not met: {last}" + (f"; raised on the way: {raised[:3]}" if raised else ""))
 
 
 def get_json(url: str) -> dict:
@@ -1157,8 +1162,10 @@ def test_the_editor_holds_the_cursor_line_where_settings_says(tmp_path: Path) ->
         script('localStorage.setItem("htmlMcpVimKeys", "1")')
         browser.refresh()
         wait_until(lambda: script('return document.querySelector("#comment-filter").options.length > 1'))
-        script('document.querySelector("[data-view=source]").click()')
-        wait_until(lambda: script(f'{editor} return editor.getValue().includes("Line 120")'))
+        script('document.body.dataset.sameLoad = "yes"; document.querySelector("[data-view=source]").click()')
+        wait_until(lambda: script(f'{editor} return editor.getValue().includes("Line 120")')
+                   or script('return document.body.dataset.sameLoad === "yes" ? false : "the page loaded again"'))
+        assert script('return document.body.dataset.sameLoad') == "yes", "the page loaded again"
         choice = lambda name: f'document.querySelector(\'[data-cursor-choice="{name}"]\')'
         script(f"{choice('third')}.click()")
         assert script(f'return {choice("third")}.getAttribute("aria-checked")') == "true"
