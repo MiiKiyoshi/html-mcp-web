@@ -18,8 +18,11 @@ document.querySelectorAll('main.pages > section.page').forEach((page, pi) => {
       const t = walker.currentNode;
       if (t.parentElement.closest('.katex-mathml, .eqno') !== null) continue;
       for (let i = 0; i < t.length; i += 1) {
+        // A soft hyphen is no letter, and the letter after a hyphenated break has the hyphen's
+        // box before its own.
+        if (t.data[i] === '\u00ad') continue;
         const r = document.createRange(); r.setStart(t, i); r.setEnd(t, i + 1);
-        const b = Array.from(r.getClientRects()).find((x) => x.width > 0 || x.height > 0);
+        const b = Array.from(r.getClientRects()).findLast((x) => x.width > 0 || x.height > 0);
         if (!b) continue;
         const mid = (b.top + b.bottom) / 2;
         let row = rows.find((x) => Math.abs(x.mid - mid) < pitch / 2);

@@ -10,7 +10,7 @@ import html
 import re
 from pathlib import Path
 
-from ..kits import COMPONENTS, descendants, document_assets, inline_woff2, prepare_body
+from ..kits import COMPONENTS, TEX_LINEBREAK, descendants, document_assets, inline_woff2, prepare_body
 from ..template_content import ContentParser, Element, parse_template_content
 
 
@@ -100,6 +100,23 @@ PAGINATE_SCRIPT = r"""<script>
   }
   const flow = document.getElementById("report-flow");
   const holder = document.querySelector("main.pages");
+  // An English word in text the skin hyphenates gets a soft hyphen at each break its
+  // patterns allow, the ones a label's breaking uses, and the pour breaks a word there and
+  // nowhere else: a browser's own hyphenation is the system's on macOS, and a headless
+  // Chrome on Linux or Windows has none. A Latin run in a Korean document is English (KITS
+  // 2.2). The soft hyphens go once the lines are set.
+  const hyphenate = texLineBreak_lib.createHyphenator(window["texLineBreak_hyphens_en-us"]);
+  const english = [];
+  const words = document.createTreeWalker(flow, NodeFilter.SHOW_TEXT);
+  while (words.nextNode()) {
+    const parent = words.currentNode.parentElement;
+    if (parent.closest(".katex, svg, code, pre") !== null || getComputedStyle(parent).hyphens !== "auto") continue;
+    if ((parent.closest("[lang]")?.lang ?? document.documentElement.lang).startsWith("en")) english.push(words.currentNode);
+  }
+  for (const text of english) {
+    text.data = text.data.replace(/[A-Za-z]+/g, (run) => hyphenate(run).join("\u00ad"));
+    text.parentElement.dataset.hyphenated = "";
+  }
   const pristine = flow.cloneNode(true);
   flow.replaceChildren();
   const head = JSON.parse(pristine.dataset.runningHead);
@@ -206,7 +223,9 @@ PAGINATE_SCRIPT = r"""<script>
       const range = document.createRange();
       range.setStart(text, offset);
       range.setEnd(text, offset + 1);
-      const box = Array.from(range.getClientRects()).find((rect) => rect.width > 0 || rect.height > 0);
+      // The letter after a hyphenated break has two boxes in Chrome, the hyphen drawn at the
+      // end of the line before and its own, which is the last.
+      const box = Array.from(range.getClientRects()).findLast((rect) => rect.width > 0 || rect.height > 0);
       return box === undefined ? -Infinity : (box.top + box.bottom) / 2;
     };
     let low = 0, high = letters.length;
@@ -215,8 +234,11 @@ PAGINATE_SCRIPT = r"""<script>
       if (topOf(letters[middle]) >= top) high = middle; else low = middle + 1;
     }
     if (low >= letters.length) return null;
-    // A word the browser hyphenated at the foot is cut inside: the line before keeps a hyphen.
-    const before = low > 0 ? letters[low - 1] : null;
+    // A word hyphenated at the foot is cut inside: the line before keeps a hyphen. The soft
+    // hyphen it was cut at is no letter.
+    let back = low - 1;
+    while (back >= 0 && letters[back][0].data[letters[back][1]] === "\u00ad") back -= 1;
+    const before = back >= 0 ? letters[back] : null;
     const midWord = before !== null && /[\p{L}\p{N}]/u.test(before[0].data[before[1]])
       && /[\p{L}\p{N}]/u.test(letters[low][0].data[letters[low][1]]);
     return [...letters[low], midWord];
@@ -522,7 +544,7 @@ PAGINATE_SCRIPT = r"""<script>
       for (const child of node.childNodes) {
         if (child.nodeType === Node.TEXT_NODE) {
           for (let offset = 0; offset < child.length; offset += 1) {
-            if (child.data[offset].trim() !== "") atoms.push({ node: child, offset });
+            if (child.data[offset].trim() !== "" && child.data[offset] !== "\u00ad") atoms.push({ node: child, offset });
           }
         } else if (child.nodeType === Node.ELEMENT_NODE) {
           // KaTeX may break inline math between the boxes it sets each part in, so those
@@ -541,7 +563,8 @@ PAGINATE_SCRIPT = r"""<script>
         const range = document.createRange();
         range.setStart(atom.node, atom.offset);
         range.setEnd(atom.node, atom.offset + 1);
-        rect = Array.from(range.getClientRects()).find((box) => box.width > 0) ?? range.getBoundingClientRect();
+        // Its own box is the last: see firstLetterBelow.
+        rect = Array.from(range.getClientRects()).findLast((box) => box.width > 0) ?? range.getBoundingClientRect();
       }
       const middle = (rect.top + rect.bottom) / 2;
       const at = lines.findIndex((line) => middle >= line.top && middle < line.foot);
@@ -560,8 +583,8 @@ PAGINATE_SCRIPT = r"""<script>
       if (atom.offset === null) range[edge === "start" ? "setStartBefore" : "setEndBefore"](atom.node);
       else range[edge === "start" ? "setStart" : "setEnd"](atom.node, atom.offset);
     };
-    // A word cut by the browser's hyphenation: the letters on either side of the break
-    // touch, with nothing between them in the text.
+    // A word cut at a hyphen the pour gave it: the letters on either side of the break
+    // touch, with nothing between them in the text but the soft hyphen.
     const hyphenated = starts.map((start, index) => {
       if (index === starts.length - 1) return false;
       const next = starts[index + 1];
@@ -570,7 +593,7 @@ PAGINATE_SCRIPT = r"""<script>
       const between = document.createRange();
       between.setStart(previous.node, previous.offset + 1);
       between.setEnd(next.node, next.offset);
-      return between.toString() === "" && /\p{L}/u.test(previous.node.data[previous.offset]) && /\p{L}/u.test(next.node.data[next.offset]);
+      return between.toString().replace(/\u00ad/g, "") === "" && /\p{L}/u.test(previous.node.data[previous.offset]) && /\p{L}/u.test(next.node.data[next.offset]);
     });
     let after = null;
     for (let index = starts.length - 1; index >= 0; index -= 1) {
@@ -680,6 +703,13 @@ PAGINATE_SCRIPT = r"""<script>
       return direct && !blockChild;
     });
     blocks.forEach(freezeLines);
+    // A set line breaks nowhere, and a hyphen at its end is drawn after it.
+    const set = document.createTreeWalker(holder, NodeFilter.SHOW_TEXT);
+    while (set.nextNode()) {
+      if (set.currentNode.data.includes("\u00ad")) set.currentNode.data = set.currentNode.data.replace(/\u00ad/g, "");
+    }
+    holder.querySelectorAll("[data-hyphenated]").forEach((element) => element.removeAttribute("data-hyphenated"));
+    document.querySelectorAll("[data-pour]").forEach((element) => element.remove());
     holder.querySelectorAll(".ln.j").forEach(setSpacing);
     holder.querySelectorAll(".ln").forEach((line) => {
       const span = extent(line);
@@ -698,6 +728,11 @@ PAGINATE_SCRIPT = r"""<script>
   });
 })();
 </script>"""
+
+
+# The English hyphenation patterns the pour breaks words by, there only while it pours.
+POUR_HYPHENS = "".join(f'\n  <script data-pour>{path.read_text(encoding="utf-8")}</script>'
+                       for path in (TEX_LINEBREAK / "lib.js", TEX_LINEBREAK / "hyphens_en-us.js"))
 
 
 def build(content_path: Path, output_path: Path, skin_dir: Path) -> None:
@@ -784,12 +819,13 @@ def build(content_path: Path, output_path: Path, skin_dir: Path) -> None:
   <style>
 {css}
   </style>{assets[0]}
+  <style data-pour>[data-hyphenated] {{ hyphens: manual !important; }}</style>
 </head>
 <body>
   <main class="pages"></main>
   <div id="report-flow" data-running-head="{running}">
 {flow_html}
-  </div>{assets[1]}
+  </div>{assets[1]}{POUR_HYPHENS}
 {PAGINATE_SCRIPT}
 </body>
 </html>

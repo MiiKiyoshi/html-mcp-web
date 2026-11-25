@@ -433,6 +433,45 @@ return Array.from(document.querySelectorAll("text[data-center]")).map((text) =>
 
 
 @needs_browser
+@pytest.mark.parametrize("lang", ["en", "ko"])
+def test_words_are_hyphenated_where_the_english_patterns_allow(tmp_path: Path, lang: str) -> None:
+    """A report's English words are hyphenated by the patterns a label's breaking uses as its
+    pages are set, alike on every system: a headless Chrome on Linux or Windows hyphenates
+    nothing of its own, and on macOS it takes the system's. Each word cut at a line's end is
+    cut where the patterns allow, a Korean word is never cut, and the set file carries no soft
+    hyphen and none of the patterns."""
+    kits = REPO / "html_mcp_web" / "kits" / "vendor" / "tex-linebreak"
+    # The sample report's prose: a paragraph written over and over breaks its lines alike.
+    html = (REPO / "examples" / "neutral-report" / "content.html").read_text(encoding="utf-8")
+    if lang == "ko":
+        html = content_html()
+        sentence = ("baseline보다 accuracy가 높은 adapter를 layer마다 고르고 retention과 "
+                    "proxy dev score를 router 없이 checkpoint마다 비교한다. ")
+        paragraphs = "\n".join(f"<p>{index} {sentence * 5}</p>" for index in range(1, 12))
+        html = html.replace("<body ", '<body data-lang="ko" ', 1)
+        html = html[:html.index('<section data-title="Method">')] + f'<section data-title="Method">{paragraphs}</section></body>'
+    cuts = run_in_report(tmp_path, html, (kits / "lib.js").read_text(encoding="utf-8")
+                         + (kits / "hyphens_en-us.js").read_text(encoding="utf-8") + """
+const hyphenate = texLineBreak_lib.createHyphenator(window["texLineBreak_hyphens_en-us"]);
+const lines = Array.from(document.querySelectorAll(".ln"));
+return lines.flatMap((line, index) => {
+  if (!line.classList.contains("h")) return [];
+  const before = line.textContent.trim().split(/\\s+/).pop(), after = lines[index + 1].textContent.trim().split(/\\s+/)[0];
+  const tail = before.match(/[A-Za-z]+$/)?.[0] ?? "";
+  const run = tail + (after.match(/^[A-Za-z]+/)?.[0] ?? "");
+  const parts = hyphenate(run);
+  const allowed = parts.slice(0, -1).map((part, at) => parts.slice(0, at + 1).join("").length);
+  return [[before, after, allowed.includes(tail.length)]];
+});
+""")
+    assert cuts, "no word was hyphenated"
+    assert all(allowed for _, _, allowed in cuts), cuts
+    assert all(before[-1:].isascii() and after[:1].isascii() for before, after, _ in cuts), cuts
+    built = (tmp_path / "report.html").read_text(encoding="utf-8")
+    assert "\u00ad" not in built and "<script data-pour" not in built and "texLineBreak_hyphens_en-us = " not in built
+
+
+@needs_browser
 def test_a_wrapped_korean_label_breaks_only_at_its_spaces(tmp_path: Path) -> None:
     """A report pours its pages from copies of the content, and a copied label is broken
     from the sentence it was written with, not from the lines it showed: its lines read
