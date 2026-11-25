@@ -306,7 +306,8 @@ class Watcher:
         if self.observer is None:
             return
         for root in self.roots:
-            if root not in self._watches:
+            # A root made as a link would carry the watch to wherever it points.
+            if root not in self._watches and not root.is_symlink():
                 self._schedule(root)
 
     def stop(self) -> None:

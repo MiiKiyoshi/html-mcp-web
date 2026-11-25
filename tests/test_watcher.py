@@ -117,6 +117,33 @@ def test_a_root_is_watched_when_only_the_project_folder_reports_a_change(tmp_pat
     assert scheduled == [(str(tmp_path / "html"), True)]
 
 
+def test_a_root_that_appears_as_a_link_is_not_watched(tmp_path: Path) -> None:
+    """A root made as a link would carry the recursive watch to wherever it points."""
+    import os
+
+    import pytest
+
+    class Observer:
+        def schedule(self, handler, path, recursive):
+            scheduled.append((path, recursive))
+            return path
+
+    scheduled: list[tuple[str, bool]] = []
+    (tmp_path / "project").mkdir()
+    (tmp_path / "elsewhere").mkdir()
+    project = tmp_path / "project"
+    watcher = Watcher(project, ["*.html"], [], _unused_change, [project / "html"])
+    watcher.observer = Observer()
+    try:
+        (project / "html").symlink_to(tmp_path / "elsewhere", target_is_directory=True)
+    except OSError as error:
+        if os.name == "nt":
+            pytest.skip(f"symlinks need a privilege on Windows: {error}")
+        raise
+    watcher._watch_new_roots()
+    assert scheduled == []
+
+
 async def _unused_change(path: str) -> None:
     raise AssertionError("no file was changed in this test")
 

@@ -145,12 +145,15 @@ def test_a_stop_right_after_the_start_ends_the_server(tmp_path: Path, monkeypatc
     """The start is reported ready a moment before the server's loop runs on for good. A stop
     in that moment found the loop not running and asked nothing of it: the server served on
     with its lock released, and the next start in the project found it answering and stayed
-    out, even with the lock held by a process that served nothing."""
+    out, even with the lock held by a process that served nothing. Stopped then, it cleans up
+    as any stop does."""
     config = _config(tmp_path)
     shared = SharedProjectServer(config)
     original = HtmlReviewServer.catch_up
+    servers: list[HtmlReviewServer] = []
 
     def late(self):
+        servers.append(self)
         time.sleep(0.5)  # the moment between the start and the loop running on, drawn out
         return original(self)
 
@@ -161,6 +164,7 @@ def test_a_stop_right_after_the_start_ends_the_server(tmp_path: Path, monkeypatc
     assert _server_threads() == before
     assert shared._remote_identity() is None
     assert _lock_is_free(config)
+    assert len(servers) == 1 and servers[0].watcher.observer is None
 
 
 def test_a_build_due_at_start_runs_once_the_server_serves(tmp_path: Path, monkeypatch) -> None:

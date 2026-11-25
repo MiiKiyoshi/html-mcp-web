@@ -4,6 +4,7 @@ with a new profile and no marionette. A diagnosis for the runners, run by hand i
 
 import http.server
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -36,6 +37,56 @@ setInterval(beat, 500);
 </script>""".replace("FAMILIES", json.dumps(FAMILIES)).replace("NAMED", json.dumps(NAMED))
 
 
+def psutil_by_profile(profile: str) -> list[int]:
+    """The pids of the processes whose command line names *profile*."""
+    import psutil
+
+    found = []
+    for process in psutil.process_iter(["pid", "cmdline"]):
+        try:
+            if any(profile in part for part in process.info["cmdline"] or []):
+                found.append(process.info["pid"])
+        except (psutil.Error, TypeError):
+            continue
+    return found
+
+
+def processes(pid: int, profile: str) -> str:
+    """The Firefox processes under *pid* and on *profile*: each one's kind, state and processor
+    time."""
+    import psutil
+
+    seen = {}
+    try:
+        tops = [psutil.Process(pid)]
+    except psutil.Error:
+        tops = []
+    for other in psutil_by_profile(profile):
+        try:
+            tops.append(psutil.Process(other))
+        except psutil.Error:
+            pass
+    for top in tops:
+        try:
+            for process in [top, *top.children(recursive=True)]:
+                seen[process.pid] = process
+        except psutil.Error:
+            continue
+    described = []
+    for pid_, process in sorted(seen.items()):
+        try:
+            line = process.cmdline()
+            kind = next((part for part in line if part in ("tab", "gpu", "rdd", "socket", "utility", "forkserver")),
+                        "browser" if "-profile" in line else "launcher?")
+            if "-contentproc" in line and kind == "browser":
+                kind = "content"
+            times = process.cpu_times()
+            described.append(f"{pid_} {kind} {process.status()} cpu {times.user + times.system:.1f}s")
+        except psutil.Error as error:
+            described.append(f"{pid_} {type(error).__name__}")
+    return f"{len(described)} processes: " + ", ".join(described)
+
+
 def run_once(label: str, seconds: float, before: tuple[str, ...] = (), env: dict | None = None,
              wait: bool = True, quiet: bool = False) -> None:
     beats: list[dict] = []
@@ -63,18 +114,31 @@ def run_once(label: str, seconds: float, before: tuple[str, ...] = (), env: dict
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     profile = tempfile.mkdtemp(prefix="html_mcp_probe_")
+    with open(os.path.join(profile, "user.js"), "w", encoding="utf-8") as prefs:
+        prefs.write('user_pref("devtools.console.stdout.content", true);\n')
+    said = os.path.join(tempfile.mkdtemp(prefix="html_mcp_probe_out_"), "out.log")
     started = time.monotonic()
     command = firefox.command(*before, "-headless", "-no-remote", "-profile", profile,
                               f"http://127.0.0.1:{server.server_port}/")
     if not wait:
         command.remove("-wait-for-browser")
-    process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                               stderr=subprocess.DEVNULL, env={**firefox.headless_environment(), **(env or {})})
+    with open(said, "wb") as out:
+        process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
+                                   env={**firefox.headless_environment(), **(env or {})})
     time.sleep(seconds)
+    tree = processes(process.pid, profile)
+    poll = process.poll()
     firefox.stop(process)
+    for found in psutil_by_profile(profile):
+        firefox.end(found)
     server.shutdown()
     shutil.rmtree(profile, ignore_errors=True)
     print(f"[{label}] first beat after {first[0] - started:.1f} s" if first else f"[{label}] no beat in {seconds} s")
+    print(f"[{label}]   started process {'running' if poll is None else f'ended {poll}'}; {tree}")
+    if not first:
+        lines = open(said, encoding="utf-8", errors="replace").read().splitlines()
+        for line in lines[-15:]:
+            print(f"[{label}]   | {line[:250]}")
     if quiet:
         return
     states = [(beat.get("ms"), beat.get("frames"), beat.get("visible"), beat.get("focus")) for beat in beats]
@@ -223,12 +287,11 @@ def browsers_at_once(label: str, count: int, apart: float = 0, **options) -> Non
 if __name__ == "__main__":
     import sys
 
-    run_once("first", 20)
-    check_once("check 1")
-    checks_at_once("load", 4)
     if sys.platform == "win32":
-        browsers_at_once("at once", 4)
-        browsers_at_once("3 s apart", 4, apart=3)
-        browsers_at_once("MOZ_NO_REMOTE", 4, env={"MOZ_NO_REMOTE": "1"})
-        browsers_at_once("no wait-for-browser", 4, wait=False)
-        browsers_at_once("marionette", 4, before=("-marionette",))
+        for round_ in range(3):
+            browsers_at_once(f"with flag {round_}", 4)
+            browsers_at_once(f"without flag {round_}", 4, wait=False)
+    else:
+        run_once("first", 20)
+        check_once("check 1")
+        checks_at_once("load", 4)
