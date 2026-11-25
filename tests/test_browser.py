@@ -5637,6 +5637,62 @@ def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
 
 
 @needs_browser
+def test_the_slide_previews_follow_a_tab_shown_again(tmp_path: Path) -> None:
+    """The slide previews show the artifact the deck shows. They were brought to it only
+    as its frame loaded, so a tab shown again, whose frame was kept, left the column on
+    the other artifact's previews, and a click on one went to the page of that number in
+    a different deck."""
+    (tmp_path / "first.html").write_text(slides_html("First deck."), encoding="utf-8")
+    (tmp_path / "second").mkdir()
+    (tmp_path / "second" / "second.html").write_text(slides_html("Second deck."), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {
+            "first": {"layout": "slides", "main": "first.html"},
+            "second": {"layout": "slides", "main": "second/second.html"},
+        },
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    browser = None
+    try:
+        shared.ensure()
+        browser = launch()
+        browser.set_window_rect(width=1000, height=700)
+        browser.navigate(f"http://127.0.0.1:{port}?artifact=first")
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
+        browser.find_element("css selector", "#thumbs-btn").click()
+
+        def shown():
+            return browser.execute_script('''
+              const read = (selector) => document.querySelector(selector)?.contentDocument
+                ?.querySelector("#target")?.textContent ?? null;
+              return {deck: read("#artifact-frame"), previews: read("#thumbs-frame")};
+            ''')
+
+        def shows(title):
+            def both():
+                seen = shown()
+                return seen if seen == {"deck": title, "previews": title} else None
+            return both
+
+        wait_until(shows("First deck."), seen=shown)
+        browser.execute_script('document.querySelectorAll(".artifact-tab")[1].click();')
+        wait_until(shows("Second deck."), seen=shown)
+        # Back to the first, whose frame was kept: the column comes back to it too.
+        browser.execute_script('document.querySelectorAll(".artifact-tab")[0].click();')
+        wait_until(shows("First deck."), seen=shown)
+    finally:
+        if browser is not None:
+            browser.quit()
+        shared.stop()
+
+
+@needs_browser
 def test_a_review_page_shows_the_servers_check_and_measures_nothing_itself(tmp_path: Path) -> None:
     """Browsers measure a few pixels apart, and a review page on another pixel ratio turned
     the same content from overflowing to clean and back. The server's own check is the only

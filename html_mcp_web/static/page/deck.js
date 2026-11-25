@@ -267,8 +267,12 @@ export function createDeck({ project, showing, pagesChanged }) {
     showOrLoad() {
       // A deck rebuilt while the reader was on another tab opens where they left it, as an edit
       // does while it is shown: loading it from the top sent them back to page 1.
-      if (loadedRevision === project.revision()) showLoaded(frameFor(project.alias()));
-      else load(true);
+      if (loadedRevision !== project.revision()) {
+        load(true);
+        return;
+      }
+      showLoaded(frameFor(project.alias()));
+      following.tell();
     },
     load,
     forget() {
