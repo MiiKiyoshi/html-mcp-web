@@ -12,15 +12,22 @@ import { homePath } from "./project.js";
 export function createArtifactTabs({ project, select }) {
   function renderTabs() {
     const tabs = $("#artifact-tabs");
-    clear(tabs);
-    for (const alias of Object.keys(project.project().artifacts)) {
-      tabs.appendChild(h("button", {
-        type: "button",
-        class: `artifact-tab${alias === project.alias() ? " active" : ""}`,
-        text: alias,
-        onclick: () => select(alias).catch((error) => alert(error.message)),
-      }));
+    // The buttons are made again only when the project names other artifacts. A press is a
+    // click only when it starts and ends on one button, and the server's state redraws the bar
+    // at any moment, as between the two halves of a reader's press.
+    const aliases = Object.keys(project.project().artifacts);
+    if (Array.from(tabs.children, (tab) => tab.textContent).join("\n") !== aliases.join("\n")) {
+      clear(tabs);
+      for (const alias of aliases) {
+        tabs.appendChild(h("button", {
+          type: "button",
+          class: "artifact-tab",
+          text: alias,
+          onclick: () => select(alias).catch((error) => alert(error.message)),
+        }));
+      }
     }
+    for (const tab of tabs.children) tab.classList.toggle("active", tab.textContent === project.alias());
     // Tabs scroll sideways when they outnumber the row, so the open one is brought into the row.
     // The row's own scroll is set rather than scrollIntoView, which also scrolls the page.
     const active = tabs.querySelector(".artifact-tab.active");

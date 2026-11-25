@@ -947,6 +947,9 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#artifact-frame").contentDocument'
             '.documentElement.style.getPropertyValue("--html-mcp-page-scale");') != wide_scale)
+        # The artifact tabs stay the same buttons while the server's state comes in, as it does
+        # below: a press is a click only when it starts and ends on one button.
+        browser.execute_script('window.heldTab = document.querySelector(".artifact-tab:nth-child(2)");')
         slides.write_text(problem_html(), encoding="utf-8")
         narrow_revision = wait_until(
             lambda: get_json(f"{base}/state")["artifacts"]["slides"]["revision"] > changed_revision
@@ -969,6 +972,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
             f'return document.querySelector("[data-comment-id=\\"{comment["id"]}\\"] .stale") !== null'))
 
         assert browser.execute_script('return document.title') == "slides.html"
+        assert browser.execute_script('return window.heldTab.isConnected && window.heldTab.textContent') == "report"
         # The tabs are drawn again as the server's state comes in, and a tab found just before
         # one such drawing is gone when it is clicked: the click goes to the tab drawn since.
         wait_until(lambda: browser.find_element("css selector", '.artifact-tab:nth-child(2)').click() or True)
