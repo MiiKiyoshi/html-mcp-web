@@ -36,7 +36,8 @@ setInterval(beat, 500);
 </script>""".replace("FAMILIES", json.dumps(FAMILIES)).replace("NAMED", json.dumps(NAMED))
 
 
-def run_once(label: str, seconds: float) -> None:
+def run_once(label: str, seconds: float, before: tuple[str, ...] = (), env: dict | None = None,
+             wait: bool = True, quiet: bool = False) -> None:
     beats: list[dict] = []
     first: list[float] = []
 
@@ -63,15 +64,19 @@ def run_once(label: str, seconds: float) -> None:
     threading.Thread(target=server.serve_forever, daemon=True).start()
     profile = tempfile.mkdtemp(prefix="html_mcp_probe_")
     started = time.monotonic()
-    process = subprocess.Popen(
-        firefox.command("-headless", "-no-remote", "-profile", profile, f"http://127.0.0.1:{server.server_port}/"),
-        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        env=firefox.headless_environment())
+    command = firefox.command(*before, "-headless", "-no-remote", "-profile", profile,
+                              f"http://127.0.0.1:{server.server_port}/")
+    if not wait:
+        command.remove("-wait-for-browser")
+    process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL, env={**firefox.headless_environment(), **(env or {})})
     time.sleep(seconds)
     firefox.stop(process)
     server.shutdown()
     shutil.rmtree(profile, ignore_errors=True)
     print(f"[{label}] first beat after {first[0] - started:.1f} s" if first else f"[{label}] no beat in {seconds} s")
+    if quiet:
+        return
     states = [(beat.get("ms"), beat.get("frames"), beat.get("visible"), beat.get("focus")) for beat in beats]
     print(f"[{label}] beats (ms, frames, visibility, focus): {states[:3]} ... {states[-3:]}")
     if beats:
@@ -203,11 +208,14 @@ def checks_at_once(label: str, count: int, prefs: str = "") -> None:
             print(f"[{label}]   {line[:300]}")
 
 
-def browsers_at_once(label: str, count: int) -> None:
-    """*count* Firefoxes started at once as the check starts one, each on a page of its own."""
-    threads = [threading.Thread(target=run_once, args=(f"{label} {index}", 20)) for index in range(count)]
+def browsers_at_once(label: str, count: int, apart: float = 0, **options) -> None:
+    """*count* Firefoxes started as the check starts one, *apart* seconds after each other,
+    each on a page of its own."""
+    threads = [threading.Thread(target=run_once, args=(f"{label} {index}", 20), kwargs={"quiet": True, **options})
+               for index in range(count)]
     for thread in threads:
         thread.start()
+        time.sleep(apart)
     for thread in threads:
         thread.join()
 
@@ -219,14 +227,8 @@ if __name__ == "__main__":
     check_once("check 1")
     checks_at_once("load", 4)
     if sys.platform == "win32":
-        browsers_at_once("browsers", 4)
-        checks_at_once("load, no default browser check", 4, 'user_pref("browser.shell.checkDefaultBrowser", false);\n')
-        checks_at_once("load, first run settled", 4, "".join(f"user_pref({name!r}, {value});\n".replace("'", '"') for name, value in (
-            ("browser.shell.checkDefaultBrowser", "false"),
-            ("browser.startup.homepage_override.mstone", "'ignore'"),
-            ("startup.homepage_welcome_url", "''"),
-            ("browser.aboutwelcome.enabled", "false"),
-            ("datareporting.policy.dataSubmissionPolicyBypassNotification", "true"),
-            ("toolkit.telemetry.reportingpolicy.firstRun", "false"),
-            ("app.update.disabledForTesting", "true"),
-        )))
+        browsers_at_once("at once", 4)
+        browsers_at_once("3 s apart", 4, apart=3)
+        browsers_at_once("MOZ_NO_REMOTE", 4, env={"MOZ_NO_REMOTE": "1"})
+        browsers_at_once("no wait-for-browser", 4, wait=False)
+        browsers_at_once("marionette", 4, before=("-marionette",))
