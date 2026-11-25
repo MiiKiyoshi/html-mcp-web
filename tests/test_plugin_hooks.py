@@ -240,8 +240,22 @@ def test_the_plugin_is_listed_and_wired_to_the_gate() -> None:
         ("PreToolUse", "mcp__html-mcp__.*"): ["before-tool"],
         ("PreToolUse", "Edit|Write|MultiEdit|NotebookEdit"): ["before-edit"],
     }
-    assert all(hook["command"].startswith('python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guide_gate.py" ')
+    # Claude Code runs a hook in Git Bash on Windows, where python3 may be only the Microsoft
+    # Store's stand-in: each hook starts through the script that finds a Python that runs.
+    assert all(hook["command"].startswith('sh "${CLAUDE_PLUGIN_ROOT}/hooks/python.sh" '
+                                          '"${CLAUDE_PLUGIN_ROOT}/hooks/guide_gate.py" ')
                for entries in hooks.values() for entry in entries for hook in entry["hooks"])
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="stands in for Git Bash's uname with a script on the PATH")
+@pytest.mark.parametrize("system, ran", [("MINGW64_NT-10.0-26100", "py -3"), ("Linux", "python3")])
+def test_the_hook_script_takes_py_on_windows_and_python3_elsewhere(tmp_path: Path, system: str, ran: str) -> None:
+    for name, said in (("uname", f"echo {system}"), ("py", 'echo py "$@"'), ("python3", 'echo python3 "$@"')):
+        (tmp_path / name).write_text(f"#!/bin/sh\n{said}\n", encoding="utf-8")
+        (tmp_path / name).chmod(0o755)
+    result = subprocess.run(["sh", str(GATE.parent / "python.sh"), "gate.py", "before-tool"], capture_output=True,
+                            text=True, env={**os.environ, "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}"})
+    assert result.stdout.strip() == f"{ran} gate.py before-tool"
 
 
 def two_decks(root: Path) -> Path:
