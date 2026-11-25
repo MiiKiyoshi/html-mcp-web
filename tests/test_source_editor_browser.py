@@ -55,8 +55,9 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
     target = "SELECT START " + "exact wrapped characters " * 12 + "SELECT END"
     home = tmp_path / "home"
     home.mkdir()
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("USERPROFILE", str(home))   # the home folder on Windows
+    # The server's home, from which it shows a path under it as ~. The browsers keep the
+    # machine's own: on Windows Chrome did not start with a home folder named elsewhere.
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
     source = home / "slides.html"
     source.write_text(
         '<!doctype html><html><head><title>Source</title></head><body><main class="pages">'
