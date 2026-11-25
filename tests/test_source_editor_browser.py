@@ -265,6 +265,22 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
           return editor.getSelectedText();
         ''')
         assert selected == target
+        # The same text written again, as the page's own save comes back from the watcher, is
+        # read and leaves the selection where it is.
+        browser.execute_script('''
+          window.sourceReads = 0;
+          const sent = window.fetch.bind(window);
+          window.fetch = (url, options) => {
+            const read = sent(url, options);
+            if (String(url).endsWith("/source") && options?.method === undefined) {
+              read.then(() => setTimeout(() => { window.sourceReads += 1; }, 200));
+            }
+            return read;
+          };
+        ''', sandbox=None)
+        source.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+        wait_until(lambda: browser.execute_script("return window.sourceReads;", sandbox=None))
+        assert browser.execute_script(f"return {editor}.getSelectedText();") == target
         browser.find_element("css selector", "#source-comment-btn").click()
         wait_until(lambda: browser.execute_script('return document.querySelector("#compose-dialog").open'))
         browser.find_element("css selector", "#compose-text").send_keys("Review exactly this source selection")

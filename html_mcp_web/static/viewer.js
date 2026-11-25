@@ -699,11 +699,16 @@ async function loadSource(force = false) {
     if (!confirm(`Discard unsaved changes to ${state.sourcePath}?`)) return false;
   }
   const source = await fetchJson(`${artifactBase()}/source`);
-  state.sourceLoading = true;
-  state.editor.session.setMode("ace/mode/html");
-  state.editor.setValue(source.text, -1);
-  state.editor.session.getUndoManager().reset();
-  state.sourceLoading = false;
+  // The same file with the same text, as the page's own save comes back from the watcher,
+  // is left as the editor holds it: set again, it lost the reader's cursor and selection a
+  // moment after the save.
+  if (source.path !== state.sourcePath || source.text !== state.editor.getValue()) {
+    state.sourceLoading = true;
+    state.editor.session.setMode("ace/mode/html");
+    state.editor.setValue(source.text, -1);
+    state.editor.session.getUndoManager().reset();
+    state.sourceLoading = false;
+  }
   state.sourcePath = source.path;
   state.sourceRevision = source.revision;
   state.sourceDirty = false;
