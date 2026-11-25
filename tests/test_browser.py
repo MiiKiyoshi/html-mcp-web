@@ -2518,7 +2518,10 @@ def test_hiding_the_comments_keeps_the_page_being_read(tmp_path: Path) -> None:
         ''')
         before = wait_until(lambda: browser.execute_script(reading))
         assert before["page"] == 12, before
-        current = browser.execute_script('return document.querySelector("#pages-list .page-nav-row.active button").dataset.page')
+        # The list marks the page being read once the frame has drawn the scroll, which takes it
+        # off the first page.
+        current = wait_until(lambda: (lambda page: page if page != "1" else None)(browser.execute_script(
+            'return document.querySelector("#pages-list .page-nav-row.active button").dataset.page')))
 
         browser.find_element("css selector", "#sidebar-toggle-btn").click()
         hidden = wait_until(lambda: (lambda now: now if now["width"] > before["width"] + 100 else None)(
