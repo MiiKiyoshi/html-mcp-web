@@ -5179,18 +5179,26 @@ def test_an_edit_replaces_the_deck_with_no_blank_and_no_jump(tmp_path: Path) -> 
         # The preview column is open too, and the drawn place of its first preview is held, read
         # once its document has loaded as the samples below require: read before, on a loaded
         # runner, it was a place the column then left.
+        deck_scale = ('return document.querySelector("#artifact-frame").contentDocument'
+                      '.documentElement.style.getPropertyValue("--html-mcp-page-scale");')
+        wide_scale = browser.execute_script(deck_scale)
         browser.execute_script('document.querySelector("#thumbs-btn").click();')
         previews_at = wait_until(lambda: browser.execute_script(
             'const doc = document.querySelector("#thumbs-frame").contentDocument;'
             'const page = doc?.readyState === "complete" && doc.fonts.status === "loaded"'
             ' ? doc.querySelector("section.page") : null;'
             'return page ? page.getBoundingClientRect().top + 0.001 : null;'))
+        # The reader's place is taken once the deck is drawn at the width the column leaves it,
+        # which its frame's resize sets. A runner slow to draw delivered the resize after the
+        # scroll below, and the deck, kept at the place on its page, scrolled to another offset.
+        wait_until(lambda: browser.execute_script(deck_scale) != wide_scale)
         frame_window = 'document.querySelector("#artifact-frame")?.contentWindow'
         browser.execute_script(f'{frame_window}.scrollTo(0, 400);')
         read_at = wait_until(lambda: browser.execute_script(
             f'const win = {frame_window}; return win && win.scrollY > 300 ? win.scrollY : null;'))
         # Every animation frame of the review page records, for the deck and for the column,
-        # the frame on top: whether it shows a loaded deck, and where.
+        # the frame on top: whether it shows a loaded deck, and where, and whether the deck is
+        # the edited one.
         browser.execute_script("""
           window.drawn = [];
           window.sampling = true;
@@ -5203,6 +5211,7 @@ def test_an_edit_replaces_the_deck_with_no_blank_and_no_jump(tmp_path: Path) -> 
             const deck = onTop(Array.from(document.querySelectorAll(".artifact-frame")));
             const column = onTop(Array.from(document.querySelectorAll("#thumbs-pane iframe")));
             window.drawn.push({loaded: shows(deck.contentDocument), y: deck.contentWindow.scrollY,
+                               edited: deck.contentDocument?.querySelector("#target")?.textContent === "Edited sentence.",
                                previews: shows(column.contentDocument),
                                previewY: shows(column.contentDocument)
                                  ? column.contentDocument.querySelector("section.page").getBoundingClientRect().top : null});
@@ -5210,15 +5219,19 @@ def test_an_edit_replaces_the_deck_with_no_blank_and_no_jump(tmp_path: Path) -> 
           };
           requestAnimationFrame(tick);
         """, sandbox=None)
+        wait_until(lambda: browser.execute_script("return window.drawn.length > 0;", sandbox=None))
         built = get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]["revision"]
         slides.write_text(slides_html("Edited sentence."), encoding="utf-8")
         wait_until(lambda: browser.execute_script(
             'const frame = document.querySelector("#artifact-frame");'
             'return document.querySelectorAll(".artifact-frame").length === 1'
-            ' && frame.contentDocument.querySelector("#target")?.textContent === "Edited sentence.";'))
+            ' && frame.contentDocument.querySelector("#target")?.textContent === "Edited sentence."'
+            ' && window.drawn.some((sample) => sample.edited);', sandbox=None))
         assert get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]["revision"] != built
         drawn = browser.execute_script("window.sampling = false; return window.drawn;", sandbox=None)
-        assert len(drawn) > 5, drawn
+        # The samples run from a frame drawn before the edit to one drawn after it, so every
+        # frame drawn while it was set up is among them, however few a slow runner drew.
+        assert not drawn[0]["edited"] and drawn[-1]["edited"], drawn
         assert all(sample["loaded"] and abs(sample["y"] - read_at) <= 2 for sample in drawn), [
             sample for sample in drawn if not sample["loaded"] or abs(sample["y"] - read_at) > 2]
         assert all(sample["previews"] and abs(sample["previewY"] - previews_at) <= 2 for sample in drawn), [
