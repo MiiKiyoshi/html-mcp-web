@@ -12,7 +12,7 @@ from marionette_driver.marionette import ActionSequence
 from html_mcp_web.config import load_config
 from html_mcp_web.firefox import stop
 from html_mcp_web.project_server import SharedProjectServer
-from tests.firefox import MOD, Browser, launch, needs_firefox
+from tests.firefox import CHECK_MARGIN, LAYOUT_CHECK_SECONDS, MOD, Browser, launch, needs_firefox
 
 
 def type_keys(browser, keys):
@@ -89,7 +89,7 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         browser.set_window_rect(width=1200, height=760)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         assert browser.execute_script(
             'return [document.querySelector("#main-file").textContent, document.querySelector("#main-file").title]'
         ) == ["slides.html", f"~{os.sep}slides.html"]

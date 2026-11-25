@@ -14,6 +14,7 @@ import pytest
 from marionette_driver.marionette import Marionette
 
 from html_mcp_web.firefox import binary, command, headless_environment
+from html_mcp_web.server import HtmlReviewServer
 
 FIREFOX = binary()
 needs_firefox = pytest.mark.skipif(FIREFOX is None, reason="Firefox is required")
@@ -24,6 +25,11 @@ CONSOLE = "console.log"
 MOD = "\ue03d" if sys.platform == "darwin" else "\ue009"
 # The names the page gives those keys, in its tooltips and its notes.
 MOD_ALT = "Cmd+Option" if sys.platform == "darwin" else "Ctrl+Alt"
+# A test that waits for the outcome of the server's layout check waits as long as the server
+# allows a check, and CHECK_MARGIN beyond it for what comes before and after the check itself:
+# the page loading and asking for it, and the outcome reaching the page or the state.
+LAYOUT_CHECK_SECONDS = HtmlReviewServer.LAYOUT_CHECK_SECONDS
+CHECK_MARGIN = 15.0
 
 
 def launch(profile: str, *arguments: str) -> subprocess.Popen:

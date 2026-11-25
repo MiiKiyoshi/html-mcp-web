@@ -18,7 +18,7 @@ from html_mcp_web.config import load_config
 from html_mcp_web.firefox import stop
 from html_mcp_web.kits import CENTER
 from html_mcp_web.project_server import SharedProjectServer
-from tests.firefox import MOD, MOD_ALT, Browser, launch, needs_firefox
+from tests.firefox import CHECK_MARGIN, LAYOUT_CHECK_SECONDS, MOD, MOD_ALT, Browser, launch, needs_firefox
 
 
 def available_port() -> int:
@@ -304,7 +304,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         browser.navigate(base)
 
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         assert browser.execute_script('''
           const button = document.querySelector("#call-agent-btn");
           return [button.classList.contains("agent-offline"), button.disabled,
@@ -832,7 +832,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
             get_json(f"{base}/state")["artifacts"]["slides"]["layout_check"]["errors"]
             if get_json(f"{base}/state")["artifacts"]["slides"]["layout_check"]["checked_revision"] == changed_revision
             else None
-        ))
+        ), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         assert any("overflows its content area" in error for error in errors)
         assert any(re.search(r"title bar text overflows its bar by \d+px", error) for error in errors)
         assert any("title bar text overlaps <img#bar-logo>" in error for error in errors)
@@ -940,7 +940,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
             get_json(f"{base}/state")["artifacts"]["slides"]["layout_check"]["errors"]
             if get_json(f"{base}/state")["artifacts"]["slides"]["layout_check"]["checked_revision"] == narrow_revision
             else None
-        ))
+        ), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         # Zoomed text wraps at slightly different line heights, so the overflow amount
         # moves by a few pixels; the set of reported problems is what must hold.
         def without_amounts(messages: list[str]) -> list[str]:
@@ -1647,7 +1647,7 @@ return {
             done = artifact["layout_check"]["checked_revision"] == artifact["revision"]
             return artifact["layout_check"]["errors"] if done else None
 
-        errors = wait_until(checked, timeout=90)
+        errors = wait_until(checked, timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         lifted = [error for error in errors if " HTML " in error]
         assert any('"a long line running well past' in error and "runs past its box (right by" in error
                    for error in lifted), errors
@@ -1879,7 +1879,7 @@ def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path
         browser.set_window_rect(width=1400, height=900)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         # Pressed in the Preview alone, Source turns the view to Split and selects the words.
         browser.execute_script(select)
         wait_until(lambda: browser.execute_script(shown))
@@ -1969,7 +1969,7 @@ def test_source_and_page_find_a_formula_by_the_tex_katex_keeps(tmp_path: Path) -
         browser.set_window_rect(width=1400, height=900)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=60)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         browser.find_element("css selector", '[data-view="split"]').click()
         wait_until(lambda: browser.execute_script(
             'const page = window.wrappedJSObject || window;'
@@ -2054,7 +2054,7 @@ def test_the_area_button_draws_a_box_to_comment_on(tmp_path: Path) -> None:
         browser.set_window_rect(width=1400, height=900)
         browser.navigate(base)
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         page = browser.execute_script('''
           const frame = document.querySelector("#artifact-frame");
           const page = frame.contentDocument.querySelector("main.pages > section.page");
@@ -2147,7 +2147,7 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
         browser.set_window_rect(width=420, height=800)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         measured = browser.execute_script('''
           const pane = document.querySelector("#artifact-pane").getBoundingClientRect();
           const toggle = document.querySelector("#sidebar-toggle-btn").getBoundingClientRect();
@@ -2384,7 +2384,7 @@ def test_slide_previews_open_from_the_first_button_and_lead_to_a_page(tmp_path: 
         browser.set_window_rect(width=1400, height=900)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         order = browser.execute_script(
             'return Array.from(document.querySelector(".workspace-toolbar").children).map((child) => child.id || child.className)')
         assert order == ["thumbs-btn", "area-btn", "zoom-reset-btn", "scripts-btn", "search-btn"], order
@@ -2509,7 +2509,7 @@ def test_hiding_the_comments_keeps_the_page_being_read(tmp_path: Path) -> None:
         browser.set_window_rect(width=1000, height=800)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         browser.execute_script('''
           const win = document.querySelector("#artifact-frame").contentWindow;
           const page = win.document.querySelectorAll("main.pages > section.page")[11];
@@ -2576,7 +2576,7 @@ def test_a_layout_problem_leads_to_its_element(tmp_path: Path) -> None:
         browser.set_window_rect(width=1400, height=900)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "layout error"'))
+            'return document.querySelector("#artifact-status")?.textContent === "layout error"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         browser.execute_script('document.querySelector(\'[data-tab="problems"]\').click()')
         # A message whose ref goes below the page's first level, so the page alone is not it.
         shown = browser.execute_script('''
@@ -2633,7 +2633,7 @@ def test_svg_text_moved_in_a_way_firefox_ignores_is_reported(tmp_path: Path) -> 
     shared = SharedProjectServer(load_config(config_path))
     try:
         shared.ensure()
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN) as response:
             errors = json.loads(response.read())["errors"]
         moved = [error for error in errors if " places " in error]
         assert moved == ["page 1 <svg#shifted> places 2 text runs with baseline-shift, which Firefox ignores, "
@@ -2684,7 +2684,7 @@ def test_an_arrowhead_that_leaves_too_little_line_is_reported(tmp_path: Path) ->
     shared = SharedProjectServer(load_config(config_path))
     try:
         shared.ensure()
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN) as response:
             errors = json.loads(response.read())["errors"]
         covered = [error for error in errors if "arrowhead" in error]
         assert covered == ["page 1 <svg#flow> <path#covered> ends with a 9-unit line after its last bend under "
@@ -2741,7 +2741,7 @@ def test_a_box_that_runs_past_the_box_it_is_drawn_in_is_reported(tmp_path: Path)
     shared = SharedProjectServer(load_config(config_path))
     try:
         shared.ensure()
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN) as response:
             errors = json.loads(response.read())["errors"]
         past = [error for error in errors if "runs past the box it is drawn in" in error]
         assert past == ["page 1 <svg#boxes> <rect#step> runs past the box it is drawn in (bottom by 2). "
@@ -2808,7 +2808,7 @@ def test_semicolons_and_stretching_are_reported_and_normal_cases_are_not(tmp_pat
         shared = SharedProjectServer(load_config(config_path))
         try:
             shared.ensure()
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN) as response:
                 errors = json.loads(response.read())["errors"]
             checked = [error for error in errors if "semicolon" in error or "stretched" in error or "spacing" in error]
             assert sorted(checked) == sorted(expected), (guideline, errors)
@@ -2881,7 +2881,7 @@ def test_a_panel_stretched_far_past_its_content_is_reported_under_the_neutral_gu
         shared = SharedProjectServer(load_config(config_path))
         try:
             shared.ensure()
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN) as response:
                 errors = json.loads(response.read())["errors"]
             checked = [error for error in errors if "its own height" in error]
             assert sorted(checked) == sorted(expected), (guideline, errors)
@@ -2950,7 +2950,7 @@ def test_a_table_column_saying_the_same_in_every_row_is_reported_under_the_neutr
         shared = SharedProjectServer(load_config(config_path))
         try:
             shared.ensure()
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN) as response:
                 errors = json.loads(response.read())["errors"]
             checked = [error for error in errors if "drop the column" in error]
             assert sorted(checked) == sorted(expected), (guideline, errors)
@@ -3015,7 +3015,7 @@ def test_a_bullet_citing_a_visual_from_another_column_is_reported_under_the_neut
         shared = SharedProjectServer(load_config(config_path))
         try:
             shared.ensure()
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN) as response:
                 errors = json.loads(response.read())["errors"]
             checked = [error for error in errors if "cites values of" in error]
             assert sorted(checked) == sorted(expected), (guideline, errors)
@@ -3082,7 +3082,8 @@ def test_space_is_measured_with_no_review_ui_open(tmp_path: Path) -> None:
         base = f"http://127.0.0.1:{port}"
         state = get_json(f"{base}/state")["artifacts"]["slides"]
         assert state["layout_check"]["checked_revision"] is None   # nobody has looked yet
-        with urllib.request.urlopen(f"{base}/artifacts/slides/space?page=1&clearance=0", timeout=75) as reply:
+        with urllib.request.urlopen(f"{base}/artifacts/slides/space?page=1&clearance=0",
+                                    timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN) as reply:
             measured = json.loads(reply.read().decode("utf-8"))
         assert measured["revision"] == state["revision"]
         assert measured["children"]                    # the page's blocks were measured
@@ -3241,7 +3242,7 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
         browser.set_window_rect(width=1400, height=1000)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         wait_until(lambda: browser.execute_script(
             'const d = document.querySelector("#artifact-frame").contentDocument;'
             'return d !== null && d.querySelector("#svg-words") !== null'))
@@ -3612,7 +3613,7 @@ def test_without_full_screen_the_show_lies_over_the_page(tmp_path: Path) -> None
         browser.set_window_rect(width=900, height=700)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         assert browser.execute_script("return document.fullscreenEnabled") is False
         shown = """
           const pane = document.querySelector("#artifact-pane").getBoundingClientRect();
@@ -3677,7 +3678,7 @@ def test_two_fingers_in_the_slide_show_carry_nothing(tmp_path: Path) -> None:
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         browser.find_element("css selector", "#fullscreen-btn").click()
         wait_until(lambda: browser.execute_script("""
           return document.querySelector("#artifact-frame").contentDocument.documentElement
@@ -3778,7 +3779,7 @@ def test_a_sideways_wheel_stays_in_the_artifact(tmp_path: Path) -> None:
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
 
         taken = browser.execute_script("""
           const frame = document.querySelector("#artifact-frame");
@@ -3855,7 +3856,7 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
 
         measure = """
           const frame = document.querySelector("#artifact-frame");
@@ -4374,7 +4375,7 @@ def test_the_artifact_stays_selectable_under_the_zoom(tmp_path: Path) -> None:
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
 
         # A long press is a finger that lands and stays, with the small wobble a hand
         # always has. If anything cancels those the browser never offers a selection, and
@@ -4472,7 +4473,7 @@ def test_a_fitted_page_sits_evenly_on_a_phone(tmp_path: Path) -> None:
         browser.set_window_rect(width=390, height=844)      # a phone, in CSS pixels
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         sides = wait_until(lambda: browser.execute_script("""
           const frame = document.querySelector("#artifact-frame");
           const win = frame.contentWindow;
@@ -4593,7 +4594,7 @@ def test_a_touch_screen_keeps_the_two_buttons_in_their_corners(tmp_path: Path) -
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         assert browser.execute_script(
             'return window.matchMedia("(pointer: coarse)").matches') is True
 
@@ -4704,7 +4705,7 @@ def test_a_selection_the_browser_took_over_still_brings_the_button(tmp_path: Pat
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
 
         # A finger lands on the word and the browser makes the selection under it.
         browser.execute_script("""
@@ -4877,7 +4878,8 @@ return {left: lines("left"), justify: lines("justify"), center: lines("center"),
         state = wait_until(lambda: (
             get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]
             if get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]["layout_check"]["checked_revision"]
-            == get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]["revision"] else None))
+            == get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]["revision"] else None),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         errors = [error for error in state["layout_check"]["errors"] if "svg#wrapped" in error]
         assert len(errors) == 1, state["layout_check"]["errors"]
         assert re.search(
@@ -5236,7 +5238,8 @@ return {short: read("short"), long: read("long"), loose: read("loose"), cramped:
         state = wait_until(lambda: (
             get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]
             if get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]["layout_check"]["checked_revision"]
-            == get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]["revision"] else None))
+            == get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["slides"]["revision"] else None),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         errors = [error for error in state["layout_check"]["errors"] if "svg#fitted" in error]
         assert any(f'is loose in 188x80 at {seen["loose"]["size"]}px' in error for error in errors), errors
         assert any("does not fit 100x40 at 12px" in error for error in errors), errors
@@ -5282,7 +5285,7 @@ def test_a_comment_whose_text_is_gone_keeps_its_place(tmp_path: Path) -> None:
         browser.start_session()
         browser.navigate(base)
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         anchor = wait_until(lambda: browser.execute_script("""
           const doc = document.querySelector("#artifact-frame").contentDocument;
           const node = doc.querySelector("#target")?.firstChild;
@@ -5470,7 +5473,7 @@ def test_a_short_last_line_is_a_fault_on_a_slide_and_a_page(tmp_path: Path) -> N
             return done if len(done) == 2 else None
 
         # With no review page open, the server runs the check itself, one artifact at a time.
-        seen = wait_until(checked, timeout=90)
+        seen = wait_until(checked, timeout=2 * LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         tails = {name: [error for error in artifact["layout_check"]["errors"] if "wastes its last line" in error]
                  for name, artifact in seen.items()}
         assert len(tails["deck"]) == 1, seen["deck"]["layout_check"]["errors"]
@@ -5512,7 +5515,7 @@ def test_a_report_head_keeps_its_text_and_a_word_space_stays_narrow(tmp_path: Pa
             artifact = get_json(f"http://127.0.0.1:{port}/state")["artifacts"]["paper"]
             return artifact if artifact["layout_check"]["checked_revision"] == artifact["revision"] else None
 
-        errors = wait_until(checked, timeout=90)["layout_check"]["errors"]
+        errors = wait_until(checked, timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)["layout_check"]["errors"]
         heads = [error for error in errors if "stands at the foot" in error]
         spaces = [error for error in errors if "opens a word space" in error]
         assert len(heads) == 1 and '"Lonely head"' in heads[0], errors
@@ -5559,7 +5562,7 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path, mo
         browser.start_session()
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         stamped = browser.execute_script(
             'return document.querySelector(\'meta[name="html-mcp-static"]\').content')
         assert stamped == get_json(f"http://127.0.0.1:{port}/state")["static"]
@@ -5590,7 +5593,7 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path, mo
         browser.refresh()
         wait_until(lambda: browser.execute_script(
             'return document.body.dataset.sameLoad !== "yes"'
-            ' && document.querySelector("#artifact-status")?.textContent === "ready"'))
+            ' && document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         refreshed = wait_until(lambda: browser.execute_script(
             f'const win = {frame_window}; return win && win.scrollY > 0 ? win.scrollY : null;'))
         assert abs(refreshed - read_at) <= 2
@@ -5612,7 +5615,7 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path, mo
         browser.switch_to_window(viewer, focus=True)
         wait_until(lambda: browser.execute_script(
             'return document.body.dataset.sameLoad !== "yes"'
-            ' && document.querySelector("#artifact-status")?.textContent === "ready"'))
+            ' && document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         returned = wait_until(lambda: browser.execute_script(
             f'const win = {frame_window}; return win && win.scrollY > 0 ? win.scrollY : null;'))
         assert abs(returned - read_at) <= 2
@@ -5658,7 +5661,7 @@ def test_an_edit_replaces_the_deck_with_no_blank_and_no_jump(tmp_path: Path) -> 
         browser.start_session()
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         # The preview column is open too, and the drawn place of its first preview is held, read
         # once its document has loaded as the samples below require: read before, on a loaded
         # runner, it was a place the column then left.
@@ -6004,7 +6007,7 @@ def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
         browser.set_window_rect(width=1000, height=700)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
 
         def shown():
             return browser.execute_script('''
@@ -6124,7 +6127,7 @@ def test_a_review_page_shows_the_servers_check_and_measures_nothing_itself(tmp_p
         browser.set_window_rect(width=1000, height=600)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'))
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         base = f"http://127.0.0.1:{port}"
         first = get_json(f"{base}/state")["artifacts"]["slides"]
         assert first["layout_check"]["checked_revision"] == first["revision"]
@@ -6153,11 +6156,11 @@ def test_a_review_page_shows_the_servers_check_and_measures_nothing_itself(tmp_p
         # A new revision is checked by the server, and the page shows that check.
         slides.write_text(slides_html("Edited sentence."), encoding="utf-8")
         wait_until(lambda: get_json(f"{base}/state")["artifacts"]["slides"]["layout_check"]["checked_revision"]
-                   == first["revision"] + 1)
+                   == first["revision"] + 1, timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         wait_until(lambda: browser.execute_script('''
           return document.querySelector("#artifact-frame").dataset.revision === "%d"
             && document.querySelector("#artifact-status").textContent === "ready";
-        ''' % (first["revision"] + 1)))
+        ''' % (first["revision"] + 1)), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
         resize_about()
         assert posts() == 0
     finally:
