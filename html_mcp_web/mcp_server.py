@@ -3,7 +3,9 @@
 import asyncio
 import functools
 import json
+import os
 import secrets
+import signal
 import sys
 import threading
 import time
@@ -640,9 +642,23 @@ def _listen_in_background(port: int) -> None:
         print(f"html-mcp did not start listening: {error}", file=sys.stderr)
 
 
+def _stop_on_sigterm(binding: ProjectBinding, number: int, frame) -> None:
+    """Stop the project server before exiting, as a closed input does: its layout check's
+    browser ends and the browser's profile is removed. A client that does not see the server
+    exit soon after closing its input ends it with SIGTERM, which ends Python where it stands.
+    The stop runs on a thread of its own, since this runs on the main thread wherever it
+    stood, perhaps holding what the stop needs."""
+    def stop() -> None:
+        binding.stop()
+        os._exit(128 + number)
+
+    threading.Thread(target=stop, name="html-mcp-sigterm").start()
+
+
 def main(start_dir: Path) -> None:
     _check_dependencies()
     binding = ProjectBinding(start_dir)
+    signal.signal(signal.SIGTERM, functools.partial(_stop_on_sigterm, binding))
     try:
         client = binding.connect()
     except ProjectSetupError as error:

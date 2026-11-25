@@ -1,6 +1,6 @@
 """A layout check's browser and its profile go with the server that started them, however the
-server stops: stop(), a pytest worker ending after it, its client closing the pipe and SIGKILL.
-A PDF export's browser goes with the process printing (html_mcp_web/chrome.py start(),
+server stops: stop(), a pytest worker ending after it, its client closing the pipe, SIGTERM and
+SIGKILL. A PDF export's browser goes with the process printing (html_mcp_web/chrome.py start(),
 server.py stop_checks()).
 
 Each server serves a deck whose image never arrives, so its check runs until the server stops.
@@ -11,6 +11,7 @@ whether the test passed or failed."""
 import contextlib
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -230,6 +231,26 @@ def test_a_client_closing_the_pipe_leaves_nothing(tmp, tmp_path, never) -> None:
     server = serving_mcp(config, port, tmp, never)
     try:
         server.stdin.close()
+        server.wait(timeout=30)
+        assert left(tmp) == (0, [])
+    finally:
+        ended(server)
+
+
+@needs_browser
+@pytest.mark.skipif(os.name == "nt", reason="Windows sends no SIGTERM: a process ended there is SIGKILL's case")
+@pytest.mark.parametrize("to", ["server", "group"])
+def test_sigterm_stops_the_server_as_a_closed_pipe_does(tmp, tmp_path, never, to) -> None:
+    """A client that does not see the server exit soon after closing the pipe ends it with
+    SIGTERM, sent to the server alone or, as the MCP SDK's client does, to the process group
+    the server leads, the browser among it."""
+    config, port = slow_project(tmp_path, never.url)
+    server = serving_mcp(config, port, tmp, never)
+    try:
+        if to == "group":
+            os.killpg(server.pid, signal.SIGTERM)
+        else:
+            server.send_signal(signal.SIGTERM)
         server.wait(timeout=30)
         assert left(tmp) == (0, [])
     finally:
