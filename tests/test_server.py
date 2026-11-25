@@ -463,8 +463,9 @@ async def test_the_servers_own_check_answers_while_a_review_page_is_open(client,
         def wait(self, timeout: float | None = None) -> int:
             return 0
 
-    def headless_browser(command, **kwargs):
+    def headless_browser(folder, *arguments):
         # Stands in for the headless page, which measures and posts at once.
+        command = chrome.command(folder, *arguments)
         launched.append((command[0], command[-1]))
         runtime.layout_revision = runtime.space_revision = runtime.revision
         runtime.layout_errors = []
@@ -472,7 +473,7 @@ async def test_the_servers_own_check_answers_while_a_review_page_is_open(client,
 
     monkeypatch.setattr(chrome, "binary", lambda: "/opt/chrome/chrome")
     monkeypatch.setattr(chrome, "end", lambda pid, folder: None)
-    monkeypatch.setattr(chrome.subprocess, "Popen", headless_browser)
+    monkeypatch.setattr(chrome, "start", headless_browser)
     state = await (await test_client.get("/artifacts/slides/layout")).json()
     assert [program for program, _ in launched] == ["/opt/chrome/chrome"]
     assert "?artifact=slides&check=" in launched[0][1]

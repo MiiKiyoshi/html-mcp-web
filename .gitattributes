@@ -2,5 +2,6 @@
 html_mcp_web/static/shared/** -text
 html_mcp_web/shared/** -text
 plugin/hooks/guide_record.py -text
+tests/chrome.py -text
 # Shell scripts keep their line ends where git would turn them into the system's.
 *.sh text eol=lf
