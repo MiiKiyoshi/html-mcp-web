@@ -233,6 +233,9 @@ export function createSourceEditor({
 
   async function load(force = false) {
     await initialize();
+    // Pressed before the page knows which artifact it shows, Source loads nothing: the request
+    // went to no artifact and the page said 404. The view loads the file once one is shown.
+    if (base() === null) return false;
     if (!force && sourcePath !== null) return true;
     if (sourceDirty) {
       if (!force) {
