@@ -706,11 +706,15 @@ def test_browser_review_contract(tmp_path: Path) -> None:
               paragraph.id = "unicode-boundary";
               paragraph.textContent = "before𝜃" + "x".repeat(arguments[1]) + "𝜃tail";
               doc.querySelector("section.page [data-layout-guard]").prepend(paragraph);
+              // A scroll hides the button, and the frame's scroll event can come some drawings
+              // after the scroll: the words are selected once it has come, as a reader selects
+              // them.
+              const scrolled = new Promise((done) => view.addEventListener("scroll", done, {once: true}));
+              const top = view.scrollY;
               paragraph.scrollIntoView({block: "center"});
-              // A scroll hides the button, and the frame's scroll event comes with its next
-              // drawing: the words are selected once it has come, as a reader selects them.
+              const heard = view.scrollY === top ? Promise.resolve() : scrolled;
               const end = arguments[0];
-              return new Promise((done) => view.requestAnimationFrame(() => view.requestAnimationFrame(() => {
+              return heard.then(() => new Promise((done) => view.requestAnimationFrame(() => view.requestAnimationFrame(() => {
                 const range = doc.createRange();
                 range.setStart(paragraph.firstChild, 0);
                 range.setEnd(paragraph.firstChild, end);
@@ -719,7 +723,7 @@ def test_browser_review_contract(tmp_path: Path) -> None:
                 selection.addRange(range);
                 doc.dispatchEvent(new view.MouseEvent("mouseup", {bubbles: true}));
                 done(true);
-              })));
+              }))));
             ''', script_args=[selection_end, filler_length])
             wait_until(lambda: browser.execute_script(
                 'return !document.querySelector("#selection-menu").classList.contains("hidden")'))
@@ -3414,9 +3418,14 @@ def test_full_screen_shows_a_deck_as_a_slide_show_and_a_report_as_its_page(tmp_p
         browser.execute_script('document.exitFullscreen(); return true;')
         wait_until(lambda: browser.execute_script('return document.fullscreenElement === null'))
 
+        # Each artifact has a frame of its own, and #artifact-frame names the one shown: the report
+        # is scrolled once the frame shown holds it.
         wait_until(lambda: browser.find_element("css selector", '.artifact-tab:nth-child(2)').click() or True)
-        wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#main-file").textContent === "report.html"'))
+        wait_until(lambda: browser.execute_script('''
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          return document.querySelector("#main-file").textContent === "report.html"
+            && doc?.title === "Report" && doc.readyState === "complete";
+        '''))
         browser.find_element("css selector", "#fullscreen-btn").click()
         wait_until(lambda: browser.execute_script('return document.fullscreenElement !== null'))
         assert browser.execute_script('''
