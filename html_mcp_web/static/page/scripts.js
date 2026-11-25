@@ -3,15 +3,18 @@
 // document as an attribute its stylesheet reads, so it holds through reloads and tab switches. The
 // button rests while the artifact has no scripts.
 //
-// createScripts takes changed(), told when the reader shows or hides them. It gives apply(), the
-// choice set on the document shown and on the button, and attach().
+// createScripts takes nothing. It gives apply(), the choice set on the document shown and on the
+// button; changed(listener), which hands in a function called when the reader shows or hides
+// them; and attach().
 
 import { $ } from "../shared/dom.js";
 import { frameDocument } from "./deck-dom.js";
+import { createListeners } from "../shared/listeners.js";
 
 const KEPT = "htmlMcpScriptsHidden";
 
-export function createScripts({ changed }) {
+export function createScripts() {
+  const changed = createListeners();
   const hidden = () => localStorage.getItem(KEPT) === "1";
 
   function apply() {
@@ -30,11 +33,12 @@ export function createScripts({ changed }) {
 
   return {
     apply,
+    changed: changed.add,
     attach() {
       $("#scripts-btn").addEventListener("click", () => {
         localStorage.setItem(KEPT, hidden() ? "0" : "1");
         apply();
-        changed();
+        changed.tell();
       });
     },
   };

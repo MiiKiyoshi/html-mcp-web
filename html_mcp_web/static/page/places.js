@@ -1,22 +1,24 @@
 // A place of the artifact shown in the views, the Preview and the Source, which Split shows side
 // by side: where a comment is, shown from its card; words of the file found on the pages; and a
 // place in the file words on the pages come from. Each kind of place has its rule for which view
-// brings it into sight. A comment shown from its mark opens in the panel, which opens first.
+// brings it into sight. A comment shown from its mark opens in the panel, which opens first, and
+// a press on the ringed comment's number on a page hides the comments.
 //
 // createPlaces takes workspace (view(), show(view)); source (load(force), showAnchor(anchor,
 // focus), showPlace(place)); marks (flash(id), showRange(range)); anchors (resolveAnchor(anchor),
-// rangeFromShown(shown)); showComment(id), which opens a comment's card in the panel; and
-// showTab(name), which shows a tab of the sidebar. It gives showComment(comment), a comment's
-// place shown with the keys left in the list; enterComment(comment), for K, which takes the keys to
-// a comment's words in the source; openComment(id), a comment opened from its mark; takeComment(id),
-// a comment opened from the editor with the keys taken to the list; showInSource(place); and
-// showWherePrinted(shown).
+// rangeFromShown(shown)); showComment(id), which opens a comment's card in the panel; ringed(),
+// the ringed comment's id; and showTab(name), which shows a tab of the sidebar. It gives
+// showComment(comment), a comment's place shown with the keys left in the list;
+// enterComment(comment), for K, which takes the keys to a comment's words in the source;
+// openComment(id), a comment opened from its mark; markPressed(id), for a press on a comment's
+// number on a page; takeComment(id), a comment opened from the editor with the keys taken to the
+// list; showInSource(place); and showWherePrinted(shown).
 
 import { $ } from "../shared/dom.js";
 import { setSidebarCollapsed } from "../shared/sidebar.js";
 import { deckPages, frameDocument } from "./deck-dom.js";
 
-export function createPlaces({ workspace, source, marks, anchors, showComment, showTab }) {
+export function createPlaces({ workspace, source, marks, anchors, showComment, ringed, showTab }) {
   // A comment's words in the source, selected, the editor taking the keys unless told to leave
   // them where they are.
   async function openSourceLocation(anchor, focus = true) {
@@ -76,6 +78,14 @@ export function createPlaces({ workspace, source, marks, anchors, showComment, s
       }
     },
     openComment,
+    // A second press on the ringed comment's number hides the comments.
+    markPressed(id) {
+      if (!$(".layout").classList.contains("sidebar-collapsed") && ringed() === id) {
+        setSidebarCollapsed(true);
+        return;
+      }
+      openComment(id).catch((error) => console.error(error));
+    },
     takeComment(id) {
       showTab("comments");
       openComment(id).catch((error) => console.error(error));

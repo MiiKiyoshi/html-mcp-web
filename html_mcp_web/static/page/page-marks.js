@@ -2,24 +2,26 @@
 // the comment's number beside them, a box drawn on a page, and a dashed mark where words a comment
 // quotes stood before an edit took them away. The words of the source shown on the page by
 // → Preview are marked in blue for a moment. The marks lie in a layer inside each page, in the
-// page's own pixels, so they move and scale with it. A click on a number opens its comment, and a
-// second click on the ringed one's hides the comments. This module keeps the words shown and the
+// page's own pixels, so they move and scale with it. This module keeps the words shown and the
 // comments whose words the page no longer finds, which their cards mark stale.
 //
-// createPageMarks takes marked(), the open comments to mark; anchors (resolveAnchor(anchor),
-// lastKnownPlace(anchor)); ringed(), the ringed comment's id; showComment(id), which opens a
-// comment in the panel; and staleChanged(), told when the comments whose words are gone change.
-// It gives render(); schedule(), render() at the frame's next frame; showRange(range), words shown
-// for a moment; lost(id), whether a comment's words are gone; forget(), none of them gone, for
-// another artifact; flash(id), a comment's marks flashed; layer(page), the layer of marks in a
-// page; and frameOf(node), the page or script block a node is in, with its box and scale.
+// createPageMarks takes marked(), the open comments to mark, and anchors (resolveAnchor(anchor),
+// lastKnownPlace(anchor)). It gives render(); schedule(), render() at the frame's next frame;
+// showRange(range), words shown for a moment; lost(id), whether a comment's words are gone;
+// forget(), none of them gone, for another artifact; flash(id), a comment's marks flashed;
+// layer(page), the layer of marks in a page; frameOf(node), the page or script block a node is
+// in, with its box and scale; and what happens to the marks, each of which hands in a function
+// called when it does: pressed(listener), with the id of the comment whose number is pressed;
+// and lostChanged(listener), as the comments whose words are gone change.
 
-import { $, clear } from "../shared/dom.js";
-import { setSidebarCollapsed } from "../shared/sidebar.js";
+import { clear } from "../shared/dom.js";
+import { createListeners } from "../shared/listeners.js";
 import { deckPages, frameDocument, frameWindow } from "./deck-dom.js";
 import { selectionRects } from "./selection-rects.js";
 
-export function createPageMarks({ marked, anchors, ringed, showComment, staleChanged }) {
+export function createPageMarks({ marked, anchors }) {
+  const pressed = createListeners();
+  const lostChanged = createListeners();
   // Source words shown on the page by → Preview, marked for a moment.
   let shownRange = null;
   // The comments whose words the page no longer finds.
@@ -106,13 +108,7 @@ export function createPageMarks({ marked, anchors, ringed, showComment, staleCha
       Object.assign(badge.style, {
         left: `${Math.max(0, box.left - 21)}px`, top: `${Math.max(0, box.top - 1)}px`,
       });
-      badge.addEventListener("click", () => {
-        if (!$(".layout").classList.contains("sidebar-collapsed") && ringed() === comment.id) {
-          setSidebarCollapsed(true);
-          return;
-        }
-        showComment(comment.id).catch((error) => console.error(error));
-      });
+      badge.addEventListener("click", () => pressed.tell(comment.id));
       return badge;
     };
     for (const comment of marked()) {
@@ -190,7 +186,7 @@ export function createPageMarks({ marked, anchors, ringed, showComment, staleCha
     }
     const attachmentChanged = previousUnattached.size !== unattached.size
       || Array.from(previousUnattached).some((commentId) => !unattached.has(commentId));
-    if (attachmentChanged) staleChanged();
+    if (attachmentChanged) lostChanged.tell();
   }
 
   function schedule() {
@@ -227,5 +223,7 @@ export function createPageMarks({ marked, anchors, ringed, showComment, staleCha
     },
     layer,
     frameOf,
+    pressed: pressed.add,
+    lostChanged: lostChanged.add,
   };
 }

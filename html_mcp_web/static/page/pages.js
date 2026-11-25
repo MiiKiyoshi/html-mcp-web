@@ -3,17 +3,18 @@
 // + comment. Out of the slide show the page being read is the one the window shows most of, read
 // again a frame after each scroll; in it, the one the show shows. This module keeps that page.
 //
-// createPages takes showing(), whether the slide show is on; slideChanged(), told when the page
-// changes while it is; commentOn(anchor), which opens a new comment on a page; and marked(), told
-// after the page changed, for the slide previews to mark it. It gives current(), the page's
-// number, or null; setCurrent(number); visible(), the page the window shows; render(), the tab
-// drawn again; update(), the page read again from the window; and schedule(), update() at the
-// frame's next frame.
+// createPages takes showing(), whether the slide show is on, and commentOn(anchor), which opens a
+// new comment on a page. It gives current(), the page's number, or null; setCurrent(number);
+// visible(), the page the window shows; render(), the tab drawn again; update(), the page read
+// again from the window; schedule(), update() at the frame's next frame; and changed(listener),
+// which hands in a function called when the page read from the window changes.
 
 import { $, h, clear } from "../shared/dom.js";
 import { deckPages, frameWindow, pageTitle } from "./deck-dom.js";
+import { createListeners } from "../shared/listeners.js";
 
-export function createPages({ showing, slideChanged, commentOn, marked }) {
+export function createPages({ showing, commentOn }) {
+  const changed = createListeners();
   let currentPage = null;
   let pageFrame = null;
 
@@ -65,9 +66,8 @@ export function createPages({ showing, slideChanged, commentOn, marked }) {
     const number = visible();
     if (number === currentPage) return;
     currentPage = number;
-    if (showing()) slideChanged();
     render();
-    marked();
+    changed.tell();
   }
 
   function schedule() {
@@ -88,5 +88,6 @@ export function createPages({ showing, slideChanged, commentOn, marked }) {
     render,
     update,
     schedule,
+    changed: changed.add,
   };
 }

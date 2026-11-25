@@ -11,10 +11,11 @@
 //
 // createReloadPlace takes alias(), the artifact shown; heldPage(), the page the slide show shows
 // or ended on, or null; and pendingView(alias), the place the artifact's next document opens at.
-// It gives remember(); recalled(), the place kept for the artifact shown, once, or null; and
-// attach(), which remembers it as the tab is hidden or left.
+// It gives remember(); putBack(win), the place kept for the artifact shown put back, once, in the
+// window of a document just loaded, unless an edit's view waits to be put back there instead;
+// and attach(), which remembers it as the tab is hidden or left.
 
-import { deckPages, frameDocument, readingPlace } from "./deck-dom.js";
+import { deckPages, frameDocument, keepReadingPlace, readingPlace } from "./deck-dom.js";
 
 const KEPT = "htmlMcpReadingPlace";
 
@@ -38,19 +39,26 @@ export function createReloadPlace({ alias, heldPage, pendingView }) {
     }
   }
 
+  // The place kept for the artifact shown, taken once, or null.
+  function recalled() {
+    let saved = null;
+    try {
+      saved = JSON.parse(sessionStorage.getItem(KEPT) ?? "null");
+      sessionStorage.removeItem(KEPT);
+    } catch {
+      return null;
+    }
+    if (saved === null || saved.artifact !== alias()) return null;
+    const page = deckPages()[saved.page];
+    return page === undefined ? null : { page, y: saved.y };
+  }
+
   return {
     remember,
-    recalled() {
-      let saved = null;
-      try {
-        saved = JSON.parse(sessionStorage.getItem(KEPT) ?? "null");
-        sessionStorage.removeItem(KEPT);
-      } catch {
-        return null;
-      }
-      if (saved === null || saved.artifact !== alias()) return null;
-      const page = deckPages()[saved.page];
-      return page === undefined ? null : { page, y: saved.y };
+    putBack(win) {
+      if (pendingView(alias()) !== undefined) return;
+      const place = recalled();
+      if (place !== null) win.requestAnimationFrame(() => keepReadingPlace(place));
     },
     attach() {
       window.addEventListener("pagehide", remember);

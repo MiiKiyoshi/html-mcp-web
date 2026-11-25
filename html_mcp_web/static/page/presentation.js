@@ -5,19 +5,28 @@
 // show ends, and the wheel's and the finger's run.
 //
 // createPresentation takes pages (current(), setCurrent(number), visible(), render()), the page
-// being read; fit(), which fits the pages to the pane; hideSelection(); scheduleLayoutCheck();
-// layout(), the shown artifact's layout; and entering(), told as the reader asks for full screen.
-// It gives showing(), whether the show is on; heldPage(), the page the show shows, or the one it
-// ended on until the deck is scrolled back to it, or null; inFullscreen(); mark(doc), a document told whether it is
-// in full screen; install(doc), the show's keys, clicks, swipes and wheel in a document; resume(),
-// the show taken up again in a document loaded in full screen; markCurrent(), the page being read
-// marked as the shown one; pagesChanged(), the page held within the pages an edit left; and
-// attach(), the controls, the keys and the full screen's changes.
+// being read, and layout(), the shown artifact's layout. It gives showing(), whether the show is
+// on; heldPage(), the page the show shows, or the one it ended on until the deck is scrolled back
+// to it, or null; inFullscreen(); movePage(delta), the show stepped by delta pages, answering
+// whether it moved; markCurrent(), the page being read marked as the shown one while the show is
+// on; pagesChanged(), the page held within the pages an edit left; mark(doc), a document told
+// whether it is in full screen; install(doc), the show's keys, clicks, swipes and wheel in a
+// document; resume(), the show taken up again in a document loaded in full screen; attach(), the
+// controls, the keys and the full screen's changes; and what happens to full screen and the show,
+// each of which hands in a function called when it does: entering(listener), as the reader asks
+// for full screen; entered(listener), as full screen comes on; changed(listener), as full screen,
+// the show or the page it shows changes, once the page shown is marked; and ended(listener), once
+// the show has ended.
 
 import { $ } from "../shared/dom.js";
 import { deckPages, frameDocument, frameWindow } from "./deck-dom.js";
+import { createListeners } from "../shared/listeners.js";
 
-export function createPresentation({ pages, fit, hideSelection, scheduleLayoutCheck, layout, entering }) {
+export function createPresentation({ pages, layout }) {
+  const entering = createListeners();
+  const entered = createListeners();
+  const changed = createListeners();
+  const ended = createListeners();
   let slideShow = false;
   let leftSlideShowAt = null;
   let pointer = null;
@@ -34,6 +43,7 @@ export function createPresentation({ pages, fit, hideSelection, scheduleLayoutCh
   }
 
   function markCurrent() {
+    if (!slideShow) return;
     for (const [index, page] of deckPages().entries()) {
       page.classList.toggle("html-mcp-current-page", index + 1 === pages.current());
     }
@@ -50,7 +60,7 @@ export function createPresentation({ pages, fit, hideSelection, scheduleLayoutCh
     const previous = pages.current();
     pages.setCurrent(Math.min(Math.max(number, 1), count));
     markCurrent();
-    fit();
+    changed.tell();
     pages.render();
     return pages.current() !== previous;
   }
@@ -86,7 +96,7 @@ export function createPresentation({ pages, fit, hideSelection, scheduleLayoutCh
     resetWheelGesture();
     delete frameDocument().documentElement.dataset.htmlMcpPresentation;
     for (const page of deckPages()) page.classList.remove("html-mcp-current-page");
-    fit();
+    changed.tell();
     const number = pages.current();
     if (number !== null) {
       // Until the deck is scrolled back to it, the page just shown is held for a reload: WebKit
@@ -112,14 +122,14 @@ export function createPresentation({ pages, fit, hideSelection, scheduleLayoutCh
     $("#fullscreen-btn").setAttribute("aria-pressed", fullscreen ? "true" : "false");
     if (fullscreen) frameDocument().documentElement.dataset.htmlMcpFullscreen = "";
     else delete frameDocument().documentElement.dataset.htmlMcpFullscreen;
-    if (fullscreen) hideSelection();
+    if (fullscreen) entered.tell();
     if (fullscreen && layout() === "slides") {
       activate();
     } else {
       const wasSlideShow = slideShow;
       deactivate();
-      fit();
-      if (wasSlideShow) scheduleLayoutCheck();
+      changed.tell();
+      if (wasSlideShow) ended.tell();
     }
   }
 
@@ -245,11 +255,15 @@ export function createPresentation({ pages, fit, hideSelection, scheduleLayoutCh
     resume() {
       if (inFullscreen() && layout() === "slides") activate();
     },
+    entering: entering.add,
+    entered: entered.add,
+    changed: changed.add,
+    ended: ended.add,
     attach() {
       $("#fullscreen-btn").addEventListener("click", () => {
         // The slide show sizes the current page itself; a reader's zoom held from browsing would
         // put the show off screen.
-        entering();
+        entering.tell();
         toggleFullscreen().catch((error) => alert(`Could not enter full screen: ${error.message}`));
       });
       $("#presentation-prev-btn").addEventListener("click", () => movePage(-1));

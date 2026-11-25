@@ -3,6 +3,8 @@
 // search in it, with the scroll and resize of its window; then the comments' marks, the search's
 // matches and the layout check's result on it, and the slide show again in full screen. A
 // document the page set up once, shown again or changed in place, needs the page alone set up.
+// While a grip is dragged the window's resizes fit the pages alone, and the pages are fitted
+// again with what is drawn over them once the Preview's room is set.
 //
 // createDeckSetup takes the parts it sets up: project (artifact()); zoom (fit(), apply(),
 // install(doc), scrolled(win)); scripts (apply()); presentation (showing(), mark(doc),
@@ -10,7 +12,8 @@
 // selection and search, each installed in the document (install(doc), hide(), handleKeydown,
 // refresh()); marks (render(), schedule()); layout (show(), schedule(), watch(doc, images)); and
 // dragging(), whether a grip is being dragged. It gives loaded(doc, win), for a document just
-// loaded, and shown(), for one the page set up before.
+// loaded; shown(), for one the page set up before; and refit(), the pages fitted again to the
+// room the Preview was given, with what is drawn over them.
 
 import { frameWindow, keepReadingPlace, readingPlace, scrollToRepaint } from "./deck-dom.js";
 
@@ -78,5 +81,11 @@ export function createDeckSetup({
     scrollToRepaint(frameWindow());
   }
 
-  return { loaded, shown };
+  function refit() {
+    zoom.fit();
+    marks.schedule();
+    layout.schedule();
+  }
+
+  return { loaded, shown, refit };
 }

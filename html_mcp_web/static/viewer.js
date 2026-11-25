@@ -1,7 +1,8 @@
 // The review page of an HTML artifact. Its own parts are modules in page/, each of which says at
 // its head what it does and what it takes and gives; the parts the review pages share are in
 // shared/. This file wires them: it creates the page's parts and then the shared ones, each given
-// the hooks it takes, and starts them in order once the page has loaded.
+// the hooks it takes, connects the parts that follow each other once all of them exist, and
+// starts them in order once the page has loaded.
 
 import { createSettings } from "./shared/settings.js";
 import { $, showMacKeyNames } from "./shared/dom.js";
@@ -49,55 +50,17 @@ let markedComments = [];
 
 // ----- The page's own parts -----
 
-const project = createProject({ leaving: () => reloadPlace.remember() });
+const project = createProject();
 
-const reloadPlace = createReloadPlace({
-  alias: project.alias,
-  heldPage: () => presentation.heldPage(),
-  pendingView: (alias) => deck.pendingView(alias),
-});
+const pages = createPages({ showing: () => presentation.showing(), commentOn });
 
-const pages = createPages({
-  showing: () => presentation.showing(),
-  slideChanged: () => presentation.markCurrent(),
-  commentOn,
-  marked: () => thumbs.mark(),
-});
+const presentation = createPresentation({ pages, layout: () => project.artifact().layout });
 
-const presentation = createPresentation({
-  pages,
-  fit: () => zoom.fit(),
-  hideSelection: () => selection.hide(),
-  scheduleLayoutCheck: () => layout.schedule(),
-  layout: () => project.artifact().layout,
-  entering: () => zoom.reset(),
-});
-
-const zoom = createZoom({
-  showing: presentation.showing,
-  hideSelection: () => selection.hide(),
-  showSelection: () => selection.show(),
-  redraw: () => marks.schedule(),
-});
+const zoom = createZoom({ showing: presentation.showing });
 
 const anchors = createAnchors({ digest: () => project.artifact().artifact_digest });
 
-const marks = createPageMarks({
-  marked: () => markedComments,
-  anchors,
-  ringed: () => panel.ringed(),
-  showComment: (id) => places.openComment(id),
-  staleChanged: () => panel.renderComments(),
-});
-
-const selection = createSelection({
-  base: project.base,
-  captureTextAnchor: anchors.captureTextAnchor,
-  pinching: zoom.pinching,
-  inFullscreen: presentation.inFullscreen,
-  commentOn,
-  showInSource: (place) => places.showInSource(place),
-});
+const marks = createPageMarks({ marked: () => markedComments, anchors });
 
 const area = createArea({ layer: marks.layer, commentOn });
 
@@ -112,7 +75,7 @@ const thumbs = createThumbs({ project, pages, searchKey: search.handleKeydown })
 
 const layout = createLayoutResults({ project, showing: presentation.showing });
 
-const scripts = createScripts({ changed: () => search.refresh() });
+const scripts = createScripts();
 
 const source = createSourceEditor({
   base: project.base,
@@ -125,7 +88,7 @@ const source = createSourceEditor({
   showWherePrinted: (shown) => places.showWherePrinted(shown),
 });
 
-const workspace = createWorkspace({ source, refit });
+const workspace = createWorkspace({ source });
 
 const places = createPlaces({
   workspace,
@@ -133,24 +96,29 @@ const places = createPlaces({
   marks,
   anchors,
   showComment: (id) => panel.showComment(id),
+  ringed: () => panel.ringed(),
   showTab: (name) => strip.show(name),
+});
+
+const selection = createSelection({
+  base: project.base,
+  captureTextAnchor: anchors.captureTextAnchor,
+  pinching: zoom.pinching,
+  inFullscreen: presentation.inFullscreen,
+  commentOn,
+  showInSource: places.showInSource,
 });
 
 const deckSetup = createDeckSetup({
   project, zoom, scripts, presentation, pages, area, selection, search, marks, layout, dragging: workspace.dragging,
 });
 
-const deck = createDeck({
-  project,
-  showing: presentation.showing,
-  pagesChanged: presentation.pagesChanged,
-  fit: zoom.fit,
-  loaded: deckSetup.loaded,
-  shown: deckSetup.shown,
-  watchLayout: layout.watch,
-  following: thumbs.follow,
-  hideSelection: selection.hide,
-  recalled: reloadPlace.recalled,
+const deck = createDeck({ project, showing: presentation.showing, pagesChanged: presentation.pagesChanged });
+
+const reloadPlace = createReloadPlace({
+  alias: project.alias,
+  heldPage: presentation.heldPage,
+  pendingView: deck.pendingView,
 });
 
 const tabs = createArtifactTabs({ project, select: selectArtifact });
@@ -169,6 +137,21 @@ const settings = createSettings({
   onLetters: (shown) => shown || panel.keys.showLetters(false),
   onCursor: () => source.holdCursorLine(),
 });
+
+// The comments' width beside the artifact and their height under it. A drag resizes the artifact
+// on every frame; measuring the fit of all pages and redrawing the highlight boxes that often is
+// the work that made the bar lag behind the finger, so the workspace is told of the drag, and the
+// drag ends with one of each, as the split's does.
+const grips = attachPanelGrips({
+  prefix: PREFIX,
+  width: "--html-mcp-sidebar-width",
+  height: "--html-mcp-panel-height",
+  split: () => workspace.split,
+  resizing: () => workspace.drag(true),
+  resized: () => workspace.drag(false),
+});
+
+const room = createPanelRoom({ isOpen: (id) => panel.isOpen(id), setHeight: (pixels) => grips.setHeight(pixels) });
 
 // The list of comments, the row above it, its search, its cards and its keys are shared with the
 // other review pages, in shared/comment-panel.js. What is this page's own goes in by the hooks
@@ -247,24 +230,6 @@ const update = createUpdate({
   how: "https://github.com/MiiKiyoshi/html-mcp-web/blob/main/INSTALL.md",
 });
 
-// The comments' width beside the artifact and their height under it. A drag resizes the artifact
-// on every frame; measuring the fit of all pages and redrawing the highlight boxes that often is
-// the work that made the bar lag behind the finger, so the drag ends with one of each, as the
-// split's does.
-const grips = attachPanelGrips({
-  prefix: PREFIX,
-  width: "--html-mcp-sidebar-width",
-  height: "--html-mcp-panel-height",
-  split: () => workspace.split,
-  resizing: () => workspace.drag(true),
-  resized: () => {
-    workspace.drag(false);
-    refit();
-  },
-});
-
-const room = createPanelRoom({ isOpen: (id) => panel.isOpen(id), setHeight: (pixels) => grips.setHeight(pixels) });
-
 // The server runs inside the agent's process. While it cannot be reached the bell says no agent
 // listens and the bar says the page is reconnecting.
 const socket = createSocket({
@@ -286,12 +251,52 @@ const socket = createSocket({
   },
 });
 
-// The pages fitted again to the room the Preview was given, and what is drawn over them.
-function refit() {
+// ----- What the parts follow of each other, once they all exist -----
+
+// The reader's place is kept as the page reloads for newer code.
+project.leaving(() => reloadPlace.remember());
+// The page read from the window is the one the slide show marks while it is on, and the one the
+// previews mark and keep in view.
+pages.changed(() => {
+  presentation.markCurrent();
+  thumbs.mark();
+});
+// The zoom goes back to the page's own as the reader asks for full screen, and the pages are
+// fitted again as full screen, the show or the page it shows changes. The selection's menu goes
+// as full screen comes on, and the layout check, which waits out the show, runs once it ends.
+presentation.entering(() => zoom.reset());
+presentation.changed(() => zoom.fit());
+presentation.entered(() => selection.hide());
+presentation.ended(() => layout.schedule());
+// The selection's menu goes while a gesture carries the deck and comes back once it has settled,
+// and the comments' marks are drawn again at each zoom.
+zoom.carrying(() => selection.hide());
+zoom.settled(() => selection.show());
+zoom.applied(() => marks.schedule());
+// A press on a comment's number on a page opens its card, and the cards say which comments' words
+// the pages no longer find.
+marks.pressed((id) => places.markPressed(id));
+marks.lostChanged(() => panel.renderComments());
+// The search looks in the speaker scripts while they are shown.
+scripts.changed(() => search.refresh());
+// The pages are fitted again, with what is drawn over them, to the room the Preview is given.
+workspace.resized(() => deckSetup.refit());
+// The slide previews follow the artifact the frame on screen is brought to, and the selection's
+// menu goes as the frame goes to another revision.
+deck.following(() => thumbs.follow());
+deck.revising(() => selection.hide());
+// A document loaded in the frame on screen is set up and put at the place a reload kept; for a
+// frame set up before and shown again, the page alone is set up.
+deck.loaded((doc, win) => {
+  deckSetup.loaded(doc, win);
+  reloadPlace.putBack(win);
+});
+deck.shown(() => deckSetup.shown());
+// Pages an edit changes in place are fitted, and checked again as their fonts and images arrive.
+deck.changed((doc, images) => {
   zoom.fit();
-  marks.schedule();
-  layout.schedule();
-}
+  layout.watch(doc, images);
+});
 
 // The new comment dialog on *anchor*. A comment on the source goes with the revision its words
 // were selected in, which the server checks against the file.

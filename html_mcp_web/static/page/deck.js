@@ -8,24 +8,29 @@
 // revision the frame on screen shows, and the place each artifact's next document opens at.
 //
 // createDeck takes project (alias(), revision(), url()); showing(), whether the slide show is
-// on; pagesChanged(), told when the slide show's pages changed in place; fit(), which fits the
-// pages to the pane; loaded(doc, win), told when the frame on screen has loaded a document, to set
-// it up; shown(), told when a frame on screen is set up already, shown again or changed in place;
-// watchLayout(doc, images), told of a document whose fonts and images, those of pages put in,
-// change the layout as they arrive; following(), told as the frame on screen follows the artifact shown, which the slide
-// previews follow too; hideSelection(); and recalled(), the reading place a reload kept, or null.
-// It gives open(alias), the artifact's frame made ready to show; shows(revision), whether the
-// frame on screen shows that revision; showOrLoad(); load(preserveView); forget(), the frame on
-// screen counted as showing nothing; and pendingView(alias), the place an artifact's next document
-// opens at, as { page, y }, or undefined.
+// on, which keeps its own page; and pagesChanged(), which holds the show's page within the pages
+// an edit leaves. It gives open(alias), the artifact's frame made ready to show; shows(revision),
+// whether the frame on screen shows that revision; showOrLoad(); load(preserveView); forget(),
+// the frame on screen counted as showing nothing; pendingView(alias), the place an artifact's
+// next document opens at, as { page, y }, or undefined; and what happens to the frame on screen,
+// each of which hands in a function called when it does: following(listener), as it is brought
+// to the artifact shown; revising(listener), as it goes to another revision; loaded(listener),
+// with the document and the window it has loaded, before the place an edit left the reader at
+// is put back in it; shown(listener), as a frame set up already is shown again or changed in
+// place; and changed(listener), with the document and the images of the pages put in, as its
+// pages change in place, before the reader's place on them is put back.
 
 import { $ } from "../shared/dom.js";
 import { PAGE, deckPages, frameDocument, frameWindow, keepReadingPlace, readingPlace, scrollToRepaint, showInFrame } from "./deck-dom.js";
 import { changePages, updateFrame } from "./frame-update.js";
+import { createListeners } from "../shared/listeners.js";
 
-export function createDeck({
-  project, showing, pagesChanged, fit, loaded, shown, watchLayout, following, hideSelection, recalled,
-}) {
+export function createDeck({ project, showing, pagesChanged }) {
+  const following = createListeners();
+  const revising = createListeners();
+  const loaded = createListeners();
+  const shown = createListeners();
+  const changed = createListeners();
   // One frame per artifact, by alias, and the frame each artifact's next revision is loading in,
   // under the one on screen.
   const frames = {};
@@ -73,7 +78,7 @@ export function createDeck({
   // A frame shown again is already loaded: what the switch has to do is set the page up for it.
   function showLoaded(frame) {
     showFrame(frame);
-    shown();
+    shown.tell();
   }
 
   // A document loaded in the frame on screen. A frame that finished loading after the reader had
@@ -90,40 +95,36 @@ export function createDeck({
     // it would report: a check scheduled on the document before an edit ran after the new
     // revision was announced and reported that document's result under it.
     doc.documentElement.dataset.htmlMcpRevision = frame.dataset.revision;
-    loaded(doc, win);
+    loaded.tell(doc, win);
     putBack(doc, win);
   }
 
-  // The place the reader left the artifact at, put back as a page and a point on it, not as a
-  // scroll offset, and again once the fonts are in: the new document is set first in a fallback
-  // face, its script blocks at other heights, and the offset the reader left at fell two pages
-  // further on by then. Else the place a reload kept.
+  // The place an edit left the reader at, put back as a page and a point on it, not as a scroll
+  // offset, and again once the fonts are in: the new document is set first in a fallback face,
+  // its script blocks at other heights, and the offset the reader left at fell two pages further
+  // on by then.
   function putBack(doc, win) {
     const alias = project.alias();
     const view = pendingViews[alias];
-    if (view !== undefined) {
-      const put = () => {
-        const page = deckPages()[view.page];
-        if (frameDocument() === doc && page !== undefined) keepReadingPlace({ page, y: view.y });
-      };
-      win.requestAnimationFrame(put);
-      doc.fonts.ready.then(() => {
-        if (pendingViews[alias] !== view) return;
-        put();
-        delete pendingViews[alias];
-      });
-    } else {
-      const place = recalled();
-      if (place !== null) win.requestAnimationFrame(() => keepReadingPlace(place));
-    }
+    if (view === undefined) return;
+    const put = () => {
+      const page = deckPages()[view.page];
+      if (frameDocument() === doc && page !== undefined) keepReadingPlace({ page, y: view.y });
+    };
+    win.requestAnimationFrame(put);
+    doc.fonts.ready.then(() => {
+      if (pendingViews[alias] !== view) return;
+      put();
+      delete pendingViews[alias];
+    });
   }
 
   function load(preserveView) {
     const iframe = frameFor(project.alias());
     showFrame(iframe);
-    following();
+    following.tell();
     if (loadedRevision === project.revision()) return;
-    hideSelection();
+    revising.tell();
     loadedRevision = project.revision();
     const page = iframe.contentDocument?.URL;
     if (page !== undefined && page !== "about:blank") {
@@ -182,13 +183,12 @@ export function createDeck({
       // A frame of an artifact the reader has left is set up when they come back to it.
       if (!active) return true;
       if (showing()) pagesChanged();
-      fit();
+      changed.tell(doc, change.added.flatMap((node) => Array.from(node.querySelectorAll("img"))));
       // The page the reader was on, or the page that took its place.
       const page = place === null ? undefined
         : place.page.isConnected ? place.page : change.added[change.removed.indexOf(place.page)];
       if (page?.matches(PAGE)) keepReadingPlace({ page, y: place.y });
       showLoaded(frame);
-      watchLayout(doc, change.added.flatMap((node) => Array.from(node.querySelectorAll("img"))));
       return true;
     }, whole);
   }
@@ -275,5 +275,10 @@ export function createDeck({
       loadedRevision = null;
     },
     pendingView: (alias) => pendingViews[alias],
+    following: following.add,
+    revising: revising.add,
+    loaded: loaded.add,
+    shown: shown.add,
+    changed: changed.add,
   };
 }

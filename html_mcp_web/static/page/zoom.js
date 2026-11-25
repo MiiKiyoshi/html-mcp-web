@@ -6,21 +6,27 @@
 // in the bar gives the fitted size back. This module keeps the reader's zoom, each artifact's as
 // it was left, and the gesture under way.
 //
-// createZoom takes showing(), whether the slide show is on; hideSelection() and showSelection(),
-// the selection's menu taken away while the deck is carried and placed again after; and
-// redraw(), which draws the comments' marks again at the new size. It gives fit(), the pages
-// drawn at the size they should be; apply(), the reader's zoom applied and Fit shown when there
-// is one; reset(), the zoom given back about the window's middle; pinching(), whether a gesture
-// carries the deck; scrolled(win), told of each scroll of the deck, which puts back what the
-// browser moved on its own just after a gesture; keep(alias) and restore(alias), an artifact's
-// zoom kept as the reader leaves it and given back as they return; install(doc), the gestures in
-// a document; and attach(), the gestures over the rest of the page and the Fit button.
+// createZoom takes showing(), whether the slide show is on. It gives fit(), the pages drawn at
+// the size they should be; apply(), the reader's zoom applied and Fit shown when there is one;
+// reset(), the zoom given back about the window's middle; pinching(), whether a gesture carries
+// the deck; scrolled(win), told of each scroll of the deck, which puts back what the browser
+// moved on its own just after a gesture; keep(alias) and restore(alias), an artifact's zoom kept
+// as the reader leaves it and given back as they return; install(doc), the gestures in a
+// document; attach(), the gestures over the rest of the page and the Fit button; and what
+// happens to the deck, each of which hands in a function called when it does:
+// carrying(listener), as a gesture starts to carry it; settled(listener), once a gesture has
+// ended and the scrolls it caused have stopped; and applied(listener), once the pages are drawn
+// at the reader's zoom.
 
 import { $ } from "../shared/dom.js";
 import { pageIsZoomed } from "../shared/page-zoom.js";
 import { frameDocument, frameWindow, pageNear } from "./deck-dom.js";
+import { createListeners } from "../shared/listeners.js";
 
-export function createZoom({ showing, hideSelection, showSelection, redraw }) {
+export function createZoom({ showing }) {
+  const carrying = createListeners();
+  const settled = createListeners();
+  const applied = createListeners();
   let artifactZoom = 1;
   // The zoom each artifact was left at. The frame keeps its own scroll and the scale it is drawn
   // at; the number the zoom handlers and the reset control work from is this one, and it is put
@@ -33,7 +39,7 @@ export function createZoom({ showing, hideSelection, showSelection, redraw }) {
   let pageTouch = false;
   let pinchSettle = null;
   let settledScroll = null;
-  // The comment button comes back 60 ms after the last scroll a settled pinch causes.
+  // A settled pinch is told 60 ms after the last scroll it causes.
   let placeAfterSettle = null;
 
   function fit() {
@@ -317,9 +323,9 @@ export function createZoom({ showing, hideSelection, showSelection, redraw }) {
     keeper.style.top = `${doc.documentElement.scrollHeight - 1 - (placed.top + win.scrollY)}px`;
     holder.style.transformOrigin = "0 0";
     holder.style.willChange = "transform";
-    // The comment button is placed by the selection and stays where it was placed while the deck
-    // under it is carried; it is placed again once the deck has settled.
-    hideSelection();
+    // What is placed over the deck, as the comment button is, stays where it was placed while the
+    // deck under it is carried: the gesture is told as it starts, and again once it has settled.
+    carrying.tell();
     return {
       driver,
       startSpan: span,
@@ -346,7 +352,7 @@ export function createZoom({ showing, hideSelection, showSelection, redraw }) {
     held.holder.style.willChange = "";
     if (held.zoom === held.startZoom) {
       held.keeper.remove();
-      setTimeout(showSelection, 60);
+      setTimeout(() => settled.tell(), 60);
       return;
     }
     const win = frameWindow();
@@ -378,10 +384,10 @@ export function createZoom({ showing, hideSelection, showSelection, redraw }) {
       if (watch.frames < 3) win.requestAnimationFrame(count);
     };
     win.requestAnimationFrame(count);
-    // After the scrolls that follow, which hide the button as any scroll does. Their events come
-    // with the frames drawn, later than any fixed delay on a machine slow to draw, where the
-    // button came back before the scroll and stayed hidden: the wait starts at the next frame and
-    // again at each scroll.
+    // Told after the scrolls that follow, which hide the comment button as any scroll does. Their
+    // events come with the frames drawn, later than any fixed delay on a machine slow to draw,
+    // where the button came back before the scroll and stayed hidden: the wait starts at the next
+    // frame and again at each scroll.
     placeAfterSettle = 0;
     win.requestAnimationFrame(placeAfterScroll);
   }
@@ -391,14 +397,14 @@ export function createZoom({ showing, hideSelection, showSelection, redraw }) {
     clearTimeout(placeAfterSettle);
     placeAfterSettle = setTimeout(() => {
       placeAfterSettle = null;
-      showSelection();
+      settled.tell();
     }, 60);
   }
 
   function apply() {
     $("#zoom-reset-btn").classList.toggle("hidden", Math.abs(artifactZoom - 1) < 0.01);
     fit();
-    redraw();
+    applied.tell();
   }
 
   // The way back from a zoom keeps the reader's place: laid out again with the scroll position
@@ -443,6 +449,9 @@ export function createZoom({ showing, hideSelection, showSelection, redraw }) {
       artifactZoom = zooms[alias] ?? 1;
     },
     install,
+    carrying: carrying.add,
+    settled: settled.add,
+    applied: applied.add,
     attach() {
       document.addEventListener("wheel", handleViewerWheel, { passive: false });
       for (const kind of ["gesturestart", "gesturechange", "gestureend"]) {

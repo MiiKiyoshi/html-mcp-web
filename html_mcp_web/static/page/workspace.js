@@ -6,19 +6,22 @@
 // whether a grip is being dragged, the panel's included.
 //
 // createWorkspace takes source (load(force), resize()), the editor, which the Source and Split
-// show; and refit(), which fits the pages to the room the Preview was given. It gives view();
-// show(view); restore(), the view the reader last chose; dragging(), whether a grip is being
-// dragged, which the artifact leaves its fitting to the end of; drag(on), told by the panel's
-// grips; split, how the panel's grips hold the split stacked above the panel (panel-grips.js);
-// and attach().
+// show. It gives view(); show(view); restore(), the view the reader last chose; dragging(),
+// whether a grip is being dragged, which the artifact leaves its fitting to the end of; drag(on),
+// told by the panel's grips as a drag starts and once they have set the panel's size; split, how
+// the panel's grips hold the split stacked above the panel (panel-grips.js); resized(listener),
+// which hands in a function called once the Preview's room has changed: a view that shows it
+// shown, or the split or the panel's size set; and attach().
 
 import { $ } from "../shared/dom.js";
+import { createListeners } from "../shared/listeners.js";
 
 const VIEWS = ["preview", "source", "split"];
 // What the browser keeps the view under.
 const KEPT = "htmlMcpWorkspaceView";
 
-export function createWorkspace({ source, refit }) {
+export function createWorkspace({ source }) {
+  const resized = createListeners();
   let view = "preview";
   let dragging = false;
   const grip = $("#split-grip");
@@ -39,7 +42,7 @@ export function createWorkspace({ source, refit }) {
     localStorage.setItem(KEPT, wanted);
     requestAnimationFrame(() => {
       source.resize();
-      if (wanted !== "source") refit();
+      if (wanted !== "source") resized.tell();
     });
   }
 
@@ -55,7 +58,7 @@ export function createWorkspace({ source, refit }) {
     dragging = false;
     localStorage.setItem("htmlMcpSplitRatio", String(ratio));
     source.resize();
-    refit();
+    resized.tell();
   };
 
   function attach() {
@@ -119,6 +122,7 @@ export function createWorkspace({ source, refit }) {
     dragging: () => dragging,
     drag(on) {
       dragging = on;
+      if (!on) resized.tell();
     },
     // With the panes stacked, the comments' bar under them changes the height the split divides,
     // and a ratio kept through that drag carried the split's bar up the screen with it. The drag
@@ -136,6 +140,7 @@ export function createWorkspace({ source, refit }) {
       },
       keep: () => localStorage.setItem("htmlMcpSplitRatio", String(ratio)),
     },
+    resized: resized.add,
     attach,
   };
 }
