@@ -973,6 +973,8 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
                 "if not Path(f'{here}.ready').exists():\n"
                 "    Path(f'{here}.failed').touch()\n"
                 "    sys.exit(1)\n"
+                # It writes UTF-8, as the waiter does, whatever a Korean Windows writes a pipe in.
+                "sys.stdout.reconfigure(encoding='utf-8')\n"
                 "print('\\n'.join(sys.argv[5].split('\\n')[1:]), flush=True)\n", encoding="utf-8")
             programs = tmp_path / "bin"
             if os.name == "nt":
