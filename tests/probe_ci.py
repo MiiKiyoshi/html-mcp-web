@@ -134,9 +134,11 @@ def check_once(label: str) -> None:
         print(f"[{label}]   {line[:300]}")
 
 
-def checks_at_once(label: str, count: int) -> None:
+def checks_at_once(label: str, count: int, prefs: str = "") -> None:
     """*count* servers each running its own layout check at the same time, as the test workers
-    do, timed, with how busy the processors were."""
+    do, timed, with how busy the processors were, the check profiles given *prefs*. The console
+    of each checking Firefox is printed for the first check that went unanswered."""
+    import asyncio
     import socket
     import urllib.request
     from pathlib import Path
@@ -149,6 +151,17 @@ def checks_at_once(label: str, count: int) -> None:
     from tests.test_browser import slides_html
 
     times: list[str] = []
+    consoles: dict[int, Path] = {}
+    real = asyncio.create_subprocess_exec
+
+    async def logged(*args, **kwargs):
+        profile = args[list(args).index("-profile") + 1]
+        Path(profile, "user.js").write_text('user_pref("devtools.console.stdout.content", true);\n' + prefs,
+                                            encoding="utf-8")
+        port = int(args[-1].split("//", 1)[1].split("/", 1)[0].rsplit(":", 1)[1])
+        out = open(consoles.setdefault(port, Path(tempfile.mkdtemp()) / "console.log"), "ab")
+        kwargs["stdout"] = kwargs["stderr"] = out
+        return await real(*args, **kwargs)
 
     def one() -> None:
         folder = Path(tempfile.mkdtemp(prefix="html_mcp_probe_project_"))
@@ -164,12 +177,17 @@ def checks_at_once(label: str, count: int) -> None:
             started = time.monotonic()
             with urllib.request.urlopen(f"http://127.0.0.1:{port}/artifacts/slides/layout", timeout=90) as response:
                 data = json.loads(response.read())
-            times.append(f"{time.monotonic() - started:.1f}s{'' if data.get('errors') is not None else ' unchecked'}")
+            answered = data.get("errors") is not None
+            times.append(f"{time.monotonic() - started:.1f}s{'' if answered else ' unchecked'}")
+            if not answered:
+                unanswered.append(port)
         except Exception as error:
             times.append(repr(error)[:80])
         finally:
             shared.stop()
 
+    unanswered: list[int] = []
+    asyncio.create_subprocess_exec = logged
     psutil.cpu_percent()
     threads = [threading.Thread(target=one) for _ in range(count)]
     for thread in threads:
@@ -178,28 +196,37 @@ def checks_at_once(label: str, count: int) -> None:
     while any(thread.is_alive() for thread in threads):
         time.sleep(1)
         busy.append(round(psutil.cpu_percent()))
-    print(f"[{label}] {count} checks at once answered after {times}, processors busy {busy} %")
+    asyncio.create_subprocess_exec = real
+    print(f"[{label}] {count} checks at once answered after {times}, processors busy {busy[:12]}... %")
+    if unanswered and unanswered[0] in consoles:
+        for line in consoles[unanswered[0]].read_text(encoding="utf-8", errors="replace").splitlines()[-25:]:
+            print(f"[{label}]   {line[:300]}")
 
 
-def defender(enabled: bool | None = None) -> None:
-    """Windows Defender's real-time scanning: said, or turned on or off."""
-    command = ("Get-MpComputerStatus | Select-Object -Property RealTimeProtectionEnabled,AntivirusEnabled | Format-List"
-               if enabled is None else f"Set-MpPreference -DisableRealtimeMonitoring ${str(not enabled).lower()}")
-    done = subprocess.run(["powershell", "-NoProfile", "-Command", command], capture_output=True, text=True)
-    print(f"[defender] {command}: {(done.stdout + done.stderr).strip()}")
+def browsers_at_once(label: str, count: int) -> None:
+    """*count* Firefoxes started at once as the check starts one, each on a page of its own."""
+    threads = [threading.Thread(target=run_once, args=(f"{label} {index}", 20)) for index in range(count)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
 
 
 if __name__ == "__main__":
     import sys
 
-    run_once("first", 25)
-    run_once("second", 20)
+    run_once("first", 20)
     check_once("check 1")
-    check_once("check 2")
     checks_at_once("load", 4)
     if sys.platform == "win32":
-        defender()
-        defender(False)
-        defender()
-        checks_at_once("load without scanning", 4)
-        defender(True)
+        browsers_at_once("browsers", 4)
+        checks_at_once("load, no default browser check", 4, 'user_pref("browser.shell.checkDefaultBrowser", false);\n')
+        checks_at_once("load, first run settled", 4, "".join(f"user_pref({name!r}, {value});\n".replace("'", '"') for name, value in (
+            ("browser.shell.checkDefaultBrowser", "false"),
+            ("browser.startup.homepage_override.mstone", "'ignore'"),
+            ("startup.homepage_welcome_url", "''"),
+            ("browser.aboutwelcome.enabled", "false"),
+            ("datareporting.policy.dataSubmissionPolicyBypassNotification", "true"),
+            ("toolkit.telemetry.reportingpolicy.firstRun", "false"),
+            ("app.update.disabledForTesting", "true"),
+        )))
