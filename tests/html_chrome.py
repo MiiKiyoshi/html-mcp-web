@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import functools
 import http.server
+import subprocess
 import sys
 import threading
 import time
@@ -49,6 +50,22 @@ READY_SEEN = """
       [alias, {error: artifact.error, checked: artifact.layout_check.checked_revision, revision: artifact.revision,
                errors: artifact.layout_check.errors, warnings: artifact.layout_check.warnings}]))}).slice(0, 3000));
 """
+
+
+def needs_full_screen() -> None:
+    """Skip a test that enters full screen in a Safari that refuses it. Safari on a Mac draws a
+    page's full screen with WebKit's GPU process, and with none running refuses it at once, the
+    page's request failing with an InvalidStateError. Most GitHub macOS runners give Safari no
+    GPU process, so the refusal is the runner's: there a slide show in full screen goes
+    unchecked in Safari, and Chrome and a Mac with a GPU still check it."""
+    if chrome.KIND != "safari":
+        return
+    # The process whose whole command is the GPU process's program, and not one that names it.
+    found = subprocess.run(["pgrep", "-f", r"^[^ ]*/com\.apple\.WebKit\.GPU$"], capture_output=True, text=True)
+    if found.returncode not in (0, 1):
+        raise RuntimeError(f"pgrep failed: {found.stderr}")
+    if found.returncode == 1:
+        pytest.skip("Safari: no WebKit GPU process runs here, and Safari refuses full screen without one")
 
 
 class Chrome(chrome.Chrome):

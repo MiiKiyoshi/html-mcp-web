@@ -16,7 +16,8 @@ from html_mcp_web.kits import CENTER
 from html_mcp_web.project_server import SharedProjectServer
 from tests import chrome
 from tests.chrome import MOD, MOD_ALT, not_in_safari
-from tests.html_chrome import CHECK_MARGIN, LAYOUT_CHECK_SECONDS, READY_SEEN, launch, needs_browser
+from tests.html_chrome import (CHECK_MARGIN, LAYOUT_CHECK_SECONDS, READY_SEEN, launch, needs_browser,
+                                needs_full_screen)
 
 
 def available_port() -> int:
@@ -812,26 +813,6 @@ def test_browser_review_contract(tmp_path: Path) -> None:
           const input = document.querySelector("[data-comment-id=\\"{comment["id"]}\\"] .cmt-form-input");
           return input?.value === "Preserved draft" && document.activeElement === input;
         ''')
-
-        browser.find_element("css selector", "#fullscreen-btn").click()
-        wait_until(lambda: browser.execute_script('return document.fullscreenElement !== null'))
-        wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#presentation-page").textContent === "1 / 2"'))
-        assert browser.execute_script('''
-          const frame = document.querySelector("#artifact-frame");
-          const layer = frame.contentDocument.querySelector(".html-mcp-highlight-layer");
-          return layer !== null && frame.contentWindow.getComputedStyle(layer).display === "none";
-        ''')
-        browser.execute_script('''
-          const frame = document.querySelector("#artifact-frame");
-          frame.contentDocument.dispatchEvent(new frame.contentWindow.WheelEvent("wheel", {
-            deltaY: 20, bubbles: true, cancelable: true
-          }));
-        ''')
-        wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#presentation-page").textContent === "2 / 2"'))
-        browser.execute_script('document.exitFullscreen(); return true;')
-        wait_until(lambda: browser.execute_script('return document.fullscreenElement === null'))
 
         slides.write_text(problem_html(), encoding="utf-8")
         changed_revision = wait_until(
@@ -3361,6 +3342,82 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
         """)
         wait_until(lambda: browser.execute_script(
             'return document.querySelector(".layout").classList.contains("sidebar-collapsed")'))
+    finally:
+        if browser is not None:
+            browser.quit()
+        shared.stop()
+
+
+@needs_browser
+def test_the_slide_show_hides_comment_marks_and_the_wheel_turns_its_pages(tmp_path: Path) -> None:
+    """Full screen starts the slide show on the first page, with the marks of comments hidden
+    from the audience, and a turn of the wheel over the slide goes to the next page."""
+    slides = tmp_path / "slides.html"
+    slides.write_text(slides_html(), encoding="utf-8")
+    port = available_port()
+    config_path = tmp_path / ".html-mcp-web.yaml"
+    config_path.write_text(yaml.safe_dump({
+        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
+        "watch": ["*.html"],
+        "port": port,
+    }, sort_keys=False), encoding="utf-8")
+    shared = SharedProjectServer(load_config(config_path))
+    browser = None
+    try:
+        shared.ensure()
+        browser = launch()
+        base = f"http://127.0.0.1:{port}"
+        browser.navigate(base)
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
+        anchor = browser.execute_script('''
+          const doc = document.querySelector("#artifact-frame").contentDocument;
+          const node = doc.querySelector("#target").firstChild;
+          const path = [];
+          for (let current = node; current !== doc.body; current = current.parentNode) {
+            path.push(Array.prototype.indexOf.call(current.parentNode.childNodes, current));
+          }
+          path.reverse();
+          return {path, text: node.nodeValue};
+        ''')
+        post_json(f"{base}/artifacts/slides/comments", {
+            "anchor": {
+                "kind": "text",
+                "quote": anchor["text"],
+                "prefix": "",
+                "suffix": "",
+                "start": {"path": anchor["path"], "offset": 0},
+                "end": {"path": anchor["path"], "offset": len(anchor["text"])},
+                "artifact_digest": get_json(f"{base}/state")["artifacts"]["slides"]["artifact_digest"],
+            },
+            "text": "Marked words",
+        })
+        wait_until(lambda: browser.execute_script('''
+          return document.querySelector("#artifact-frame").contentDocument
+            .querySelectorAll(".html-mcp-highlight").length > 0;
+        '''))
+
+        needs_full_screen()
+        browser.find_element("css selector", "#fullscreen-btn").click()
+        wait_until(lambda: browser.execute_script('return document.fullscreenElement !== null'))
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#presentation-page").textContent === "1 / 2"'))
+        assert browser.execute_script('''
+          const frame = document.querySelector("#artifact-frame");
+          const layer = frame.contentDocument.querySelector(".html-mcp-highlight-layer");
+          return layer !== null && frame.contentWindow.getComputedStyle(layer).display === "none";
+        ''')
+        browser.execute_script('''
+          const frame = document.querySelector("#artifact-frame");
+          frame.contentDocument.dispatchEvent(new frame.contentWindow.WheelEvent("wheel", {
+            deltaY: 20, bubbles: true, cancelable: true
+          }));
+        ''')
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#presentation-page").textContent === "2 / 2"'))
+        browser.execute_script('document.exitFullscreen(); return true;')
+        wait_until(lambda: browser.execute_script('return document.fullscreenElement === null'))
     finally:
         if browser is not None:
             browser.quit()
