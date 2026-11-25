@@ -35,8 +35,6 @@ jobs:
       # browser test would be skipped and the job would pass, so this step fails instead.
       - name: Firefox
         run: python -m tests.firefox
-      - name: Probe
-        run: python -m tests.probe_ci || true
       - name: Tests
         env:
           HTML_MCP_FAILURES: ${{ runner.temp }}/failures
@@ -81,9 +79,6 @@ jobs:
         run: python -m tests.fonts
       - name: Firefox
         run: python -m tests.firefox
-      - name: Probe
-        shell: bash
-        run: python -m tests.probe_ci || true
       - name: Tests
         shell: bash
         env:

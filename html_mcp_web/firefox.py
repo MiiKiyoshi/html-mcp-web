@@ -36,13 +36,16 @@ def binary() -> str | None:
 
 
 def command(*arguments: str) -> list[str]:
-    """The command that starts Firefox with *arguments*. On Windows Firefox can start as a
-    launcher that hands the browser to a process of its own and ends; told to wait for the
-    browser, it stays the browser's parent, so end() finds the browser under it."""
+    """The command that starts Firefox with *arguments*, which start it headless. On Windows
+    Firefox starts as a launcher that hands the browser to a process of its own; started
+    headless, the launcher waits for that browser and stays its parent, so end() finds the
+    browser under it. Firefox's -wait-for-browser asks for the same wait, and named as well it
+    left most of several Firefoxes started at once on Windows without the page they were
+    given."""
     program = binary()
     if program is None:
         raise FileNotFoundError("firefox is not installed")
-    return [program, *(["-wait-for-browser"] if os.name == "nt" else []), *arguments]
+    return [program, *arguments]
 
 
 def end(pid: int) -> None:
