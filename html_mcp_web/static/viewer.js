@@ -1215,8 +1215,9 @@ const lastKnownPlace = anchors.lastKnownPlace;
 
 // The whole of what the reader dragged over, as one range. A drag usually leaves one, but
 // KaTeX draws a fraction or a subscript as an inline table (.vlist is a table-cell), and a
-// drag that crosses those cells puts Firefox into cell selection, which leaves one range
-// per cell. Taking the outermost boundaries reads that back as the span it looked like.
+// drag that crosses those cells puts a browser that selects table cells into cell
+// selection, which leaves one range per cell. Taking the outermost boundaries reads that
+// back as the span it looked like.
 function selectionSpan(selection) {
   const Range = frameWindow().Range;
   const span = selection.getRangeAt(0).cloneRange();
@@ -2303,9 +2304,9 @@ function updateDeck(frame, preserveView) {
     keepView(frame, preserveView);
     loadBehind(frame, artifactUrl());
   };
-  // Only a document this page set up takes pages: Firefox puts back the address a frame last
-  // showed when the review page is reloaded, and a document loaded that way was never set up,
-  // so its pages changed and the reader's place was never put back.
+  // Only a document this page set up takes pages: a browser may put back the address a frame
+  // last showed when the review page is reloaded, and a document loaded that way was never
+  // set up, so its pages changed and the reader's place was never put back.
   const canPatch = () => state.framesBehind[alias] === undefined && frame.contentDocument?.readyState === "complete"
     && frame.contentDocument.documentElement.dataset.htmlMcpRevision !== undefined;
   if (!canPatch()) {

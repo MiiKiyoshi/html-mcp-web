@@ -154,23 +154,27 @@ def end(pid: int, folder: str) -> None:
     # Ended before that, the processes it was still starting put its profile back once the
     # profile had been removed.
     deadline = time.monotonic() + 5
-    while _endpoint(folder) is None and _running(started) and time.monotonic() < deadline:
+    while (said(folder).is_file() and _endpoint(folder) is None and _running(started)
+           and time.monotonic() < deadline):
         time.sleep(0.05)
     try:
         below = started.children(recursive=True)
     except psutil.Error:
         below = []
-    if close(folder):
-        deadline = time.monotonic() + 5
-        while _running(started) and time.monotonic() < deadline:
-            time.sleep(0.05)
-    for process in (*below, started):
-        if _running(process):
+    # The signal comes whatever the asking met.
+    try:
+        if close(folder):
+            deadline = time.monotonic() + 5
+            while _running(started) and time.monotonic() < deadline:
+                time.sleep(0.05)
+    finally:
+        for process in (*below, started):
+            if _running(process):
+                with contextlib.suppress(psutil.Error):
+                    process.terminate()
+        for process in psutil.wait_procs(below, timeout=5)[1]:
             with contextlib.suppress(psutil.Error):
-                process.terminate()
-    for process in psutil.wait_procs(below, timeout=5)[1]:
-        with contextlib.suppress(psutil.Error):
-            process.kill()
+                process.kill()
 
 
 def stop(process: subprocess.Popen, folder: str) -> None:
