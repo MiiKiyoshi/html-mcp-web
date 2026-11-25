@@ -976,18 +976,6 @@ def test_browser_review_contract(tmp_path: Path) -> None:
             'const b = document.querySelector("#download-pdf-btn"); return [b.disabled, b.textContent];') == [True, "Export PDF…"]
         wait_until(lambda: browser.execute_script('return !document.querySelector("#download-pdf-btn").disabled'), timeout=120)
         assert browser.execute_script('return [document.body.dataset.downloads, document.querySelector("#download-pdf-btn").textContent]') == ["report.pdf ", "Export PDF"]
-        browser.find_element("css selector", "#fullscreen-btn").click()
-        wait_until(lambda: browser.execute_script('return document.fullscreenElement !== null'))
-        assert browser.execute_script('''
-          const root = document.querySelector("#artifact-frame").contentDocument.documentElement;
-          return !root.hasAttribute("data-html-mcp-presentation");
-        ''')
-        browser.execute_script('document.querySelector("#artifact-frame").contentWindow.scrollTo(0, 1000)')
-        assert wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-frame").contentWindow.scrollY > 0'))
-        browser.execute_script('document.exitFullscreen(); return true;')
-        wait_until(lambda: browser.execute_script('return document.fullscreenElement === null'))
-
         browser.find_element("css selector", '.artifact-tab:nth-child(1)').click()
         wait_until(lambda: browser.execute_script(
             'return document.querySelectorAll("[data-comment-id]").length === 1'))
@@ -3349,15 +3337,22 @@ def test_opening_the_last_comment_shows_the_whole_card(tmp_path: Path) -> None:
 
 
 @needs_browser
-def test_the_slide_show_hides_comment_marks_and_the_wheel_turns_its_pages(tmp_path: Path) -> None:
-    """Full screen starts the slide show on the first page, with the marks of comments hidden
-    from the audience, and a turn of the wheel over the slide goes to the next page."""
+def test_full_screen_shows_a_deck_as_a_slide_show_and_a_report_as_its_page(tmp_path: Path) -> None:
+    """Full screen starts a deck's slide show on the first page, with the marks of comments
+    hidden from the audience, and a turn of the wheel over the slide goes to the next page. A
+    report in full screen stays its page, which scrolls."""
     slides = tmp_path / "slides.html"
+    report = tmp_path / "paper" / "report.html"
+    report.parent.mkdir()
     slides.write_text(slides_html(), encoding="utf-8")
+    report.write_text(report_html(), encoding="utf-8")
     port = available_port()
     config_path = tmp_path / ".html-mcp-web.yaml"
     config_path.write_text(yaml.safe_dump({
-        "artifacts": {"slides": {"layout": "slides", "main": "slides.html"}},
+        "artifacts": {
+            "slides": {"layout": "slides", "main": "slides.html"},
+            "report": {"layout": "report", "main": "paper/report.html"},
+        },
         "watch": ["*.html"],
         "port": port,
     }, sort_keys=False), encoding="utf-8")
@@ -3416,6 +3411,21 @@ def test_the_slide_show_hides_comment_marks_and_the_wheel_turns_its_pages(tmp_pa
         ''')
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#presentation-page").textContent === "2 / 2"'))
+        browser.execute_script('document.exitFullscreen(); return true;')
+        wait_until(lambda: browser.execute_script('return document.fullscreenElement === null'))
+
+        wait_until(lambda: browser.find_element("css selector", '.artifact-tab:nth-child(2)').click() or True)
+        wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#main-file").textContent === "report.html"'))
+        browser.find_element("css selector", "#fullscreen-btn").click()
+        wait_until(lambda: browser.execute_script('return document.fullscreenElement !== null'))
+        assert browser.execute_script('''
+          const root = document.querySelector("#artifact-frame").contentDocument.documentElement;
+          return !root.hasAttribute("data-html-mcp-presentation");
+        ''')
+        browser.execute_script('document.querySelector("#artifact-frame").contentWindow.scrollTo(0, 1000)')
+        assert wait_until(lambda: browser.execute_script(
+            'return document.querySelector("#artifact-frame").contentWindow.scrollY > 0'))
         browser.execute_script('document.exitFullscreen(); return true;')
         wait_until(lambda: browser.execute_script('return document.fullscreenElement === null'))
     finally:
