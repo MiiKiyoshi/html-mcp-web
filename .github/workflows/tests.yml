@@ -25,16 +25,16 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Python packages
         run: pip install -e ".[mcp,dev]"
-      # The fonts the browser tests were written with: Ubuntu sets serif, sans-serif and
-      # monospace in Noto Serif, Noto Sans and DejaVu Sans Mono once these are installed.
+      # The fonts the browser tests were written with, which every Chrome a test starts sets
+      # the generic families in (tests/fonts.py).
       - name: Fonts
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq fonts-noto-core fonts-noto-mono fonts-dejavu-core fonts-dejavu-mono
-      # The runner's own Firefox, which the tests find as the package does. Without one every
+      # The runner's own Chrome, which the tests find as the package does. Without one every
       # browser test would be skipped and the job would pass, so this step fails instead.
-      - name: Firefox
-        run: python -m tests.firefox
+      - name: Chrome
+        run: python -m tests.chrome
       - name: Tests
         env:
           HTML_MCP_FAILURES: ${{ runner.temp }}/failures
@@ -52,14 +52,14 @@ jobs:
           if-no-files-found: ignore
 
   # The page's users are on Windows and macOS too: every test runs there as well, the browser's
-  # in the Firefox each runner has installed where its installer puts it.
+  # in the Chrome each runner has installed.
   other-systems:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     strategy:
       fail-fast: false
       # A system's tests run in parts, each on a runner of its own: a runner's few cores are
-      # shared by a Firefox per worker.
+      # shared by a Chrome per worker.
       matrix:
         include:
           - {os: windows-latest, part: "1/3"}
@@ -74,16 +74,20 @@ jobs:
           python-version: "3.13"
       - name: Python packages
         run: pip install -e ".[mcp,dev]"
-      # The same fonts as on Linux, set in Firefox's generic families (tests/fonts.py).
+      # The same fonts as on Linux, installed for the runner's user (tests/fonts.py).
       - name: Fonts
         run: python -m tests.fonts
-      - name: Firefox
-        run: python -m tests.firefox
+      - name: Chrome
+        run: python -m tests.chrome
       - name: Tests
         shell: bash
         env:
           HTML_MCP_FAILURES: ${{ runner.temp }}/failures
         run: |
+          # The runner's own chromedriver can be older than its Chrome. Without it Selenium
+          # fetches the one that fits.
+          while command -v chromedriver >/dev/null; do rm -f "$(command -v chromedriver)" || break; done
+          unset CHROMEWEBDRIVER
           python -m pytest -rfs --durations 15 --part ${{ matrix.part }} \
             || python -m pytest -rfs --last-failed --last-failed-no-failures none
       - name: Pages of failed tests
@@ -91,5 +95,44 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: failures-${{ matrix.os }}-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/failures
+          if-no-files-found: ignore
+
+  # Mac users read the page in Safari, whose engine is not Chrome's: the review page's browser
+  # tests run in it too, through its own driver, while the server checks and prints in Chrome.
+  # It has no window without a screen and takes one session at a time, so its tests run one
+  # after another.
+  safari:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        part: ["1/3", "2/3", "3/3"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Python packages
+        run: pip install -e ".[mcp,dev]"
+      - name: Fonts
+        run: python -m tests.fonts
+      - name: Safari's driver
+        run: |
+          sudo safaridriver --enable
+          /usr/bin/safaridriver --version
+      - name: Browser tests in Safari
+        env:
+          HTML_MCP_BROWSER_KIND: safari
+          HTML_MCP_FAILURES: ${{ runner.temp }}/failures
+        run: |
+          python -m pytest -n 0 -rfs --part ${{ matrix.part }} tests/test_browser.py \
+            || python -m pytest -n 0 -rfs --last-failed --last-failed-no-failures none tests/test_browser.py
+      - name: Pages of failed tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failures-safari-${{ strategy.job-index }}
           path: ${{ runner.temp }}/failures
           if-no-files-found: ignore

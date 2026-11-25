@@ -7,7 +7,7 @@ import pytest
 pptx = pytest.importorskip("pptx")
 
 from html_mcp_web.pptx_export import export_pptx  # noqa: E402
-from tests.firefox import needs_firefox  # noqa: E402
+from tests.chrome import needs_browser  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 NEUTRAL = REPO / "templates" / "neutral-slides"
@@ -55,7 +55,7 @@ def shapes_by_kind(slide) -> dict[str, list]:
     return kinds
 
 
-@needs_firefox
+@needs_browser
 def test_export_bakes_chrome_into_background_and_keeps_body_editable(tmp_path: Path) -> None:
     html = deck(tmp_path)
     out = tmp_path / "out" / "deck.pptx"
@@ -157,7 +157,7 @@ def test_export_bakes_chrome_into_background_and_keeps_body_editable(tmp_path: P
 DEJAVU = Path("/usr/share/fonts/truetype/dejavu")
 
 
-@needs_firefox
+@needs_browser
 @pytest.mark.skipif(not (DEJAVU / "DejaVuSans.ttf").is_file(), reason="a static TrueType face is required")
 def test_export_embeds_the_skin_face(tmp_path: Path) -> None:
     import json
@@ -189,7 +189,7 @@ def test_export_embeds_the_skin_face(tmp_path: Path) -> None:
     assert lead.text_frame.paragraphs[0].runs[0].font.name == "DejaVu Sans"
 
 
-@needs_firefox
+@needs_browser
 def test_export_route_writes_inside_the_project(tmp_path: Path) -> None:
     import io
     import json
@@ -246,7 +246,7 @@ def test_export_route_writes_inside_the_project(tmp_path: Path) -> None:
         shared.stop()
 
 
-@needs_firefox
+@needs_browser
 def test_each_page_screenshots_its_own_element(tmp_path: Path) -> None:
     """Marks restart on every page; a document-wide lookup once shot page 1's math into page 2."""
     from html_mcp_web.slides import build
@@ -272,7 +272,7 @@ def test_each_page_screenshots_its_own_element(tmp_path: Path) -> None:
     assert first.image.size[0] == second.image.size[0] == round(first.width / 9525 * 3)
 
 
-@needs_firefox
+@needs_browser
 def test_an_svg_file_in_an_img_is_exported_like_an_inline_svg(tmp_path: Path) -> None:
     """A deck's figure drawn as <img src="fig/step.svg"> failed the whole export: the file's
     bytes went to python-pptx as a picture, and an svg is no image it can identify. It
@@ -304,7 +304,7 @@ def test_an_svg_file_in_an_img_is_exported_like_an_inline_svg(tmp_path: Path) ->
         assert "svgBlip" in archive.read("ppt/slides/slide2.xml").decode("utf-8")
 
 
-@needs_firefox
+@needs_browser
 def test_inline_svg_is_embedded_as_vector_math_stays_raster(tmp_path: Path) -> None:
     import re
     import zipfile
@@ -364,7 +364,7 @@ def test_inline_svg_is_embedded_as_vector_math_stays_raster(tmp_path: Path) -> N
     pptx.Presentation(str(out))  # the package still opens
 
 
-@needs_firefox
+@needs_browser
 def test_inline_flow_images_each_become_a_picture(tmp_path: Path) -> None:
     """A row of <img> in inline flow (no block wrapper) reads as a text-only leaf; each image
     must still export as its own picture instead of being dropped with the empty text."""
@@ -392,7 +392,7 @@ def test_inline_flow_images_each_become_a_picture(tmp_path: Path) -> None:
     assert len(shapes_by_kind(prs.slides[1]).get("PICTURE", [])) == 4
 
 
-@needs_firefox
+@needs_browser
 def test_the_page_is_carried_over_as_it_is_laid_out(tmp_path: Path) -> None:
     """Four things the export used to lose: the line breaks of a code block, the gap under
     a bullet, the proportions of a picture fitted in a box of another shape, and a drawing
@@ -474,7 +474,7 @@ def test_the_page_is_carried_over_as_it_is_laid_out(tmp_path: Path) -> None:
         assert cell.margin_left + cell.margin_right < loose.margin_left + loose.margin_right
 
 
-@needs_firefox
+@needs_browser
 def test_takeaway_pptx_textbox_uses_the_body_width(tmp_path: Path) -> None:
     """PowerPoint text metrics differ slightly, so a tight takeaway box wraps a line that
     fits in HTML. The exported box keeps the body's available width as breathing room."""
@@ -498,7 +498,7 @@ def test_takeaway_pptx_textbox_uses_the_body_width(tmp_path: Path) -> None:
     assert takeaway.width / 9525 > 1100
 
 
-@needs_firefox
+@needs_browser
 def test_reference_lines_reach_the_slide_edge(tmp_path: Path) -> None:
     """A reference line set as wide as its words wrapped its last word under PowerPoint's
     wider letters, so each line's box keeps its left edge and reaches the slide's right edge."""
@@ -526,7 +526,7 @@ def test_reference_lines_reach_the_slide_edge(tmp_path: Path) -> None:
         assert abs((shape.left + shape.width) / 9525 - 1280) < 1
 
 
-@needs_firefox
+@needs_browser
 def test_a_wrapped_svg_label_keeps_its_lines_in_the_vector(tmp_path: Path) -> None:
     """The deck breaks a data-wrap label into lines when it opens; the export serializes
     the drawing as it stands, so the vector carries the lines and their spacing."""
@@ -561,7 +561,7 @@ def test_a_wrapped_svg_label_keeps_its_lines_in_the_vector(tmp_path: Path) -> No
     assert svg_text.count('word-spacing="') == len(lines) - 1, svg_text
 
 
-@needs_firefox
+@needs_browser
 def test_a_speaker_script_becomes_the_slide_notes(tmp_path: Path) -> None:
     """A script is hidden in the slide show and left out of print, so without this the
     pptx would be the one copy of the deck that has lost it. PowerPoint shows a slide's
@@ -612,7 +612,7 @@ RINGED = """
 """
 
 
-@needs_firefox
+@needs_browser
 @pytest.mark.parametrize("ringed", [False, True])
 def test_contents_and_divider_pages_come_over_as_text_and_shapes(tmp_path: Path, ringed: bool) -> None:
     """On contents and divider pages only plain text came back as text: a contents number,
@@ -710,7 +710,7 @@ def test_contents_and_divider_pages_come_over_as_text_and_shapes(tmp_path: Path,
     assert marks_left(slides[2], divider["3"], 0.15) == 0 and marks_left(slides[2], divider["Section name"], 0.15) == 0
 
 
-@needs_firefox
+@needs_browser
 def test_an_appendix_number_is_editable_text_not_a_field(tmp_path: Path) -> None:
     """A slide-number field counts the slide's place in the whole deck, so it cannot say
     A1; an appendix label comes back as plain text to correct by hand, while the pages

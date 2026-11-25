@@ -169,7 +169,7 @@ def test_a_stop_right_after_the_start_ends_the_server(tmp_path: Path, monkeypatc
 
 def test_a_build_due_at_start_runs_once_the_server_serves(tmp_path: Path, monkeypatch) -> None:
     """A report whose content was newer than its built file was built before the server
-    reported its start, and a report's build sets its pages in Firefox: on a slow machine the
+    reported its start, and a report's build sets its pages in Chrome: on a slow machine the
     start gave up first. The server now starts, and builds next, a request asked meanwhile
     waiting for the build."""
     from html_mcp_web import config as config_module

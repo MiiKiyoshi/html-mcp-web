@@ -54,7 +54,7 @@ from .config import (
     get_template_dir,
     load_config,
 )
-from . import firefox
+from . import chrome
 from .pdf_export import print_artifact_pdf, print_figure_pdf
 from . import __version__
 from .pptx_export import export_pptx
@@ -473,7 +473,8 @@ class HtmlReviewServer:
         # One catch-up at a time: a rebuild takes seconds, and every state read asks.
         self.catching_up = asyncio.Lock()
         # Built by the first catch-up, once the server serves: a report's build sets its pages
-        # in Firefox, which on a slow machine took longer than the server is given to start.
+        # in a headless browser, which on a slow machine took longer than the server is given
+        # to start.
         self.artifacts = self._create_artifacts(config, build=False)
         self.watcher = self._create_watcher(config)
 
@@ -542,8 +543,8 @@ class HtmlReviewServer:
             "review": {"calls": self.review.calls, "consumed": self.review.consumed,
                        "waiters": self.review.waiters, "lanes": self.review.page_lanes()},
             "artifacts": artifacts,
-            # Whether the layout can be checked at all: only the server checks it, with Firefox.
-            "layout_checker": firefox.binary() is not None,
+            # Whether the layout can be checked at all: only the server checks it, in Chrome.
+            "layout_checker": chrome.binary() is not None,
         }
 
     def runtime(self, request: web.Request) -> ArtifactRuntime:
@@ -675,8 +676,9 @@ class HtmlReviewServer:
         source = runtime.main_file.read_text(encoding="utf-8")
         if for_print:
             # Speaker scripts are screen-only. Hiding them with CSS is not enough for the
-            # printer: a hidden block between pages made Firefox drop the background layer
-            # of the page before it, so the print copy carries no script blocks at all.
+            # printer: a hidden block between pages made the printing browser drop the
+            # background layer of the page before it, so the print copy carries no script
+            # blocks at all.
             source = strip_script_blocks(source)
         page_size = PRINT_PAGE_SIZES[runtime.config.layout]
         head_content = (
@@ -1187,13 +1189,13 @@ class HtmlReviewServer:
         The check is browser work: the review page's scripts measure the artifact and post
         the result back. Browsers measure a few pixels apart, and the same content
         overflowed at one pixel ratio and fitted at another, so the result recorded is
-        always this one: a headless Firefox on this host at its default pixel ratio, the
+        always this one: a headless Chrome on this host at its default pixel ratio, the
         browser the PDF and pptx exports print with. Its page carries a token that
         update_layout requires, and one check runs at a time.
         """
         if runtime.space_revision == runtime.revision:
             return
-        if firefox.binary() is None or self.closing:
+        if chrome.binary() is None or self.closing:
             return
         task = asyncio.current_task()
         self.check_tasks.add(task)
@@ -1209,13 +1211,13 @@ class HtmlReviewServer:
             if runtime.space_revision == runtime.revision:
                 return
             runtime.check_token = secrets.token_urlsafe(16)
-            profile = tempfile.mkdtemp(prefix="html_mcp_check_")
-            process = await asyncio.create_subprocess_exec(
-                *firefox.command("-headless", "-no-remote", "-profile", profile,
-                                 f"http://{host}/?{urlencode({'artifact': runtime.alias, 'check': runtime.check_token})}"),
-                stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
-                env=firefox.headless_environment(),
-            )
+            profile = chrome.profile("html_mcp_check_")
+            with open(chrome.said(profile), "wb") as said:
+                process = await asyncio.create_subprocess_exec(
+                    *chrome.command(profile, f"http://{host}/?{urlencode({'artifact': runtime.alias, 'check': runtime.check_token})}"),
+                    stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.DEVNULL, stderr=said,
+                    env=chrome.headless_environment(),
+                )
             run = (process, profile)
             self.check_runs.add(run)
             try:
@@ -1227,18 +1229,18 @@ class HtmlReviewServer:
                 runtime.check_token = None
                 # Shielded, so a cancelled check still waits for its browser to exit before
                 # the profile goes: removed under a running browser, files came back into it.
-                await asyncio.shield(self._ending(process))
+                await asyncio.shield(self._ending(process, profile))
                 shutil.rmtree(profile, ignore_errors=True)
                 self.check_runs.discard(run)
                 self.check_endings.pop(process, None)
 
-    def _ending(self, process: asyncio.subprocess.Process) -> asyncio.Task:
-        """The task that ends a checking browser and every process under it and waits until
-        they exit, started when first asked for. One that has exited already is not looked for
-        by its pid, which another process may have now."""
+    def _ending(self, process: asyncio.subprocess.Process, profile: str) -> asyncio.Task:
+        """The task that ends a checking browser on *profile* and every process under it and
+        waits until they exit, started when first asked for. One that has exited already is
+        not looked for by its pid, which another process may have now."""
         async def end() -> None:
             if process.returncode is None:
-                await asyncio.get_running_loop().run_in_executor(None, firefox.end, process.pid)
+                await asyncio.get_running_loop().run_in_executor(None, chrome.end, process.pid, profile)
             await process.wait()
 
         if process not in self.check_endings:
@@ -1256,9 +1258,9 @@ class HtmlReviewServer:
             # Nothing to check: say what is missing now rather than wait on a browser.
             return web.json_response({"revision": runtime.revision, "errors": None,
                                       "error": runtime.missing_file()})
-        no_firefox = firefox.binary() is None
+        no_browser = chrome.binary() is None
         self.drop_stale_layout()
-        if runtime.layout_revision != runtime.revision and not no_firefox:
+        if runtime.layout_revision != runtime.revision and not no_browser:
             await self._ensure_layout_checked(runtime, request.host)
         checked = runtime.layout_revision == runtime.revision
         data: dict[str, Any] = {
@@ -1270,7 +1272,7 @@ class HtmlReviewServer:
             data["warnings"] = list(runtime.layout_warnings)
         if not checked:
             # Said at once when nothing can check: waiting would only end in the same answer.
-            data["unchecked"] = ("Firefox is not installed, so nothing can check the layout" if no_firefox
+            data["unchecked"] = (f"{chrome.MISSING}, so nothing can check the layout" if no_browser
                                  else "the layout check did not finish. Try again")
         if runtime.build_error is not None:
             data["build_error"] = runtime.build_error
@@ -1820,7 +1822,7 @@ class HtmlReviewServer:
         for process, profile in list(self.check_runs):
             if process.returncode is None or process in self.check_endings:
                 with contextlib.suppress(asyncio.TimeoutError):
-                    await asyncio.wait_for(self._ending(process), timeout=10)
+                    await asyncio.wait_for(self._ending(process, profile), timeout=10)
             shutil.rmtree(profile, ignore_errors=True)
         self.check_runs.clear()
         self.check_endings.clear()

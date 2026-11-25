@@ -1,47 +1,42 @@
-"""Print the reviewed artifact, or one figure of a report, to a PDF with firefox marionette.
+"""Print the reviewed artifact, or one figure of a report, to a PDF in headless Chrome.
 
 The artifact URL already carries the print CSS (artifact.css @media print
-places each section.page on its own fixed-size sheet), so WebDriver:Print
-with the layout's page size yields the artifact exactly as the Print button would
+places each section.page on its own fixed-size sheet), so printing on sheets of
+the layout's page size yields the artifact exactly as the Print button would
 in a browser that honors @page size.
 
-Requires firefox and the marionette_driver package; callers surface the
-ImportError/FileNotFoundError message to the user instead of crashing.
+Requires Chrome or Edge; callers surface the FileNotFoundError message to the
+user instead of crashing.
 """
-import base64
+from .chrome import chrome, wait_loaded
 
-from .firefox import firefox, wait_loaded
-
-PRINT_PAGE_CM = {
-    "slides": (33.867, 19.05),
-    "report": (21.0, 29.7),
+# A sheet's width and height in inches: a slide is 1280 by 720 CSS pixels, at 96 to the inch,
+# and a report's page is A4. Chrome rounds a sheet's size to three-hundredths of an inch, and
+# a slide given as 33.867 by 19.05 cm comes out 1.3 px wider, so each size is the exact one.
+PRINT_PAGE_INCHES = {
+    "slides": (1280 / 96, 720 / 96),
+    "report": (21.0 / 2.54, 29.7 / 2.54),
 }
 
 
 def print_artifact_pdf(artifact_url: str, layout: str) -> bytes:
-    width_cm, height_cm = PRINT_PAGE_CM[layout]
-    with firefox() as client:
-        client.navigate(artifact_url)
+    width, height = PRINT_PAGE_INCHES[layout]
+    with chrome() as page:
+        page.navigate(artifact_url)
         # A font that never arrives does not stop the print: it is the page as far as it got.
         try:
-            wait_loaded(client)
+            wait_loaded(page)
         except TimeoutError:
             pass
-        body = {
-            "background": True, "shrinkToFit": False, "scale": 1.0,
-            "margin": {"top": 0, "bottom": 0, "left": 0, "right": 0},
-            "page": {"width": width_cm, "height": height_cm},
-        }
-        return base64.b64decode(client._send_message("WebDriver:Print", body, key="value"))
+        return page.print_pdf(width, height)
 
 
 # The drawing of report figure N, alone in the document: the figure whose caption reads
 # "Figure N:", its svg with the HTML lifted over it and without the caption. The rest of
-# the body is removed rather than hidden, since Firefox prints hidden text into the PDF
-# as text a reader can select and extract. The head stays, so the faces and the kit's
-# styles stay. The drawing keeps the size and the inherited text style it was set at, and
-# the sheet is its svg's box. Returns the sheet's width and height in CSS pixels, or why
-# there is none.
+# the body is removed, so that none of its text reaches the PDF, where a reader could
+# select and extract it. The head stays, so the faces and the kit's styles stay. The
+# drawing keeps the size and the inherited text style it was set at, and the sheet is its
+# svg's box. Returns the sheet's width and height in CSS pixels, or why there is none.
 ISOLATE_FIGURE = """
 const label = `Figure ${arguments[0]}:`;
 const figure = [...document.querySelectorAll('figure')]
@@ -79,19 +74,13 @@ return [width, height];
 def print_figure_pdf(artifact_url: str, number: int) -> bytes:
     """Report figure number's drawing as a PDF of one sheet its own size, its text vector
     text in the document's embedded faces."""
-    with firefox() as client:
-        client.navigate(artifact_url)
+    with chrome() as page:
+        page.navigate(artifact_url)
         try:
-            wait_loaded(client)
+            wait_loaded(page)
         except TimeoutError:
             pass
-        size = client.execute_script(ISOLATE_FIGURE, script_args=[number])
+        size = page.execute_script(ISOLATE_FIGURE, [number])
         if isinstance(size, str):
             raise ValueError(size)
-        width_cm, height_cm = (value * 2.54 / 96 for value in size)
-        body = {
-            "background": True, "shrinkToFit": False, "scale": 1.0,
-            "margin": {"top": 0, "bottom": 0, "left": 0, "right": 0},
-            "page": {"width": width_cm, "height": height_cm},
-        }
-        return base64.b64decode(client._send_message("WebDriver:Print", body, key="value"))
+        return page.print_pdf(size[0] / 96, size[1] / 96)

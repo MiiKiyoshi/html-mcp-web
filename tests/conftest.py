@@ -1,7 +1,9 @@
 import pytest
 
+from html_mcp_web import chrome
 from html_mcp_web.shared.update import Update
 from html_mcp_web.tool import TOOL
+from tests.fonts import pin_fonts
 
 
 def pytest_addoption(parser):
@@ -38,3 +40,18 @@ def no_update(monkeypatch):
 
     monkeypatch.setattr(Update, "news", unknown)
     monkeypatch.setattr(Update, "_run", refused)
+
+
+@pytest.fixture(autouse=True)
+def pinned_fonts(monkeypatch):
+    """Every Chrome the package starts in a test, for a layout check, a print or a report's
+    pages, sets the generic families in the faces the tests were written with, as the tests'
+    own Chrome does (tests/fonts.py)."""
+    made = chrome.profile
+
+    def pinned(prefix: str) -> str:
+        folder = made(prefix)
+        pin_fonts(folder)
+        return folder
+
+    monkeypatch.setattr(chrome, "profile", pinned)

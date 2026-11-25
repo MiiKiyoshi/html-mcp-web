@@ -27,7 +27,7 @@ from html_mcp_web.project_server import SharedProjectServer
 from html_mcp_web.server import HtmlReviewServer
 from html_mcp_web.shared import plugin_monitor
 from html_mcp_web.tool import TOOL
-from tests.firefox import needs_firefox
+from tests.chrome import needs_browser
 
 
 def available_port() -> int:
@@ -561,7 +561,7 @@ def test_pages_name_single_pages_and_ranges_in_order_each_once() -> None:
             page_numbers(spec, 8)
 
 
-@needs_firefox
+@needs_browser
 def test_image_save_writes_a_png_and_returns_its_path(tmp_path: Path) -> None:
     # save exists so a page can be handed to the user without the image entering the
     # transcript; the tool returns a path, not pixels.
@@ -1538,10 +1538,11 @@ def test_a_suggestion_rejected_is_told_to_the_agent_once(tmp_path: Path) -> None
 
 
 def test_layout_says_at_once_when_nothing_can_check(tmp_path: Path, monkeypatch) -> None:
-    """With no Firefox and no review page open, waiting could only end in the same answer."""
+    """With no browser to check in and no review page open, waiting could only end in the same
+    answer."""
     import time
 
-    from html_mcp_web import firefox
+    from html_mcp_web import chrome
 
     project(tmp_path)
     binding = ProjectBinding(tmp_path)
@@ -1549,12 +1550,12 @@ def test_layout_says_at_once_when_nothing_can_check(tmp_path: Path, monkeypatch)
         mcp = create_server(binding)
         binding.require_client()
         # Where its installer puts it counts as installed too, on Windows and macOS.
-        monkeypatch.setattr(firefox, "binary", lambda: None)
+        monkeypatch.setattr(chrome, "binary", lambda: None)
         started = time.monotonic()
         result = answer(mcp.call_tool("layout", {"artifact": "slides"}))
         assert time.monotonic() - started < 5
         assert result["errors"] is None
-        assert "Firefox is not installed" in result["unchecked"]
+        assert "Chrome or Edge is not installed" in result["unchecked"]
     finally:
         binding.stop()
 

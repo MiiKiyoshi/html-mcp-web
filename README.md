@@ -32,8 +32,8 @@ Paste this into Claude Code or Codex:
 Install html-mcp-web by following https://raw.githubusercontent.com/MiiKiyoshi/html-mcp-web/main/INSTALL.md
 ```
 
-The agent checks for Python and Firefox, shows you what it will install, and installs once
-you agree. Start the agent again afterwards.
+The agent checks for Python and Chrome, or Edge on Windows, shows you what it will install,
+and installs once you agree. Start the agent again afterwards.
 
 ## Init
 

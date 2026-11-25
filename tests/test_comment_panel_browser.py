@@ -1,13 +1,11 @@
-"""The comment panel the review pages share, as this page uses it, in Firefox: its search, its
+"""The comment panel the review pages share, as this page uses it, in Chrome: its search, its
 orders, the line that undoes a change of status, the row above the list, how each artifact
 keeps its own comments, the keys that work the list beside the slides' own, Help, and the
 Settings for the key letters and the editor's cursor."""
 
 import json
 import os
-import shutil
 import socket
-import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -17,13 +15,11 @@ from pathlib import Path
 
 import pytest
 import yaml
-from marionette_driver.marionette import ActionSequence
 
 from html_mcp_web.comments import ArtifactAnchor, CommentStore, PageAnchor, SourceAnchor, SuggestedEdit
 from html_mcp_web.config import load_config
-from html_mcp_web.firefox import stop
 from html_mcp_web.project_server import SharedProjectServer
-from tests.firefox import MOD, MOD_ALT, Browser, launch, needs_firefox
+from tests.chrome import MOD, MOD_ALT, ActionSequence, launch, needs_browser
 
 DECK = ('<!doctype html><html><head><meta charset="utf-8"><title>Slides</title></head><body><main class="pages">'
         '<section class="page"><h1>First</h1><p>Tea is served.</p></section></main></body></html>')
@@ -118,11 +114,11 @@ SERVERS: dict[str, SharedProjectServer] = {}
 
 
 @contextmanager
-def review_page(root: Path, aliases=("slides",), deck=DECK, prefs="", height=1000):
+def review_page(root: Path, aliases=("slides",), deck=DECK, height=1000, platform=None, **browser):
     """The review page of a project of one deck per alias, each in a folder of its own, opened in
-    a headless Firefox 1500 wide and 1000 high unless told, with its server's address. `prefs`
-    are Firefox's own settings, as user.js lines. SERVERS names the server by its address while
-    the page is open."""
+    a headless Chrome 1500 wide and 1000 high unless told, with its server's address. `platform`
+    is the system the browser says it runs on, and the rest are launch()'s own (tests/chrome.py).
+    SERVERS names the server by its address while the page is open."""
     for alias in aliases:
         (root / alias).mkdir()
         (root / alias / "slides.html").write_text(deck, encoding="utf-8")
@@ -132,31 +128,21 @@ def review_page(root: Path, aliases=("slides",), deck=DECK, prefs="", height=100
         "artifacts": {alias: {"layout": "slides", "main": f"{alias}/slides.html"} for alias in aliases},
         "watch": ["*.html"], "port": port}, sort_keys=False), encoding="utf-8")
     shared = SharedProjectServer(load_config(config_path))
-    profile = tempfile.mkdtemp(prefix="html_mcp_panel_")
-    marionette_port = available_port()
-    (Path(profile) / "user.js").write_text(f'user_pref("marionette.port", {marionette_port});\n{prefs}', encoding="utf-8")
-    process = None
-    browser = None
+    window = None
     try:
         shared.ensure()
         SERVERS[f"http://127.0.0.1:{port}"] = shared
-        process = launch(profile)
-        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
-        browser.start_session()
-        browser.set_window_rect(width=1500, height=height)
+        window = launch(**browser)
+        window.set_window_rect(width=1500, height=height)
+        if platform is not None:
+            window.platform(platform)
         base = f"http://127.0.0.1:{port}"
-        browser.navigate(base)
-        wait_until(lambda: browser.execute_script('return document.querySelector("#comment-filter").options.length > 1'))
-        yield browser, base
+        window.navigate(base)
+        wait_until(lambda: window.execute_script('return document.querySelector("#comment-filter").options.length > 1'))
+        yield window, base
     finally:
-        if browser is not None:
-            try:
-                browser.delete_session()
-            except Exception:
-                pass
-        if process is not None:
-            stop(process)
-        shutil.rmtree(profile, ignore_errors=True)
+        if window is not None:
+            window.quit()
         SERVERS.pop(f"http://127.0.0.1:{port}", None)
         shared.stop()
 
@@ -201,7 +187,7 @@ def opened(browser) -> list[str]:
                                   '.filter((card) => card.querySelector(".cmt-actions")).map((card) => card.dataset.commentId)')
 
 
-@needs_firefox
+@needs_browser
 def test_the_search_finds_words_writers_files_and_days_in_every_status(tmp_path: Path) -> None:
     """The search box lists the comments that meet what is typed, whatever their status, while
     the view list reads all: words in the thread or in what a comment is on, from: the agent
@@ -243,7 +229,7 @@ def test_the_search_finds_words_writers_files_and_days_in_every_status(tmp_path:
             == "human · 11-12 09:30")
 
 
-@needs_firefox
+@needs_browser
 def test_the_sort_list_orders_the_list_and_its_search_and_the_row_keeps_one_line(tmp_path: Path) -> None:
     """Beside the views, the sort list puts the list in page order, latest first or oldest
     first, by when each thread was last written in, in a view and in a search alike, and the
@@ -327,7 +313,7 @@ def test_the_sort_list_orders_the_list_and_its_search_and_the_row_keeps_one_line
         assert script('return document.querySelector("#comment-rare").classList.contains("open")') is False
 
 
-@needs_firefox
+@needs_browser
 def test_the_row_stays_one_line_at_every_text_size_with_the_bell_in_it(tmp_path: Path) -> None:
     """At every text size, from a 700px panel down to 240px, a comment picked or not, the row
     above the list stays one line, the bell among its buttons until it waits behind the dots,
@@ -359,7 +345,7 @@ def test_the_row_stays_one_line_at_every_text_size_with_the_bell_in_it(tmp_path:
         wait_until(lambda: get_json(f"{base}/state")["review"]["calls"] == 1)
 
 
-@needs_firefox
+@needs_browser
 def test_the_line_above_the_list_says_how_comments_reach_the_agent(tmp_path: Path) -> None:
     """After a comment is posted while comments wait for the agent, the line above the list says
     they reach it at the bell, with its key, until the bell is pressed. A press no agent hears is
@@ -395,7 +381,7 @@ def test_the_line_above_the_list_says_how_comments_reach_the_agent(tmp_path: Pat
         assert script(note) is None
 
 
-@needs_firefox
+@needs_browser
 def test_the_bell_calls_an_agent_the_configuration_names(tmp_path: Path) -> None:
     """With agents in the configuration, the reviewer picks beside the bell which agent it
     calls, with the effort that agent lists. Naming them while the page is open brings the
@@ -432,7 +418,7 @@ def test_the_bell_calls_an_agent_the_configuration_names(tmp_path: Path) -> None
         assert SERVERS[base].runner.app["review_server"].review.calls == 0
 
 
-@needs_firefox
+@needs_browser
 def test_undo_puts_the_last_change_of_status_back(tmp_path: Path) -> None:
     """A change of status made from the row or on a card is said in a line above the list with
     Undo, which puts each comment back to the status it had, a resolved one with the moment it
@@ -527,7 +513,7 @@ def test_undo_puts_the_last_change_of_status_back(tmp_path: Path) -> None:
         assert line() is None and statuses(second) == ["archived"]
 
 
-@needs_firefox
+@needs_browser
 def test_a_change_made_on_one_artifact_is_never_undone_on_another(tmp_path: Path) -> None:
     """Each artifact has its comments. A tab chosen, or the first artifact shown in place of one
     the configuration no longer names, lets go of what the panel held for the one before: the
@@ -616,7 +602,7 @@ def test_a_change_made_on_one_artifact_is_never_undone_on_another(tmp_path: Path
         assert len(statuses_posted()) == before and status("slides", four) == "open"
 
 
-@needs_firefox
+@needs_browser
 def test_a_refused_suggestion_says_the_servers_words(tmp_path: Path) -> None:
     """The server refuses a change made to a thread that changed since the card was drawn, and a
     suggestion the file no longer fits, each in words sent as JSON. The reviewer reads the
@@ -656,7 +642,7 @@ def test_a_refused_suggestion_says_the_servers_words(tmp_path: Path) -> None:
                       f"Reject it, or reply to ask the agent for a new one. ({why})")
 
 
-@needs_firefox
+@needs_browser
 def test_the_comment_list_goes_by_keys(tmp_path: Path) -> None:
     """The comments go by keys as tex-mcp-web's do, as a notebook's cells do: j and k move the
     ring and leave every card as it was, a key presses the ringed card's button and shows its
@@ -888,7 +874,7 @@ def test_the_comment_list_goes_by_keys(tmp_path: Path) -> None:
         assert script('return document.querySelector("#compose-anchor").textContent') == "Whole artifact"
 
 
-@needs_firefox
+@needs_browser
 def test_the_ring_holds_a_third_of_the_way_down_and_an_opened_card_shows_its_end(tmp_path: Path) -> None:
     """Moving by keys keeps the ringed card's middle a third of the way down the list, so the
     eye stays put, a card opened by Space shows its end, where the latest words are, and a
@@ -941,7 +927,7 @@ def test_the_ring_holds_a_third_of_the_way_down_and_an_opened_card_shows_its_end
             script('document.querySelector("#comments-list").scrollTop = 0;')
 
 
-@needs_firefox
+@needs_browser
 def test_the_slides_and_their_previews_keep_their_keys(tmp_path: Path) -> None:
     """The slide show takes its keys on the page itself as in the artifact, where the comment
     keys rest until it ends: Space, the arrows, n, Home and End move the slides and leave the
@@ -955,7 +941,7 @@ def test_the_slides_and_their_previews_keep_their_keys(tmp_path: Path) -> None:
     kept.add(ArtifactAnchor(), "Cite the survey here.")
     # Without the browser's full screen the pane lies over the page, as on an iPhone, and the
     # show runs the same.
-    with review_page(tmp_path, deck=deck, prefs='user_pref("full-screen-api.enabled", false);\n') as (browser, base):
+    with review_page(tmp_path, deck=deck, fullscreen=False) as (browser, base):
         script = lambda code: browser.execute_script(code, sandbox=None)
         frame = 'document.querySelector("#artifact-frame")'
         wait_until(lambda: len(listed(browser)) == 2
@@ -1011,7 +997,7 @@ def test_the_slides_and_their_previews_keep_their_keys(tmp_path: Path) -> None:
         assert ring() != first
 
 
-@needs_firefox
+@needs_browser
 def test_help_opens_from_the_menu_and_the_question_mark_on_the_page_shown_last(tmp_path: Path) -> None:
     """Help (?) in the ⋯ menu, or ? anywhere on the page, opens Help: its Start here page says
     how to comment on this page, its tabs go round with the arrows, it opens on the page shown
@@ -1074,7 +1060,7 @@ def test_help_opens_from_the_menu_and_the_question_mark_on_the_page_shown_last(t
         wait_until(lambda: shown() == ["search", True, ["help-search"], 0])
 
 
-@needs_firefox
+@needs_browser
 def test_the_search_example_in_help_finds_what_help_says(tmp_path: Path) -> None:
     """The Search page's example, typed into the search box step by step, lists what each step
     says: the threads with the word, those the agent wrote in, and the one answered on the day,
@@ -1147,7 +1133,7 @@ def test_the_search_example_in_help_finds_what_help_says(tmp_path: Path) -> None
         wait_until(lambda: "other" in [names[cid] for cid in listed(browser)])
 
 
-@needs_firefox
+@needs_browser
 def test_the_editor_holds_the_cursor_line_where_settings_says(tmp_path: Path) -> None:
     """Settings can hold the source editor's cursor line a third or half of the way down, as the
     comment keys hold the ring in the list: the keys move the text under the cursor, the ends
@@ -1235,12 +1221,12 @@ def test_the_editor_holds_the_cursor_line_where_settings_says(tmp_path: Path) ->
             == ["On", "Off"]
 
 
-@needs_firefox
+@needs_browser
 @pytest.mark.parametrize("platform, held, alt", [("MacIntel", "Cmd", "Option"), ("Linux x86_64", "Ctrl", "Alt")])
 def test_on_a_mac_the_page_names_the_keys_a_mac_has(tmp_path: Path, platform: str, held: str, alt: str) -> None:
     """A Mac holds the page's shortcuts with Cmd and Option. Its tooltips and every page of Help
     name them so, while Ctrl+[ stays Ctrl, and another system reads Ctrl and Alt."""
-    with review_page(tmp_path, prefs=f'user_pref("general.platform.override", "{platform}");\n') as (browser, base):
+    with review_page(tmp_path, platform=platform) as (browser, base):
         script = lambda code: browser.execute_script(code, sandbox=None)
         assert script("return navigator.platform") == platform
         wait_until(lambda: f"{held}+{alt}+Enter" in script('return document.querySelector("#call-agent-btn").title'))
@@ -1257,7 +1243,7 @@ def test_on_a_mac_the_page_names_the_keys_a_mac_has(tmp_path: Path, platform: st
         assert other not in keys + saved + script('return document.querySelector("#call-agent-btn").title')
 
 
-@needs_firefox
+@needs_browser
 def test_help_fits_a_narrow_window_on_every_page(tmp_path: Path) -> None:
     """At 480 pixels wide, every page of Help fits the dialog at the default text size and at
     the largest: nothing sticks out of it, and nothing in it scrolls sideways."""
@@ -1283,7 +1269,7 @@ def test_help_fits_a_narrow_window_on_every_page(tmp_path: Path) -> None:
 
 
 
-@needs_firefox
+@needs_browser
 def test_a_reply_written_while_the_page_cannot_hear_its_server_shows_once_it_can(tmp_path: Path) -> None:
     """The page hears of a reply over its socket. A reply written while the socket is closed,
     or before it first opens, reaches no page, so each opening reads the comments again."""
@@ -1310,7 +1296,7 @@ def test_a_reply_written_while_the_page_cannot_hear_its_server_shows_once_it_can
         wait_until(unanswered)
 
 
-@needs_firefox
+@needs_browser
 def test_an_agents_reply_shows_its_markdown_and_a_closed_card_its_words(tmp_path: Path) -> None:
     """An opened card draws a reply's bold, list and code. A closed card shows the same words
     without their marks."""

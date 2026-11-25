@@ -1,4 +1,4 @@
-"""The page-wide parts the review pages share, as the HTML review page uses them, in Firefox: the
+"""The page-wide parts the review pages share, as the HTML review page uses them, in Chrome: the
 grips that size the comments panel, and the holds that keep the page at its size."""
 
 from __future__ import annotations
@@ -6,7 +6,8 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from tests.test_comment_panel_browser import needs_firefox, review_page, wait_until
+from tests.chrome import ActionSequence
+from tests.test_comment_panel_browser import needs_browser, review_page, wait_until
 
 # A browser that says it is an iPhone, the one that zooms into a field as it takes the cursor.
 IPHONE = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
@@ -25,7 +26,7 @@ FINGER = '''
 VIEWPORT = 'return document.querySelector(\'meta[name="viewport"]\').content'
 
 
-@needs_firefox
+@needs_browser
 def test_the_panels_left_edge_sets_its_width_and_keeps_it(tmp_path: Path) -> None:
     """Beside the artifact, the comments' left edge is dragged to set their width, or moved by
     the keys on it, between 240px and 70% of the window, and the artifact takes the room left.
@@ -51,7 +52,7 @@ def test_the_panels_left_edge_sets_its_width_and_keeps_it(tmp_path: Path) -> Non
             document.querySelector(".tab-btn[data-tab=pages]").click();
             window.tappedAfterDrag = true;
           }, 50), {capture: true, once: true});''', sandbox=None)
-        drag = browser.actions.sequence("pointer", "mouse", {"pointerType": "mouse"})
+        drag = ActionSequence(browser, "pointer", "mouse", {"pointerType": "mouse"})
         drag.pointer_move(grip["x"], grip["y"]).pointer_down()
         for step in range(1, 5):
             drag.pointer_move(grip["x"] - 30 * step, grip["y"], duration=30)
@@ -91,7 +92,7 @@ def test_the_panels_left_edge_sets_its_width_and_keeps_it(tmp_path: Path) -> Non
           getComputedStyle(document.querySelector("#sidebar-grip")).display]''') == ["none", "flex"])
 
 
-@needs_firefox
+@needs_browser
 def test_a_pinch_outside_the_artifact_leaves_the_page_at_its_size(tmp_path: Path) -> None:
     """A trackpad's pinch reaches the page as a wheel turned with Ctrl held. Over the top bar or
     the comments the browser would magnify the whole page, so there it is kept from the browser;
@@ -104,18 +105,13 @@ def test_a_pinch_outside_the_artifact_leaves_the_page_at_its_size(tmp_path: Path
             sandbox=None) == [False, True, False, True]
 
 
-@needs_firefox
+@needs_browser
 def test_a_finger_on_a_field_keeps_an_iphone_from_zooming_into_it(tmp_path: Path) -> None:
     """An iPhone zooms the page into a field whose text is under 16px as it takes the cursor.
     The fields keep the size of the text around them, and from a finger landing on one until
     just after it has the cursor the page may not grow past its size. A finger anywhere else
     frees it at once. The source editor's hidden input, which no finger lands on, is 16px."""
-    prefs = (f'user_pref("general.useragent.override", "{IPHONE}");\n'
-             'user_pref("dom.w3c_touch_events.enabled", 1);\n'
-             'user_pref("dom.maxtouchpoints.testing.value", 5);\n'
-             'user_pref("ui.primaryPointerCapabilities", 1);\n'
-             'user_pref("ui.allPointerCapabilities", 1);\n')
-    with review_page(tmp_path, prefs=prefs) as (browser, base):
+    with review_page(tmp_path, user_agent=IPHONE, touch=True) as (browser, base):
         assert browser.execute_script('return [navigator.userAgent.includes("iPhone"), matchMedia("(pointer: coarse)").matches]',
                                       sandbox=None) == [True, True]
         assert browser.execute_script('''

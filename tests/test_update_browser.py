@@ -1,4 +1,4 @@
-"""The ⋯ menu's Update in Firefox, for an install from a git clone: the version line names the
+"""The ⋯ menu's Update in Chrome, for an install from a git clone: the version line names the
 version with the clone's commit, the menu offers Update when the clone's upstream has commits
 the clone lacks, and the band under the top bar says what is left once an update is in."""
 
@@ -6,10 +6,10 @@ import asyncio
 from pathlib import Path
 
 from html_mcp_web.shared.update import Update, UpdateError
-from tests.test_comment_panel_browser import SERVERS, needs_firefox, review_page, wait_until
+from tests.test_comment_panel_browser import SERVERS, needs_browser, review_page, wait_until
 
 
-@needs_firefox
+@needs_browser
 def test_the_more_menu_updates_the_clone_and_says_what_is_left(tmp_path: Path, monkeypatch) -> None:
     """The ⋯ menu names what runs and offers Update only when the upstream has new commits. A
     click updates, and a band stays under the top bar: first to reconnect the agent, since the

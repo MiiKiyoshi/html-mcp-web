@@ -1,4 +1,4 @@
-"""Turn a built slide deck into an editable pptx with firefox marionette and python-pptx.
+"""Turn a built slide deck into an editable pptx with headless Chrome and python-pptx.
 
 Each block inside a body page's content becomes its own shape at the position it has in
 the html (a 1280x720 px page is 12192000x6858000 EMU, 9525 EMU per px):
@@ -28,19 +28,15 @@ Skin configuration lives in skin.json under "pptx":
                ignores CFF/OTF and variable fonts. Every run is set in family.
   font         typeface for every run when nothing is embedded; default Arial
 
-Requires firefox, marionette_driver, python-pptx, and fontTools when fonts are embedded.
+Requires Chrome or Edge, python-pptx, and fontTools when fonts are embedded.
 """
 import base64
 import copy
 import io
 import json
 import re
-import shutil
 import urllib.parse
-import socket
 import struct
-import subprocess
-import tempfile
 import time
 import zipfile
 from pathlib import Path
@@ -557,6 +553,14 @@ if (fullBleed) for (const item of items) if (item.kind === 'text' || item.lifted
 return {title: title.trim(), hasBody: !!body, items};
 """
 
+# The box of a whole page, in the document's pixels, once it is scrolled into view.
+JS_PAGE = """
+const page = document.querySelectorAll('section.page')[arguments[0]];
+page.scrollIntoView();
+const box = page.getBoundingClientRect();
+return [box.left + scrollX, box.top + scrollY, box.width, box.height];
+"""
+
 # Marks restart at 0 on every page, so the lookup stays inside the page being exported;
 # a document-wide search returned an earlier page's element and its picture was
 # stretched into this page's box.
@@ -564,7 +568,8 @@ JS_ELEMENT = """
 const page = document.querySelectorAll('section.page')[arguments[0]];
 const el = page.querySelector('[data-pptx-index="' + arguments[1] + '"]');
 el.scrollIntoView({block: 'center'});
-return el;
+const box = el.getBoundingClientRect();
+return [box.left + scrollX, box.top + scrollY, box.width, box.height];
 """
 
 
@@ -1294,12 +1299,10 @@ def load_pptx_config(skin_dir: Path | None) -> dict[str, Any]:
 
 
 def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path | None) -> dict[str, Any]:
-    from marionette_driver.marionette import Marionette
     from pptx import Presentation
 
-    from .firefox import command, headless_environment, stop
+    from .chrome import chrome
 
-    browser = command("-marionette", "-headless", "-no-remote", "-profile")
     config = load_pptx_config(skin_dir)
     faces: dict[str, Path] = {}
     if "fonts" in config:
@@ -1311,24 +1314,7 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
     else:
         font = config.get("font", DEFAULT_FONT)
 
-    # A port of its own for this firefox. On the default one, an export attached to whatever
-    # browser already held 2828: a second export, or one whose predecessor had not finished
-    # exiting, drove the wrong session and read another deck's pages.
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        marionette_port = int(probe.getsockname()[1])
-    profile = tempfile.mkdtemp(prefix="html_mcp_pptx_")
-    Path(profile, "user.js").write_text(
-        f'user_pref("layout.css.devPixelsPerPx", "{DPR}");\n'
-        f'user_pref("marionette.port", {marionette_port});\n'
-        'user_pref("browser.shell.checkDefaultBrowser", false);\n', encoding="utf-8")
-    proc = subprocess.Popen(
-        [*browser, profile, "-width", "1400", "-height", "900", "about:blank"],
-        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=headless_environment(),
-    )
-    try:
-        client = Marionette(host="127.0.0.1", port=marionette_port, startup_timeout=60)
-        client.start_session()
+    with chrome("--window-size=1400,900", f"--force-device-scale-factor={DPR}") as client:
         client.navigate(html_url)
         client.execute_script(JS_SETUP)
         for _ in range(100):
@@ -1346,8 +1332,8 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
         prs.slide_height = _px(PAGE_HEIGHT_PX)
         report = []
         for index in range(page_count):
-            info = client.execute_script(JS_EXTRACT, script_args=[index])
-            script = client.execute_script(JS_SCRIPT, script_args=[index])
+            info = client.execute_script(JS_EXTRACT, [index])
+            script = client.execute_script(JS_SCRIPT, [index])
             if not info["hasBody"]:
                 slide = _blank_slide(prs)
                 _add_notes(slide, script)
@@ -1357,13 +1343,10 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
                 # paint cleared, so none shows twice.
                 overlaid = [item for item in info["items"]
                             if item["kind"] == "text" or (item["kind"] == "panel" and item["lifted"])]
-                client.execute_script(JS_HIDE_TEXT, script_args=[
+                client.execute_script(JS_HIDE_TEXT, [
                     index, [item["i"] for item in overlaid if "paras" in item],
                     [item["i"] for item in overlaid if item["kind"] == "panel"]])
-                shot = client.screenshot(element=client.execute_script(
-                    "const p = document.querySelectorAll('section.page')[arguments[0]]; p.scrollIntoView(); return p;",
-                    script_args=[index]), format="base64")
-                _set_slide_background(slide, base64.b64decode(shot))
+                _set_slide_background(slide, client.screenshot(client.execute_script(JS_PAGE, [index])))
                 for item in overlaid:
                     if item["kind"] == "text":
                         _add_text(slide, item, font)
@@ -1380,13 +1363,9 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
             # carry a second copy of what is about to become an editable shape over it.
             for item in overlay:
                 if item["kind"] == "shot":
-                    element = client.execute_script(JS_ELEMENT, script_args=[index, item["i"]])
-                    item["_shot"] = client.screenshot(element=element, format="base64")
-            client.execute_script(JS_HIDE, script_args=[index, [item["i"] for item in overlay]])
-            shot = client.screenshot(element=client.execute_script(
-                "const p = document.querySelectorAll('section.page')[arguments[0]]; p.scrollIntoView(); return p;",
-                script_args=[index]), format="base64")
-            _set_slide_background(slide, base64.b64decode(shot))
+                    item["_shot"] = client.screenshot(client.execute_script(JS_ELEMENT, [index, item["i"]]))
+            client.execute_script(JS_HIDE, [index, [item["i"] for item in overlay]])
+            _set_slide_background(slide, client.screenshot(client.execute_script(JS_PAGE, [index])))
             for item in overlay:
                 if item["kind"] == "text":
                     _add_text(slide, item, font)
@@ -1409,7 +1388,7 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
                     if fit == "cover":
                         _crop_to_cover(picture, item["rect"], natural)
                 else:
-                    shot_bytes = base64.b64decode(item["_shot"])
+                    shot_bytes = item["_shot"]
                     if "svgFile" in item:
                         item["svg"] = _svg_file_text(item["svgFile"], project_dir)
                     if "svg" in item:
@@ -1420,14 +1399,9 @@ def export_pptx(html_url: str, out_path: Path, project_dir: Path, skin_dir: Path
             report.append({"page": index + 1, "title": info["title"], "shapes": len(overlay),
                            "screenshot": True, "vector_svgs": sum(1 for item in overlay if "svg" in item),
                            "notes": len(script)})
-        client.delete_session()
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        prs.save(str(out_path))
-        if faces:
-            embed_fonts(out_path, font, faces)
-        return {"path": str(out_path), "slides": len(prs.slides), "pages": report,
-                "font": font, "embedded_faces": sorted(faces)}
-    finally:
-        # Ended before its profile goes, as in firefox.firefox().
-        stop(proc)
-        shutil.rmtree(profile, ignore_errors=True)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    prs.save(str(out_path))
+    if faces:
+        embed_fonts(out_path, font, faces)
+    return {"path": str(out_path), "slides": len(prs.slides), "pages": report,
+            "font": font, "embedded_faces": sorted(faces)}

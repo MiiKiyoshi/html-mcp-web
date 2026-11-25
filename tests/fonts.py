@@ -1,22 +1,21 @@
 """The fonts the browser tests were written with, given to a Windows or macOS runner of the CI.
 
-The tests measure pages set in the browser's generic families, and Ubuntu 24.04 sets them, once
-its packages are installed, in Noto Serif for serif, Noto Sans for sans-serif and DejaVu Sans
-Mono for monospace. On Linux the workflow installs those packages. Here the same fonts are taken
-from Debian's packages of the same versions, installed for the system, and named in Firefox's
-defaults, which every profile it starts reads: the tests' own and the server's checks and
-prints. Run by the CI as python -m tests.fonts."""
+The tests measure pages set in the browser's generic families: Noto Serif for serif, Noto Sans
+for sans-serif and DejaVu Sans Mono for monospace. Every Chrome a test starts, its own and each
+one the package starts for it, names them in its profile (pin_fonts), on every system. On Linux
+the workflow installs them as Ubuntu's packages. Here the same fonts are taken from Debian's
+packages of the same versions and installed for this user alone, which needs no administrator:
+on macOS in ~/Library/Fonts, on Windows in the user's own font folder, registered under the
+user's key. Run by the CI as python -m tests.fonts."""
 
 import hashlib
 import io
+import json
 import os
-import re
 import sys
 import tarfile
 import urllib.request
 from pathlib import Path
-
-from tests.firefox import FIREFOX
 
 # Each package, its digest, and the files it holds of each family's four faces.
 PACKAGES = {
@@ -29,6 +28,19 @@ PACKAGES = {
          [f"DejaVuSansMono{face}.ttf" for face in ("", "-Bold", "-Oblique", "-BoldOblique")]),
 }
 FAMILIES = {"serif": "Noto Serif", "sans-serif": "Noto Sans", "monospace": "DejaVu Sans Mono"}
+# Chrome's settings of the generic families, for every script: the standard face, which a page
+# that names none is set in, is the serif one.
+FONTS = {"standard": FAMILIES["serif"], "serif": FAMILIES["serif"],
+         "sansserif": FAMILIES["sans-serif"], "fixed": FAMILIES["monospace"]}
+
+
+def pin_fonts(folder: str) -> None:
+    """Name the generic families in a new Chrome profile's preferences, which it reads as it
+    starts."""
+    fonts = {generic: {"Zyyy": family} for generic, family in FONTS.items()}
+    Path(folder, "Default").mkdir(exist_ok=True)
+    Path(folder, "Default", "Preferences").write_text(json.dumps({"webkit": {"webprefs": {"fonts": fonts}}}),
+                                                       encoding="utf-8")
 
 
 def unpack(url: str, digest: str, folder: str, names: list[str]) -> dict[str, bytes]:
@@ -56,32 +68,19 @@ def install(name: str, data: bytes) -> None:
     import ctypes
     import winreg
 
-    target = Path(os.environ["WINDIR"], "Fonts", name)
+    target = Path(os.environ["LOCALAPPDATA"], "Microsoft", "Windows", "Fonts", name)
+    target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
-    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts",
-                        0, winreg.KEY_SET_VALUE) as fonts:
-        winreg.SetValueEx(fonts, f"{Path(name).stem} (TrueType)", 0, winreg.REG_SZ, name)
+    # A font of one user's is registered with its full path, under that user's key.
+    with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts",
+                            0, winreg.KEY_SET_VALUE) as fonts:
+        winreg.SetValueEx(fonts, f"{Path(name).stem} (TrueType)", 0, winreg.REG_SZ, str(target))
     ctypes.windll.gdi32.AddFontResourceW(str(target))
 
 
-def firefox_defaults() -> Path:
-    """The folder of default preferences Firefox reads at every start, beside its program, or
-    in a Mac application's Resources. Homebrew's firefox on the PATH is a script that runs the
-    application's program, which it names."""
-    program = Path(FIREFOX).resolve()
-    if sys.platform == "darwin" and program.parent.name != "MacOS":
-        script = program.read_text(encoding="utf-8")
-        named = re.search(r"(/[^'\"\s]*?\.app)/Contents/MacOS/firefox", script)
-        if named is None:
-            sys.exit(f"{program} names no Firefox application:\n{script[:1000]}")
-        program = Path(named.group(1), "Contents", "MacOS", "firefox")
-    resources = program.parent.parent / "Resources" if program.parent.name == "MacOS" else program.parent
-    return resources / "defaults" / "pref"
-
-
 if __name__ == "__main__":
-    if FIREFOX is None or sys.platform not in ("darwin", "win32"):
-        sys.exit("run on a Windows or macOS runner that has Firefox")
+    if sys.platform not in ("darwin", "win32"):
+        sys.exit("run on a Windows or macOS runner")
     for url, (digest, folder, names) in PACKAGES.items():
         for name, data in unpack(url, digest, folder, names).items():
             install(name, data)
@@ -90,10 +89,4 @@ if __name__ == "__main__":
 
         # Programs started from now on see the new fonts.
         ctypes.windll.user32.SendMessageTimeoutW(0xFFFF, 0x001D, 0, 0, 0x0002, 1000, None)
-    defaults = firefox_defaults()
-    defaults.mkdir(parents=True, exist_ok=True)
-    (defaults / "test-fonts.js").write_text("".join(
-        f'pref("font.name.{generic}.{group}", "{family}");\n'
-        for generic, family in FAMILIES.items() for group in ("x-western", "x-unicode")), encoding="utf-8")
-    print(f"Fonts installed and named in {defaults / 'test-fonts.js'}: "
-          + ", ".join(f"{generic} {family}" for generic, family in FAMILIES.items()))
+    print("Fonts installed for this user: " + ", ".join(f"{generic} {family}" for generic, family in FAMILIES.items()))

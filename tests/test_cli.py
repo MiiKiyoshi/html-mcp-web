@@ -7,7 +7,7 @@ import pytest
 
 from html_mcp_web import config as config_module
 from html_mcp_web.cli import main
-from tests.firefox import FIREFOX
+from tests.chrome import CHROME
 
 REPO = Path(__file__).resolve().parents[1]
 # The template shims import the engine from this checkout, whichever package is installed.
@@ -118,7 +118,7 @@ def test_neutral_slides_build_guarded_pages_and_speaker_scripts(tmp_path: Path) 
 
 def test_neutral_report_builds_a_numbered_flow_for_the_columns(tmp_path: Path, monkeypatch, capsys) -> None:
     """The flow the pour sets into pages: numbered heads, captions, citations and the
-    references. It is read before Firefox sets the pages, which the next test covers."""
+    references. It is read before Chrome sets the pages, which the next test covers."""
     import importlib
 
     engine = importlib.import_module("html_mcp_web.report.build")
@@ -211,7 +211,7 @@ def test_init_creates_a_viewable_plain_document(tmp_path, monkeypatch, layout, w
 
 
 @pytest.mark.parametrize("layout", ["slides", pytest.param("report", marks=pytest.mark.skipif(
-    FIREFOX is None, reason="a report is set in Firefox"))])
+    CHROME is None, reason="a report is set in Chrome"))])
 def test_init_builds_missing_template_output(tmp_path, monkeypatch, layout):
     from html_mcp_web.template_content import parse_template_content
     monkeypatch.chdir(tmp_path)

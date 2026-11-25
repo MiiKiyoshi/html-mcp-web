@@ -444,7 +444,7 @@ async def test_headless_check_runs_while_a_different_artifact_is_reviewed(client
 async def test_the_servers_own_check_answers_while_a_review_page_is_open(client, monkeypatch) -> None:
     """A review page does not measure for the record, so layout() runs the server's own
     check whether a page is open or not, and opens it with the token the record requires."""
-    from html_mcp_web import firefox
+    from html_mcp_web import chrome
 
     test_client, review = client
     idle_viewer = object()
@@ -466,23 +466,23 @@ async def test_the_servers_own_check_answers_while_a_review_page_is_open(client,
         runtime.layout_errors = []
         return Headless()
 
-    monkeypatch.setattr(firefox, "binary", lambda: "/opt/firefox/firefox")
-    monkeypatch.setattr(firefox, "end", lambda pid: None)
+    monkeypatch.setattr(chrome, "binary", lambda: "/opt/chrome/chrome")
+    monkeypatch.setattr(chrome, "end", lambda pid, folder: None)
     monkeypatch.setattr(asyncio, "create_subprocess_exec", headless_browser)
     state = await (await test_client.get("/artifacts/slides/layout")).json()
-    assert [program for program, _ in launched] == ["/opt/firefox/firefox"]
+    assert [program for program, _ in launched] == ["/opt/chrome/chrome"]
     assert "?artifact=slides&check=" in launched[0][1]
     assert state["errors"] == [] and "unchecked" not in state
 
 
 async def test_layout_says_at_once_when_nothing_can_check(client, monkeypatch) -> None:
-    from html_mcp_web import firefox
+    from html_mcp_web import chrome
 
     test_client, review = client
-    monkeypatch.setattr(firefox, "binary", lambda: None)
+    monkeypatch.setattr(chrome, "binary", lambda: None)
     state = await (await test_client.get("/artifacts/slides/layout")).json()
     assert state["errors"] is None
-    assert "Firefox is not installed" in state["unchecked"]
+    assert "Chrome or Edge is not installed" in state["unchecked"]
     # The review page learns it too, and says "unchecked" rather than "checking" forever.
     assert (await (await test_client.get("/state")).json())["layout_checker"] is False
 
@@ -1215,7 +1215,7 @@ async def test_render_page_crops_to_a_target_block(client, monkeypatch) -> None:
     posted = await test_client.post("/artifacts/slides/layout", json=server_check(review))
     assert posted.status == 200
 
-    # A real one-page PDF at the slide deck's print size, standing in for firefox.
+    # A real one-page PDF at the slide deck's print size, standing in for Chrome's.
     with pymupdf.open() as made:
         made.new_page(width=960, height=540)
         pdf = made.tobytes()
@@ -1758,10 +1758,10 @@ async def test_an_agent_rewrites_its_own_entries_through_the_batch_update(client
 
 
 async def test_a_result_from_older_checker_code_is_checked_again(client, monkeypatch) -> None:
-    from html_mcp_web import firefox
+    from html_mcp_web import chrome
 
     test_client, review = client
-    monkeypatch.setattr(firefox, "binary", lambda: None)
+    monkeypatch.setattr(chrome, "binary", lambda: None)
     posted = await test_client.post(
         "/artifacts/slides/layout", json=server_check(review, errors=["page 1 exceeds the slides height"]))
     assert posted.status == 200

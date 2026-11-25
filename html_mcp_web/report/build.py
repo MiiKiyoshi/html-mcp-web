@@ -78,9 +78,10 @@ PAGINATE_SCRIPT = r"""<script>
 
   // A report the builder has set is written with its pages, and nothing is poured again.
   // Another browser may advance a glyph or a formula by a fraction of a pixel more or
-  // less than Firefox did, which over a line ended it up to a few pixels from where Firefox
-  // ended it. Every line with word spaces carries the width Firefox gave its words, and is
-  // brought back to it by its word spaces, which Firefox, where it was measured, leaves.
+  // less than the Chrome that set the pages did, which over a line ended it up to a few
+  // pixels from where that Chrome ended it. Every line with word spaces carries the width
+  // its words had there, and is brought back to it by its word spaces, which a browser
+  // that draws the line at that width leaves.
   // The width is read in the page's own pixels: a page drawn larger or smaller, as the
   // review page fits it to its pane, gave its lines that scale, and a page drawn 1.1 times
   // its size had every space taken back until its words ran over each other.
@@ -508,11 +509,11 @@ PAGINATE_SCRIPT = r"""<script>
   }
 
   // The builder sets every line the pour made as a block of its own and writes the pages
-  // down, so a reader's browser draws the lines Firefox broke and the layout check
+  // down, so a reader's browser draws the lines the pour broke and the layout check
   // measured, whatever its own line breaking, justification or hyphenation would do. A
   // line keeps the block's alignment, justified ones stretched to the column, and a word
-  // Firefox hyphenated at a line's end gets its hyphen drawn after the line, outside the
-  // text a comment quotes. A table keeps the column widths Firefox gave it.
+  // hyphenated at a line's end gets its hyphen drawn after the line, outside the text a
+  // comment quotes. A table keeps the column widths the pour gave it.
   function freezeLines(block) {
     const lines = lineBoxes(block);
     if (lines.length === 0) return;
@@ -589,13 +590,13 @@ PAGINATE_SCRIPT = r"""<script>
     block.querySelectorAll("wbr").forEach((opportunity) => opportunity.remove());
   }
 
-  // A justified line keeps its spacing as Firefox would spread it, written as letter and
-  // word spacing, which every browser draws alike, and is no longer justified by the
-  // browser: Chrome spread a Korean line between letters and WebKit between words only,
-  // so the same line ended at the same place with its words in other places. The slack
-  // goes to every space and, in a Korean document, every Hangul letter alike, as Firefox's
-  // inter-character justification spreads it, a letter taking no more than --letter-cap
-  // and the words the rest. A Latin word, a number, math and code are not spread inside.
+  // A justified line keeps its spacing as the pour spreads it, written as letter and word
+  // spacing, which every browser draws alike, and is no longer justified by the browser:
+  // Chrome spread a Korean line between letters and WebKit between words only, so the same
+  // line ended at the same place with its words in other places. The slack goes to every
+  // space and, in a Korean document, every Hangul letter alike, as inter-character
+  // justification spreads it, a letter taking no more than --letter-cap and the words the
+  // rest. A Latin word, a number, math and code are not spread inside.
   const HANGUL = /[\uac00-\ud7a3]/;
   function setSpacing(line) {
     line.classList.remove("j");
@@ -801,18 +802,17 @@ def build(content_path: Path, output_path: Path, skin_dir: Path) -> None:
 
 
 def set_pages(document: Path) -> str:
-    """The document with its pages set: Firefox pours the text into the columns once, and
-    what it made, every line in its place, is written down (KITS 10.13). Left to pour in
-    the reader's browser, Chrome or Safari broke and spread the lines its own way, and the
-    pages the reader saw were not the pages the layout check had measured."""
-    from ..firefox import firefox, wait_loaded
+    """The document with its pages set: headless Chrome pours the text into the columns
+    once, and what it made, every line in its place, is written down (KITS 10.13). Left to
+    pour in the reader's browser, each browser broke and spread the lines its own way, and
+    the pages the reader saw were not the pages the layout check had measured."""
+    from ..chrome import chrome, wait_loaded
 
-    with firefox() as client:
-        client.navigate(document.resolve().as_uri())
-        wait_loaded(client, 'document.documentElement.hasAttribute("data-poured")', tries=150)
-        # In the page's own scope, where its script left the setting function.
-        return "<!doctype html>\n" + client.execute_script(
-            "window.htmlMcpFreeze(); return document.documentElement.outerHTML;", sandbox=None) + "\n"
+    with chrome() as page:
+        page.navigate(document.resolve().as_uri())
+        wait_loaded(page, 'document.documentElement.hasAttribute("data-poured")', tries=150)
+        return "<!doctype html>\n" + page.execute_script(
+            "window.htmlMcpFreeze(); return document.documentElement.outerHTML;") + "\n"
 
 
 def _json(text: str) -> str:

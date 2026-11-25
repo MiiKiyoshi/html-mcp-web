@@ -1,18 +1,14 @@
 import json
 import os
-import shutil
-import tempfile
 import time
 import urllib.request
 from pathlib import Path
 
 import yaml
-from marionette_driver.marionette import ActionSequence
 
 from html_mcp_web.config import load_config
-from html_mcp_web.firefox import stop
 from html_mcp_web.project_server import SharedProjectServer
-from tests.firefox import CHECK_MARGIN, LAYOUT_CHECK_SECONDS, MOD, Browser, launch, needs_firefox
+from tests.chrome import CHECK_MARGIN, LAYOUT_CHECK_SECONDS, MOD, ActionSequence, launch, needs_browser
 
 
 def type_keys(browser, keys):
@@ -54,7 +50,7 @@ def get_json(url: str) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
-@needs_firefox
+@needs_browser
 def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path, monkeypatch) -> None:
     target = "SELECT START " + "exact wrapped characters " * 12 + "SELECT END"
     home = tmp_path / "home"
@@ -75,17 +71,10 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         "port": port,
     }, sort_keys=False), encoding="utf-8")
     shared = SharedProjectServer(load_config(config_path))
-    profile = tempfile.mkdtemp(prefix="html_mcp_source_editor_")
-    marionette_port = available_port()
-    (Path(profile) / "user.js").write_text(
-        f'user_pref("marionette.port", {marionette_port});\n', encoding="utf-8")
-    browser_process = None
     browser = None
     try:
         shared.ensure()
-        browser_process = launch(profile)
-        browser = Browser(host="127.0.0.1", port=marionette_port, startup_timeout=30)
-        browser.start_session()
+        browser = launch()
         browser.set_window_rect(width=1200, height=760)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
@@ -315,7 +304,7 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
           const r = document.querySelector("#split-grip").getBoundingClientRect();
           return {x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2)};
         ''')
-        drag = browser.actions.sequence("pointer", "mouse", {"pointerType": "mouse"})
+        drag = ActionSequence(browser, "pointer", "mouse", {"pointerType": "mouse"})
         drag.pointer_move(grip["x"], grip["y"]).pointer_down()
         drag.pointer_move(grip["x"] - 120, grip["y"], duration=250).pointer_up().perform()
         after = browser.execute_script('''
@@ -326,11 +315,5 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         assert after[1] > before[1] + 80
     finally:
         if browser is not None:
-            try:
-                browser.delete_session()
-            except Exception:
-                pass
-        if browser_process is not None:
-            stop(browser_process)
-        shutil.rmtree(profile, ignore_errors=True)
+            browser.quit()
         shared.stop()

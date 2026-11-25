@@ -1,10 +1,7 @@
-import socket
-import tempfile
 import time
 from pathlib import Path
 
-from html_mcp_web.firefox import stop
-from tests.firefox import Browser, launch, needs_firefox
+from tests.chrome import launch, needs_browser
 
 REPO = Path(__file__).resolve().parents[1]
 COLUMNS = REPO / "html_mcp_web" / "kits" / "columns.js"
@@ -22,20 +19,13 @@ def page(with_script: bool) -> str:
             f"<div style='width: 320px'><table>{rows}</table></div>{script}")
 
 
-@needs_firefox
+@needs_browser
 def test_a_column_of_short_labels_keeps_them_whole(tmp_path: Path) -> None:
     """Left to the browser, a column of short labels beside a column of longer text
     breaks each label in two. The kit's script keeps them whole and the longer column
     wraps instead, within the same width."""
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
-    profile = tempfile.mkdtemp(prefix="columns_test_")
-    Path(profile, "user.js").write_text(f'user_pref("marionette.port", {port});\n', encoding="utf-8")
-    process = launch(profile)
+    browser = launch()
     try:
-        browser = Browser(host="127.0.0.1", port=port, startup_timeout=60)
-        browser.start_session()
         results = []
         for with_script in (False, True):
             path = tmp_path / f"page{int(with_script)}.html"
@@ -50,7 +40,7 @@ return {
   within: table.offsetWidth <= table.parentElement.offsetWidth,
 };"""))
     finally:
-        stop(process)
+        browser.quit()
 
     bare, fitted = results
     assert bare["labels"] != [1, 1, 1]

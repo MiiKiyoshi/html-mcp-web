@@ -14,9 +14,13 @@ shell Claude Code itself uses there, and write `Scripts` where the commands say 
   None: stop and tell the user. Use the one found as `python3` below. On Windows, that is
   `py -3.13` or the full path of a Python from python.org or winget, not the `python3` in a
   `WindowsApps` folder, which only opens the Microsoft Store.
-- Firefox: `command -v firefox`, and on macOS also `/Applications/Firefox.app/Contents/MacOS/firefox`,
-  on Windows `C:\Program Files\Mozilla Firefox\firefox.exe`. Record its directory, unless it is
-  one of these two, where the server finds Firefox by itself. Missing: offer to install it.
+- Chrome: `command -v google-chrome google-chrome-stable chromium chromium-browser microsoft-edge`.
+  On macOS also `/Applications/Google Chrome.app`, `Chromium.app` or `Microsoft Edge.app`. On
+  Windows also `C:\Program Files\Google\Chrome\Application\chrome.exe`, or Microsoft Edge,
+  `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`, which every Windows has.
+  The server takes Chrome, else Chromium, else Edge. Record the directory of the one found,
+  unless it is one of the places named here, where the server finds it by itself. Missing:
+  offer to install Chrome.
 - Install directory: `$HOME/.local/share/html-mcp-web`, unless the user named another.
   Note whether it already holds a checkout. The checkout stays: its templates and guidelines are read from it.
 - Agents: `command -v claude` and `command -v codex`. Register with each one found.
@@ -27,18 +31,19 @@ shell Claude Code itself uses there, and write `Scripts` where the commands say 
 ## 2. Confirm
 
 Show one summary, in the user's language: install directory (new or update), Python,
-Firefox (found, or offered), the agents to register with, and any existing registration that
+Chrome (found, or offered), the agents to register with, and any existing registration that
 will be replaced.
 Registration is user-level, available in every folder. Do not ask about scope. Ask once.
 
-When Firefox is offered, give both outcomes so the user can choose:
+When Chrome is offered, give both outcomes so the user can choose:
 
 - Install: `layout()` and `image()`, with which the agent checks the pages it edits, PDF
-  and PPTX export, and building a report, whose pages are set in Firefox, work. Firefox is installed for the whole system, which needs administrator
-  rights, and on Debian or Ubuntu Mozilla's package repository is added to the system's sources.
+  and PPTX export, and building a report, whose pages are set in Chrome, work. On Debian or
+  Ubuntu, Chrome is installed for the whole system from Google's package, which needs
+  administrator rights and adds Google's package repository to the system's sources.
 - Decline: the review page, comments, editing and building a deck work. `layout()`,
   `image()`, PDF and PPTX export and building a report do not, since all of them render the
-  pages in a headless Firefox, until it is installed.
+  pages in a headless Chrome, until it is installed.
 
 ## 3. Install
 
@@ -54,24 +59,19 @@ its file.
     "$DIR/.venv/bin/python" -m pip install -e "${DIR}[mcp]"
     "$DIR/.venv/bin/html-mcp-web" mcp --check                          # lists the tools
 
-Firefox, when the user chose to install it:
+Chrome, when the user chose to install it:
 
-- macOS: `brew install --cask firefox`. Its directory is `/Applications/Firefox.app/Contents/MacOS`.
-- Windows: `winget install Mozilla.Firefox`, into `C:\Program Files\Mozilla Firefox`.
-- Debian or Ubuntu: from Mozilla's APT repository, since Ubuntu's own package installs a snap,
-  which containers and some systems cannot run. As root, or with sudo before each command:
+- macOS: `brew install --cask google-chrome`, into `/Applications/Google Chrome.app`.
+- Debian or Ubuntu: Google's package, since Ubuntu's own Chromium is a snap, which containers
+  and some systems cannot run. As root, or with sudo before the second command:
 
-      install -d -m 0755 /etc/apt/keyrings
-      curl -fsSL https://packages.mozilla.org/apt/repo-signing-key.gpg -o /etc/apt/keyrings/packages.mozilla.org.asc
-      echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" > /etc/apt/sources.list.d/mozilla.list
-      printf 'Package: *\nPin: origin packages.mozilla.org\nPin-Priority: 1000\n' > /etc/apt/preferences.d/mozilla
-      apt-get update && apt-get install -y firefox
+      curl -fsSLO https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+      apt-get install -y ./google-chrome-stable_current_amd64.deb && rm google-chrome-stable_current_amd64.deb
 
-- Elsewhere: the system's own firefox package.
+- Elsewhere: the system's own Chromium package.
 
-Then `firefox --version` (on macOS, the full path above) confirms it, and on Windows, where
-Firefox prints nothing to a console, that `firefox.exe` is in the folder above. Its directory
-goes into the PATH below as step 1 says.
+Then `google-chrome --version` confirms it, and on macOS
+`"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --version`.
 
 ## 4. Register
 
@@ -79,7 +79,7 @@ Remove a registration the user agreed to replace (`claude mcp remove --scope use
 `codex mcp remove html-mcp`), then:
 
     BIN="$DIR/.venv/bin"
-    P="$BIN:<firefox directory, if any>:/usr/bin:/bin"
+    P="$BIN:<browser directory, if any>:/usr/bin:/bin"
     claude mcp add --scope user html-mcp -e PATH="$P" -- "$BIN/python" -m html_mcp_web.cli mcp
     codex mcp add html-mcp --env PATH="$P" -- "$BIN/python" -m html_mcp_web.cli mcp
 
