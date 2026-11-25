@@ -887,9 +887,10 @@ def _session() -> subprocess.Popen:
 def _runs_as(monitor: subprocess.Popen) -> set[str]:
     """The pids the plugin's monitor runs its Python as: the one started, whose shell execs it,
     and under Git Bash on Windows, where the exec starts the Python as a process of its own
-    under the shell, that one."""
+    under the shell, that one, and the Python a virtual environment's launcher starts under it
+    in turn, which is the one that writes the record."""
     try:
-        return {str(monitor.pid), *(str(child.pid) for child in psutil.Process(monitor.pid).children())}
+        return {str(monitor.pid), *(str(child.pid) for child in psutil.Process(monitor.pid).children(recursive=True))}
     except psutil.Error:
         return {str(monitor.pid)}
 
