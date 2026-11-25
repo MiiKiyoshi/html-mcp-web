@@ -1181,9 +1181,17 @@ def test_the_editor_holds_the_cursor_line_where_settings_says(tmp_path: Path) ->
                  ' return [row, Math.round(top / editor.renderer.lineHeight),'
                  ' Math.round(editor.renderer.scroller.clientHeight / 3 / editor.renderer.lineHeight)];')
         held = lambda row: (lambda r: r[0] == row and abs(r[1] - r[2]) <= 1)(script(place))
+
+        def hold(row: int) -> None:
+            """Wait for the cursor on *row*, held where settings say, and say where it is if not."""
+            try:
+                wait_until(lambda: held(row))
+            except AssertionError as failure:
+                raise AssertionError(f"{failure}; the cursor's row, its screen line and the line a third down "
+                                     f"are {script(place)}") from None
         script(f"{editor} editor.focus();")
         press(browser, *["j"] * 40)
-        wait_until(lambda: held(40))
+        hold(40)
         # At the end the last line goes only as low as the editor scrolls, with no room made below.
         press(browser, "G")
         bottom = (f'{editor} return editor.session.getScrollTop() <= editor.session.getScreenLength()'
@@ -1195,7 +1203,7 @@ def test_the_editor_holds_the_cursor_line_where_settings_says(tmp_path: Path) ->
         press(browser, "g", "g")
         wait_until(lambda: script(place)[:2] == [0, 0])
         press(browser, *["j"] * 30)
-        wait_until(lambda: held(30))
+        hold(30)
         # A click moves the cursor and leaves the text where it is.
         scroll = f"{editor} return editor.session.getScrollTop();"
         before = script(scroll)
