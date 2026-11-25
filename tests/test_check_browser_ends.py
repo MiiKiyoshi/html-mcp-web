@@ -1,6 +1,7 @@
-"""A layout check's browser and its profile go with the server that started them when the
-server stops: by stop(), with a pytest worker ending after it, and with its client closing the
-pipe (server.py stop_checks()).
+"""A layout check's browser and its profile go with the server that started them, however the
+server stops: stop(), a pytest worker ending after it, its client closing the pipe and SIGKILL.
+A PDF export's browser goes with the process printing (html_mcp_web/chrome.py start(),
+server.py stop_checks()).
 
 Each server serves a deck whose image never arrives, so its check runs until the server stops.
 Each process a test starts has a temporary folder of its own, where the browsers' profiles are
@@ -233,3 +234,29 @@ def test_a_client_closing_the_pipe_leaves_nothing(tmp, tmp_path, never) -> None:
         assert left(tmp) == (0, [])
     finally:
         ended(server)
+
+
+@needs_browser
+@pytest.mark.skipif(sys.platform == "darwin", reason="macOS has no way to end a process with the one that started it")
+@pytest.mark.parametrize("work", ["check", "export"])
+def test_a_killed_starter_takes_its_browser_with_it(tmp, tmp_path, never, work) -> None:
+    """A server killed mid-check, or a process killed while it prints a PDF, cleans up nothing,
+    and its browser ends with it all the same. What it leaves in the temporary folder stays
+    there: a check's profile goes at a later server start's sweep."""
+    if work == "check":
+        config, port = slow_project(tmp_path, never.url)
+        starter = serving_mcp(config, port, tmp, never)
+    else:
+        page = f"data:text/html,<img src='{never.url}'><p>slow"
+        printing = f"from html_mcp_web.pdf_export import print_artifact_pdf; print_artifact_pdf({page!r}, 'slides')"
+        starter = subprocess.Popen([sys.executable, "-c", printing], env=environment(tmp, tmp_path / "cache"),
+                                   stdin=subprocess.DEVNULL)
+    try:
+        if work == "export":
+            wait_for_browser(tmp, starter)
+            never.asked()
+        starter.kill()
+        starter.wait()
+        assert left(tmp, seconds=10)[0] == 0
+    finally:
+        ended(starter)

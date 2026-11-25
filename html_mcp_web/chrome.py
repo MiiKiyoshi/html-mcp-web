@@ -10,10 +10,13 @@ Callers surface the FileNotFoundError message instead of crashing."""
 import asyncio
 import base64
 import contextlib
+import ctypes
+import functools
 import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -177,6 +180,110 @@ def end(pid: int, folder: str) -> None:
                 process.kill()
 
 
+if sys.platform.startswith("linux"):
+    # Bound before any browser starts: the function below runs between fork and exec, where
+    # nothing may be loaded or imported.
+    _prctl = ctypes.CDLL(None, use_errno=True).prctl
+    _PR_SET_PDEATHSIG, _SIGKILL = 1, int(signal.SIGKILL)
+
+    def _tied(starter: int) -> None:
+        """In the browser's process before it runs the browser: the kernel kills it once the
+        thread that started it has exited, with its process or alone, and one whose starter
+        died before this ran exits at once."""
+        _prctl(_PR_SET_PDEATHSIG, _SIGKILL)
+        if os.getppid() != starter:
+            os._exit(1)
+
+elif os.name == "nt":
+    from ctypes import wintypes
+
+    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    _kernel32.CreateJobObjectW.argtypes = (wintypes.LPVOID, wintypes.LPCWSTR)
+    _kernel32.SetInformationJobObject.argtypes = (wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD)
+    _kernel32.OpenProcess.restype = wintypes.HANDLE
+    _kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    _kernel32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    _kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    _CREATE_SUSPENDED, _KILL_ON_JOB_CLOSE, _EXTENDED_LIMITS = 0x4, 0x2000, 9
+    _PROCESS_SET_QUOTA, _PROCESS_TERMINATE = 0x100, 0x1
+
+    class _BasicLimits(ctypes.Structure):
+        _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64), ("PerJobUserTimeLimit", ctypes.c_int64),
+                    ("LimitFlags", wintypes.DWORD), ("MinimumWorkingSetSize", ctypes.c_size_t),
+                    ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", wintypes.DWORD),
+                    ("Affinity", ctypes.c_size_t), ("PriorityClass", wintypes.DWORD),
+                    ("SchedulingClass", wintypes.DWORD)]
+
+    class _Limits(ctypes.Structure):
+        # JOBOBJECT_EXTENDED_LIMIT_INFORMATION, its IO_COUNTERS six 64-bit counts.
+        _fields_ = [("BasicLimitInformation", _BasicLimits), ("IoInfo", ctypes.c_uint64 * 6),
+                    ("ProcessMemoryLimit", ctypes.c_size_t), ("JobMemoryLimit", ctypes.c_size_t),
+                    ("PeakProcessMemoryUsed", ctypes.c_size_t), ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+    def _checked(result):
+        if not result:
+            raise ctypes.WinError(ctypes.get_last_error())
+        return result
+
+    @functools.cache
+    def _job() -> int:
+        """The job every browser this process starts is put in, with the processes it starts.
+        Only this process holds the job, and Windows ends what is in it once the job's last
+        holder has gone, with this process however it ends."""
+        job = _checked(_kernel32.CreateJobObjectW(None, None))
+        limits = _Limits()
+        limits.BasicLimitInformation.LimitFlags = _KILL_ON_JOB_CLOSE
+        _checked(_kernel32.SetInformationJobObject(job, _EXTENDED_LIMITS, ctypes.byref(limits),
+                                                   ctypes.sizeof(limits)))
+        return job
+
+    def _join_job(pid: int) -> None:
+        handle = _checked(_kernel32.OpenProcess(_PROCESS_SET_QUOTA | _PROCESS_TERMINATE, False, pid))
+        try:
+            _checked(_kernel32.AssignProcessToJobObject(_job(), handle))
+        finally:
+            _kernel32.CloseHandle(handle)
+
+
+def start(folder: str, *arguments: str) -> subprocess.Popen:
+    """Start the browser headless on the profile in *folder*, with *arguments* after the ones
+    every start takes, and its error output in said(folder). Its callers end it with stop()
+    and remove its profile, and a starter that ends without doing so takes the browser with it:
+    on Linux the kernel kills the browser once the thread that started it exits, and on Windows
+    the browser and every process it starts are in a job that ends with the starter. On macOS
+    nothing ends it but its callers."""
+    tie: dict = {}
+    if sys.platform.startswith("linux"):
+        tie["preexec_fn"] = functools.partial(_tied, os.getpid())
+    elif os.name == "nt":
+        # Put in the job before it runs, and so before it starts processes of its own.
+        tie["creationflags"] = _CREATE_SUSPENDED
+    with open(said(folder), "wb") as output:
+        process = subprocess.Popen(command(folder, *arguments), stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.DEVNULL, stderr=output, env=headless_environment(), **tie)
+    if os.name == "nt":
+        try:
+            _join_job(process.pid)
+            psutil.Process(process.pid).resume()
+        except BaseException:
+            process.kill()
+            process.wait()
+            raise
+    return process
+
+
+def remove(folder: str) -> None:
+    """Remove the profile in *folder* of a browser that has exited, and the folder of its own
+    in the temporary folder that a browser ended by a signal leaves: its profile's
+    SingletonSocket points into it."""
+    with contextlib.suppress(OSError):
+        own = Path(os.readlink(Path(folder, "SingletonSocket"))).parent
+        if own.parent == Path(folder).parent:
+            shutil.rmtree(own, ignore_errors=True)
+    shutil.rmtree(folder, ignore_errors=True)
+
+
 def stop(process: subprocess.Popen, folder: str) -> None:
     """End a browser this process started on the profile in *folder*, and wait until it has
     exited. One that has exited already is not looked for by its pid, which another process
@@ -306,9 +413,7 @@ class Page:
 def chrome(*arguments: str):
     """A page on a headless browser of its own, started with *arguments* as well."""
     folder = profile("html_mcp_chrome_")
-    with open(said(folder), "wb") as output:
-        process = subprocess.Popen(command(folder, *arguments, "about:blank"), stdin=subprocess.DEVNULL,
-                                   stdout=subprocess.DEVNULL, stderr=output, env=headless_environment())
+    process = start(folder, *arguments, "about:blank")
     try:
         page = Page(listening(process, folder))
         try:
@@ -319,7 +424,7 @@ def chrome(*arguments: str):
         # Removed under a running browser, the profile came back in part, and on Windows a
         # file a running browser holds is not removed at all.
         stop(process, folder)
-        shutil.rmtree(folder, ignore_errors=True)
+        remove(folder)
 
 
 def wait_loaded(page: Page, condition: str = "true", tries: int = 50) -> None:

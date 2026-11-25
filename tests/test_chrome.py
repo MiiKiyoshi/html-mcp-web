@@ -4,8 +4,9 @@
 import os
 import shutil
 import socket
-import subprocess
 from pathlib import Path
+
+import pytest
 
 from html_mcp_web import chrome
 from tests.html_chrome import needs_browser
@@ -48,6 +49,22 @@ def test_a_chrome_is_gone_with_its_profile_once_its_page_closes(monkeypatch) -> 
         assert probe.connect_ex(("127.0.0.1", port)) != 0
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Chrome on Windows keeps no socket in the temporary folder")
+def test_a_profile_goes_with_the_folder_its_browser_kept_its_socket_in(tmp_path: Path) -> None:
+    """A browser ended by a signal leaves the folder it kept its socket in, beside its profile
+    in the temporary folder, and the folder goes with the profile. A folder elsewhere that a
+    profile's link points to is left alone."""
+    for name, place in (("profile_a", tmp_path), ("profile_b", tmp_path / "elsewhere")):
+        profile, own = tmp_path / name, place / f"com.google.Chrome.{name}"
+        own.mkdir(parents=True)
+        (own / "SingletonSocket").touch()
+        profile.mkdir()
+        (profile / "SingletonSocket").symlink_to(own / "SingletonSocket")
+        chrome.remove(str(profile))
+        assert not profile.exists()
+    assert sorted(path.name for path in tmp_path.rglob("com.google.Chrome.*")) == ["com.google.Chrome.profile_b"]
+
+
 @needs_browser
 def test_chromes_started_at_once_each_open_their_page() -> None:
     """The server's layout checks, prints and the browser tests start browsers side by side,
@@ -76,12 +93,8 @@ def test_chromes_started_at_once_each_open_their_page() -> None:
     for server in servers:
         threading.Thread(target=server.serve_forever, daemon=True).start()
     profiles = [chrome.profile("html_mcp_together_") for _ in servers]
-    processes = []
-    for server, profile in zip(servers, profiles):
-        with open(chrome.said(profile), "wb") as said:
-            processes.append(subprocess.Popen(
-                chrome.command(profile, f"http://127.0.0.1:{server.server_port}/"),
-                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=said, env=chrome.headless_environment()))
+    processes = [chrome.start(profile, f"http://127.0.0.1:{server.server_port}/")
+                 for server, profile in zip(servers, profiles)]
     try:
         deadline = time.monotonic() + 40
         while set(asked) != {server.server_port for server in servers} and time.monotonic() < deadline:

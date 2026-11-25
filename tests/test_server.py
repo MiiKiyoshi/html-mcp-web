@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -454,21 +455,24 @@ async def test_the_servers_own_check_answers_while_a_review_page_is_open(client,
     launched: list[tuple[str, str]] = []
 
     class Headless:
-        pid, returncode = 0, None
+        pid = 0
 
-        async def wait(self) -> int:
+        def poll(self) -> None:
+            return None
+
+        def wait(self, timeout: float | None = None) -> int:
             return 0
 
-    async def headless_browser(program, *args, **kwargs):
+    def headless_browser(command, **kwargs):
         # Stands in for the headless page, which measures and posts at once.
-        launched.append((program, args[-1]))
+        launched.append((command[0], command[-1]))
         runtime.layout_revision = runtime.space_revision = runtime.revision
         runtime.layout_errors = []
         return Headless()
 
     monkeypatch.setattr(chrome, "binary", lambda: "/opt/chrome/chrome")
     monkeypatch.setattr(chrome, "end", lambda pid, folder: None)
-    monkeypatch.setattr(asyncio, "create_subprocess_exec", headless_browser)
+    monkeypatch.setattr(chrome.subprocess, "Popen", headless_browser)
     state = await (await test_client.get("/artifacts/slides/layout")).json()
     assert [program for program, _ in launched] == ["/opt/chrome/chrome"]
     assert "?artifact=slides&check=" in launched[0][1]
@@ -1794,10 +1798,10 @@ async def test_check_profiles_and_browsers_do_not_outlive_their_check(client, tm
     await review.sweep_check_profiles(None)
     assert not stale.exists() and fresh.exists()
     # A server that stops mid-check ends the browser and removes its profile.
-    process = await asyncio.create_subprocess_exec(sys.executable, "-c", "import time; time.sleep(30)")
+    process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
     review.check_runs.add((process, str(fresh)))
     await review.stop_checks(None)
-    assert process.returncode is not None and not fresh.exists() and not review.check_runs
+    assert process.poll() is not None and not fresh.exists() and not review.check_runs
 
 
 async def test_a_write_that_lands_while_its_content_builds_is_built_in_turn(tmp_path: Path) -> None:

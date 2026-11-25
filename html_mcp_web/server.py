@@ -13,7 +13,6 @@ import logging
 import math
 import os
 import re
-import shutil
 import stat
 import subprocess
 import sys
@@ -1213,12 +1212,7 @@ class HtmlReviewServer:
                 return
             runtime.check_token = secrets.token_urlsafe(16)
             profile = chrome.profile("html_mcp_check_")
-            with open(chrome.said(profile), "wb") as said:
-                process = await asyncio.create_subprocess_exec(
-                    *chrome.command(profile, f"http://{host}/?{urlencode({'artifact': runtime.alias, 'check': runtime.check_token})}"),
-                    stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.DEVNULL, stderr=said,
-                    env=chrome.headless_environment(),
-                )
+            process = chrome.start(profile, f"http://{host}/?{urlencode({'artifact': runtime.alias, 'check': runtime.check_token})}")
             run = (process, profile)
             self.check_runs.add(run)
             try:
@@ -1231,21 +1225,15 @@ class HtmlReviewServer:
                 # Shielded, so a cancelled check still waits for its browser to exit before
                 # the profile goes: removed under a running browser, files came back into it.
                 await asyncio.shield(self._ending(process, profile))
-                shutil.rmtree(profile, ignore_errors=True)
+                chrome.remove(profile)
                 self.check_runs.discard(run)
                 self.check_endings.pop(process, None)
 
-    def _ending(self, process: asyncio.subprocess.Process, profile: str) -> asyncio.Task:
+    def _ending(self, process: subprocess.Popen, profile: str) -> asyncio.Future:
         """The task that ends a checking browser on *profile* and every process under it and
-        waits until they exit, started when first asked for. One that has exited already is
-        not looked for by its pid, which another process may have now."""
-        async def end() -> None:
-            if process.returncode is None:
-                await asyncio.get_running_loop().run_in_executor(None, chrome.end, process.pid, profile)
-            await process.wait()
-
+        waits until they exit, started when first asked for."""
         if process not in self.check_endings:
-            self.check_endings[process] = asyncio.ensure_future(end())
+            self.check_endings[process] = asyncio.get_running_loop().run_in_executor(None, chrome.stop, process, profile)
         return self.check_endings[process]
 
     async def layout_state(self, request: web.Request) -> web.Response:
@@ -1801,9 +1789,10 @@ class HtmlReviewServer:
 
     async def sweep_check_profiles(self, app: web.Application) -> None:
         # A server killed mid-check never reaches its cleanup, and its profile stays in the
-        # temporary directory: a machine collected 1232 of them, 12GB, in nine days. Each
-        # start removes this user's stale ones. Windows has no user ids, and there the
-        # temporary directory is this user's own.
+        # temporary directory, with the folder a browser ended by a signal leaves there: a
+        # machine collected 1232 profiles, 12GB, in nine days. Each start removes this user's
+        # stale ones. Windows has no user ids, and there the temporary directory is this
+        # user's own.
         now = time.time()
         for profile in Path(tempfile.gettempdir()).glob("html_mcp_check_*"):
             try:
@@ -1811,7 +1800,7 @@ class HtmlReviewServer:
             except FileNotFoundError:
                 continue
             if (os.name == "nt" or info.st_uid == os.getuid()) and now - info.st_mtime > self.STALE_PROFILE_SECONDS:
-                shutil.rmtree(profile, ignore_errors=True)
+                chrome.remove(str(profile))
 
     async def stop_checks(self, app: web.Application) -> None:
         # A running check is cancelled and awaited, so its own cleanup ends the browser and
@@ -1824,10 +1813,10 @@ class HtmlReviewServer:
             task.cancel()
         await asyncio.gather(*running, return_exceptions=True)
         for process, profile in list(self.check_runs):
-            if process.returncode is None or process in self.check_endings:
+            if process.poll() is None or process in self.check_endings:
                 with contextlib.suppress(asyncio.TimeoutError):
-                    await asyncio.wait_for(self._ending(process, profile), timeout=10)
-            shutil.rmtree(profile, ignore_errors=True)
+                    await asyncio.wait_for(asyncio.shield(self._ending(process, profile)), timeout=10)
+            chrome.remove(profile)
         self.check_runs.clear()
         self.check_endings.clear()
 
