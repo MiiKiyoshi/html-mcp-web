@@ -158,7 +158,7 @@ When an item fails, remove it, change the order or add what is missing, and go d
 
 ## Article 8. Facts and sources
 
-8.1 **Understand it first.** Read the material as far as you need in order to explain the subject, and stop there. Do not go on collecting or ranking sources.
+8.1 **Understand it first, then say it yourself.** Read the material as far as you need in order to explain the subject, and stop there. Do not go on collecting or ranking sources. A deck is not the available material gathered and set on pages: doing that well, with every statement correct and sourced, is still not the work. A sentence carried over from a source keeps the words and the order its authors chose for their own readers. Write each page from what you understood, as you would say it to this audience in the frame they have (2.2), and measure how much to say by what they have and ask, never by how much the material holds.
 
 8.2 **What a value is.** Let the audience tell whether a value they see was measured, taken from a source, or made up for the explanation. Mark an example, an assumed value or a pending result as what it is.
 
