@@ -8,12 +8,13 @@ import yaml
 
 from html_mcp_web.config import load_config
 from html_mcp_web.project_server import SharedProjectServer
-from tests.chrome import CHECK_MARGIN, LAYOUT_CHECK_SECONDS, MOD, READY_SEEN, ActionSequence, launch, needs_browser
+from tests.chrome import MOD
+from tests.html_chrome import CHECK_MARGIN, LAYOUT_CHECK_SECONDS, READY_SEEN, launch, needs_browser
 
 
 def type_keys(browser, keys):
     """Keys pressed one by one, with <C-[> for Ctrl+[ and <Enter> for Enter."""
-    actions = ActionSequence(browser, "key", "keyboard")
+    actions = browser.actions("key", "keyboard")
     for key in keys:
         if key == "<C-[>":
             actions.key_down("\ue009").key_down("[").key_up("[").key_up("\ue009")
@@ -243,11 +244,11 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         assert browser.execute_script(f"return {editor}.textInput.getElement().readOnly;") is False
         # Without Vim keys, Ctrl+Alt+M comments on the selection.
         browser.execute_script(f"{editor}.focus(); {editor}.selection.selectLine();")
-        ActionSequence(browser, "key", "keyboard").key_down(MOD).key_down("\ue00a").key_down("m") \
+        browser.actions("key", "keyboard").key_down(MOD).key_down("\ue00a").key_down("m") \
             .key_up("m").key_up("\ue00a").key_up(MOD).perform()
         wait_until(lambda: browser.execute_script('return document.querySelector("#compose-dialog").open'))
         # Ctrl+[ drops the comment being written, as Escape does where Safari keeps Escape.
-        ActionSequence(browser, "key", "keyboard").key_down("\ue009").key_down("[") \
+        browser.actions("key", "keyboard").key_down("\ue009").key_down("[") \
             .key_up("[").key_up("\ue009").perform()
         wait_until(lambda: browser.execute_script('return !document.querySelector("#compose-dialog").open'))
         assert browser.execute_script(
@@ -299,7 +300,7 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
           editor.focus();
           editor.moveCursorTo(0, editor.getValue().indexOf("SELECT START") + 5);
         ''')
-        ActionSequence(browser, "key", "keyboard").key_down(MOD).key_down("\ue00a").key_down("k") \
+        browser.actions("key", "keyboard").key_down(MOD).key_down("\ue00a").key_down("k") \
             .key_up("k").key_up("\ue00a").key_up(MOD).perform()
         wait_until(lambda: browser.execute_script(
             'return document.querySelector(".cmt.is-focused")?.dataset.commentId') == comments[0]["id"])
@@ -313,7 +314,7 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
           const r = document.querySelector("#split-grip").getBoundingClientRect();
           return {x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2)};
         ''')
-        drag = ActionSequence(browser, "pointer", "mouse", {"pointerType": "mouse"})
+        drag = browser.actions("pointer", "mouse", {"pointerType": "mouse"})
         drag.pointer_move(grip["x"], grip["y"]).pointer_down()
         drag.pointer_move(grip["x"] - 120, grip["y"], duration=250).pointer_up().perform()
         after = browser.execute_script('''

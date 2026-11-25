@@ -1,7 +1,7 @@
 import time
 from pathlib import Path
 
-from tests.chrome import launch, needs_browser
+from tests.html_chrome import launch, needs_browser
 
 REPO = Path(__file__).resolve().parents[1]
 COLUMNS = REPO / "html_mcp_web" / "kits" / "columns.js"

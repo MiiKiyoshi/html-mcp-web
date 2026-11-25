@@ -27,7 +27,7 @@ from html_mcp_web.project_server import SharedProjectServer
 from html_mcp_web.server import HtmlReviewServer
 from html_mcp_web.shared import plugin_monitor
 from html_mcp_web.tool import TOOL
-from tests.chrome import needs_browser
+from tests.html_chrome import needs_browser
 
 
 def available_port() -> int:

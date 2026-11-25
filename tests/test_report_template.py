@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.chrome import launch, needs_browser
+from tests.html_chrome import launch, needs_browser
 
 
 REPO = Path(__file__).resolve().parents[1]

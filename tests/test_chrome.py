@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 
 from html_mcp_web import chrome
-from tests.chrome import needs_browser
+from tests.html_chrome import needs_browser
 
 
 def test_chrome_is_looked_for_before_chromium_and_edge(tmp_path: Path, monkeypatch) -> None:

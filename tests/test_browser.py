@@ -9,12 +9,13 @@ from pathlib import Path
 
 import pytest
 import yaml
+from selenium.webdriver.common.keys import Keys
 
 from html_mcp_web.config import load_config
 from html_mcp_web.kits import CENTER
 from html_mcp_web.project_server import SharedProjectServer
-from tests.chrome import (CHECK_MARGIN, LAYOUT_CHECK_SECONDS, MOD, MOD_ALT, READY_SEEN, ActionSequence, Keys, launch,
-                          needs_browser, not_in_safari)
+from tests.chrome import MOD, MOD_ALT, not_in_safari
+from tests.html_chrome import CHECK_MARGIN, LAYOUT_CHECK_SECONDS, READY_SEEN, launch, needs_browser
 
 
 def available_port() -> int:
@@ -1801,7 +1802,7 @@ def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path
           editor.focus();
         ''')
         # Its keys, Ctrl+Alt+P, do what the button does.
-        ActionSequence(browser, "key", "keyboard").key_down(MOD).key_down("\ue00a") \
+        browser.actions("key", "keyboard").key_down(MOD).key_down("\ue00a") \
             .key_down("p").key_up("p").key_up("\ue00a").key_up(MOD).perform()
         marked = wait_until(lambda: browser.execute_script('''
           const doc = document.querySelector("#artifact-frame").contentDocument;
@@ -1938,7 +1939,7 @@ def test_the_area_button_draws_a_box_to_comment_on(tmp_path: Path) -> None:
         assert browser.execute_script(
             'return document.querySelector("#area-btn").getAttribute("aria-pressed")') == "true"
         start, end = at(30, 40), at(430, 240)   # from the heading's words into empty page
-        ActionSequence(browser, "pointer", "mouse", {"pointerType": "mouse"}) \
+        browser.actions("pointer", "mouse", {"pointerType": "mouse"}) \
             .pointer_move(*start).pointer_down() \
             .pointer_move(end[0], end[1], duration=300).pointer_up().perform()
         wait_until(lambda: browser.execute_script('return document.querySelector("#compose-dialog").open'))
@@ -2044,7 +2045,7 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
         box = browser.execute_script(
             'const r = document.querySelector("#sidebar-grip").getBoundingClientRect();'
             'return {x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2)};')
-        drag = ActionSequence(browser, "pointer", "mouse", {"pointerType": "mouse"})
+        drag = browser.actions("pointer", "mouse", {"pointerType": "mouse"})
         drag.pointer_move(box["x"], box["y"]).pointer_down()
         for step in range(1, 5):
             drag.pointer_move(box["x"], box["y"] - 30 * step, duration=30)
@@ -2077,7 +2078,7 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
         box = browser.execute_script(
             'const r = document.querySelector("#sidebar-grip").getBoundingClientRect();'
             'return {x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2)};')
-        drag = ActionSequence(browser, "pointer", "mouse", {"pointerType": "mouse"})
+        drag = browser.actions("pointer", "mouse", {"pointerType": "mouse"})
         drag.pointer_move(box["x"], box["y"]).pointer_down()
         for step in range(1, 4):
             drag.pointer_move(box["x"], box["y"] + 12 * step, duration=30)
@@ -2147,7 +2148,7 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
         box = browser.execute_script(
             'const r = document.querySelector("#sidebar-grip").getBoundingClientRect();'
             'return {x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2)};')
-        drag = ActionSequence(browser, "pointer", "mouse", {"pointerType": "mouse"})
+        drag = browser.actions("pointer", "mouse", {"pointerType": "mouse"})
         drag.pointer_move(box["x"], box["y"]).pointer_down()
         for step in range(1, 5):
             drag.pointer_move(box["x"], box["y"] - 40 * step, duration=30)

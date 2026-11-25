@@ -7,7 +7,7 @@ import pytest
 
 from html_mcp_web import config as config_module
 from html_mcp_web.cli import main
-from tests.chrome import CHROME
+from tests.html_chrome import CHROME
 
 REPO = Path(__file__).resolve().parents[1]
 # The template shims import the engine from this checkout, whichever package is installed.

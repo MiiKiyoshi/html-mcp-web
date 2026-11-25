@@ -1,52 +1,61 @@
-"""The review page in Google Chrome, or in Safari on macOS, for the tests, and what a failing
-test leaves of the page it had open.
+"""A review tool's page in Google Chrome, or in Safari on macOS, for the tool's tests.
 
-Chrome is the one the package finds (html_mcp_web/chrome.py), driven through Selenium, which
-fetches the driver that fits it. ``launch()`` gives a headless window.
-``HTML_MCP_BROWSER=headed`` shows it, to watch a test run. ``HTML_MCP_BROWSER_KIND=safari``
-runs the same tests in Safari through safaridriver, which must be enabled once
-(``safaridriver --enable``). Safari has no headless window and runs one automation session at
-a time, so its window shows and the tests take it in turn. Its driver opens no file from a
-test's temporary folder, so a file is served to it from its folder over HTTP. What Safari cannot
-be made to do, a test marks with ``not_in_safari``.
+Chrome is driven through Selenium, which finds the driver that fits the installed Chrome by
+itself. ``launch()`` gives a headless window. ``REVIEW_BROWSER=headed`` shows it, to watch
+a test run. ``REVIEW_BROWSER_KIND=safari`` runs the same tests in Safari through
+safaridriver, which must be enabled once (``safaridriver --enable``). Safari has no headless
+window and runs one automation session at a time, so its window shows and the tests take it
+in turn, with ``pytest -n 0``. What Safari cannot be made to do, a test marks with
+``not_in_safari``, and a method Safari cannot carry out skips the test that calls it.
 
-Every Chrome a test starts, its own and those the package starts for it, sets the generic
-font families in the faces the tests were written with (tests/fonts.py)."""
+Shared by the review tools' tests. It is written in tex-mcp-web, and scripts/share_page.py
+copies it to the others. A copy is never edited by hand. What one tool's tests alone use is kept
+in that tool's tests. A tool whose tests start another Chromium browser, or Chrome with flags or
+preferences of their own, gives them in a subclass of Chrome through options() and start().
+"""
 
 from __future__ import annotations
 
 import base64
-import functools
-import http.server
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
-import threading
 import time
 import traceback
 from pathlib import Path
-from urllib.parse import quote, urlsplit
-from urllib.request import url2pathname
 
 import psutil
 import pytest
-from selenium import webdriver
-from selenium.common.exceptions import NoAlertPresentException, SessionNotCreatedException
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys  # noqa: F401  (the tests' keys)
 
-from html_mcp_web.chrome import binary
-from html_mcp_web.server import HtmlReviewServer
-from tests.fonts import FONTS
+selenium = pytest.importorskip("selenium")
+from selenium import webdriver  # noqa: E402
+from selenium.common.exceptions import NoAlertPresentException, SessionNotCreatedException  # noqa: E402
+from selenium.webdriver.common.by import By  # noqa: E402
 
-KIND = os.environ.get("HTML_MCP_BROWSER_KIND", "chrome")
-assert KIND in ("chrome", "safari"), f"HTML_MCP_BROWSER_KIND is chrome or safari, not {KIND}"
-CHROME = binary()
+KIND = os.environ.get("REVIEW_BROWSER_KIND", "chrome")
+assert KIND in ("chrome", "safari"), f"REVIEW_BROWSER_KIND is chrome or safari, not {KIND}"
+
+# Where Chrome is on each system, when it is not on the PATH.
+_INSTALLED = {
+    "darwin": ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"],
+    "win32": [r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+              r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"],
+}
+
+
+def binary() -> str | None:
+    """The installed Chrome, or None."""
+    for name in ("google-chrome", "google-chrome-stable", "chrome"):
+        if (found := shutil.which(name)) is not None:
+            return found
+    return next((path for path in _INSTALLED.get(sys.platform, []) if Path(path).is_file()), None)
+
+
 if KIND == "chrome":
-    needs_browser = pytest.mark.skipif(CHROME is None, reason="Chrome or Edge is required")
+    needs_browser = pytest.mark.skipif(binary() is None, reason="Google Chrome is required")
 else:
     needs_browser = pytest.mark.skipif(shutil.which("safaridriver") is None, reason="Safari on macOS is required")
 
@@ -55,29 +64,16 @@ def not_in_safari(reason: str):
     """Skip a test in Safari, which cannot do what the reason says."""
     return pytest.mark.skipif(KIND == "safari", reason=f"Safari: {reason}")
 
-
+# The keys a test presses, by the names it writes them with.
+ENTER, CONTROL, SHIFT, ALT, META, ESCAPE = "\ue007", "\ue009", "\ue008", "\ue00a", "\ue03d", "\ue00c"
 # The key the page's own shortcuts are held with: Cmd on a Mac, where Option stands for Alt, and
-# Ctrl elsewhere (shared/dom.js).
-MOD = "" if sys.platform == "darwin" else ""
-# The names the page gives those keys, in its tooltips and its notes.
+# Ctrl elsewhere.
+MOD = META if sys.platform == "darwin" else CONTROL
+# The names the page gives those keys, in its tooltips and in Help.
 MOD_ALT = "Cmd+Option" if sys.platform == "darwin" else "Ctrl+Alt"
-# A test that waits for the outcome of the server's layout check waits as long as the server
-# allows a check, and CHECK_MARGIN beyond it for what comes before and after the check itself:
-# the page loading and asking for it, and the outcome reaching the page or the state.
-LAYOUT_CHECK_SECONDS = HtmlReviewServer.LAYOUT_CHECK_SECONDS
-CHECK_MARGIN = 15.0
-# What a test waiting for the review page to say "ready" reports when it does not: the status
-# the page shows, and each artifact's layout check and error as the server has them.
-READY_SEEN = """
-  const status = document.querySelector("#artifact-status")?.textContent;
-  return fetch("/state").then((reply) => reply.json()).then((state) => JSON.stringify({status,
-    artifacts: Object.fromEntries(Object.entries(state.artifacts).map(([alias, artifact]) =>
-      [alias, {error: artifact.error, checked: artifact.layout_check.checked_revision, revision: artifact.revision,
-               errors: artifact.layout_check.errors, warnings: artifact.layout_check.warnings}]))}).slice(0, 3000));
-"""
 
 
-class ActionSequence:
+class Actions:
     """One input device's actions, built up and then performed: a keyboard's keys, or a
     mouse's or a finger's moves and presses, at the page's own coordinates."""
 
@@ -85,103 +81,101 @@ class ActionSequence:
         self.browser, self.steps = browser, []
         self.source = {"type": kind, "id": name, **({"parameters": parameters} if parameters else {})}
 
-    def key_down(self, key: str) -> "ActionSequence":
+    def key_down(self, key: str) -> "Actions":
         self.steps.append({"type": "keyDown", "value": key})
         return self
 
-    def key_up(self, key: str) -> "ActionSequence":
+    def key_up(self, key: str) -> "Actions":
         self.steps.append({"type": "keyUp", "value": key})
         return self
 
-    def pointer_move(self, x: float, y: float, duration: int = 0) -> "ActionSequence":
+    def pointer_move(self, x: float, y: float, duration: int = 0) -> "Actions":
         self.steps.append({"type": "pointerMove", "x": int(x), "y": int(y), "duration": duration, "origin": "viewport"})
         return self
 
-    def pointer_down(self, button: int = 0) -> "ActionSequence":
+    def pointer_down(self, button: int = 0) -> "Actions":
         self.steps.append({"type": "pointerDown", "button": button})
         return self
 
-    def pointer_up(self, button: int = 0) -> "ActionSequence":
+    def pointer_up(self, button: int = 0) -> "Actions":
         self.steps.append({"type": "pointerUp", "button": button})
         return self
 
-    def pause(self, duration: int) -> "ActionSequence":
+    def pause(self, duration: int) -> "Actions":
         self.steps.append({"type": "pause", "duration": duration})
         return self
 
     def perform(self) -> None:
-        self.browser.driver.execute("actions", {"actions": [{**self.source, "actions": self.steps}]})
+        self.browser.perform([{**self.source, "actions": self.steps}])
         self.steps = []
 
 
 class Chrome:
-    """A Chrome window on the review page. *touch* makes its pointer a finger, *user_agent*
-    has it say it is another browser, and *fullscreen* False takes its full screen away, as an
-    iPhone's Safari has none for a page."""
+    """A Chrome window on a tool's page."""
 
-    def __init__(self, downloads: Path | None = None, touch: bool = False, user_agent: str | None = None,
-                 fullscreen: bool = True):
-        edge = Path(CHROME).stem.lower() in ("msedge", "microsoft-edge", "microsoft-edge-stable")
-        options = webdriver.EdgeOptions() if edge else webdriver.ChromeOptions()
-        options.binary_location = CHROME
+    def __init__(self, downloads: Path | None = None, touch: bool = False):
+        options = self.options()
         environment = dict(os.environ)
-        if os.environ.get("HTML_MCP_BROWSER") != "headed":
+        if os.environ.get("REVIEW_BROWSER") != "headed":
             options.add_argument("--headless=new")
             # A headless Chrome still connects to the display it is given. Over ssh with X
             # forwarding that display is the far machine's, which prints a refusal for each try.
             for name in ("DISPLAY", "WAYLAND_DISPLAY"):
                 environment.pop(name, None)
-        # A container has no user namespace for Chrome's sandbox, and its /dev/shm is small. A
-        # key's scroll lands at once, as a test reads it: a smooth one went on past a scroll the
-        # page made after it. The rest are the package's own (html_mcp_web/chrome.py).
+        # A container has no user namespace for Chrome's sandbox, and its /dev/shm is small.
         for flag in ("--no-sandbox", "--disable-dev-shm-usage", "--window-size=1500,1000",
-                     "--force-device-scale-factor=1", "--disable-smooth-scrolling", "--hide-scrollbars",
-                     "--password-store=basic", "--use-mock-keychain", "--disable-component-update",
-                     "--disable-background-networking"):
+                     "--force-device-scale-factor=1", "--hide-scrollbars"):
             options.add_argument(flag)
         options.set_capability("unhandledPromptBehavior", "ignore")
         # The page's console, kept for what a failing test leaves behind (keep_failure).
         options.set_capability("goog:loggingPrefs", {"browser": "ALL"})
-        preferences = {f"webkit.webprefs.fonts.{generic}.Zyyy": family for generic, family in FONTS.items()}
         if downloads is not None:
-            preferences.update({"download.default_directory": str(downloads), "download.prompt_for_download": False,
-                                "plugins.always_open_pdf_externally": True})
-        options.add_experimental_option("prefs", preferences)
-        driver, service = (webdriver.Edge, webdriver.EdgeService) if edge else (webdriver.Chrome, webdriver.ChromeService)
-        self.driver = driver(options=options, service=service(env=environment))
+            options.add_experimental_option("prefs", {
+                **options.experimental_options.get("prefs", {}),
+                "download.default_directory": str(downloads), "download.prompt_for_download": False,
+                "plugins.always_open_pdf_externally": True})
+        self.driver = self.start(options, environment)
         self.driver.set_script_timeout(60)
         # The tests are written for a light system. A machine set to dark, whose setting
         # reaches headless Chrome, would otherwise turn System to dark.
         self.prefer_scheme(None)
         if touch:
             # A finger is a coarse pointer, which the page's touch rules key off.
-            self.driver.execute_cdp_cmd("Emulation.setTouchEmulationEnabled", {"enabled": True, "maxTouchPoints": 5})
-        if user_agent is not None:
-            self.driver.execute_cdp_cmd("Emulation.setUserAgentOverride", {"userAgent": user_agent})
-        if not fullscreen:
-            self.driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-                "source": 'Object.defineProperty(Document.prototype, "fullscreenEnabled", {get: () => false});'})
+            self.driver.execute_cdp_cmd("Emulation.setTouchEmulationEnabled", {"enabled": True, "maxTouchPoints": 2})
+
+    def options(self) -> webdriver.ChromeOptions:
+        """The options the browser starts with, before the flags every test gives it: Chrome's,
+        with where it is installed."""
+        options = webdriver.ChromeOptions()
+        options.binary_location = binary()
+        return options
+
+    def start(self, options: webdriver.ChromeOptions, environment: dict[str, str]):
+        """The driver of the browser, started with *options* in *environment*."""
+        return webdriver.Chrome(options=options, service=webdriver.ChromeService(env=environment))
 
     def quit(self) -> None:
         # A test quits its browser in a finally clause, so a failing one quits with its failure
         # still on its way out: what the page showed then is kept in the folder
-        # HTML_MCP_FAILURES names, which the CI keeps, a failure that passes when run again too.
+        # REVIEW_FAILURES names, which the CI keeps, a failure that passes when run again too.
         failure = sys.exc_info()[1]
-        if failure is not None and not isinstance(failure, pytest.skip.Exception) and os.environ.get("HTML_MCP_FAILURES"):
-            self.keep_failure(Path(os.environ["HTML_MCP_FAILURES"]))
-        # Closed as its own Close does, and given the moment that takes, Chrome leaves nothing
-        # in the temporary folder, where its driver's ending left a folder of Chrome's own. It
-        # has exited once it waits for its driver to collect it.
-        if not isinstance(self, Safari):
-            try:
-                browsers = psutil.Process(self.driver.service.process.pid).children()
-                self.driver.execute_cdp_cmd("Browser.close", {})
-                deadline = time.monotonic() + 5
-                while time.monotonic() < deadline and any(
-                        browser.is_running() and browser.status() != psutil.STATUS_ZOMBIE for browser in browsers):
-                    time.sleep(0.05)
-            except Exception:
-                pass
+        if failure is not None and not isinstance(failure, pytest.skip.Exception) and os.environ.get("REVIEW_FAILURES"):
+            self.keep_failure(Path(os.environ["REVIEW_FAILURES"]))
+        self.end()
+
+    def end(self) -> None:
+        """Close Chrome as its own Close does, then end its driver. Chrome then removes the
+        folder it made in the temporary folder, which it leaves when its driver ends it. It has
+        exited once it waits for its driver to collect it."""
+        try:
+            browsers = psutil.Process(self.driver.service.process.pid).children()
+            self.driver.execute_cdp_cmd("Browser.close", {})
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline and any(
+                    browser.is_running() and browser.status() != psutil.STATUS_ZOMBIE for browser in browsers):
+                time.sleep(0.05)
+        except Exception:
+            pass
         try:
             self.driver.quit()
         except Exception:
@@ -240,33 +234,28 @@ class Chrome:
 
     def execute_script(self, script: str, script_args=(), **_):
         """Run the script in the page, its arguments as ``arguments``, and give what it
-        returns: a promise's value once it settles. The page's own scope is the only one."""
+        returns: a promise's value once it settles."""
         return self.driver.execute_script(script, *script_args)
 
-    def set_window_rect(self, x: int = 0, y: int = 0, width: int = 1500, height: int = 1000) -> None:
+    def set_window_rect(self, *, x: int = 0, y: int = 0, width: int = 1500, height: int = 1000) -> None:
         """Size the page's viewport, which is what a test measures against."""
         self.driver.execute_cdp_cmd("Emulation.setDeviceMetricsOverride", {
             "width": width, "height": height, "deviceScaleFactor": 1, "mobile": False})
-
-    @property
-    def window_rect(self) -> dict:
-        width, height = self.driver.execute_script("return [innerWidth, innerHeight]")
-        return {"x": 0, "y": 0, "width": width, "height": height}
 
     def find_element(self, strategy: str, selector: str):
         assert strategy == "css selector"
         return self.driver.find_element(By.CSS_SELECTOR, selector)
 
-    def screenshot(self, format: str = "base64"):
-        shot = self.driver.get_screenshot_as_base64()
-        return base64.b64decode(shot) if format == "binary" else shot
+    def console_errors(self) -> list[str]:
+        """The errors the page's console took since this was last asked, as Chrome logs them:
+        a script's error, console.error, and a request that failed."""
+        return [entry["message"] for entry in self.driver.get_log("browser") if entry["level"] == "SEVERE"]
 
-    def out_of_sight(self, hidden: bool) -> None:
-        """Take the page out of sight, as a tab behind another is, or bring it back. Every tab
-        of a headless Chrome stays in sight, so its window is minimized instead."""
-        window = self.driver.execute_cdp_cmd("Browser.getWindowForTarget", {})["windowId"]
-        self.driver.execute_cdp_cmd("Browser.setWindowBounds", {
-            "windowId": window, "bounds": {"windowState": "minimized" if hidden else "normal"}})
+    def assert_quiet_console(self) -> None:
+        """Fail on an error the page's console took since it was last asked: the check a test
+        ends with, which Safari, giving no console, leaves out while the test's other checks
+        stand."""
+        assert self.console_errors() == []
 
     def prefer_scheme(self, scheme: str | None) -> None:
         """Have the system say it prefers dark or light, or with None light, the scheme the
@@ -274,23 +263,28 @@ class Chrome:
         self.driver.execute_cdp_cmd("Emulation.setEmulatedMedia", {
             "features": [{"name": "prefers-color-scheme", "value": scheme or "light"}]})
 
+    def user_agent(self, text: str) -> None:
+        """Have the browser say it is the browser *text* names, as navigator.userAgent gives
+        it, for the pages loaded from then on."""
+        self.driver.execute_cdp_cmd("Emulation.setUserAgentOverride", {"userAgent": text})
+
     def platform(self, name: str) -> None:
         """Have the browser say it runs on the system *name*, as navigator.platform gives it,
         for the pages loaded from then on."""
         self.driver.execute_cdp_cmd("Emulation.setUserAgentOverride", {
             "userAgent": self.driver.execute_script("return navigator.userAgent"), "platform": name})
 
+    def actions(self, kind: str, name: str, parameters: dict | None = None) -> Actions:
+        return Actions(self, kind, name, parameters)
+
+    def perform(self, sources: list[dict]) -> None:
+        """Perform the input sources' actions together, as two fingers move at once."""
+        self.driver.execute("actions", {"actions": sources})
+
 
 def osascript(script: str) -> str:
     return subprocess.run(["osascript", "-e", script], check=True, capture_output=True, text=True,
                           stdin=subprocess.DEVNULL).stdout.strip()
-
-
-class QuietFiles(http.server.SimpleHTTPRequestHandler):
-    """A folder's files for Safari, with no line printed for each request."""
-
-    def log_message(self, format: str, *args) -> None:
-        pass
 
 
 class SafariElement:
@@ -310,19 +304,16 @@ class SafariElement:
             "arguments[0].scrollIntoView({block: 'nearest', inline: 'nearest'});"
             " const box = arguments[0].getBoundingClientRect();"
             " return [box.left + box.width / 2, box.top + box.height / 2];", self.element)
-        ActionSequence(self.browser, "pointer", "mouse", {"pointerType": "mouse"}) \
+        self.browser.actions("pointer", "mouse", {"pointerType": "mouse"}) \
             .pointer_move(box[0], box[1]).pause(50).pointer_down().pause(50).pointer_up().perform()
 
 
 class Safari(Chrome):
-    """A Safari window on the review page. It shows on the screen, since Safari has no
+    """A Safari window on a tool's page. It shows on the screen, since Safari has no
     headless window, and its viewport is sized by sizing the window around it."""
 
-    def __init__(self, downloads: Path | None = None, touch: bool = False, user_agent: str | None = None,
-                 fullscreen: bool = True):
-        assert downloads is None and not touch and user_agent is None and fullscreen, \
-            "a test that needs these is marked not_in_safari"
-        self.files: http.server.ThreadingHTTPServer | None = None
+    def __init__(self, downloads: Path | None = None, touch: bool = False):
+        assert downloads is None and not touch, "a test that needs these is marked not_in_safari"
         options = webdriver.SafariOptions()
         options.set_capability("unhandledPromptBehavior", "ignore")
         # One session at a time: the one before may still be closing. One that never closes,
@@ -357,31 +348,12 @@ class Safari(Chrome):
         if self.system_dark is not None:
             self.dark(self.system_dark)
         super().quit()
-        self._serve(None)
 
-    def _serve(self, folder: Path | None) -> None:
-        """Serve *folder* over HTTP on a port of its own, or with None nothing."""
-        if self.files is not None:
-            self.files.shutdown()
-            self.files.server_close()
-            self.files = None
-        if folder is not None:
-            self.files = http.server.ThreadingHTTPServer(
-                ("127.0.0.1", 0), functools.partial(QuietFiles, directory=str(folder)))
-            self.files.folder = folder
-            threading.Thread(target=self.files.serve_forever, daemon=True).start()
-
-    def _reachable(self, url: str) -> str:
-        """The address Safari opens for *url*. Its driver loads no file from outside
-        Safari's sandbox, which a test's temporary folder is, and shows an error page
-        instead: a file is served from its own folder, with what lies beside it, which a
-        page refers to as it would beside the file."""
-        if urlsplit(url).scheme != "file":
-            return url
-        page = Path(url2pathname(urlsplit(url).path))
-        if self.files is None or self.files.folder != page.parent:
-            self._serve(page.parent)
-        return f"http://127.0.0.1:{self.files.server_address[1]}/{quote(page.name)}"
+    def end(self) -> None:
+        try:
+            self.driver.quit()
+        except Exception:
+            pass
 
     def _loaded(self) -> None:
         """Wait for the page's scripts to have run: Safari's driver gives a page back while
@@ -391,14 +363,14 @@ class Safari(Chrome):
             time.sleep(0.05)
 
     def navigate(self, url: str) -> None:
-        super().navigate(self._reachable(url))
+        super().navigate(url)
         self._loaded()
 
     def refresh(self) -> None:
         super().refresh()
         self._loaded()
 
-    def set_window_rect(self, x: int = 0, y: int = 0, width: int = 1500, height: int = 1000) -> None:
+    def set_window_rect(self, *, x: int = 0, y: int = 0, width: int = 1500, height: int = 1000) -> None:
         """Size the window so that the viewport inside it has the size asked for."""
         self.driver.set_window_rect(x=x, y=y, width=width, height=height)
         for _ in range(3):
@@ -409,22 +381,17 @@ class Safari(Chrome):
             self.driver.set_window_rect(x=x, y=y, width=rect["width"] + width - inner[0],
                                         height=rect["height"] + height - inner[1])
 
-    def screenshot(self, format: str = "base64"):
-        """The viewport at one image pixel per CSS pixel, as the tests measure it."""
-        import pymupdf
-        shot = base64.b64decode(self.driver.get_screenshot_as_base64())
-        pixmap = pymupdf.Pixmap(shot)
-        ratio = round(pixmap.width / self.driver.execute_script("return innerWidth"))
-        if ratio > 1:
-            pixmap.shrink(ratio.bit_length() - 1)
-            shot = pixmap.tobytes("png")
-        return shot if format == "binary" else base64.b64encode(shot).decode()
+    def console_errors(self) -> list[str]:
+        pytest.skip("Safari: its driver gives no console to read")
+
+    def assert_quiet_console(self) -> None:
+        pass
+
+    def user_agent(self, text: str) -> None:
+        pytest.skip("Safari: what a browser says it is cannot be set")
 
     def platform(self, name: str) -> None:
         pytest.skip("Safari: the system a browser says it runs on cannot be set")
-
-    def out_of_sight(self, hidden: bool) -> None:
-        pytest.skip("Safari: a window taken out of sight is not brought back by its driver")
 
     def find_element(self, strategy: str, selector: str):
         return SafariElement(self, super().find_element(strategy, selector))
@@ -445,21 +412,5 @@ class Safari(Chrome):
             self.dark(scheme == "dark")
 
 
-def launch(downloads: Path | None = None, touch: bool = False, user_agent: str | None = None,
-           fullscreen: bool = True) -> Chrome:
-    return (Safari if KIND == "safari" else Chrome)(downloads, touch, user_agent, fullscreen)
-
-
-if __name__ == "__main__":
-    # Run by the CI before the tests: on a runner without Chrome every browser test would be
-    # skipped and the job would pass.
-    from html_mcp_web.chrome import chrome
-
-    if CHROME is None:
-        sys.exit("No Chrome or Edge found: every browser test would be skipped.")
-    started = time.monotonic()
-    with chrome() as page:
-        page.navigate("data:text/html,<!doctype html><p>Chrome</p>")
-        page.screenshot([0, 0, 100, 40])
-        version = page.call("Browser.getVersion")["product"]
-    print(f"{version}, {CHROME}: started, drew a page and ended in {time.monotonic() - started:.1f} s")
+def launch(downloads: Path | None = None, touch: bool = False) -> Chrome:
+    return (Safari if KIND == "safari" else Chrome)(downloads, touch)

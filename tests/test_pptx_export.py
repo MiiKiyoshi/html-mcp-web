@@ -7,7 +7,7 @@ import pytest
 pptx = pytest.importorskip("pptx")
 
 from html_mcp_web.pptx_export import export_pptx  # noqa: E402
-from tests.chrome import needs_browser  # noqa: E402
+from tests.html_chrome import needs_browser  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 NEUTRAL = REPO / "templates" / "neutral-slides"

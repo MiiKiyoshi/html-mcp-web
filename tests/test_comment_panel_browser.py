@@ -19,7 +19,8 @@ import yaml
 from html_mcp_web.comments import ArtifactAnchor, CommentStore, PageAnchor, SourceAnchor, SuggestedEdit
 from html_mcp_web.config import load_config
 from html_mcp_web.project_server import SharedProjectServer
-from tests.chrome import MOD, MOD_ALT, ActionSequence, launch, needs_browser
+from tests.chrome import MOD, MOD_ALT
+from tests.html_chrome import launch, needs_browser
 
 DECK = ('<!doctype html><html><head><meta charset="utf-8"><title>Slides</title></head><body><main class="pages">'
         '<section class="page"><h1>First</h1><p>Tea is served.</p></section></main></body></html>')
@@ -117,8 +118,8 @@ SERVERS: dict[str, SharedProjectServer] = {}
 def review_page(root: Path, aliases=("slides",), deck=DECK, height=1000, platform=None, **browser):
     """The review page of a project of one deck per alias, each in a folder of its own, opened in
     a headless Chrome 1500 wide and 1000 high unless told, with its server's address. `platform`
-    is the system the browser says it runs on, and the rest are launch()'s own (tests/chrome.py).
-    SERVERS names the server by its address while the page is open."""
+    is the system the browser says it runs on, and the rest are launch()'s own
+    (tests/html_chrome.py). SERVERS names the server by its address while the page is open."""
     for alias in aliases:
         (root / alias).mkdir()
         (root / alias / "slides.html").write_text(deck, encoding="utf-8")
@@ -166,7 +167,7 @@ ESCAPE, HOME, END, DOWN, ALT, SHIFT = "\ue00c", "\ue011", "\ue010", "\ue015", "\
 
 def press(browser, *keys) -> None:
     """Keys pressed one after the other, as a hand presses them, wherever the focus is."""
-    actions = ActionSequence(browser, "key", "keyboard")
+    actions = browser.actions("key", "keyboard")
     for key in keys:
         actions.key_down(key).key_up(key).pause(15)
     actions.perform()
@@ -174,7 +175,7 @@ def press(browser, *keys) -> None:
 
 def chord(browser, *keys) -> None:
     """Keys held down together, as Ctrl+Alt+K."""
-    actions = ActionSequence(browser, "key", "keyboard")
+    actions = browser.actions("key", "keyboard")
     for key in keys:
         actions.key_down(key)
     for key in reversed(keys):
@@ -716,7 +717,7 @@ def test_the_comment_list_goes_by_keys(tmp_path: Path) -> None:
                    ' [...document.querySelectorAll("#comments-list [data-key]")].map((node) => node.dataset.key)]')
         shown, marked = script(letters)
         assert shown is True and sorted(marked) == sorted(["x", "e", "D", "aa", "nn", "r", "R", "A", "dd"])
-        ActionSequence(browser, "pointer", "mouse", {"pointerType": "mouse"}).pointer_move(300, 300) \
+        browser.actions("pointer", "mouse", {"pointerType": "mouse"}).pointer_move(300, 300) \
             .pointer_move(340, 340).perform()
         assert script(letters)[0] is False
         script('document.querySelector(\'[data-letters-choice="off"]\').click()')
@@ -1204,7 +1205,7 @@ def test_the_editor_holds_the_cursor_line_where_settings_says(tmp_path: Path) ->
         before = script(scroll)
         point = script(f"{editor} const at = editor.renderer.textToScreenCoordinates(44, 2);"
                        " return [Math.round(at.pageX + 4), Math.round(at.pageY + 4)];")
-        ActionSequence(browser, "pointer", "mouse", {"pointerType": "mouse"}).pointer_move(point[0], point[1]) \
+        browser.actions("pointer", "mouse", {"pointerType": "mouse"}).pointer_move(point[0], point[1]) \
             .pointer_down().pointer_up().perform()
         wait_until(lambda: script(place)[0] == 44)
         assert script(scroll) == before

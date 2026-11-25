@@ -6,7 +6,6 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from tests.chrome import ActionSequence
 from tests.test_comment_panel_browser import needs_browser, review_page, wait_until
 
 # A browser that says it is an iPhone, the one that zooms into a field as it takes the cursor.
@@ -52,7 +51,7 @@ def test_the_panels_left_edge_sets_its_width_and_keeps_it(tmp_path: Path) -> Non
             document.querySelector(".tab-btn[data-tab=pages]").click();
             window.tappedAfterDrag = true;
           }, 50), {capture: true, once: true});''', sandbox=None)
-        drag = ActionSequence(browser, "pointer", "mouse", {"pointerType": "mouse"})
+        drag = browser.actions("pointer", "mouse", {"pointerType": "mouse"})
         drag.pointer_move(grip["x"], grip["y"]).pointer_down()
         for step in range(1, 5):
             drag.pointer_move(grip["x"] - 30 * step, grip["y"], duration=30)

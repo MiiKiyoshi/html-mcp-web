@@ -34,10 +34,10 @@ jobs:
       # The runner's own Chrome, which the tests find as the package does. Without one every
       # browser test would be skipped and the job would pass, so this step fails instead.
       - name: Chrome
-        run: python -m tests.chrome
+        run: python -m tests.html_chrome
       - name: Tests
         env:
-          HTML_MCP_FAILURES: ${{ runner.temp }}/failures
+          REVIEW_FAILURES: ${{ runner.temp }}/failures
         run: |
           # A browser test that a loaded runner fails once is run again by itself.
           python -m pytest -rfs --durations 15 || python -m pytest -rfs --last-failed --last-failed-no-failures none
@@ -78,11 +78,11 @@ jobs:
       - name: Fonts
         run: python -m tests.fonts
       - name: Chrome
-        run: python -m tests.chrome
+        run: python -m tests.html_chrome
       - name: Tests
         shell: bash
         env:
-          HTML_MCP_FAILURES: ${{ runner.temp }}/failures
+          REVIEW_FAILURES: ${{ runner.temp }}/failures
         run: |
           # The runner's own chromedriver can be older than its Chrome. Without it Selenium
           # fetches the one that fits.
@@ -124,8 +124,8 @@ jobs:
           /usr/bin/safaridriver --version
       - name: Browser tests in Safari
         env:
-          HTML_MCP_BROWSER_KIND: safari
-          HTML_MCP_FAILURES: ${{ runner.temp }}/failures
+          REVIEW_BROWSER_KIND: safari
+          REVIEW_FAILURES: ${{ runner.temp }}/failures
         run: |
           python -m pytest -n 0 -rfs --part ${{ matrix.part }} tests/test_browser.py \
             || python -m pytest -n 0 -rfs --last-failed --last-failed-no-failures none tests/test_browser.py
