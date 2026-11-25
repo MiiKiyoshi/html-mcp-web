@@ -625,10 +625,15 @@ def test_a_refused_suggestion_says_the_servers_words(tmp_path: Path) -> None:
         script(f'document.querySelector(\'{card} .sugg-reject\').click()')
         wait_until(lambda: script("return window.alerts") == ["Action failed: stale thread: comment changed since it was read"])
         # Drawn again with the thread as it is, the card's suggestion no longer fits the file.
+        # The card drawn before is marked, so the button pressed is on the card drawn again:
+        # pressed while the list was still being read, the old card sent its old stamp.
+        script(f'document.querySelector(\'{card}\').dataset.drawnBefore = "";')
         show_view(browser, "all")
         show_view(browser, "open")
         (tmp_path / "slides" / "slides.html").write_text(DECK.replace("Tea is served.", "Tea is brewed."), encoding="utf-8")
-        wait_until(lambda: script(f'return document.querySelector(\'{card} .sugg-apply\') !== null'))
+        wait_until(lambda: script(f'const drawn = document.querySelector(\'{card}\');'
+                                  ' return drawn !== null && drawn.dataset.drawnBefore === undefined'
+                                  ' && drawn.querySelector(".sugg-apply") !== null'))
         request = urllib.request.Request(f"{base}/artifacts/slides/comments/{comment.id}/apply-suggestion",
                                          data=json.dumps({"updated": local_moment(11, 30)}).encode("utf-8"),
                                          headers={"Content-Type": "application/json"}, method="POST")
