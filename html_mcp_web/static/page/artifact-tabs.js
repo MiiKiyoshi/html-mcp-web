@@ -7,8 +7,7 @@
 
 import { $, h, clear } from "../shared/dom.js";
 import { displayPath, fileName } from "./path-display.mjs";
-
-const homePath = document.querySelector('meta[name="html-mcp-home"]')?.content ?? "";
+import { homePath } from "./project.js";
 
 export function createArtifactTabs({ project, select }) {
   function renderTabs() {
@@ -38,7 +37,7 @@ export function createArtifactTabs({ project, select }) {
     const artifact = project.artifact();
     // The file's name alone, as the editor shows it; the path is its title.
     $("#main-file").textContent = fileName(artifact.main_file);
-    $("#main-file").title = displayPath(artifact.main_file, homePath);
+    $("#main-file").title = displayPath(artifact.main_file, homePath());
     // The tab carries the file being reviewed, so several projects open at once stay apart in the
     // browser's tab strip.
     document.title = fileName(artifact.main_file);

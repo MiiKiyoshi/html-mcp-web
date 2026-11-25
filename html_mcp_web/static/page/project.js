@@ -13,7 +13,9 @@
 // ?artifact= names, else the one the reader last chose, else the first, and answers as adopt does;
 // show(alias); choose(alias), shown and kept for next time; take(artifact), the shown artifact's
 // description, with its revision; and checked(record), the shown artifact's description as the
-// layout check answered it, which the project's description keeps too.
+// layout check answered it, which the project's description keeps too. servedStatic() and
+// homePath() read what the server stamped into the page: the code it was built with, and the
+// folder a path is shown from as ~.
 
 import { fetchJson } from "./fetch-json.js";
 
@@ -23,6 +25,12 @@ const CHOSEN = "htmlMcpArtifact";
 // The tag of the code this page was built with, stamped into it by the server.
 export function servedStatic() {
   return document.querySelector('meta[name="html-mcp-static"]')?.content ?? null;
+}
+
+// The home folder of the server's user, stamped into the page by the server, under which a path
+// is shown from ~.
+export function homePath() {
+  return document.querySelector('meta[name="html-mcp-home"]')?.content ?? "";
 }
 
 export function createProject({ leaving }) {

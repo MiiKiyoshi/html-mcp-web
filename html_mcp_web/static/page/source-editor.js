@@ -21,11 +21,9 @@
 import { $ } from "../shared/dom.js";
 import { fetchJson, refusalText } from "./fetch-json.js";
 import { displayPath, fileName } from "./path-display.mjs";
-import { servedStatic } from "./project.js";
+import { homePath, servedStatic } from "./project.js";
 import { createSourceMarks } from "./source-marks.js";
 import { createVimKeys } from "./vim-keys.js";
-
-const homePath = document.querySelector('meta[name="html-mcp-home"]')?.content ?? "";
 
 export function createSourceEditor({
   base, cursorAt, marked, commentOn, refreshComments, showComment, focusComment, showWherePrinted,
@@ -259,7 +257,7 @@ export function createSourceEditor({
     sourceDirty = false;
     // The file's name alone, so the bar keeps its buttons on one row; the path is its title.
     $("#source-file").textContent = fileName(source.path);
-    $("#source-file").title = displayPath(source.path, homePath);
+    $("#source-file").title = displayPath(source.path, homePath());
     $("#source-save-btn").disabled = true;
     $("#source-reload-btn").disabled = false;
     setStatus("Saved");
