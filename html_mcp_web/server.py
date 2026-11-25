@@ -1815,7 +1815,10 @@ class HtmlReviewServer:
 
     async def stop_checks(self, app: web.Application) -> None:
         # A running check is cancelled and awaited, so its own cleanup ends the browser and
-        # removes the profile. Whatever is left after that is ended here.
+        # removes the profile. Whatever is left after that is ended here. It runs as the
+        # server shuts down, before aiohttp waits up to a minute for the requests in flight:
+        # among them are a check's own page, on a WebSocket, and a layout request waiting for
+        # the check, which end once the check does, and stop() waits less than that minute.
         running = [task for task in self.check_tasks if task is not asyncio.current_task()]
         for task in running:
             task.cancel()
@@ -1886,7 +1889,7 @@ class HtmlReviewServer:
         app.on_startup.append(self.start_watcher)
         app.on_startup.append(self.sweep_check_profiles)
         app.on_shutdown.append(self.release_waiters)
-        app.on_cleanup.append(self.stop_checks)
+        app.on_shutdown.append(self.stop_checks)
         app.on_cleanup.append(self.stop_watcher)
         return app
 
