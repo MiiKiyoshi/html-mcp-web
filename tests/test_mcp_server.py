@@ -913,8 +913,9 @@ class Lines:
 
 @pytest.mark.parametrize("codex", [False, pytest.param(True, marks=pytest.mark.xfail(
     os.name == "nt", strict=True,
-    reason="the waiter starts codex by its bare name, which Windows finds only as codex.exe, and npm "
-           "installs codex.cmd there (shared/waiter.py, from tex-mcp-web)"))])
+    reason="delivery to a Codex installed by npm on Windows is an open problem: the waiter starts codex "
+           "by its bare name, which Windows finds only as codex.exe, while npm installs codex.cmd, and "
+           "cmd.exe would cut the message at its newline and read & | % ^ in it (shared/waiter.py)"))])
 def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
     # The tool returns at once with a command for the harness to watch in the background;
     # blocking here would freeze the agent, which is what the button exists to avoid.
