@@ -531,7 +531,12 @@ def test_browser_review_contract(tmp_path: Path) -> None:
                   belowWords: button.top - (frame.top + words.bottom),
                   wouldOverflow: frame.top + words.bottom + 8 + button.height > pane.bottom - 8,
                   inside: button.left >= pane.left && button.right <= pane.right
-                          && button.top >= pane.top && button.bottom <= pane.bottom};
+                          && button.top >= pane.top && button.bottom <= pane.bottom,
+                  pane: [pane.left, pane.top, pane.right, pane.bottom],
+                  button: [button.left, button.top, button.right, button.bottom],
+                  words: [frame.left + words.left, frame.top + words.top, frame.left + words.right,
+                          frame.top + words.bottom],
+                  pageScrolled: [document.scrollingElement.scrollLeft, document.scrollingElement.scrollTop]};
         '''
 
         # A phone holds a word to select it and sends no mouseup, so the selection alone
@@ -553,9 +558,9 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         # It comes out under the words, against their left edge, where the hand that made the
         # selection already is.
         placed = browser.execute_script(measure_selection_button)
-        assert abs(placed["fromLeft"]) <= 2
-        assert 0 <= placed["belowWords"] <= 12
-        assert placed["inside"]
+        assert abs(placed["fromLeft"]) <= 2, placed
+        assert 0 <= placed["belowWords"] <= 12, placed
+        assert placed["inside"], placed
 
         # At the bottom edge the same placement would hang the button off the pane, so it
         # goes above the words instead and stays whole.
@@ -576,9 +581,9 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         wait_until(lambda: browser.execute_script(
             'return !document.querySelector("#selection-menu").classList.contains("hidden")'))
         edge = browser.execute_script(measure_selection_button)
-        assert edge["wouldOverflow"]        # the words really are at the bottom of the pane
-        assert edge["inside"]               # and the whole button is still on it
-        assert edge["belowWords"] < 0       # because it went above them
+        assert edge["wouldOverflow"], edge  # the words really are at the bottom of the pane
+        assert edge["inside"], edge         # and the whole button is still on it
+        assert edge["belowWords"] < 0, edge  # because it went above them
 
         browser.execute_script(
             'document.querySelector("#artifact-frame").contentWindow.getSelection().removeAllRanges();')
