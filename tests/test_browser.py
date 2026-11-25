@@ -3756,12 +3756,15 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
           view.scrollBy(300, 300);
           return settled;
         """)
-        time.sleep(0.3)
-        stray = browser.execute_script("""
+        # Read once the deck has drawn two frames: a scroll's event comes with the next frame,
+        # which a runner slow to draw gave later than the 0.3 s this test once waited.
+        two_frames = """
           const win = document.querySelector("#artifact-frame").contentWindow;
-          return [win.scrollX, win.scrollY];
-        """)
-        assert stray == settled
+          return new Promise((done) => win.requestAnimationFrame(() => win.requestAnimationFrame(
+            () => done([win.scrollX, win.scrollY]))));
+        """
+        stray = browser.execute_script(two_frames)
+        assert stray == settled, (stray, settled)
         settled = browser.execute_script(fingers + """
           send("touchstart", [touch(1, 300, 400), touch(2, 400, 400)]);
           for (let step = 1; step <= 2; step += 1) {
@@ -3782,11 +3785,7 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
           send("touchend", []);
           return {settled, taken, untouched};
         """)
-        time.sleep(0.3)
-        panned = browser.execute_script("""
-          const win = document.querySelector("#artifact-frame").contentWindow;
-          return [win.scrollX, win.scrollY];
-        """)
+        panned = browser.execute_script(two_frames)
         assert settled["taken"] is False, settled
         assert settled["untouched"] == settled["settled"], settled
         assert panned == [settled["settled"][0] + 40, settled["settled"][1] + 40], (panned, settled)
