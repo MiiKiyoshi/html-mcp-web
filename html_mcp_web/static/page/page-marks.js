@@ -9,14 +9,13 @@
 // lastKnownPlace(anchor)). It gives render(); schedule(), render() at the frame's next frame;
 // showRange(range), words shown for a moment; lost(id), whether a comment's words are gone;
 // forget(), none of them gone, for another artifact; flash(id), a comment's marks flashed;
-// layer(page), the layer of marks in a page; frameOf(node), the page or script block a node is
-// in, with its box and scale; and what happens to the marks, each of which hands in a function
-// called when it does: pressed(listener), with the id of the comment whose number is pressed;
-// and lostChanged(listener), as the comments whose words are gone change.
+// layer(page), the layer of marks in a page; and what happens to the marks, each of which hands
+// in a function called when it does: pressed(listener), with the id of the comment whose number
+// is pressed; and lostChanged(listener), as the comments whose words are gone change.
 
 import { clear } from "../shared/dom.js";
 import { createListeners } from "../shared/listeners.js";
-import { deckPages, frameDocument, frameWindow } from "./deck-dom.js";
+import { deckPages, frameDocument, frameOf, frameWindow } from "./deck-dom.js";
 import { selectionRects } from "./selection-rects.js";
 
 export function createPageMarks({ marked, anchors }) {
@@ -65,25 +64,6 @@ export function createPageMarks({ marked, anchors }) {
       marks.style.height = `${page.scrollHeight}px`;
     }
     return marks;
-  }
-
-  // Browsers disagree on whether the CSS zoom applied to section.page is reflected in
-  // getClientRects(), so placing measured coordinates straight onto an unscaled layer misaligns
-  // them when zoomed (observed in Safari). Measure the page rect through the same API to derive
-  // the effective scale, then convert to page-relative coordinates.
-  function frameOf(node) {
-    const element = node.nodeType === 1 ? node : node.parentElement;
-    // Speaker-script blocks (slides templates) live outside main.pages but take comments through
-    // the same anchor path; each block is its own highlight frame. They scroll internally, so
-    // content coordinates need the scroll offset added back.
-    const page = element?.closest("body > main.pages > section.page, .script-block") ?? null;
-    if (page === null) return null;
-    const rect = page.getBoundingClientRect();
-    const ratio = page.offsetWidth > 0 ? rect.width / page.offsetWidth : 1;
-    return {
-      page, rect, ratio: ratio > 0 ? ratio : 1,
-      scrollTop: page.scrollTop || 0, scrollLeft: page.scrollLeft || 0,
-    };
   }
 
   function render() {
@@ -222,7 +202,6 @@ export function createPageMarks({ marked, anchors }) {
       }, 350);
     },
     layer,
-    frameOf,
     pressed: pressed.add,
     lostChanged: lostChanged.add,
   };

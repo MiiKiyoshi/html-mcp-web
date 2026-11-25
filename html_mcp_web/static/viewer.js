@@ -68,7 +68,6 @@ const search = createSearch({
   showing: presentation.showing,
   current: pages.current,
   movePage: presentation.movePage,
-  frameOf: marks.frameOf,
 });
 
 const thumbs = createThumbs({ project, pages, searchKey: search.handleKeydown });

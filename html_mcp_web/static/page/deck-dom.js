@@ -1,7 +1,8 @@
 // The artifact on screen as its frame holds it: the frame's window and document, its pages and
-// a page's title, the page nearest a point, and the reader's place as a page and a point on it.
-// Each function reads the frame on screen, #artifact-frame, when it is called, and none keeps
-// anything: deck.js decides which frame that is.
+// a page's title, the page nearest a point, the page a node is in with its box and scale, and the
+// reader's place as a page and a point on it. Each function reads the frame on screen,
+// #artifact-frame, when it is called, and none keeps anything: deck.js decides which frame that
+// is.
 
 import { $ } from "../shared/dom.js";
 
@@ -43,6 +44,25 @@ export function pageNear(point) {
     }
   }
   return nearest;
+}
+
+// Browsers disagree on whether the CSS zoom applied to section.page is reflected in
+// getClientRects(), so placing measured coordinates straight onto an unscaled layer misaligns
+// them when zoomed (observed in Safari). Measure the page rect through the same API to derive
+// the effective scale, then convert to page-relative coordinates.
+export function frameOf(node) {
+  const element = node.nodeType === 1 ? node : node.parentElement;
+  // Speaker-script blocks (slides templates) live outside main.pages but take comments through
+  // the same anchor path; each block is its own highlight frame. They scroll internally, so
+  // content coordinates need the scroll offset added back.
+  const page = element?.closest("body > main.pages > section.page, .script-block") ?? null;
+  if (page === null) return null;
+  const rect = page.getBoundingClientRect();
+  const ratio = page.offsetWidth > 0 ? rect.width / page.offsetWidth : 1;
+  return {
+    page, rect, ratio: ratio > 0 ? ratio : 1,
+    scrollTop: page.scrollTop || 0, scrollLeft: page.scrollLeft || 0,
+  };
 }
 
 // The page at the top of the window, and the point on it there, in the page's own pixels.
