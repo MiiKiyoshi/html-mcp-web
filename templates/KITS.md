@@ -138,7 +138,7 @@ A list with subitems and at least two outer items stays in one column while it f
 
 `data-no` is the part's number, set beside its name in `p.label`. An optional `img.shot` places a picture to the right.
 
-9.4 **data-appendix starts separate appendix numbering.** `data-appendix` on a section marks it and every later page as an appendix held for questions, usually on the divider that opens it. The footer counts the main deck, cover included, and stops before the appendix, whose pages count on their own, as `A1 / A8`. Without `data-appendix` the footer counts the whole deck, and a divider alone does not start appendix numbering.
+9.4 **data-appendix starts separate appendix numbering.** `data-appendix` on a section marks it and every later page as an appendix held for questions. Open the appendix with a divider page (9.3, neutral-slides clause 4.10) and put `data-appendix` on that divider. The footer counts the main deck, cover included, and stops before the appendix, whose pages count on their own, as `A1 / A8`. Without `data-appendix` the footer counts the whole deck, and a divider alone does not start appendix numbering.
 
 9.5 **Body blocks spread between lead and takeaway.** Blocks are spread down the body. A first `p.lead`, one line under the title, stays with the title and an optional final `p.takeaway` near the bottom, and only the content between them shares the remaining height. The items of a `ul.notes` directly in the body or in a column of `two` (9.8) take that height first, up to one line between each pair. Related compact content under neutral clause 6.5 (report 5.5) goes in one wrapper so it moves as one block.
 

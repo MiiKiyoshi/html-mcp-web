@@ -84,6 +84,8 @@ When an item fails, remove it, change the order or add what is missing, and go d
 
 4.9 **A progress update.** Start from what the audience last saw, cover only what changed since, and end with one page saying what should be done next, or that nothing needs doing.
 
+4.10 **Appendix.** Pages held for questions go after the last page of the talk, and a divider page that names the appendix opens them. Put the divider in even when the appendix is a single page, so the audience and the presenter see where the talk ends and the held material begins.
+
 ## Article 5. Words
 
 5.1 **The audience's field terms.** Name each thing the way the audience and the field name it in the deck's language, including the loanwords they actually use. Do not translate a term the audience uses in its original language, replace a term with a plainer-sounding word, or invent a metaphor or a cover word for a group of things. This holds for a whole procedure as much as for one word: when the audience has a name for what is done, such as fitting a model by minimising a loss, say it by that name. A description in everyday words of something they have a name for is not easier. It takes away the name they would have recognised and leaves them to guess which known thing is meant. Where no term exists, describe the thing and its relations. Keep the real command, option and data names the audience needs in order to find the subject. For an ordinary object use the word people say in conversation, such as a box, not a stiffer formal word, such as a square, unless the exact shape is the point. When a plain word would be read in its everyday sense, use the word that marks the sense meant, such as methodology for a named research method.
