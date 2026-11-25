@@ -948,7 +948,9 @@ def test_browser_review_contract(tmp_path: Path) -> None:
             f'return document.querySelector("[data-comment-id=\\"{comment["id"]}\\"] .stale") !== null'))
 
         assert browser.execute_script('return document.title') == "slides.html"
-        browser.find_element("css selector", '.artifact-tab:nth-child(2)').click()
+        # The tabs are drawn again as the server's state comes in, and a tab found just before
+        # one such drawing is gone when it is clicked: the click goes to the tab drawn since.
+        wait_until(lambda: browser.find_element("css selector", '.artifact-tab:nth-child(2)').click() or True)
         wait_until(lambda: browser.execute_script(
             'return document.querySelector("#main-file").textContent === "report.html"'
             ' && document.querySelector("#main-file").title === "paper/report.html"'))
