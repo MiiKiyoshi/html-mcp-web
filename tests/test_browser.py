@@ -13,8 +13,8 @@ import yaml
 from html_mcp_web.config import load_config
 from html_mcp_web.kits import CENTER
 from html_mcp_web.project_server import SharedProjectServer
-from tests.chrome import (CHECK_MARGIN, LAYOUT_CHECK_SECONDS, MOD, MOD_ALT, ActionSequence, Keys, launch, needs_browser,
-                          not_in_safari)
+from tests.chrome import (CHECK_MARGIN, LAYOUT_CHECK_SECONDS, MOD, MOD_ALT, READY_SEEN, ActionSequence, Keys, launch,
+                          needs_browser, not_in_safari)
 
 
 def available_port() -> int:
@@ -234,7 +234,9 @@ x</pre>
 </body></html>'''.replace("</body>", f"<script>{CENTER.read_text(encoding='utf-8')}</script></body>")
 
 
-def wait_until(check, timeout: float = 15.0):
+def wait_until(check, timeout: float = 15.0, seen=None):
+    """Wait for check() to answer truly, and give its answer. When it does not in time, the
+    failure says its last answer, and what seen() then gives when a seen is passed."""
     deadline = time.monotonic() + timeout
     last = None
     while time.monotonic() < deadline:
@@ -245,6 +247,11 @@ def wait_until(check, timeout: float = 15.0):
         except Exception as error:
             last = error
         time.sleep(0.1)
+    if seen is not None:
+        try:
+            last = f"{last}; seen: {seen()}"
+        except Exception as error:
+            last = f"{last}; seen: {error!r}"
     raise AssertionError(f"condition was not met: {last}")
 
 
@@ -291,7 +298,8 @@ def test_browser_review_contract(tmp_path: Path) -> None:
         browser.navigate(base)
 
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         assert browser.execute_script('''
           const button = document.querySelector("#call-agent-btn");
           return [button.classList.contains("agent-offline"), button.disabled,
@@ -1762,7 +1770,8 @@ def test_source_beside_comment_selects_the_words_in_the_editor_in_split(tmp_path
         browser.set_window_rect(width=1400, height=900)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         # Pressed in the Preview alone, Source turns the view to Split and selects the words.
         browser.execute_script(select)
         wait_until(lambda: browser.execute_script(shown))
@@ -1839,7 +1848,8 @@ def test_source_and_page_find_a_formula_by_the_tex_katex_keeps(tmp_path: Path) -
         browser.set_window_rect(width=1400, height=900)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         browser.find_element("css selector", '[data-view="split"]').click()
         wait_until(lambda: browser.execute_script(
             'const page = window.wrappedJSObject || window;'
@@ -1911,7 +1921,8 @@ def test_the_area_button_draws_a_box_to_comment_on(tmp_path: Path) -> None:
         browser.set_window_rect(width=1400, height=900)
         browser.navigate(base)
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         page = browser.execute_script('''
           const frame = document.querySelector("#artifact-frame");
           const page = frame.contentDocument.querySelector("main.pages > section.page");
@@ -1991,7 +2002,8 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
         browser.set_window_rect(width=420, height=800)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         measured = browser.execute_script('''
           const pane = document.querySelector("#artifact-pane").getBoundingClientRect();
           const toggle = document.querySelector("#sidebar-toggle-btn").getBoundingClientRect();
@@ -2219,7 +2231,8 @@ def test_slide_previews_open_from_the_first_button_and_lead_to_a_page(tmp_path: 
         browser.set_window_rect(width=1400, height=900)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         order = browser.execute_script(
             'return Array.from(document.querySelector(".workspace-toolbar").children).map((child) => child.id || child.className)')
         assert order == ["thumbs-btn", "area-btn", "zoom-reset-btn", "scripts-btn", "search-btn"], order
@@ -2331,7 +2344,8 @@ def test_hiding_the_comments_keeps_the_page_being_read(tmp_path: Path) -> None:
         browser.set_window_rect(width=1000, height=800)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         browser.execute_script('''
           const win = document.querySelector("#artifact-frame").contentWindow;
           const page = win.document.querySelectorAll("main.pages > section.page")[11];
@@ -3015,7 +3029,8 @@ def test_a_selection_inside_an_svg_is_marked_where_its_letters_are(tmp_path: Pat
         browser.set_window_rect(width=1400, height=1000)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         wait_until(lambda: browser.execute_script(
             'const d = document.querySelector("#artifact-frame").contentDocument;'
             'return d !== null && d.querySelector("#svg-words") !== null'))
@@ -3363,7 +3378,8 @@ def test_without_full_screen_the_show_lies_over_the_page(tmp_path: Path) -> None
         browser.set_window_rect(width=900, height=700)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         assert browser.execute_script("return document.fullscreenEnabled") is False
         shown = """
           const pane = document.querySelector("#artifact-pane").getBoundingClientRect();
@@ -3415,7 +3431,8 @@ def test_two_fingers_in_the_slide_show_carry_nothing(tmp_path: Path) -> None:
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         browser.find_element("css selector", "#fullscreen-btn").click()
         wait_until(lambda: browser.execute_script("""
           return document.querySelector("#artifact-frame").contentDocument.documentElement
@@ -3504,7 +3521,8 @@ def test_a_sideways_wheel_stays_in_the_artifact(tmp_path: Path) -> None:
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
 
         taken = browser.execute_script("""
           const frame = document.querySelector("#artifact-frame");
@@ -3569,7 +3587,8 @@ def test_pinching_the_artifact_leaves_the_comments_alone(tmp_path: Path) -> None
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
 
         measure = """
           const frame = document.querySelector("#artifact-frame");
@@ -4074,7 +4093,8 @@ def test_the_artifact_stays_selectable_under_the_zoom(tmp_path: Path) -> None:
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
 
         # A long press is a finger that lands and stays, with the small wobble a hand
         # always has. If anything cancels those the browser never offers a selection, and
@@ -4159,7 +4179,8 @@ def test_a_fitted_page_sits_evenly_on_a_phone(tmp_path: Path) -> None:
         browser.set_window_rect(width=390, height=844)      # a phone, in CSS pixels
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         sides = wait_until(lambda: browser.execute_script("""
           const frame = document.querySelector("#artifact-frame");
           const win = frame.contentWindow;
@@ -4252,7 +4273,8 @@ def test_a_touch_screen_keeps_the_two_buttons_in_their_corners(tmp_path: Path) -
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         assert browser.execute_script(
             'return window.matchMedia("(pointer: coarse)").matches') is True
 
@@ -4348,7 +4370,8 @@ def test_a_selection_the_browser_took_over_still_brings_the_button(tmp_path: Pat
         browser.set_window_rect(width=900, height=1200)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
 
         # A finger lands on the word and the browser makes the selection under it.
         browser.execute_script("""
@@ -4850,7 +4873,8 @@ def test_a_comment_whose_text_is_gone_keeps_its_place(tmp_path: Path) -> None:
         browser = launch()
         browser.navigate(base)
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         anchor = wait_until(lambda: browser.execute_script("""
           const doc = document.querySelector("#artifact-frame").contentDocument;
           const node = doc.querySelector("#target")?.firstChild;
@@ -5101,7 +5125,8 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path, mo
         browser = launch()
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         stamped = browser.execute_script(
             'return document.querySelector(\'meta[name="html-mcp-static"]\').content')
         assert stamped == get_json(f"http://127.0.0.1:{port}/state")["static"]
@@ -5132,7 +5157,8 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path, mo
         browser.refresh()
         wait_until(lambda: browser.execute_script(
             'return document.body.dataset.sameLoad !== "yes"'
-            ' && document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            ' && document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         refreshed = wait_until(lambda: browser.execute_script(
             f'const win = {frame_window}; return win && win.scrollY > 0 ? win.scrollY : null;'))
         assert abs(refreshed - read_at) <= 2
@@ -5148,7 +5174,8 @@ def test_a_page_left_open_across_a_code_change_reloads_itself(tmp_path: Path, mo
         browser.out_of_sight(False)
         wait_until(lambda: browser.execute_script(
             'return document.body.dataset.sameLoad !== "yes"'
-            ' && document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            ' && document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         returned = wait_until(lambda: browser.execute_script(
             f'const win = {frame_window}; return win && win.scrollY > 0 ? win.scrollY : null;'))
         assert abs(returned - read_at) <= 2
@@ -5181,7 +5208,8 @@ def test_an_edit_replaces_the_deck_with_no_blank_and_no_jump(tmp_path: Path) -> 
         browser = launch()
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         # The preview column is open too, and the drawn place of its first preview is held, read
         # once its document has loaded as the samples below require: read before, on a loaded
         # runner, it was a place the column then left.
@@ -5501,7 +5529,8 @@ def test_a_tab_comes_back_to_where_it_was_left(tmp_path: Path) -> None:
         browser.set_window_rect(width=1000, height=700)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
 
         def shown():
             return browser.execute_script('''
@@ -5608,7 +5637,8 @@ def test_a_review_page_shows_the_servers_check_and_measures_nothing_itself(tmp_p
         browser.set_window_rect(width=1000, height=600)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         base = f"http://127.0.0.1:{port}"
         first = get_json(f"{base}/state")["artifacts"]["slides"]
         assert first["layout_check"]["checked_revision"] == first["revision"]
@@ -5641,7 +5671,8 @@ def test_a_review_page_shows_the_servers_check_and_measures_nothing_itself(tmp_p
         wait_until(lambda: browser.execute_script('''
           return document.querySelector("#artifact-frame").dataset.revision === "%d"
             && document.querySelector("#artifact-status").textContent === "ready";
-        ''' % (first["revision"] + 1)), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+        ''' % (first["revision"] + 1)),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         resize_about()
         assert posts() == 0
     finally:

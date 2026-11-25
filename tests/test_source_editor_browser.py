@@ -8,7 +8,7 @@ import yaml
 
 from html_mcp_web.config import load_config
 from html_mcp_web.project_server import SharedProjectServer
-from tests.chrome import CHECK_MARGIN, LAYOUT_CHECK_SECONDS, MOD, ActionSequence, launch, needs_browser
+from tests.chrome import CHECK_MARGIN, LAYOUT_CHECK_SECONDS, MOD, READY_SEEN, ActionSequence, launch, needs_browser
 
 
 def type_keys(browser, keys):
@@ -31,7 +31,9 @@ def available_port() -> int:
         return int(listener.getsockname()[1])
 
 
-def wait_until(check, timeout: float = 12):
+def wait_until(check, timeout: float = 12, seen=None):
+    """Wait for check() to answer truly, and give its answer. When it does not in time, the
+    failure says its last answer, and what seen() then gives when a seen is passed."""
     deadline = time.monotonic() + timeout
     last = None
     while time.monotonic() < deadline:
@@ -42,6 +44,11 @@ def wait_until(check, timeout: float = 12):
         except Exception as error:
             last = error
         time.sleep(0.1)
+    if seen is not None:
+        try:
+            last = f"{last}; seen: {seen()}"
+        except Exception as error:
+            last = f"{last}; seen: {error!r}"
     raise AssertionError(f"condition was not met: {last}")
 
 
@@ -79,7 +86,8 @@ def test_source_selection_wraps_exactly_and_split_divider_resizes(tmp_path: Path
         browser.set_window_rect(width=1200, height=760)
         browser.navigate(f"http://127.0.0.1:{port}")
         wait_until(lambda: browser.execute_script(
-            'return document.querySelector("#artifact-status")?.textContent === "ready"'), timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN)
+            'return document.querySelector("#artifact-status")?.textContent === "ready"'),
+            timeout=LAYOUT_CHECK_SECONDS + CHECK_MARGIN, seen=lambda: browser.execute_script(READY_SEEN))
         assert browser.execute_script(
             'return [document.querySelector("#main-file").textContent, document.querySelector("#main-file").title]'
         ) == ["slides.html", f"~{os.sep}slides.html"]

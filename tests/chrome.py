@@ -66,6 +66,15 @@ MOD_ALT = "Cmd+Option" if sys.platform == "darwin" else "Ctrl+Alt"
 # the page loading and asking for it, and the outcome reaching the page or the state.
 LAYOUT_CHECK_SECONDS = HtmlReviewServer.LAYOUT_CHECK_SECONDS
 CHECK_MARGIN = 15.0
+# What a test waiting for the review page to say "ready" reports when it does not: the status
+# the page shows, and each artifact's layout check and error as the server has them.
+READY_SEEN = """
+  const status = document.querySelector("#artifact-status")?.textContent;
+  return fetch("/state").then((reply) => reply.json()).then((state) => JSON.stringify({status,
+    artifacts: Object.fromEntries(Object.entries(state.artifacts).map(([alias, artifact]) =>
+      [alias, {error: artifact.error, checked: artifact.layout_check.checked_revision, revision: artifact.revision,
+               errors: artifact.layout_check.errors, warnings: artifact.layout_check.warnings}]))}).slice(0, 3000));
+"""
 
 
 class ActionSequence:
