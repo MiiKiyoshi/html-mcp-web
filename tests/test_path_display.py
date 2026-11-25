@@ -8,7 +8,7 @@ import pytest
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required for the UI helper test")
 def test_home_path_display_boundaries() -> None:
-    module = (Path(__file__).parent.parent / "html_mcp_web" / "static" / "path-display.mjs").as_uri()
+    module = (Path(__file__).parent.parent / "html_mcp_web" / "static" / "page" / "path-display.mjs").as_uri()
     script = f"""
       import {{ displayPath, fileName }} from {json.dumps(module)};
       const home = "/home/alice";

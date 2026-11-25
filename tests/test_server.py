@@ -1644,7 +1644,8 @@ async def test_the_shell_names_its_assets_under_a_tag_that_moves(client) -> None
     response = await test_client.get("/")
     text = await response.text()
     assert response.headers["Cache-Control"] == "no-store"
-    newest = max(int(path.stat().st_mtime) for folder in (review.static_dir, review.static_dir / "shared")
+    newest = max(int(path.stat().st_mtime) for folder in (review.static_dir, review.static_dir / "shared",
+                                                          review.static_dir / "page")
                  for path in folder.iterdir() if path.is_file())
     assert f'src="/static/v{newest}/viewer.js"' in text
     assert f'href="/static/v{newest}/style.css"' in text

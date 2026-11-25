@@ -1,5 +1,16 @@
-export function createAnchors(dependencies) {
-  const { frameDocument, state } = dependencies;
+// Where a comment's words are on the pages, and how a selection is written down as a comment's
+// anchor. A text anchor keeps the quoted words, the text around them, the path of child positions
+// to each of its ends and the digest of the document it was taken from; it is found again by its
+// path while the words there are still the same, else by its words and the text around them.
+//
+// createAnchors takes digest(), the digest of the artifact shown. It gives
+// captureTextAnchor(range); resolveAnchor(anchor), the range of an anchor's words, or null when
+// they are gone; lastKnownPlace(anchor), the element the words were in, as deep as the page still
+// has it; and rangeFromShown(shown), the words the server says a stretch of the source shows.
+
+import { frameDocument } from "./deck-dom.js";
+
+export function createAnchors({ digest }) {
 
   function ignoredTextNode(node) {
     const parent = node.parentElement;
@@ -136,7 +147,7 @@ export function createAnchors(dependencies) {
       suffix: wholeCharacterSlice(snapshot.text, endOffset, endOffset + 120),
       start: { path: nodePath(start.node, doc.body), offset: start.offset },
       end: { path: nodePath(end.node, doc.body), offset: end.offset },
-      artifact_digest: state.artifact.artifact_digest,
+      artifact_digest: digest(),
     };
   }
   

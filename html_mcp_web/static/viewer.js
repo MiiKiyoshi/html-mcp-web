@@ -1,2680 +1,209 @@
-import { createPresentation } from "./presentation.js";
-import { createLayoutChecks } from "./layout-check.js";
-import { createAnchors } from "./anchors.js";
-import { createSearch } from "./search.js";
-import { displayPath, fileName } from "./path-display.mjs";
+// The review page of an HTML artifact. Its own parts are modules in page/, each of which says at
+// its head what it does and what it takes and gives; the parts the review pages share are in
+// shared/. This file wires them: it creates the page's parts and then the shared ones, each given
+// the hooks it takes, and starts them in order once the page has loaded.
+
 import { createSettings } from "./shared/settings.js";
-import { $, h, clear, COMPOSED, keyByPosition, showMacKeyNames } from "./shared/dom.js";
+import { $, showMacKeyNames } from "./shared/dom.js";
 import { createCommentPanel } from "./shared/comment-panel.js";
 import { createTabStrip } from "./shared/tab-strip.js";
 import { createHelp } from "./shared/help.js";
 import { createUpdate } from "./shared/update.js";
-import { holdZoomOnFields, holdPinchOutside, pageIsZoomed } from "./shared/page-zoom.js";
+import { holdZoomOnFields, holdPinchOutside } from "./shared/page-zoom.js";
 import { attachPanelGrips } from "./shared/panel-grips.js";
-const homePath = document.querySelector('meta[name="html-mcp-home"]')?.content ?? "";
+import { attachEscapeKey } from "./shared/page-keys.js";
+import { attachSidebarToggle } from "./shared/sidebar.js";
+import { createSocket } from "./shared/socket.js";
+import { fetchJson } from "./page/fetch-json.js";
+import { createProject } from "./page/project.js";
+import { createReloadPlace } from "./page/reload-place.js";
+import { createPages } from "./page/pages.js";
+import { createPresentation } from "./page/presentation.js";
+import { createZoom } from "./page/zoom.js";
+import { createAnchors } from "./page/anchors.js";
+import { createPageMarks } from "./page/page-marks.js";
+import { createSelection } from "./page/selection.js";
+import { createArea } from "./page/area.js";
+import { createSearch } from "./page/search.js";
+import { createThumbs } from "./page/thumbs.js";
+import { createLayoutResults } from "./page/layout-results.js";
+import { createScripts } from "./page/scripts.js";
+import { createSourceEditor } from "./page/source-editor.js";
+import { createWorkspace } from "./page/workspace.js";
+import { createPlaces } from "./page/places.js";
+import { createDeckSetup } from "./page/deck-setup.js";
+import { createDeck } from "./page/deck.js";
+import { createArtifactTabs } from "./page/artifact-tabs.js";
+import { createPanelRoom } from "./page/panel-room.js";
+import { anchorLabel, commentQuote, composeAnchorText } from "./page/comment-places.js";
+import { attachExport } from "./page/export.js";
+import { attachMenu } from "./page/menu.js";
+import { attachFrameTheme, markFrameThemes } from "./page/frame-theme.js";
 
 // What the browser keeps this page's shared choices under, named once, in index.html.
 const PREFIX = document.querySelector("script[data-prefix]").dataset.prefix;
 
-const state = {
-  // The comment panel sets the comments it lists, those opened and picked, the ringed one and
-  // the comment tab shown here too (shared/comment-panel.js).
-  project: null,
-  // The open comments, which the pages and the editor mark.
-  markedComments: [],
-  alias: null,
-  artifact: null,
-  revision: null,
-  loadedRevision: null,
-  selectionAnchor: null,
-  areaMode: false,
-  // Source words shown on the page by → Preview, marked for a moment.
-  shownRange: null,
-  // The comments whose words the page no longer finds, which their cards mark stale.
-  unattached: new Set(),
-  // The place each artifact's next document opens at, by id, kept until it is put back: the
-  // page at the top of the window, by its index, and how far into it.
-  pendingViews: {},
-  // The frame each artifact's next revision is loading in, by id, under the one on screen.
-  framesBehind: {},
-  // One frame per artifact, by id, kept with its document: a tab shows its own frame
-  // and hides the others. Loading the next artifact into the one frame there was
-  // fetched and parsed the whole deck again, fonts and all, ran the layout check over
-  // it again, and started it at the top; a switch took seconds and lost the place.
-  frames: {},
-  // The zoom each artifact was left at. The frame keeps its own scroll and the scale
-  // it is drawn at; the number the zoom handlers and the reset control work from is
-  // this one, and it is put back with the frame.
-  zooms: {},
-  ws: null,
-  renderFrame: null,
-  layoutFrame: null,
-  layoutCheckError: null,
-  selectionPointerDown: false,
-  selectionSettle: null,
-  pageFrame: null,
-  currentPage: null,
-  slideShow: false,
-  leftSlideShowAt: null,
-  presentationPointer: null,
-  presentationWheelEvents: [],
-  presentationLastWheelStep: 0,
-  suppressPresentationClick: false,
-  draggingPanel: false,
-  view: "preview",
-  editor: null,
-  // Whether a press in the editor is held down, which moves the cursor with the text in place.
-  editorPointing: false,
-  sourcePath: null,
-  sourceRevision: null,
-  sourceDirty: false,
-  sourceLoading: false,
-  sourceCommentMarkers: [],
-  // Each comment's marked text in the editor, as { range, comment }.
-  sourceCommentSpans: [],
-  sourceCommentRows: new Set(),
-  sourceCommentsByRow: new Map(),
-  artifactZoom: 1,
-  pinch: null,
-  // Two fingers that began while the page itself was zoomed belong to the browser until
-  // they lift: see pageIsZoomed.
-  pageGesture: false,
-  pageTouch: false,
-  pinchSettle: null,
-  settledScroll: null,
-};
+// The open comments of the artifact shown, as the panel last read them, which the pages and the
+// editor mark.
+let markedComments = [];
 
-function artifactBase() {
-  return `/artifacts/${encodeURIComponent(state.alias)}`;
-}
+// ----- The page's own parts -----
 
-function renderArtifactTabs() {
-  const tabs = $("#artifact-tabs");
-  clear(tabs);
-  for (const alias of Object.keys(state.project.artifacts)) {
-    tabs.appendChild(h("button", {
-      type: "button",
-      class: `artifact-tab${alias === state.alias ? " active" : ""}`,
-      text: alias,
-      onclick: () => selectArtifact(alias).catch((error) => alert(error.message)),
-    }));
-  }
-  // Tabs scroll sideways when they outnumber the row, so the open one is brought into the
-  // row. The row's own scroll is set rather than scrollIntoView, which also scrolls the page.
-  const active = tabs.querySelector(".artifact-tab.active");
-  if (active !== null) {
-    const left = active.offsetLeft - tabs.offsetLeft;
-    if (left < tabs.scrollLeft) tabs.scrollLeft = left;
-    else if (left + active.offsetWidth > tabs.scrollLeft + tabs.clientWidth) {
-      tabs.scrollLeft = left + active.offsetWidth - tabs.clientWidth;
-    }
-  }
-}
+const project = createProject({ leaving: () => reloadPlace.remember() });
 
-// The frame that holds an artifact. The frame the page starts with is taken by the
-// first artifact shown; every artifact after that gets a frame of its own. The active
-// one carries the id everything else looks the frame up by.
-function frameFor(alias) {
-  let frame = state.frames[alias];
-  if (frame !== undefined) return frame;
-  const pane = $("#artifact-pane");
-  const spare = pane.querySelector(".artifact-frame:not([data-artifact])");
-  frame = spare ?? document.createElement("iframe");
-  if (spare === null) {
-    frame.className = "artifact-frame";
-    frame.title = "Agent-generated HTML artifact";
-    frame.tabIndex = -1;
-    const last = Array.from(pane.querySelectorAll(".artifact-frame")).pop();
-    last.after(frame);
-  }
-  frame.dataset.artifact = alias;
-  frame.addEventListener("load", () => attachArtifactEvents(frame));
-  state.frames[alias] = frame;
-  return frame;
-}
+const reloadPlace = createReloadPlace({
+  alias: project.alias,
+  heldPage: () => presentation.heldPage(),
+  pendingView: (alias) => deck.pendingView(alias),
+});
 
-// The active frame is raised over the others, which stay painted underneath and are
-// inert there: out of the tab order, out of find-in-page, silent to a screen reader.
-function showFrame(frame) {
-  for (const other of Object.values(state.frames)) {
-    const active = other === frame;
-    other.classList.toggle("active", active);
-    other.toggleAttribute("inert", !active);
-    if (active) other.id = "artifact-frame";
-    else other.removeAttribute("id");
-  }
-}
+const pages = createPages({
+  showing: () => presentation.showing(),
+  slideChanged: () => presentation.markCurrent(),
+  commentOn,
+  marked: () => thumbs.mark(),
+});
 
-// A frame shown again is already loaded: what the switch has to do is set the page up
-// for it. The check schedules itself only for a frame not yet measured with its fonts in.
-function showLoadedArtifact(frame) {
-  showFrame(frame);
-  applyArtifactZoom();
-  renderHighlights();
-  state.currentPage = visiblePageNumber();
-  renderPages();
-  updateLayoutUi();
-  scheduleLayoutCheck();
-  search.refresh();
-  scrollToRepaint(frameWindow());
-}
+const presentation = createPresentation({
+  pages,
+  fit: () => zoom.fit(),
+  hideSelection: () => selection.hide(),
+  scheduleLayoutCheck: () => layout.schedule(),
+  layout: () => project.artifact().layout,
+  entering: () => zoom.reset(),
+});
 
-// Safari draws a frame come back from underneath in part or not at all until it is
-// scrolled, whatever the frame's visibility or layer meanwhile. So the scroll is done
-// here: one pixel, and back at the next frame, which leaves the reader where they were.
-function scrollToRepaint(win) {
-  const { scrollX, scrollY } = win;
-  win.scrollTo({ left: scrollX, top: scrollY + (scrollY > 0 ? -1 : 1), behavior: "instant" });
-  requestAnimationFrame(() => win.scrollTo({ left: scrollX, top: scrollY, behavior: "instant" }));
-}
+const zoom = createZoom({
+  showing: presentation.showing,
+  hideSelection: () => selection.hide(),
+  showSelection: () => selection.show(),
+  redraw: () => marks.schedule(),
+});
 
-async function selectArtifact(alias) {
-  if (alias === state.alias) return;
-  if (state.sourceDirty && !confirm(`Discard unsaved changes to ${state.sourcePath}?`)) return;
-  if (state.alias) state.zooms[state.alias] = state.artifactZoom;
-  state.alias = alias;
-  announceActiveArtifact();
-  localStorage.setItem("htmlMcpArtifact", alias);
-  state.artifact = state.project.artifacts[alias];
-  state.revision = state.artifact.revision;
-  state.loadedRevision = null;
-  resetCommentPanel();
-  state.unattached.clear();
-  state.currentPage = null;
-  state.sourcePath = null;
-  state.sourceRevision = null;
-  state.sourceDirty = false;
-  const frame = frameFor(alias);
-  // The frame says what revision it shows; the artifact says which is current.
-  state.loadedRevision = frame.dataset.revision === undefined ? null : Number(frame.dataset.revision);
-  state.artifactZoom = state.zooms[alias] ?? 1;
-  renderArtifactTabs();
-  updateArtifactLinks();
-  updateLayoutUi();
-  await refreshComments();
-  if (state.view !== "preview") await loadSource(true);
-  if (state.loadedRevision === state.revision) showLoadedArtifact(frame);
-  // A deck rebuilt while the reader was on another tab opens where they left it, as an
-  // edit does while it is shown: loading it from the top sent them back to page 1.
-  else loadArtifact(true);
-}
+const anchors = createAnchors({ digest: () => project.artifact().artifact_digest });
 
-function updateArtifactLinks() {
-  // The file's name alone, as the editor shows it; the path is its title.
-  $("#main-file").textContent = fileName(state.artifact.main_file);
-  $("#main-file").title = displayPath(state.artifact.main_file, homePath);
-  // The tab carries the file being reviewed, so several projects open at once stay
-  // apart in the browser's tab strip.
-  document.title = fileName(state.artifact.main_file);
-  $("#download-pptx-btn").hidden = state.artifact.layout !== "slides";
-}
+const marks = createPageMarks({
+  marked: () => markedComments,
+  anchors,
+  ringed: () => panel.ringed(),
+  showComment: (id) => places.openComment(id),
+  staleChanged: () => panel.renderComments(),
+});
 
-// The PDF and the pptx are built on the server while their button shows it is busy and
-// takes no second press; the file then downloads. A plain link would leave the button
-// silent for the seconds the export takes, and each further press would start another
-// export and download another copy.
-async function download(button, format) {
-  if (button.disabled) return;
-  const label = button.dataset.label;
-  const title = button.dataset.title ??= button.title;
-  button.disabled = true;
-  button.classList.add("busy");
-  button.textContent = `${label}\u2026`;
-  try {
-    const response = await fetch(`${artifactBase()}/download/${format}`);
-    if (!response.ok) throw new Error(await response.text());
-    const blob = await response.blob();
-    const name = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") || "")?.[1] || `${format}.${format}`;
-    const url = URL.createObjectURL(blob);
-    const link = h("a", { href: url, download: name });
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-    button.textContent = label;
-  } catch (error) {
-    // A 404 on the pptx means the review server predates its export: restart the MCP process.
-    button.textContent = `${label} failed`;
-    button.title = String(error.message || error);
-    setTimeout(() => { button.textContent = label; button.title = title; }, 6000);
-  } finally {
-    button.disabled = false;
-    button.classList.remove("busy");
-  }
-}
+const selection = createSelection({
+  base: project.base,
+  captureTextAnchor: anchors.captureTextAnchor,
+  pinching: zoom.pinching,
+  inFullscreen: presentation.inFullscreen,
+  commentOn,
+  showInSource: (place) => places.showInSource(place),
+});
 
-async function responseError(response) {
-  const text = await response.text();
-  return text || `${response.status} ${response.statusText}`;
-}
+const area = createArea({ layer: marks.layer, commentOn });
 
-async function fetchJson(path, options) {
-  const response = await fetch(path, options);
-  if (!response.ok) throw new Error(await responseError(response));
-  return response.status === 204 ? null : response.json();
-}
+const search = createSearch({
+  showing: presentation.showing,
+  current: pages.current,
+  movePage: presentation.movePage,
+  frameOf: marks.frameOf,
+});
 
-function setSourceStatus(text, kind = "") {
-  const status = $("#source-status");
-  status.textContent = text;
-  status.classList.toggle("dirty", kind === "dirty");
-  status.classList.toggle("conflict", kind === "conflict");
-}
+const thumbs = createThumbs({ project, pages, searchKey: search.handleKeydown });
 
-function clearSourceCommentMarkers() {
-  if (state.editor === null) return;
-  for (const marker of state.sourceCommentMarkers) state.editor.session.removeMarker(marker);
-  for (const row of state.sourceCommentRows) {
-    state.editor.session.removeGutterDecoration(row, "source-comment-line");
-    state.editor.session.removeGutterDecoration(row, "source-suggestion-line");
-  }
-  state.sourceCommentMarkers = [];
-  state.sourceCommentSpans = [];
-  state.sourceCommentRows.clear();
-  state.sourceCommentsByRow.clear();
-}
+const layout = createLayoutResults({ project, showing: presentation.showing });
 
-function updateSourceCommentButton() {
-  const selected = Boolean(state.editor?.getSelectedText().trim());
-  const button = $("#source-comment-btn");
-  button.disabled = !selected || state.sourceDirty;
-  button.title = state.sourceDirty
-    ? "Save source before commenting"
-    : selected ? "Comment on the selected source text (Ctrl+Alt+M, gc with Vim keys)" : "Select source text to comment";
-  $("#source-page-btn").disabled = !selected;
-}
+const scripts = createScripts({ changed: () => search.refresh() });
 
-// The words selected in the editor, shown where the Preview shows them, beside the editor in
-// Split: the server gives the text the selection shows, the page finds it, scrolls to it and
-// marks it a moment.
-async function showSourceSelectionOnPage() {
-  if (!state.editor?.getSelectedText().trim()) return;
-  const range = state.editor.getSelectionRange();
-  const shown = await fetchJson(`${artifactBase()}/source-shown`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      line_start: range.start.row + 1, column_start: range.start.column,
-      line_end: range.end.row + 1, column_end: range.end.column,
-    }),
-  });
-  if (state.view !== "split") {
-    await setWorkspaceView("split");
-    // The Preview takes its new width before it is scrolled and marked.
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  }
-  const found = anchors.rangeFromShown(shown);
-  if (found === null) throw new Error("the pages do not show these words or the words around them");
-  const node = found.startContainer;
-  // At once: a smooth scroll in Safari came late, or stopped short, when one place followed
-  // another.
-  (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement)
-    ?.scrollIntoView({ behavior: "instant", block: "center" });
-  // Drawn with the comments' marks, so a redraw as the Preview takes its width keeps it.
-  state.shownRange = found;
-  scheduleHighlights();
-  setTimeout(() => {
-    if (state.shownRange !== found) return;
-    state.shownRange = null;
-    scheduleHighlights();
-  }, 2000);
-}
+const source = createSourceEditor({
+  base: project.base,
+  cursorAt: () => settings.cursorAt(),
+  marked: () => markedComments,
+  commentOn,
+  refreshComments: () => panel.refreshComments(),
+  showComment: (id) => places.takeComment(id),
+  focusComment: (id) => places.openComment(id),
+  showWherePrinted: (shown) => places.showWherePrinted(shown),
+});
 
-function setSourceDirty(dirty) {
-  state.sourceDirty = dirty;
-  $("#source-save-btn").disabled = !dirty;
-  if (dirty) {
-    setSourceStatus("Unsaved", "dirty");
-    clearSourceCommentMarkers();
-  }
-  updateSourceCommentButton();
-}
+const workspace = createWorkspace({ source, refit });
 
-function syncSourceCommentMarkers() {
-  if (state.editor === null) return;
-  clearSourceCommentMarkers();
-  if (state.sourcePath === null || state.sourceDirty) return;
-  const Range = window.ace.require("ace/range").Range;
-  for (const comment of state.markedComments) {
-    const anchor = comment.anchor;
-    if (comment.status !== "open" || anchor.kind !== "source"
-        || anchor.file !== state.sourcePath || anchor.stale) continue;
-    const firstRow = anchor.line_start - 1;
-    const lastRow = anchor.line_end - 1;
-    state.sourceCommentMarkers.push(state.editor.session.addMarker(
-      new Range(firstRow, anchor.column_start, lastRow, anchor.column_end),
-      "source-comment-highlight",
-      "text",
-      false,
-    ));
-    state.sourceCommentSpans.push({ range: new Range(firstRow, anchor.column_start, lastRow, anchor.column_end), comment });
-    state.editor.session.addGutterDecoration(firstRow, "source-comment-line");
-    state.sourceCommentRows.add(firstRow);
-    const comments = state.sourceCommentsByRow.get(firstRow) ?? [];
-    comments.push(comment);
-    state.sourceCommentsByRow.set(firstRow, comments);
-  }
-  // The text an open proposal would replace, whatever its comment points at: a comment on
-  // the rendered page proposes in the source too, and the editor marks the same text the
-  // card's − line shows. The server found each piece once in the file, so a piece an edit
-  // has since moved or duplicated is left unmarked rather than marked wrongly.
-  const text = state.editor.session.getValue();
-  for (const comment of state.markedComments) {
-    const suggestion = comment.suggestion;
-    if (comment.status !== "open" || suggestion === undefined || suggestion.file !== state.sourcePath) continue;
-    for (const change of suggestion.changes) {
-      const at = text.indexOf(change.old);
-      if (at < 0 || text.indexOf(change.old, at + 1) >= 0) continue;
-      const start = state.editor.session.doc.indexToPosition(at);
-      const end = state.editor.session.doc.indexToPosition(at + change.old.length);
-      state.sourceCommentMarkers.push(state.editor.session.addMarker(
-        new Range(start.row, start.column, end.row, end.column),
-        "source-suggestion-highlight",
-        "text",
-        false,
-      ));
-      state.sourceCommentSpans.push({ range: new Range(start.row, start.column, end.row, end.column), comment });
-      state.editor.session.addGutterDecoration(start.row, "source-comment-line");
-      state.editor.session.addGutterDecoration(start.row, "source-suggestion-line");
-      state.sourceCommentRows.add(start.row);
-      const comments = state.sourceCommentsByRow.get(start.row) ?? [];
-      if (!comments.includes(comment)) comments.push(comment);
-      state.sourceCommentsByRow.set(start.row, comments);
-    }
-  }
-}
+const places = createPlaces({
+  workspace,
+  source,
+  marks,
+  anchors,
+  showComment: (id) => panel.showComment(id),
+  showTab: (name) => strip.show(name),
+});
 
-// The editor's type size, kept for next time. Stepped by a pixel between 10 and 28.
-function sourceFontSize() {
-  const stored = Number(localStorage.getItem("htmlMcpSourceFontSize"));
-  return stored >= 10 && stored <= 28 ? stored : 13;
-}
+const deckSetup = createDeckSetup({
+  project, zoom, scripts, presentation, pages, area, selection, search, marks, layout, dragging: workspace.dragging,
+});
 
-function stepSourceFontSize(step) {
-  const size = Math.min(28, Math.max(10, sourceFontSize() + step));
-  localStorage.setItem("htmlMcpSourceFontSize", String(size));
-  state.editor?.setFontSize(`${size}px`);
-}
+const deck = createDeck({
+  project,
+  showing: presentation.showing,
+  pagesChanged: presentation.pagesChanged,
+  fit: zoom.fit,
+  loaded: deckSetup.loaded,
+  shown: deckSetup.shown,
+  watchLayout: layout.watch,
+  following: thumbs.follow,
+  hideSelection: selection.hide,
+  recalled: reloadPlace.recalled,
+});
 
-// Long lines wrap unless the viewer turned it off, and Vim keys are off unless the viewer
-// turned them on, each kept for next time. With Vim keys, :w saves.
-function sourceWraps() {
-  return localStorage.getItem("htmlMcpSourceWrap") !== "0";
-}
+const tabs = createArtifactTabs({ project, select: selectArtifact });
 
-function applySourceWrap() {
-  const on = sourceWraps();
-  $("#source-wrap-btn").classList.toggle("active", on);
-  $("#source-wrap-btn").setAttribute("aria-pressed", String(on));
-  state.editor?.session.setUseWrapMode(on);
-}
+// ----- The parts shared with the other review pages -----
 
-function vimKeys() {
-  return localStorage.getItem("htmlMcpVimKeys") === "1";
-}
-
-function applyVimKeys() {
-  const on = vimKeys();
-  $("#source-vim-btn").classList.toggle("active", on);
-  $("#source-vim-btn").setAttribute("aria-pressed", String(on));
-  state.editor?.setKeyboardHandler(on ? "ace/keyboard/vim" : null, () => {
-    // Leaving Vim keys keeps Vim's block cursor, under which a click takes the character
-    // before the one clicked.
-    if (!on) {
-      state.editor.renderer.$blockCursor = false;
-      state.editor.textInput.getElement().readOnly = false;
-      return;
-    }
-    defineVimCommands(window.ace.require("ace/keyboard/vim").Vim);
-    holdKeysOutsideInsert(state.editor);
-    syncYanksToClipboard(state.editor);
-    keepInputAtCursor(state.editor);
-  });
-}
-
-// Outside Insert mode Vim moves the editor's hidden input off to the editor's left, out of
-// view, and Safari, bringing it into view at each key, made the text shake and flicker as
-// the cursor moved. The input stays at the cursor, inside the editor, in every mode. Ace
-// keeps it away from the cursor on iOS itself, which a touch screen leaves alone.
-function keepInputAtCursor(editor) {
-  if (window.matchMedia("(pointer: coarse)").matches) return;
-  const keep = () => {
-    editor.renderer.$keepTextAreaAtCursor = true;
-    editor.renderer.$moveTextAreaToCursor();
-  };
-  editor.state.cm.on("vim-mode-change", keep);
-  keep();
-}
-
-// What Vim yanks, deletes or changes goes to the system clipboard too, so it pastes in
-// another program. A browser lets a page write the clipboard only on localhost or https.
-function syncYanksToClipboard(editor) {
-  const Vim = window.ace.require("ace/keyboard/vim").Vim;
-  const unnamed = () => Vim.getRegisterController().getRegister('"').toString();
-  let last = unnamed();
-  // Vim says a command is done as it starts on it, before the text reaches the register.
-  editor.state.cm.on("vim-command-done", () => setTimeout(() => {
-    const text = unnamed();
-    if (text === last) return;
-    last = text;
-    navigator.clipboard?.writeText(text).catch(() => {});
-  }));
-}
-
-// macOS answers a letter held down in a text field with its accent menu rather than a
-// repeat, so j held to run down the file opened the menu. Outside Insert mode the editor's
-// input field is read-only, which the menu leaves alone, so a held key repeats. A touch
-// screen keeps the field writable: its on-screen keyboard opens only for one.
-function holdKeysOutsideInsert(editor) {
-  if (window.matchMedia("(pointer: coarse)").matches) return;
-  const cm = editor.state.cm;
-  const field = editor.textInput.getElement();
-  const sync = () => { field.readOnly = !cm.state.vim.insertMode; };
-  cm.on("vim-mode-change", sync);
-  sync();
-}
-
-// :w saves, and gc comments on what a motion or the visual selection covers, as Vim's
-// operators do: gcc the line, gcip the paragraph, gc on a selection the selection.
-let vimCommandsDefined = false;
-
-function defineVimCommands(Vim) {
-  if (vimCommandsDefined) return;
-  vimCommandsDefined = true;
-  // jj typed quickly leaves Insert mode, as Escape and Ctrl+[ do.
-  Vim.map("jj", "<Esc>", "insert");
-  Vim.defineEx("write", "w", () =>
-    saveSource().catch((error) => alert(`Could not save: ${error.message}`)));
-  // What an operator covers, selected in the editor; its start is where the cursor ends.
-  const select = (ranges) => {
-    const ends = [ranges[0].anchor, ranges[0].head].sort((a, b) => a.line - b.line || a.ch - b.ch);
-    const [start] = ends;
-    let [, end] = ends;
-    // A line's operator ends at the start of the next line, which is not part of it.
-    if (end.ch === 0 && end.line > start.line) {
-      end = { line: end.line - 1, ch: state.editor.session.getLine(end.line - 1).length };
-    }
-    const Range = window.ace.require("ace/range").Range;
-    state.editor.selection.setRange(new Range(start.line, start.ch, end.line, end.ch));
-    return start;
-  };
-  Vim.defineOperator("sourceComment", (cm, args, ranges) => {
-    const start = select(ranges);
-    commentSourceSelection();
-    return start;
-  });
-  Vim.mapCommand("gc", "operator", "sourceComment");
-  Vim.defineAction("showCommentAtCursor", () => showCommentAtCursor());
-  Vim.mapCommand("K", "action", "showCommentAtCursor", {}, { context: "normal" });
-  // gs shows what a motion or the selection covers in the Preview, as → Preview does: gss
-  // the line, gsip the paragraph.
-  Vim.defineOperator("showInPreview", (cm, args, ranges) => {
-    const start = select(ranges);
-    showSourceSelectionOnPage().catch((error) => alert(`Could not show it in the Preview: ${error.message}`));
-    return start;
-  });
-  Vim.mapCommand("gs", "operator", "showInPreview");
-}
-
-// With Vim keys and an input method on, as with Korean, a key outside Insert mode reaches
-// the page as the method's own event and then as the letter it composed, and Vim knew
-// neither: the command was lost and the letter went into the text. The key is read by
-// where it sits on the keyboard instead, and the letter that follows is dropped.
-function vimCommandMode() {
-  const vim = state.editor?.state?.cm?.state.vim;
-  return Boolean(state.editor?.$vimModeHandler && vim && !vim.insertMode);
-}
-
-function attachVimInputMethod(editor) {
-  editor.container.addEventListener("keydown", (event) => {
-    const field = editor.textInput.getElement();
-    if (!vimCommandMode() || event.target !== field || event.ctrlKey || event.metaKey || event.altKey) return;
-    let key = null;
-    if (event.isComposing || event.key === "Process" || COMPOSED.test(event.key)) {
-      key = keyByPosition(event) ?? null;
-    } else if (field.readOnly && event.key.length === 1 && event.key !== " ") {
-      // A read-only field (below) takes no typing, so a character key reaches Vim here,
-      // where Vim otherwise reads it from the typing. Space is a named key Vim reads itself.
-      key = event.key;
-    }
-    if (key === null) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    window.ace.require("ace/keyboard/vim").Vim.handleKey(editor.state.cm, key, "user");
-  }, true);
-  // Safari starts a composition at every key while a Korean method is on, and Ace answers
-  // one outside Insert mode by cancelling it, which takes the focus off the editor and back:
-  // the cursor and selection flickered at each key. The keys are read above, so outside
-  // Insert mode the composition never reaches Ace.
-  for (const kind of ["compositionstart", "compositionupdate", "compositionend"]) {
-    editor.container.addEventListener(kind, (event) => {
-      if (vimCommandMode() && event.target === editor.textInput.getElement()) event.stopImmediatePropagation();
-    }, true);
-  }
-  const typed = editor.onTextInput.bind(editor);
-  editor.onTextInput = (text, ...rest) => {
-    if (vimCommandMode() && COMPOSED.test(text)) return;
-    typed(text, ...rest);
-  };
-}
-
-function darkTheme() {
-  return document.documentElement.dataset.theme === "dark";
-}
-
-function editorTheme() {
-  return darkTheme() ? "ace/theme/one_dark" : "ace/theme/textmate";
-}
-
-function markFrameTheme(frame) {
-  try {
-    const root = frame.contentDocument?.documentElement;
-    if (root) root.dataset.htmlMcpTheme = document.documentElement.dataset.theme;
-  } catch {
-    // A frame from elsewhere keeps its own look.
-  }
-}
-
-// The theme, the text size, the key that sends a comment, the key letters and the editor's
-// cursor, as Settings keeps them. The review page's own parts follow the theme; the artifact
-// is drawn as written, on a ground that follows it.
+// The theme, the text size, the key that sends a comment, the key letters and the editor's cursor,
+// as Settings keeps them. The review page's own parts follow the theme; the artifact is drawn as
+// written, on a ground that follows it.
 const settings = createSettings({
   prefix: PREFIX,
   onTheme: () => {
-    state.editor?.setTheme(editorTheme());
-    for (const frame of document.querySelectorAll("iframe")) markFrameTheme(frame);
+    source.setTheme();
+    markFrameThemes();
   },
   onLetters: (shown) => shown || panel.keys.showLetters(false),
-  onCursor: () => holdCursorLine(),
+  onCursor: () => source.holdCursorLine(),
 });
 
-// The cursor's line held a third or a half of the way down the editor, as the comment keys
-// hold the ringed card in the list, when the viewer chose it in Settings: the keys move the
-// text under the cursor and the eyes stay where they are. A click or a drag leaves the text
-// where it is. The first lines stay at the top and the last ones at the bottom, with no room
-// made above or below the text to hold them there.
-function holdCursorLine() {
-  const editor = state.editor;
-  const at = settings.cursorAt();
-  if (!editor || at === undefined || state.editorPointing) return;
-  const { row, column } = editor.getCursorPosition();
-  const top = editor.session.documentToScreenRow(row, column) * editor.renderer.lineHeight;
-  editor.session.setScrollTop(Math.max(0, top - editor.renderer.scroller.clientHeight * at));
-}
-
-// K with Vim keys, or Ctrl+Alt+K (Cmd+Option+K), opens in the comments the comment the
-// cursor is on, as a click on its mark beside the line does: the narrowest when several
-// cover the cursor, else one on the cursor's line.
-function showCommentAtCursor() {
-  const { row, column } = state.editor.getCursorPosition();
-  const size = ({ range }) => (range.end.row - range.start.row) * 1e6 + range.end.column - range.start.column;
-  const covering = state.sourceCommentSpans.filter(({ range }) => range.contains(row, column)).sort((a, b) => size(a) - size(b));
-  const chosen = covering[0]?.comment ?? state.sourceCommentsByRow.get(row)?.[0];
-  if (chosen === undefined) {
-    setSourceStatus("No comment here");
-    return;
-  }
-  // The keys go with it to the list, shown first, where K takes them back to these words.
-  state.editor.blur();
-  strip.show("comments");
-  focusComment(chosen.id).catch((error) => console.error(error));
-  $("#comments-list").focus({ preventScroll: true });
-}
-
-// Ctrl+Alt+M (Cmd+Option+M), or gc with Vim keys. Comments wait for the file to be saved,
-// as the button does, and the bar says so.
-function commentSourceSelection() {
-  if (state.sourceDirty) {
-    setSourceStatus("Save before commenting", "dirty");
-    return;
-  }
-  openSourceCommentCompose();
-}
-
-async function initializeSourceEditor() {
-  if (state.editor !== null) return;
-  if (window.ace === undefined) throw new Error("The source editor did not load");
-  window.ace.config.set("basePath", `/static/${servedStatic()}/ace`);
-  const editor = window.ace.edit("source-editor");
-  editor.setTheme(editorTheme());
-  // Ace restarts its cursor's blinking animation at every move, and Safari redrew the whole
-  // editor each time, so the text flickered as the cursor moved. In Safari the cursor holds
-  // steady instead. Every browser on an iPhone or iPad is Safari underneath.
-  if (/iPhone|iPad|iPod/.test(navigator.userAgent)
-    || /^((?!chrome|chromium|android|edg).)*safari/i.test(navigator.userAgent)) {
-    editor.container.classList.add("steady-cursor");
-  }
-  editor.session.setUseWorker(false);
-  editor.session.setMode("ace/mode/html");
-  editor.session.setUseWrapMode(sourceWraps());
-  editor.setShowPrintMargin(false);
-  editor.setOptions({ fontSize: `${sourceFontSize()}px`, scrollPastEnd: 0.25 });
-  editor.session.on("change", () => {
-    if (!state.sourceLoading) setSourceDirty(true);
-  });
-  editor.selection.on("changeSelection", updateSourceCommentButton);
-  // A press in the text or beside it moves the cursor itself, before the editor does.
-  for (const name of ["mousedown", "guttermousedown"]) editor.on(name, () => { state.editorPointing = true; });
-  document.addEventListener("pointerup", () => { state.editorPointing = false; }, true);
-  editor.selection.on("changeCursor", holdCursorLine);
-  editor.commands.addCommand({
-    name: "saveSource",
-    bindKey: { win: "Ctrl-S", mac: "Command-S" },
-    exec: () => saveSource().catch((error) => alert(`Could not save: ${error.message}`)),
-  });
-  editor.commands.addCommand({
-    name: "showInPreview",
-    bindKey: { win: "Ctrl-Alt-P", mac: "Command-Alt-P" },
-    exec: () => showSourceSelectionOnPage().catch((error) => alert(`Could not show it in the Preview: ${error.message}`)),
-  });
-  editor.commands.addCommand({
-    name: "showCommentAtCursor",
-    bindKey: { win: "Ctrl-Alt-K", mac: "Command-Alt-K" },
-    exec: () => showCommentAtCursor(),
-  });
-  editor.commands.addCommand({
-    name: "commentSource",
-    bindKey: { win: "Ctrl-Alt-M", mac: "Command-Alt-M" },
-    exec: commentSourceSelection,
-  });
-  editor.on("guttermousedown", (event) => {
-    if (event.domEvent.target.classList.contains("source-comment-line")) {
-      const comments = state.sourceCommentsByRow.get(event.getDocumentPosition().row) ?? [];
-      if (comments.length > 0) focusComment(comments[0].id).catch((error) => console.error(error));
-    }
-  });
-  state.editor = editor;
-  attachVimInputMethod(editor);
-  applyVimKeys();
-}
-
-async function loadSource(force = false) {
-  await initializeSourceEditor();
-  if (!force && state.sourcePath !== null) return true;
-  if (state.sourceDirty) {
-    if (!force) {
-      setSourceStatus("Changed on disk · reload", "conflict");
-      return false;
-    }
-    if (!confirm(`Discard unsaved changes to ${state.sourcePath}?`)) return false;
-  }
-  const source = await fetchJson(`${artifactBase()}/source`);
-  // The same file with the same text, as the page's own save comes back from the watcher,
-  // is left as the editor holds it: set again, it lost the reader's cursor and selection a
-  // moment after the save.
-  if (source.path !== state.sourcePath || source.text !== state.editor.getValue()) {
-    state.sourceLoading = true;
-    state.editor.session.setMode("ace/mode/html");
-    state.editor.setValue(source.text, -1);
-    state.editor.session.getUndoManager().reset();
-    state.sourceLoading = false;
-  }
-  state.sourcePath = source.path;
-  state.sourceRevision = source.revision;
-  state.sourceDirty = false;
-  // The file's name alone, so the bar keeps its buttons on one row; the path is its title.
-  $("#source-file").textContent = fileName(source.path);
-  $("#source-file").title = displayPath(source.path, homePath);
-  $("#source-save-btn").disabled = true;
-  $("#source-reload-btn").disabled = false;
-  setSourceStatus("Saved");
-  syncSourceCommentMarkers();
-  updateSourceCommentButton();
-  state.editor.resize();
-  return true;
-}
-
-async function saveSource() {
-  if (state.editor === null || state.sourcePath === null || !state.sourceDirty) return;
-  setSourceStatus("Saving…");
-  const response = await fetch(`${artifactBase()}/source`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: state.editor.getValue(), revision: state.sourceRevision }),
-  });
-  if (response.status === 409) {
-    setSourceStatus("Changed on disk · reload", "conflict");
-    throw new Error(await responseError(response));
-  }
-  if (!response.ok) {
-    setSourceStatus("Save failed", "conflict");
-    throw new Error(await responseError(response));
-  }
-  const saved = await response.json();
-  state.sourceRevision = saved.revision;
-  state.sourceDirty = false;
-  $("#source-save-btn").disabled = true;
-  setSourceStatus("Saved");
-  await refreshComments();
-}
-
-function openSourceCommentCompose() {
-  if (state.editor === null || state.sourcePath === null || state.sourceDirty) return;
-  const range = state.editor.getSelectionRange();
-  const quote = state.editor.getSelectedText();
-  if (!quote.trim() || range.isEmpty()) return;
-  // Back in the editor once the comment is sent or dropped, to go on from where it was.
-  $("#compose-dialog").addEventListener("close", () => state.editor.focus(), { once: true });
-  commentOn({
-    kind: "source",
-    file: state.sourcePath,
-    quote,
-    line_start: range.start.row + 1,
-    line_end: range.end.row + 1,
-    column_start: range.start.column,
-    column_end: range.end.column,
-  });
-}
-
-async function setWorkspaceView(view) {
-  if (!["preview", "source", "split"].includes(view)) return;
-  if (view !== "preview") await loadSource(false);
-  state.view = view;
-  const layout = $(".layout");
-  layout.classList.remove("view-preview", "view-source", "view-split");
-  layout.classList.add(`view-${view}`);
-  for (const button of document.querySelectorAll(".view-tab")) {
-    button.classList.toggle("active", button.dataset.view === view);
-  }
-  localStorage.setItem("htmlMcpWorkspaceView", view);
-  requestAnimationFrame(() => {
-    state.editor?.resize();
-    if (view !== "source") {
-      updatePageScale();
-      scheduleHighlights();
-      scheduleLayoutCheck();
-    }
-  });
-}
-
-// A comment's words in the source, selected, the editor taking the keys unless told to leave
-// them where they are.
-async function openSourceLocation(anchor, focus = true) {
-  if (state.view === "preview") await setWorkspaceView("source");
-  else await loadSource(false);
-  if (state.editor === null || state.sourcePath !== anchor.file) return;
-  state.editor.gotoLine(anchor.line_start, anchor.column_start, true);
-  if (!anchor.stale) {
-    const Range = window.ace.require("ace/range").Range;
-    state.editor.selection.setRange(new Range(
-      anchor.line_start - 1,
-      anchor.column_start,
-      anchor.line_end - 1,
-      anchor.column_end,
-    ));
-  }
-  if (focus) state.editor.focus();
-}
-
-function frameWindow() {
-  return $("#artifact-frame").contentWindow;
-}
-
-function frameDocument() {
-  return $("#artifact-frame").contentDocument;
-}
-
-function artifactPages() {
-  return Array.from(frameDocument().querySelectorAll("body > main.pages > section.page"));
-}
-
-function pageTitle(page, index) {
-  const heading = page.querySelector("h1, h2, h3");
-  const title = page.dataset.title || heading?.textContent || "";
-  return title.trim().replace(/\s+/g, " ") || `Page ${index + 1}`;
-}
-
-function visiblePageNumber() {
-  const pages = artifactPages();
-  if (state.slideShow) {
-    return pages.length === 0 ? null : state.currentPage || 1;
-  }
-  const viewportHeight = frameWindow().innerHeight;
-  let visibleNumber = pages.length === 0 ? null : 1;
-  let visibleHeight = -1;
-  for (const [index, page] of pages.entries()) {
-    const rect = page.getBoundingClientRect();
-    const height = Math.max(0, Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0));
-    if (height > visibleHeight) {
-      visibleHeight = height;
-      visibleNumber = index + 1;
-    }
-  }
-  return visibleNumber;
-}
-
-function jumpToPage(number) {
-  artifactPages()[number - 1]?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-function renderPages() {
-  const list = $("#pages-list");
-  clear(list);
-  for (const [index, page] of artifactPages().entries()) {
-    const number = index + 1;
-    const title = pageTitle(page, index);
-    list.appendChild(h("div", { class: `page-nav-row${state.currentPage === number ? " active" : ""}` },
-      h("button", {
-        type: "button",
-        class: "page-nav-item",
-        data: { page: String(number) },
-        title: `Go to page ${number}`,
-        onclick: () => jumpToPage(number),
-      },
-      h("span", { class: "page-number", text: String(number) }),
-      h("span", { class: "page-title", text: title })),
-      h("button", { type: "button", class: "comment-page-btn", text: "+ comment",
-                    onclick: () => commentOn({ kind: "page", number, title }) })));
-  }
-}
-
-// Slide previews: a second frame of the same artifact, drawn small in a column at the
-// pane's left, so a preview is the page itself. A click goes to that page, and the page
-// being read is marked and kept in view.
-const thumbsOpen = () => $("#artifact-pane").classList.contains("thumbs-open");
-// How many previews stay wholly in sight above and below the marked one. Counted in
-// previews rather than as a share of the column, so a short screen and a tall one both
-// show the same neighbours.
-const THUMB_NEIGHBOURS = 2;
-// The column follows the page being read by moving its previews, not by scrolling. Safari
-// did not draw a frame's scroll set from script while the deck was moving, so in traces the
-// column's scroll position kept up (y=375>252) while the column stayed drawn pages behind
-// and the marked preview slid off its top. A transform is drawn with the frame's next paint.
-// The distance moved is handed to the column's own scroll as soon as the reader turns to the
-// column, so it scrolls on from what is shown.
-let thumbShift = 0;
-
-function setThumbsOpen(open) {
-  $("#artifact-pane").classList.toggle("thumbs-open", open);
-  $("#thumbs-btn").classList.toggle("active", open);
-  $("#thumbs-btn").setAttribute("aria-pressed", String(open));
-  localStorage.setItem("htmlMcpThumbsOpen", open ? "1" : "0");
-  if (open) loadThumbs();
-}
-
-function loadThumbs() {
-  const frame = $("#thumbs-frame");
-  const wanted = `${state.alias}@${state.revision}`;
-  if (frame.dataset.loaded === wanted) {
-    markCurrentThumb();
-    return;
-  }
-  // An alias may hold an @ itself: the revision is what follows the last one.
-  const loaded = frame.dataset.loaded;
-  const sameArtifact = loaded !== undefined && loaded.slice(0, loaded.lastIndexOf("@")) === state.alias;
-  frame.dataset.loaded = wanted;
-  const url = artifactUrl();
-  const shown = frame.contentDocument?.URL;
-  if (shown === undefined || shown === "about:blank") {
-    showInFrame(frame, url);
-    return;
-  }
-  // The previews of the artifact they show change as the deck does, see updateFrame.
-  const canPatch = () => thumbsBehind === null && frame.id === "thumbs-frame"
-    && frame.contentDocument?.readyState === "complete";
-  if (sameArtifact && canPatch()) {
-    updateFrame(frame, url, canPatch, (doc, previous, next) => {
-      if (changePages(doc, previous, next) === null) return false;
-      markCurrentThumb();
-      return true;
-    }, () => loadThumbsBehind(url));
-    return;
-  }
-  loadThumbsBehind(url);
-}
-
-// As with the deck, a column already showing previews keeps them in view while the next
-// revision loads whole under it: loaded in place, the column went blank on every edit. And
-// as with the deck, a frame still loading keeps the latest address for when its load ends.
-function loadThumbsBehind(url) {
-  const frame = $("#thumbs-frame");
-  if (thumbsBehind === null) {
-    thumbsBehind = document.createElement("iframe");
-    thumbsBehind.title = frame.title;
-    thumbsBehind.tabIndex = -1;
-    thumbsBehind.toggleAttribute("inert", true);
-    thumbsBehind.src = url;
-    frame.after(thumbsBehind);
-    const next = thumbsBehind;
-    next.addEventListener("load", () => {
-      if (next.contentDocument !== null && next.contentDocument.URL !== "about:blank") revealThumbs(next);
-    });
-  }
-  thumbsBehind.dataset.wanted = new URL(url, location.href).href;
-}
-
-let thumbsBehind = null;
-
-// The loaded previews take the column at the scroll the old ones had, set up as any load is,
-// and the old frame covers them until two frames have been drawn.
-async function revealThumbs(next) {
-  if (next.contentDocument.URL !== next.dataset.wanted) {
-    showInFrame(next, next.dataset.wanted);
-    return;
-  }
-  thumbsBehind = null;
-  const old = $("#thumbs-frame");
-  const at = old.contentWindow.scrollY + thumbShift;
-  old.removeAttribute("id");
-  old.toggleAttribute("inert", true);
-  old.classList.add("covering");
-  next.id = "thumbs-frame";
-  next.dataset.loaded = old.dataset.loaded;
-  next.toggleAttribute("inert", false);
-  // Scaled first: the old column's place, as drawn, means the same previews only at the
-  // scale they are drawn at. The column then stays where the reader left it, as drawn, so
-  // an edit does not pull a column the reader scrolled back to the current page.
-  installThumbs();
-  shiftThumbs(0);
-  next.contentWindow.scrollTo(0, at);
-  const win = next.contentWindow;
-  await next.contentDocument.fonts.ready;
-  await new Promise((done) => win.requestAnimationFrame(() => win.requestAnimationFrame(done)));
-  old.remove();
-  // As with the deck: Safari left the column empty until the reader clicked in it, which
-  // scrolls it, and then drew the previews at once.
-  scrollToRepaint(win);
-}
-
-function thumbPages() {
-  const doc = $("#thumbs-frame").contentDocument;
-  return doc === null ? [] : Array.from(doc.querySelectorAll("body > main.pages > section.page"));
-}
-
-// The previews take the column's width, less a margin: measured, since the column can be
-// laid out after the frame loads.
-function scaleThumbs() {
-  const doc = $("#thumbs-frame").contentDocument;
-  const first = thumbPages()[0];
-  if (doc === null || first === undefined || doc.documentElement.clientWidth <= 24) return;
-  doc.documentElement.style.setProperty(
-    "--html-mcp-page-scale", String((doc.documentElement.clientWidth - 24) / first.offsetWidth));
-}
-
-function installThumbs() {
-  const doc = $("#thumbs-frame").contentDocument;
-  if (doc === null || thumbPages().length === 0) return;
-  doc.documentElement.dataset.htmlMcpScriptsHidden = "";
-  scaleThumbs();
-  doc.defaultView.addEventListener("resize", scaleThumbs);
-  const style = doc.createElement("style");
-  style.textContent = `
-    body > main.pages > section.page { cursor: pointer; }
-    body > main.pages > section.page * { pointer-events: none !important; }
-    body > main.pages > section.page.html-mcp-thumb-current {
-      outline: calc(3px / var(--html-mcp-page-scale)) solid #e0955a !important;
-    }`;
-  doc.head.appendChild(style);
-  // A click marks its preview at once and shows that page. Scrolled there smoothly, the deck
-  // passed every page between, and the mark followed the deck down the column through each.
-  doc.addEventListener("click", (event) => {
-    const page = event.target.closest?.("body > main.pages > section.page");
-    if (!page) return;
-    const number = thumbPages().indexOf(page) + 1;
-    state.currentPage = number;
-    markCurrentThumb();
-    artifactPages()[number - 1]?.scrollIntoView({ behavior: "instant", block: "start" });
-  });
-  doc.addEventListener("keydown", handleThumbKey);
-  doc.addEventListener("keydown", search.handleKeydown, true);
-  // A new document starts unmoved. Not passive, so the browser waits for the hand-over
-  // before it scrolls the column on a wheel or a touch.
-  thumbShift = 0;
-  for (const kind of ["wheel", "touchstart", "pointerdown", "keydown"]) {
-    doc.addEventListener(kind, settleThumbShift, { capture: true, passive: false });
-  }
-  // Under ?trace, every scroll the column takes, so one the viewer did not ask for shows
-  // as a line of its own beside the thumb lines.
-  doc.defaultView.addEventListener("scroll", () => {
-    window.htmlMcpTrace?.(`thumb-scroll y=${Math.round(doc.defaultView.scrollY)}`);
-  }, { passive: true });
-  markCurrentThumb();
-}
-
-// With the column focused, the arrow and page keys step the deck a page at a time, and Home
-// and End go to its ends. A run of presses counts from where the last one went: the deck's
-// own page is read from its scroll a frame later, and a quick second press read it unchanged.
-let thumbKey = null;
-
-function handleThumbKey(event) {
-  if (event.metaKey || event.ctrlKey || event.altKey) return;
-  const steps = { ArrowUp: -1, ArrowLeft: -1, PageUp: -1, ArrowDown: 1, ArrowRight: 1, PageDown: 1 };
-  const count = artifactPages().length;
-  if (count === 0) return;
-  let page;
-  if (event.key === "Home") page = 1;
-  else if (event.key === "End") page = count;
-  else if (event.key in steps) {
-    const recent = thumbKey !== null && performance.now() - thumbKey.time < 500;
-    page = Math.min(Math.max((recent ? thumbKey.page : state.currentPage || 1) + steps[event.key], 1), count);
-  } else return;
-  event.preventDefault();
-  thumbKey = { page, time: performance.now() };
-  artifactPages()[page - 1].scrollIntoView({ behavior: "instant", block: "start" });
-}
-
-function shiftThumbs(shift) {
-  thumbShift = shift;
-  const holder = $("#thumbs-frame").contentDocument?.querySelector("body > main.pages");
-  if (holder) holder.style.transform = shift === 0 ? "" : `translateY(${-shift}px)`;
-}
-
-function settleThumbShift() {
-  const win = $("#thumbs-frame").contentWindow;
-  if (thumbShift === 0 || win === null) return;
-  const shown = win.scrollY + thumbShift;
-  shiftThumbs(0);
-  win.scrollTo(0, shown);
-  window.htmlMcpTrace?.(`thumb-settle y=${Math.round(shown)}`);
-}
-
-function markCurrentThumb() {
-  if (!thumbsOpen()) return;
-  const pages = thumbPages();
-  for (const [index, page] of pages.entries()) {
-    page.classList.toggle("html-mcp-thumb-current", index + 1 === state.currentPage);
-  }
-  // The marked preview stays a margin inside the column, not at its edge: scrolled to the
-  // nearest edge, it sat at the top whenever the deck was read upward, and the previews of
-  // the pages just above it were out of sight.
-  const current = pages[state.currentPage - 1];
-  const win = $("#thumbs-frame").contentWindow;
-  if (current === undefined || win === null) {
-    window.htmlMcpTrace?.(`thumb p=${state.currentPage}/${pages.length} not in the column`);
-    return;
-  }
-  const box = current.getBoundingClientRect();
-  // One preview's step down the column, gap included. A column too short for the
-  // neighbours on both sides keeps the marked preview in its middle instead.
-  const step = pages.length > 1 ? pages[1].getBoundingClientRect().top - pages[0].getBoundingClientRect().top : box.height;
-  const margin = Math.min(THUMB_NEIGHBOURS * step, (win.innerHeight - box.height) / 2);
-  // Where the column is drawn from, and how far it may go: the last preview's bottom, plus
-  // the body's padding, ends it. Boxes are read as drawn, so they include the shift.
-  const shown = win.scrollY + thumbShift;
-  const end = Math.max(0, pages[pages.length - 1].getBoundingClientRect().bottom + shown + 8 - win.innerHeight);
-  let wanted = shown;
-  if (box.top < margin) wanted = shown + box.top - margin;
-  else if (box.bottom > win.innerHeight - margin) wanted = shown + box.bottom - (win.innerHeight - margin);
-  wanted = Math.min(Math.max(wanted, 0), end);
-  if (wanted !== shown) shiftThumbs(wanted - win.scrollY);
-  // Under ?trace, what the column did for this page: the preview's box before the move,
-  // the margin kept, and where the column was drawn from before and after, with the
-  // column's own scroll and the frame's state.
-  window.htmlMcpTrace?.(`thumb p=${state.currentPage}/${pages.length} box=${Math.round(box.top)},${Math.round(box.bottom)}`
-    + ` in=${win.innerHeight} m=${Math.round(margin)} y=${Math.round(shown)}>${Math.round(wanted)} s=${Math.round(win.scrollY)}`
-    + ` ${win.document.readyState} sc=${win.document.documentElement.style.getPropertyValue("--html-mcp-page-scale") || "-"}`);
-}
-
-function updateCurrentPage() {
-  const number = visiblePageNumber();
-  if (number === state.currentPage) return;
-  state.currentPage = number;
-  if (state.slideShow) {
-    for (const [index, page] of artifactPages().entries()) {
-      page.classList.toggle("html-mcp-current-page", index + 1 === state.currentPage);
-    }
-    updatePresentationControls();
-  }
-  renderPages();
-  markCurrentThumb();
-}
-
-function scheduleCurrentPage() {
-  const win = frameWindow();
-  if (state.pageFrame !== null) win.cancelAnimationFrame(state.pageFrame);
-  state.pageFrame = win.requestAnimationFrame(() => {
-    state.pageFrame = null;
-    updateCurrentPage();
-  });
-}
-
-function installArtifactLayout() {
-  const doc = frameDocument();
-  if (doc.documentElement.dataset.htmlMcpLayout !== state.artifact.layout) {
-    throw new Error("artifact layout does not match project configuration");
-  }
-  updatePageScale();
-}
-
-function updatePageScale() {
-  const doc = frameDocument();
-  const page = state.slideShow
-    ? doc.querySelector("body > main.pages > section.page.html-mcp-current-page")
-    : doc.querySelector("body > main.pages > section.page");
-  if (page === null) return;
-  // The width the page is actually given, measured rather than guessed from the window:
-  // the guess put a phone's margin at 8px where the stylesheet spends 48, so the page was
-  // fitted 40px too wide and hung off the right while the left kept its margin.
-  const holder = page.parentElement;
-  const availableWidth = holder.clientWidth || frameWindow().innerWidth;
-  const widthScale = availableWidth / page.offsetWidth;
-  const fitted = state.slideShow
-    ? Math.min(widthScale, frameWindow().innerHeight / page.offsetHeight)
-    : Math.min(1, widthScale);
-  const scale = state.slideShow ? fitted : fitted * state.artifactZoom;
-  const root = frameDocument().documentElement;
-  root.style.setProperty("--html-mcp-page-scale", String(scale));
-  root.style.setProperty("--html-mcp-zoom", String(state.slideShow ? 1 : state.artifactZoom));
-  // The room a drawn-smaller block gives back depends on its own height, and only the
-  // template knows how tall a script block is.
-  const script = doc.querySelector("body > main.pages > .script-block");
-  if (script !== null) root.style.setProperty("--html-mcp-script-height", `${script.offsetHeight}px`);
-}
-
-let scheduleLayoutCheck = () => {};
-const presentation = createPresentation(state, {
-  $,
-  artifactPages,
-  frameDocument,
-  frameWindow,
-  hideSelectionButton,
-  renderPages,
-  scheduleLayoutCheck: () => scheduleLayoutCheck(),
-  updatePageScale,
-  visiblePageNumber,
-});
-const activateSlideShow = presentation.activate;
-const handlePresentationClick = presentation.handleClick;
-const handlePresentationKeydown = presentation.handleKeydown;
-const handlePresentationPointerDown = presentation.handlePointerDown;
-const handlePresentationPointerUp = presentation.handlePointerUp;
-const handlePresentationWheel = presentation.handleWheel;
-const movePresentationPage = presentation.movePage;
-const syncFullscreenMode = presentation.syncFullscreenMode;
-const toggleFullscreen = presentation.toggleFullscreen;
-const inFullscreen = presentation.inFullscreen;
-const updatePresentationControls = presentation.updateControls;
-
-const layoutChecks = createLayoutChecks({
-  $,
-  artifactBase,
-  artifactPages,
-  clear,
-  fetchJson,
-  frameDocument,
-  frameWindow,
-  h,
-  state,
-});
-scheduleLayoutCheck = layoutChecks.scheduleLayoutCheck;
-const updateLayoutUi = layoutChecks.updateLayoutUi;
-
-const anchors = createAnchors({ frameDocument, state });
-const search = createSearch(state, {
-  $,
-  artifactPages,
-  frameDocument,
-  frameWindow,
-  movePresentationPage,
-  pageFrameFor,
-  selectionRects,
-});
-const captureTextAnchor = anchors.captureTextAnchor;
-const resolveAnchor = anchors.resolveAnchor;
-const lastKnownPlace = anchors.lastKnownPlace;
-
-// The whole of what the reader dragged over, as one range. A drag usually leaves one, but
-// KaTeX draws a fraction or a subscript as an inline table (.vlist is a table-cell), and a
-// drag that crosses those cells puts a browser that selects table cells into cell
-// selection, which leaves one range per cell. Taking the outermost boundaries reads that
-// back as the span it looked like.
-function selectionSpan(selection) {
-  const Range = frameWindow().Range;
-  const span = selection.getRangeAt(0).cloneRange();
-  for (let index = 1; index < selection.rangeCount; index += 1) {
-    const other = selection.getRangeAt(index);
-    if (span.compareBoundaryPoints(Range.START_TO_START, other) > 0) {
-      span.setStart(other.startContainer, other.startOffset);
-    }
-    if (span.compareBoundaryPoints(Range.END_TO_END, other) < 0) {
-      span.setEnd(other.endContainer, other.endOffset);
-    }
-  }
-  return span;
-}
-
-// Two fingers on the artifact zoom the artifact alone; the controls and the comments
-// stay their size. Every touch on the artifact is answered here, so the browser cannot
-// take a gesture halfway through and turn a pinch into a scroll, which is what made an
-// earlier reading of it cut out. A finger that stays put still belongs to the browser,
-// because that is a reader holding a word.
-function installArtifactZoom() {
-  const doc = frameDocument();
-  // A gesture on the document this one replaces is over, whatever its fingers do next.
-  state.pinch = null;
-  for (const kind of ["touchstart", "touchmove", "touchend", "touchcancel"]) {
-    doc.addEventListener(kind, handleArtifactTouch, { passive: false, capture: true });
-  }
-  doc.addEventListener("wheel", handleArtifactWheel, { passive: false, capture: true });
-  for (const kind of ["gesturestart", "gesturechange", "gestureend"]) {
-    doc.addEventListener(kind, handleArtifactGesture, { passive: false, capture: true });
-  }
-}
-
-// Safari sends two fingers as a gesture of its own, with the scale since the gesture
-// began, and on a Mac that gesture is all a trackpad pinch sends: refused and left at
-// that, the pinch zoomed nothing there. So the gesture drives the zoom, unless touches
-// already do, as on a phone, where the gesture comes beside them and is only refused.
-// Refusing it matters either way: left to run, Safari's own zoom moved the window under
-// the settled layout and the deck appeared somewhere else the moment the fingers lifted.
-function handleArtifactGesture(event) {
-  if (leftToPage(event)) return;
-  zoomFromGesture(event, { x: event.clientX, y: event.clientY });
-}
-
-// The page itself can be zoomed: by a field that took the cursor on a phone, or by a
-// pinch made before this listened. Two fingers then have to reach the browser, or nothing
-// brings the page back, and every pinch went to the artifact with the sidebar cut off. It
-// is decided when they land and kept until they lift, so a zoom-out that passes the mark
-// on its way down is not taken over short of the end.
-function leftToPage(event) {
-  if (event.type === "gesturestart") state.pageGesture = pageIsZoomed();
-  if (!state.pageGesture) return false;
-  if (event.type === "gestureend") state.pageGesture = false;
-  return true;
-}
-
-function handleViewerGesture(event) {
-  if (leftToPage(event)) return;
-  if (frameDocument() === null) {
-    event.preventDefault();
-    return;
-  }
-  const frame = $("#artifact-frame").getBoundingClientRect();
-  zoomFromGesture(event, { x: frame.width / 2, y: frame.height / 2 });
-}
-
-function zoomFromGesture(event, point) {
-  event.preventDefault();
-  if (state.slideShow) return;
-  const pinch = state.pinch;
-  if (pinch !== null && pinch.driver === "touch") return;
-  if (event.type === "gesturestart") {
-    if (pinch !== null) settlePinch();
-    state.settledScroll = null;
-    state.pinch = beginPinch(1, point, "gesture");
-    return;
-  }
-  if (pinch === null || pinch.driver !== "gesture") return;
-  if (event.type === "gesturechange") {
-    carryPinch(pinch, pinch.startZoom * event.scale, point);
-    return;
-  }
-  settlePinch();
-}
-
-// A trackpad pinch reaches the page as a wheel event holding ctrl, which is also what a
-// mouse sends under the key each desktop zooms with: ctrl on Windows and Linux, command
-// on a Mac. The pointer is the fixed point, as the point between two fingers is.
-function handleArtifactWheel(event) {
-  keepSidewaysWheel(event);
-  zoomFromWheel(event, { x: event.clientX, y: event.clientY });
-}
-
-// Safari starts its swipe back or forward on the first wheel event of a gesture that is
-// mostly sideways when nothing under the pointer scrolls that way, and is told not to
-// at that event alone, by the event being taken. There is no page to go back to here,
-// and a deck fitted to its width scrolls sideways nowhere, so two fingers that set off
-// a little sideways left the artifact for the page before: a sideways wheel that nothing
-// under the pointer can follow is taken, and the fingers stay in the artifact.
-function keepSidewaysWheel(event) {
-  if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
-  for (let node = event.target; node !== null && node.nodeType === 1; node = node.parentElement) {
-    if (scrollsSideways(node, event.deltaX)) return;
-  }
-  event.preventDefault();
-}
-
-function scrollsSideways(node, deltaX) {
-  const doc = node.ownerDocument;
-  if (node !== doc.scrollingElement) {
-    const overflow = doc.defaultView.getComputedStyle(node).overflowX;
-    if (overflow !== "auto" && overflow !== "scroll") return false;
-  }
-  return deltaX < 0 ? node.scrollLeft > 0 : node.scrollLeft + node.clientWidth < node.scrollWidth - 1;
-}
-
-// Over the rest of the viewer, the comments or the bar, the same pinch zooms the artifact
-// about its middle. Left to the browser there, it zoomed the whole page, comments and
-// all, while the artifact kept a zoom of its own, and the two ran side by side.
-function handleViewerWheel(event) {
-  keepSidewaysWheel(event);
-  if (frameDocument() === null) return;
-  const frame = $("#artifact-frame").getBoundingClientRect();
-  zoomFromWheel(event, { x: frame.width / 2, y: frame.height / 2 });
-}
-
-function zoomFromWheel(event, point) {
-  state.settledScroll = null;
-  if (!(event.ctrlKey || event.metaKey) || state.slideShow) return;
-  event.preventDefault();
-  // A gesture that drives the zoom is the whole gesture: a wheel beside it is not a step.
-  if (state.pinch !== null && state.pinch.driver === "gesture") return;
-  if (state.pinch === null) state.pinch = beginPinch(1, point, "wheel");
-  const pinch = state.pinch;
-  if (pinch === null) return;
-  // Fingers spreading on a trackpad arrive as many small steps, and the size follows the
-  // distance they travel, at the rate a browser zooms its own pages by: a pinch here
-  // reaches as far as the same pinch anywhere else. A mouse sends one large step per
-  // notch, where that rate would multiply the size by e, so a notch has a step of its
-  // own. Both multiply, so a step moves the same share of the size at any zoom and
-  // zooming in then out by the same amount lands back where it started.
-  const notch = event.deltaMode !== WheelEvent.DOM_DELTA_PIXEL || Math.abs(event.deltaY) >= 40;
-  const factor = notch
-    ? (event.deltaY < 0 ? 1.25 : 1 / 1.25)
-    : Math.exp(-event.deltaY / 100);
-  carryPinch(pinch, pinch.zoom * factor, point);
-  // A wheel has no lift to end on, so the gesture ends where the steps stop.
-  if (state.pinchSettle !== null) clearTimeout(state.pinchSettle);
-  state.pinchSettle = setTimeout(settlePinch, 150);
-}
-
-// The reader's zoom is the page's own size, not a transform laid over it. A transform
-// creates no scrollable room, so whatever it pushed past an edge could not be reached:
-// zoomed in, the left never came back and the first page lost its top. The factor goes
-// into the scale the pages are laid out at, whose margins grow the boxes with it, so the
-// document is genuinely larger and scrolls in both directions like any other.
-//
-// That layout is settled once, when the gesture ends. While it runs, the holder of the
-// pages is carried by one transform the compositor applies, which lays nothing out and
-// paints nothing anew: laying the pages out again on every step, and rebuilding the
-// highlight boxes each time, was work a phone could not finish between two frames, and
-// the zoom stuttered in step with it.
-//
-// One finger is the browser's, whether it holds a word or scrolls: the layout is a
-// document of its own size and scrolls like any other, with the browser's smoothness and
-// momentum. Scrolling it ourselves, by the finger's movement, stuttered, and doubled the
-// distance whenever the browser had begun a scroll of its own before we took over.
-function handleArtifactTouch(event) {
-  const touches = Array.from(event.touches);
-  // In the slide show the stylesheet fits the page and centres it, and a carried holder
-  // has no layout to settle into: two fingers are taken from the browser, as the wheel
-  // and the gesture are there, and carry nothing. A gesture still in flight is settled.
-  if (state.slideShow) {
-    if (state.pinch !== null) settlePinch();
-    if (touches.length >= 2) event.preventDefault();
-    return;
-  }
-  if (event.type === "touchstart") state.settledScroll = null;
-  if (event.type === "touchend" || event.type === "touchcancel") {
-    if (touches.length < 2) state.pageTouch = false;
-    if (touches.length < 2 && state.pinch !== null) settlePinch();
-    return;
-  }
-  if (touches.length < 2) return;
-  if (event.type === "touchstart" && state.pinch === null) state.pageTouch = pageIsZoomed();
-  if (state.pageTouch) return;
-  {
-    const [first, second] = touches;
-    const span = Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
-    const middle = { x: (first.clientX + second.clientX) / 2, y: (first.clientY + second.clientY) / 2 };
-    if (state.pinch === null || event.type === "touchstart") {
-      if (state.pinch !== null) settlePinch();
-      state.pinch = beginPinch(span, middle, "touch");
-      // A second finger is never a reader holding a word, so this one is taken from the
-      // browser at once: told only at the first move, it has already begun a zoom of its
-      // own, and two zooms ran on the same fingers.
-      if (state.pinch !== null) event.preventDefault();
-      return;
-    }
-    event.preventDefault();
-    const pinch = state.pinch;
-    carryPinch(pinch, pinch.startZoom * (span / pinch.startSpan), middle);
-  }
-}
-
-// The holder scaled about its own corner and shifted so that what the gesture started on
-// is under the fixed point now, held within what the settled layout can reach: a page
-// narrower than its holder sits centred with no scroll to move it, a wider one scrolls
-// between its two edges, and the deck scrolls between the document's top and bottom
-// margins. Shown anywhere else, the deck jumped to the nearest reachable place the moment
-// the gesture ended.
-function carryPinch(pinch, zoom, at) {
-  pinch.zoom = Math.min(4, Math.max(0.5, zoom));
-  pinch.middle = at;
-  const grown = pinch.zoom / pinch.startZoom;
-  const room = pinch.room;
-  // What is visible is measured as it stands, not as it stood: a phone hides its address
-  // bar partway through a gesture, and a deck held within the room it had before that
-  // was outside the room it had after.
-  const view = frameDocument().documentElement;
-  room.viewWidth = view.clientWidth;
-  room.viewHeight = view.clientHeight;
-  const shift = {
-    x: at.x - pinch.origin.x - grown * pinch.focal.x,
-    y: at.y - pinch.origin.y - grown * pinch.focal.y,
-  };
-  const pageWidth = grown * room.pageWidth;
-  const pageAtZero = room.left - pinch.origin.x - grown * room.pageOffset;
-  shift.x = pageWidth <= room.width
-    ? pageAtZero + (room.width - pageWidth) / 2
-    : Math.min(pageAtZero, Math.max(
-        pageAtZero - (room.left + pageWidth + room.right - room.viewWidth), shift.x));
-  const holderAtZero = room.top - pinch.origin.y;
-  shift.y = Math.min(holderAtZero, Math.max(
-    holderAtZero - (room.top + grown * room.height + room.bottom - room.viewHeight), shift.y));
-  pinch.holder.style.transform = `translate(${shift.x}px, ${shift.y}px) scale(${grown})`;
-}
-
-// What the gesture keeps of its start: the holder's corner and the point between the
-// fingers relative to it, for carrying the holder; that point in the coordinates of the
-// page it lies on, which no zoom changes, for putting it back under the fingers once the
-// layout is settled; and the room the settled layout will have, read off the document
-// now, since the holder grows by the zoom alone and the margins around it not at all.
-function beginPinch(span, middle, driver) {
-  if (span === 0 || state.slideShow) return null;
-  const doc = frameDocument();
-  const win = frameWindow();
-  const holder = doc.querySelector("body > main.pages");
-  const page = pageNear(middle);
-  if (holder === null || page === null) return null;
-  const corner = holder.getBoundingClientRect();
-  const box = page.getBoundingClientRect();
-  const ratio = box.width / page.offsetWidth;
-  const left = corner.left + win.scrollX;
-  const top = corner.top + win.scrollY;
-  const room = {
-    left,
-    top,
-    right: doc.documentElement.scrollWidth - (left + corner.width),
-    bottom: doc.documentElement.scrollHeight - (top + corner.height),
-    width: corner.width,
-    height: corner.height,
-    pageOffset: box.left - corner.left,
-    pageWidth: box.width,
-    viewWidth: doc.documentElement.clientWidth,
-    viewHeight: doc.documentElement.clientHeight,
-  };
-  // The document's scrollable size follows the carried holder, and shrunk by a zoom out
-  // it let the browser pull the scroll position back in the middle of the gesture. A dot
-  // pinned at the document's far corner holds that size until the layout settles.
-  const keeper = doc.createElement("div");
-  Object.assign(keeper.style, {
-    position: "absolute", left: "0px", top: "0px", width: "1px", height: "1px",
-    visibility: "hidden", pointerEvents: "none",
-  });
-  doc.body.appendChild(keeper);
-  const placed = keeper.getBoundingClientRect();
-  keeper.style.left = `${doc.documentElement.scrollWidth - 1 - (placed.left + win.scrollX)}px`;
-  keeper.style.top = `${doc.documentElement.scrollHeight - 1 - (placed.top + win.scrollY)}px`;
-  holder.style.transformOrigin = "0 0";
-  holder.style.willChange = "transform";
-  // The comment button is placed by the selection and stays where it was placed while
-  // the deck under it is carried; it is placed again once the deck has settled.
-  hideSelectionButton();
-  return {
-    driver,
-    startSpan: span,
-    startZoom: state.artifactZoom,
-    zoom: state.artifactZoom,
-    middle,
-    holder,
-    origin: { x: corner.left, y: corner.top },
-    focal: { x: middle.x - corner.left, y: middle.y - corner.top },
-    page,
-    local: { x: (middle.x - box.left) / ratio, y: (middle.y - box.top) / ratio },
-    room,
-    keeper,
-  };
-}
-
-function settlePinch() {
-  const pinch = state.pinch;
-  state.pinch = null;
-  if (state.pinchSettle !== null) clearTimeout(state.pinchSettle);
-  state.pinchSettle = null;
-  pinch.holder.style.transform = "";
-  pinch.holder.style.transformOrigin = "";
-  pinch.holder.style.willChange = "";
-  if (pinch.zoom === pinch.startZoom) {
-    pinch.keeper.remove();
-    setTimeout(showSelectionButton, 60);
-    return;
-  }
-  const win = frameWindow();
-  const page = pinch.page;
-  state.artifactZoom = pinch.zoom;
-  applyArtifactZoom();
-  page.getBoundingClientRect();
-  // Safari keeps the scroll position anchored to an element and, after a layout, moves
-  // the position by what that element moved. A layout that changes transforms is left
-  // alone, so the zoom above leaves the anchor's recorded place where the old layout had
-  // it, and the next layout of any kind moved the deck by the zoom's whole displacement:
-  // the highlight boxes redrawn a frame later sent it somewhere else after the fingers
-  // had lifted. The dot's removal is that next layout, made here, before the position is
-  // set; and it is set absolutely, so nothing already applied is applied again. The
-  // property that turns the anchoring off is not implemented there.
-  pinch.keeper.remove();
-  frameDocument().body.getBoundingClientRect();
-  const box = page.getBoundingClientRect();
-  const ratio = box.width / page.offsetWidth;
-  win.scrollTo(win.scrollX + box.left + pinch.local.x * ratio - pinch.middle.x,
-               win.scrollY + box.top + pinch.local.y * ratio - pinch.middle.y);
-  // What the browser moves on its own in the moment after is put back; the reader's own
-  // next touch or wheel ends the watch.
-  state.settledScroll = { x: win.scrollX, y: win.scrollY, until: performance.now() + 400 };
-  // After the scroll that follows, which hides the button as any scroll does.
-  setTimeout(showSelectionButton, 60);
-}
-
-// The page under a point, or the nearest one when the point is in a gap.
-function pageNear(point) {
-  const hit = frameDocument().elementFromPoint(point.x, point.y);
-  const under = hit === null ? null : hit.closest("body > main.pages > section.page");
-  if (under !== null) return under;
-  let nearest = null;
-  let distance = Infinity;
-  for (const page of artifactPages()) {
-    const box = page.getBoundingClientRect();
-    const away = Math.max(box.top - point.y, point.y - box.bottom, 0);
-    if (away < distance) {
-      distance = away;
-      nearest = page;
-    }
-  }
-  return nearest;
-}
-
-function applyArtifactZoom() {
-  $("#zoom-reset-btn").classList.toggle("hidden", Math.abs(state.artifactZoom - 1) < 0.01);
-  updatePageScale();
-  scheduleHighlights();
-}
-
-// The way back from a zoom keeps the reader's place: laid out again with the scroll
-// position left as it was, the deck showed some other part of itself, further down after
-// a zoom in and further up after a zoom out. What sits at the middle of the window is
-// the fixed point, and the settle a pinch ends with puts it back there.
-function resetArtifactZoom() {
-  if (state.pinch !== null) settlePinch();
-  if (state.artifactZoom === 1) return;
-  const view = frameDocument().documentElement;
-  const middle = { x: view.clientWidth / 2, y: view.clientHeight / 2 };
-  const pinch = beginPinch(1, middle, "wheel");
-  if (pinch === null) {
-    state.artifactZoom = 1;
-    applyArtifactZoom();
-    return;
-  }
-  pinch.zoom = 1;
-  state.pinch = pinch;
-  settlePinch();
-}
-
-// The page at the top of the window, and the point on it there, in the page's own pixels.
-function readingPlace() {
-  const page = pageNear({ x: frameDocument().documentElement.clientWidth / 2, y: 0 });
-  if (page === null) return null;
-  const box = page.getBoundingClientRect();
-  return { page, y: -box.top / (box.height / page.offsetHeight) };
-}
-
-function keepReadingPlace(place) {
-  if (place === null) return;
-  const win = frameWindow();
-  const box = place.page.getBoundingClientRect();
-  win.scrollTo(win.scrollX, win.scrollY + box.top + place.y * (box.height / place.page.offsetHeight));
-}
-
-function showSelectionButton() {
-  const selection = frameWindow().getSelection();
-  const menu = $("#selection-menu");
-  // While a gesture carries the deck the menu stays out of it: the selection's own
-  // settle, timed from before the gesture, would otherwise bring it back mid-way.
-  if (state.pinch !== null) return;
-  if (inFullscreen()) {
-    state.selectionAnchor = null;
-    hideSelectionButton();
-    return;
-  }
-  if (selection === null || selection.rangeCount === 0) {
-    state.selectionAnchor = null;
-    hideSelectionButton();
-    return;
-  }
-  const range = selectionSpan(selection);
-  if (range.collapsed) {
-    state.selectionAnchor = null;
-    hideSelectionButton();
-    return;
-  }
-  try {
-    state.selectionAnchor = captureTextAnchor(range);
-  } catch (error) {
-    state.selectionAnchor = null;
-    hideSelectionButton();
-    return;
-  }
-  // The same geometry the highlight uses, so the menu meets the letters that were
-  // grabbed rather than the whole svg label they sit in.
-  const marks = selectionRects(range);
-  const rect = marks.length === 0 ? range.getBoundingClientRect() : {
-    left: Math.min(...marks.map((mark) => mark.left)),
-    top: Math.min(...marks.map((mark) => mark.top)),
-    bottom: Math.max(...marks.map((mark) => mark.top + mark.height)),
-  };
-  const iframe = $("#artifact-frame");
-  const pane = $("#artifact-pane");
-  menu.classList.remove("hidden");
-  // Under the selection and lined up with its left edge. The menu's own size is read
-  // rather than assumed, so the pane's edges can hold it: a selection near the bottom puts
-  // it above instead, and one near a side slides it along until the whole menu fits.
-  const gap = 8;
-  const width = menu.offsetWidth;
-  const height = menu.offsetHeight;
-  const under = iframe.offsetTop + rect.bottom + gap;
-  const above = iframe.offsetTop + rect.top - height - gap;
-  const wanted = under + height > pane.clientHeight - gap && above >= gap ? above : under;
-  const left = iframe.offsetLeft + rect.left;
-  menu.style.left = `${Math.max(gap, Math.min(left, pane.clientWidth - width - gap))}px`;
-  menu.style.top = `${Math.max(gap, Math.min(wanted, pane.clientHeight - height - gap))}px`;
-}
-
-// A stretch of the page as its source writes it: rendered math as the TeX KaTeX keeps in
-// the formula's annotation, other text as shown.
-function sourceLikeText(range) {
-  const doc = frameDocument();
-  const walker = doc.createTreeWalker(range.commonAncestorContainer.nodeType === Node.TEXT_NODE
-    ? range.commonAncestorContainer.parentNode : range.commonAncestorContainer, NodeFilter.SHOW_TEXT);
-  let text = "";
-  let formula = null;
-  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-    if (!range.intersectsNode(node) || node.parentElement?.closest(".html-mcp-highlight-layer")) continue;
-    const math = node.parentElement?.closest(".katex");
-    if (math) {
-      if (math === formula) continue;
-      formula = math;
-      text += ` ${math.querySelector('annotation[encoding="application/x-tex"]')?.textContent ?? ""} `;
-      continue;
-    }
-    const from = node === range.startContainer ? range.startOffset : 0;
-    const to = node === range.endContainer ? range.endOffset : node.nodeValue.length;
-    text += node.nodeValue.slice(from, to);
-  }
-  return text;
-}
-
-// The place in the edit file the selected words come from, found by the server in the file
-// as saved, selected in the editor beside the Preview, in Split.
-async function openSelectionInSource() {
-  const selection = frameWindow().getSelection();
-  if (state.selectionAnchor === null || selection === null || selection.rangeCount === 0) return;
-  const selected = selectionSpan(selection);
-  const start = selected.startContainer;
-  const page = (start.nodeType === Node.ELEMENT_NODE ? start : start.parentElement)
-    ?.closest("body > main.pages > section.page");
-  const title = page ? pageTitle(page, artifactPages().indexOf(page)) : "";
-  const around = (from, to) => {
-    const stretch = frameDocument().createRange();
-    stretch.setStart(from.node, from.offset);
-    stretch.setEnd(to.node, to.offset);
-    return sourceLikeText(stretch);
-  };
-  const edge = page ?? frameDocument().body;
-  const quote = sourceLikeText(selected);
-  const prefix = around({ node: edge, offset: 0 }, { node: selected.startContainer, offset: selected.startOffset }).slice(-120);
-  const suffix = around({ node: selected.endContainer, offset: selected.endOffset }, { node: edge, offset: edge.childNodes.length }).slice(0, 120);
-  const place = await fetchJson(`${artifactBase()}/source-place`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ quote, prefix, suffix, title }),
-  });
-  hideSelectionButton();
-  if (state.view !== "split") await setWorkspaceView("split");
-  if (!(await loadSource(false)) || state.sourcePath !== place.path) return;
-  const Range = window.ace.require("ace/range").Range;
-  state.editor.selection.setRange(new Range(
-    place.line_start - 1, place.column_start, place.line_end - 1, place.column_end));
-  state.editor.scrollToLine(place.line_start - 1, true, true, () => {});
-  state.editor.focus();
-}
-
-function hideSelectionButton() {
-  $("#selection-menu").classList.add("hidden");
-}
-
-// A Range inside an <svg> does not report the characters it holds. Selecting nine letters
-// of a label gave the whole <text> element's box (218px wide where the letters were 143),
-// and selecting from the middle gave an empty rect, so a highlight covered the whole label
-// and the comment button sat away from what was grabbed. The element numbers its own
-// characters and can place each one, which is where the letters actually are. The shapes a
-// touch screen's long press and handle drag produce are wider than one text node: element
-// containers and spans across tspans, and the first cut of this handled neither, so those
-// fell back to the misplaced native box. A character belongs to the selection when the
-// range intersects its node and its offset lies inside; the owning <text> indexes every
-// descendant character, so one element places them all, line by line.
-function svgSelectionRects(range) {
-  let ancestor = range.commonAncestorContainer;
-  if (ancestor.nodeType === Node.TEXT_NODE) ancestor = ancestor.parentElement;
-  if (ancestor === null || ancestor.namespaceURI !== "http://www.w3.org/2000/svg") return null;
-  const enclosing = ancestor.closest("text");
-  const roots = enclosing !== null ? [enclosing]
-    : Array.from(ancestor.querySelectorAll("text")).filter((text) => range.intersectsNode(text));
-  if (roots.length === 0) return null;
-  const rects = [];
-  for (const root of roots) {
-    if (typeof root.getExtentOfChar !== "function") return null;
-    const unit = extentUnit(root);
-    const toScreen = textMapping(root);
-    if (unit === null || toScreen === null) return null;
-    const walker = frameDocument().createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    let base = 0;
-    let band = null;
-    let node;
-    while ((node = walker.nextNode()) !== null) {
-      const length = node.nodeValue.length;
-      if (range.intersectsNode(node)) {
-        const from = range.startContainer === node ? Math.min(range.startOffset, length) : 0;
-        const to = range.endContainer === node ? Math.min(range.endOffset, length) : length;
-        for (let index = from; index < to; index += 1) {
-          let box;
-          try {
-            box = root.getExtentOfChar(base + index);
-          } catch (error) {
-            return null;
-          }
-          let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
-          for (const [x, y] of [[box.x, box.y], [box.x + box.width, box.y],
-                                [box.x, box.y + box.height], [box.x + box.width, box.y + box.height]]) {
-            const [screenX, screenY] = toScreen(x * unit, y * unit);
-            left = Math.min(left, screenX); right = Math.max(right, screenX);
-            top = Math.min(top, screenY); bottom = Math.max(bottom, screenY);
-          }
-          // One rect per line: a character on a new tspan line starts a new band rather
-          // than stretching the previous one down and across. Lines set tight overlap by
-          // a sliver, so joining takes half the character's height, not a mere touch.
-          if (band !== null
-              && Math.min(bottom, band.bottom) - Math.max(top, band.top) > (bottom - top) / 2) {
-            band.left = Math.min(band.left, left);
-            band.right = Math.max(band.right, right);
-            band.top = Math.min(band.top, top);
-            band.bottom = Math.max(band.bottom, bottom);
-          } else {
-            band = { left, top, right, bottom };
-            rects.push(band);
-          }
-        }
-      }
-      base += length;
-    }
-  }
-  if (rects.length === 0) return null;
-  return rects.map((box) => ({ ...box, width: box.right - box.left, height: box.bottom - box.top }));
-}
-
-// Where a point of a text's user space falls on screen. Two boxes of the text are right
-// in every engine: its own box in user space (getBBox) and its box on screen
-// (getBoundingClientRect). The screen matrix is used where it carries the one onto the
-// other, which keeps a turned label right; where it does not, as in Safari, whose matrix
-// leaves out the CSS scale the page is drawn at and so put the box further off the more
-// the page was zoomed, the two boxes give the mapping themselves.
-function textMapping(root) {
-  const box = root.getBBox();
-  const rect = root.getBoundingClientRect();
-  const ctm = root.getScreenCTM();
-  if (ctm !== null) {
-    const through = (x, y) => [ctm.a * x + ctm.c * y + ctm.e, ctm.b * x + ctm.d * y + ctm.f];
-    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
-    for (const [x, y] of [[box.x, box.y], [box.x + box.width, box.y],
-                          [box.x, box.y + box.height], [box.x + box.width, box.y + box.height]]) {
-      const [screenX, screenY] = through(x, y);
-      left = Math.min(left, screenX); right = Math.max(right, screenX);
-      top = Math.min(top, screenY); bottom = Math.max(bottom, screenY);
-    }
-    if (Math.abs(left - rect.left) < 1.5 && Math.abs(top - rect.top) < 1.5
-        && Math.abs(right - rect.right) < 1.5 && Math.abs(bottom - rect.bottom) < 1.5) {
-      return through;
-    }
-  }
-  if (box.width === 0 || box.height === 0) return null;
-  const scaleX = rect.width / box.width;
-  const scaleY = rect.height / box.height;
-  return (x, y) => [rect.left + (x - box.x) * scaleX, rect.top + (y - box.y) * scaleY];
-}
-
-// How many user-space units one unit of a character extent is: the height the extents
-// of all the characters span, against the height of the text's own box. Chromium hands
-// the extents back divided by the scale the page is drawn at (a label at user-space y
-// 282 on a page scaled by 0.76 came back at 369); the factor is 1 where they agree.
-function extentUnit(root) {
-  const total = root.getNumberOfChars();
-  const box = root.getBBox();
-  if (total === 0 || box.height === 0) return 1;
-  let top = Infinity, bottom = -Infinity;
-  for (let index = 0; index < total; index += 1) {
-    let extent;
-    try {
-      extent = root.getExtentOfChar(index);
-    } catch (error) {
-      return null;
-    }
-    top = Math.min(top, extent.y);
-    bottom = Math.max(bottom, extent.y + extent.height);
-  }
-  return bottom > top ? box.height / (bottom - top) : 1;
-}
-
-function selectionRects(range) {
-  return svgSelectionRects(range)
-    ?? Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
-}
-
-function ensureHighlightLayer(page) {
-  const doc = frameDocument();
-  let style = doc.querySelector("#html-mcp-highlight-style");
-  if (style === null) {
-    style = doc.createElement("style");
-    style.id = "html-mcp-highlight-style";
-    style.textContent = `
-      .html-mcp-highlight-layer { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; z-index: 2147483646; pointer-events: none; }
-      .html-mcp-highlight-layer, .html-mcp-highlight-layer * { margin: 0; }
-      .html-mcp-highlight { position: absolute; border-radius: 2px; background: rgba(246, 216, 74, .42); box-shadow: inset 0 -1px rgba(171, 139, 0, .28); }
-      .html-mcp-highlight-badge { position: absolute; min-width: 18px; height: 18px; padding: 0 4px; border: 1px solid #8b7413; border-radius: 9px; color: #302900; background: #ffe77a; font: 11px/16px system-ui, sans-serif; pointer-events: auto; cursor: pointer; }
-      .html-mcp-highlight.flash { background: rgba(255, 177, 60, .68); }
-      .html-mcp-lost { position: absolute; border-radius: 2px; border: 1px dashed rgba(150, 122, 8, .8); background: rgba(246, 216, 74, .1); }
-      .html-mcp-lost.flash { background: rgba(255, 177, 60, .4); }
-      .html-mcp-highlight-badge.lost { border-style: dashed; color: #6d6650; background: #f6f1e2; }
-      .html-mcp-area { position: absolute; box-sizing: border-box; border: 2px solid rgba(171, 139, 0, .8); border-radius: 2px; background: rgba(246, 216, 74, .16); }
-      .html-mcp-area.flash { background: rgba(255, 177, 60, .4); }
-      .html-mcp-shown { position: absolute; border-radius: 2px; background: rgba(181, 213, 255, .75); }
-      html.html-mcp-area-mode, html.html-mcp-area-mode * { cursor: crosshair !important; user-select: none !important; -webkit-user-select: none !important; touch-action: none !important; }
-    `;
-    doc.head.appendChild(style);
-  }
-  // Keep the layer inside the page. It then inherits the page zoom, so both share one coordinate system.
-  let layer = page.querySelector(":scope > .html-mcp-highlight-layer");
-  if (layer === null) {
-    layer = doc.createElement("div");
-    layer.className = "html-mcp-highlight-layer";
-    page.appendChild(layer);
-  }
-  // A scrolling frame (speaker-script block) clips an inset layer to the visible box;
-  // size the layer to the full scroll height so marks on scrolled-away lines survive.
-  if (page.scrollHeight > page.clientHeight) {
-    layer.style.bottom = "auto";
-    layer.style.height = `${page.scrollHeight}px`;
-  }
-  return layer;
-}
-
-// Browsers disagree on whether the CSS zoom applied to section.page is reflected in
-// getClientRects(), so placing measured coordinates straight onto an unscaled layer
-// misaligns them when zoomed (observed in Safari). Measure the page rect through the
-// same API to derive the effective scale, then convert to page-relative coordinates.
-function pageFrameFor(node) {
-  const element = node.nodeType === 1 ? node : node.parentElement;
-  // Speaker-script blocks (slides templates) live outside main.pages but take comments
-  // through the same anchor path; each block is its own highlight frame. They scroll
-  // internally, so content coordinates need the scroll offset added back.
-  const page = element?.closest("body > main.pages > section.page, .script-block") ?? null;
-  if (page === null) return null;
-  const rect = page.getBoundingClientRect();
-  const ratio = page.offsetWidth > 0 ? rect.width / page.offsetWidth : 1;
-  return {
-    page, rect, ratio: ratio > 0 ? ratio : 1,
-    scrollTop: page.scrollTop || 0, scrollLeft: page.scrollLeft || 0,
-  };
-}
-
-function renderHighlights() {
-  if (frameDocument() === null || frameDocument().body === null) return;
-  const previousUnattached = new Set(state.unattached);
-  for (const layer of frameDocument().querySelectorAll(".html-mcp-highlight-layer")) clear(layer);
-  state.unattached.clear();
-  let number = 0;
-  // Both rect and page rect are viewport-relative, so scrolling cancels out in the difference.
-  const local = (frame, rect) => ({
-    left: (rect.left - frame.rect.left) / frame.ratio + frame.scrollLeft,
-    top: (rect.top - frame.rect.top) / frame.ratio + frame.scrollTop,
-    width: rect.width / frame.ratio,
-    height: rect.height / frame.ratio,
-  });
-  const numberedBadge = (comment, count, box, lost) => {
-    const badge = frameDocument().createElement("button");
-    badge.type = "button";
-    badge.className = lost ? "html-mcp-highlight-badge lost" : "html-mcp-highlight-badge";
-    badge.textContent = String(count);
-    badge.title = lost ? `${comment.thread[0].text}\n(the text this quotes is gone)` : comment.thread[0].text;
-    Object.assign(badge.style, {
-      left: `${Math.max(0, box.left - 21)}px`, top: `${Math.max(0, box.top - 1)}px`,
-    });
-    badge.addEventListener("click", () => {
-      const layout = $(".layout");
-      if (!layout.classList.contains("sidebar-collapsed")
-        && state.focusedCommentId === comment.id) {
-        layout.classList.add("sidebar-collapsed");
-        localStorage.setItem("htmlMcpSidebarCollapsed", "1");
-        return;
-      }
-      focusComment(comment.id).catch((error) => console.error(error));
-    });
-    return badge;
-  };
-  for (const comment of state.markedComments) {
-    if (comment.status !== "open" || !["text", "area"].includes(comment.anchor.kind)) continue;
-    number += 1;
-    if (comment.anchor.kind === "area") {
-      // The box is in page pixels and the layer lies inside the page, so it is drawn as
-      // stored at every zoom.
-      const page = artifactPages()[comment.anchor.number - 1];
-      if (page === undefined) continue;
-      const [x1, y1, x2, y2] = comment.anchor.bbox;
-      const box = { left: x1, top: y1, width: x2 - x1, height: y2 - y1 };
-      const layer = ensureHighlightLayer(page);
-      const mark = frameDocument().createElement("div");
-      mark.className = "html-mcp-area";
-      mark.dataset.commentId = comment.id;
-      Object.assign(mark.style, {
-        left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px`,
-      });
-      layer.appendChild(mark);
-      layer.appendChild(numberedBadge(comment, number, box, false));
-      continue;
-    }
-    const range = resolveAnchor(comment.anchor);
-    const frame = range === null ? null : pageFrameFor(range.startContainer);
-    if (frame === null) {
-      state.unattached.add(comment.id);
-      // The quoted text is gone, so there is nothing to draw over. What the page still
-      // has is the place the comment was written at, and a dashed mark stands there: it
-      // says the comment was about this much of the page and no closer.
-      const place = lastKnownPlace(comment.anchor);
-      const placeFrame = place === null ? null : pageFrameFor(place);
-      if (placeFrame === null) continue;
-      const box = local(placeFrame, place.getBoundingClientRect());
-      const layer = ensureHighlightLayer(placeFrame.page);
-      const mark = frameDocument().createElement("div");
-      mark.className = "html-mcp-lost";
-      mark.dataset.commentId = comment.id;
-      Object.assign(mark.style, {
-        left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px`,
-      });
-      layer.appendChild(mark);
-      layer.appendChild(numberedBadge(comment, number, box, true));
-      continue;
-    }
-    const layer = ensureHighlightLayer(frame.page);
-    const rects = selectionRects(range);
-    for (const rect of rects) {
-      const box = local(frame, rect);
-      const mark = frameDocument().createElement("div");
-      mark.className = "html-mcp-highlight";
-      mark.dataset.commentId = comment.id;
-      Object.assign(mark.style, {
-        left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px`,
-      });
-      layer.appendChild(mark);
-    }
-    const firstRect = rects[0];
-    if (firstRect !== undefined) layer.appendChild(numberedBadge(comment, number, local(frame, firstRect), false));
-  }
-  const shown = state.shownRange;
-  const shownFrame = shown === null ? null : pageFrameFor(shown.startContainer);
-  if (shownFrame !== null) {
-    const layer = ensureHighlightLayer(shownFrame.page);
-    for (const rect of shown.collapsed ? [shown.getBoundingClientRect()] : selectionRects(shown)) {
-      const box = local(shownFrame, rect);
-      const mark = frameDocument().createElement("div");
-      // The editor's selection blue, apart from the comments' yellow.
-      mark.className = "html-mcp-shown";
-      Object.assign(mark.style, {
-        left: `${box.left}px`, top: `${box.top}px`, width: `${Math.max(2, box.width)}px`, height: `${box.height}px`,
-      });
-      layer.appendChild(mark);
-    }
-  }
-  const attachmentChanged = previousUnattached.size !== state.unattached.size
-    || Array.from(previousUnattached).some((commentId) => !state.unattached.has(commentId));
-  if (attachmentChanged) renderComments();
-}
-
-// While the Area button is down, a drag on a page draws a box instead of selecting text,
-// and the comment written for it opens when the drag ends. The box is kept in the page's
-// own pixels.
-function setAreaMode(on) {
-  state.areaMode = on;
-  const button = $("#area-btn");
-  button.classList.toggle("active", on);
-  button.setAttribute("aria-pressed", String(on));
-  frameDocument()?.documentElement.classList.toggle("html-mcp-area-mode", on);
-  if (on) frameWindow()?.getSelection()?.removeAllRanges();
-}
-
-function installAreaDrawing(doc) {
-  doc.documentElement.classList.toggle("html-mcp-area-mode", state.areaMode);
-  let drawing = null;
-  const pointOn = (page, event) => {
-    const rect = page.getBoundingClientRect();
-    const ratio = page.offsetWidth > 0 ? rect.width / page.offsetWidth : 1;
-    return {
-      x: Math.min(page.offsetWidth, Math.max(0, (event.clientX - rect.left) / ratio)),
-      y: Math.min(page.offsetHeight, Math.max(0, (event.clientY - rect.top) / ratio)),
-    };
-  };
-  const boxOf = ({ start, end }) => ({
-    left: Math.min(start.x, end.x), top: Math.min(start.y, end.y),
-    width: Math.abs(end.x - start.x), height: Math.abs(end.y - start.y),
-  });
-  doc.addEventListener("pointerdown", (event) => {
-    if (!state.areaMode || event.button !== 0) return;
-    const page = event.target.closest?.("body > main.pages > section.page");
-    if (!page) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    const start = pointOn(page, event);
-    const mark = doc.createElement("div");
-    mark.className = "html-mcp-area";
-    ensureHighlightLayer(page).appendChild(mark);
-    drawing = { page, start, end: start, mark, pointer: event.pointerId };
-    event.target.setPointerCapture?.(event.pointerId);
-  }, true);
-  doc.addEventListener("pointermove", (event) => {
-    if (drawing === null || event.pointerId !== drawing.pointer) return;
-    event.preventDefault();
-    drawing.end = pointOn(drawing.page, event);
-    const box = boxOf(drawing);
-    Object.assign(drawing.mark.style, {
-      left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px`,
-    });
-  }, true);
-  const finish = (event) => {
-    if (drawing === null || event.pointerId !== drawing.pointer) return;
-    const done = drawing;
-    drawing = null;
-    done.mark.remove();
-    event.stopImmediatePropagation();
-    const box = boxOf(done);
-    // A click, not a box.
-    if (event.type !== "pointerup" || box.width < 4 || box.height < 4) return;
-    const index = artifactPages().indexOf(done.page);
-    setAreaMode(false);
-    commentOn({
-      kind: "area",
-      number: index + 1,
-      title: pageTitle(done.page, index),
-      bbox: [box.left, box.top, box.left + box.width, box.top + box.height].map((value) => Math.round(value)),
-    });
-  };
-  doc.addEventListener("pointerup", finish, true);
-  doc.addEventListener("pointercancel", finish, true);
-}
-
-function scheduleHighlights() {
-  if (state.renderFrame !== null) frameWindow().cancelAnimationFrame(state.renderFrame);
-  state.renderFrame = frameWindow().requestAnimationFrame(() => {
-    state.renderFrame = null;
-    renderHighlights();
-  });
-}
-
-function scriptsHidden() {
-  return localStorage.getItem("htmlMcpScriptsHidden") === "1";
-}
-
-// Speaker scripts are blocks a slides template emits after each page. The choice to
-// hide them is a viewer setting, applied to the artifact document as an attribute the
-// viewer stylesheet reads, so it survives artifact reloads and tab switches.
-function applyScriptVisibility() {
-  const hidden = scriptsHidden();
-  const doc = frameDocument();
-  if (doc?.documentElement) {
-    if (hidden) doc.documentElement.dataset.htmlMcpScriptsHidden = "";
-    else delete doc.documentElement.dataset.htmlMcpScriptsHidden;
-  }
-  const button = $("#scripts-btn");
-  button.classList.toggle("active", !hidden);
-  button.setAttribute("aria-pressed", hidden ? "false" : "true");
-  const hasScripts = doc?.querySelector("main.pages > .script-block") !== null;
-  button.disabled = !hasScripts;
-}
-
-function attachArtifactEvents(frame) {
-  // A frame that finished loading after the reader had moved to another tab is not the
-  // one the page is set up for. It forgets what it shows, so coming back loads it again
-  // and sets the page up then.
-  if (frame.id !== "artifact-frame") {
-    delete frame.dataset.revision;
-    return;
-  }
-  const doc = frameDocument();
-  const win = frameWindow();
-  // The document says which revision it is, so a check knows whether it is looking at
-  // the one it would report: a check scheduled on the document before an edit ran after
-  // the new revision was announced and reported that document's result under it.
-  doc.documentElement.dataset.htmlMcpRevision = frame.dataset.revision;
-  // Page geometry exists before anchors are measured.
-  installArtifactLayout();
-  applyScriptVisibility();
-  if (inFullscreen()) {
-    doc.documentElement.dataset.htmlMcpFullscreen = "";
-  }
-  state.currentPage = visiblePageNumber();
-  renderPages();
-  installAreaDrawing(doc);
-  doc.addEventListener("mouseup", () => setTimeout(showSelectionButton, 0), true);
-  doc.addEventListener("keyup", () => setTimeout(showSelectionButton, 0), true);
-  // A phone selects by holding a word and dragging the handles, and sends no mouseup for
-  // any of it: the words were highlighted and no button ever came. The selection itself is
-  // watched as well, held back while a pointer is down so that a drag on a desktop still
-  // settles before the button appears.
-  // Holding a word hands that touch to the browser's own selection, and the sequence ends
-  // as a cancel rather than a release. A cancel is the end of a touch like any other, so
-  // it asks the same question; without that the highlighted words waited for the next pan
-  // or pinch to bring the button.
-  for (const kind of ["touchend", "touchcancel"]) {
-    doc.addEventListener(kind, () => setTimeout(showSelectionButton, 60), true);
-  }
-  installArtifactZoom();
-  doc.addEventListener("selectionchange", () => {
-    if (state.selectionPointerDown) return;
-    if (state.selectionSettle !== null) clearTimeout(state.selectionSettle);
-    state.selectionSettle = setTimeout(() => {
-      state.selectionSettle = null;
-      showSelectionButton();
-    }, 250);
-  });
-  doc.addEventListener("keydown", handlePresentationKeydown, true);
-  doc.addEventListener("keydown", search.handleKeydown, true);
-  doc.addEventListener("click", handlePresentationClick, true);
-  doc.addEventListener("pointerdown", handlePresentationPointerDown, true);
-  doc.addEventListener("pointerup", handlePresentationPointerUp, true);
-  doc.addEventListener("wheel", handlePresentationWheel, { passive: false });
-  doc.addEventListener("pointerdown", (event) => {
-    state.selectionPointerDown = true;
-    if (!event.target.closest(".html-mcp-highlight-layer")) hideSelectionButton();
-  }, true);
-  for (const kind of ["pointerup", "pointercancel"]) {
-    doc.addEventListener(kind, () => {
-      state.selectionPointerDown = false;
-      setTimeout(showSelectionButton, 60);
-    }, true);
-  }
-  win.addEventListener("scroll", () => {
-    const settled = state.settledScroll;
-    if (settled !== null) {
-      state.settledScroll = null;
-      if (performance.now() < settled.until
-          && (Math.abs(win.scrollX - settled.x) > 1 || Math.abs(win.scrollY - settled.y) > 1)) {
-        win.scrollTo(settled.x, settled.y);
-      }
-    }
-    hideSelectionButton();
-    scheduleCurrentPage();
-  }, { passive: true });
-  win.addEventListener("resize", () => {
-    // A wider or narrower artifact draws every page at another size, and the scroll position
-    // left as it was showed some other page: hiding the comments took the reader from page 12
-    // to page 8, and showing them took the reader back. What sits at the top of the window
-    // stays there. The top, not the middle: a window that also grows taller moves its middle,
-    // and the deck read from its first line was pushed down by the difference.
-    const place = state.slideShow ? null : readingPlace();
-    updatePageScale();
-    keepReadingPlace(place);
-    // Dragging the split resizes the artifact on every frame. Measuring the fit of all pages
-    // and redrawing the highlight boxes that often is the work that made the bar lag behind
-    // the finger; the drag ends with one of each.
-    if (state.draggingPanel) return;
-    scheduleHighlights();
-    scheduleLayoutCheck();
-    scheduleCurrentPage();
-  });
-  // The zoom the document is shown at is the artifact's own, and the reset control
-  // follows it; a scroll put back means the same only at the zoom it was taken at.
-  applyArtifactZoom();
-  const alias = state.alias;
-  const view = state.pendingViews[alias];
-  if (view !== undefined) {
-    // Put back as a page and a point on it, not as a scroll offset, and again once the fonts
-    // are in: the new document is set first in a fallback face, its script blocks at other
-    // heights, and the offset the reader left at fell two pages further on by then.
-    const putBack = () => {
-      const page = artifactPages()[view.page];
-      if (frameDocument() === doc && page !== undefined) keepReadingPlace({ page, y: view.y });
-    };
-    win.requestAnimationFrame(putBack);
-    doc.fonts.ready.then(() => {
-      if (state.pendingViews[alias] !== view) return;
-      putBack();
-      delete state.pendingViews[alias];
-    });
-  } else {
-    const place = recalledReadingPlace();
-    if (place !== null) win.requestAnimationFrame(() => keepReadingPlace(place));
-  }
-  renderHighlights();
-  search.refresh();
-  updateLayoutUi();
-  if (inFullscreen() && state.artifact.layout === "slides") activateSlideShow();
-  scheduleLayoutCheck();
-  doc.fonts.ready.then(scheduleLayoutCheck);
-  // An image that finishes loading after the check changes the layout the
-  // check measured, so each pending image re-triggers it.
-  for (const img of doc.images) {
-    if (!img.complete) {
-      img.addEventListener("load", scheduleLayoutCheck, { once: true });
-      img.addEventListener("error", scheduleLayoutCheck, { once: true });
-    }
-  }
-}
-
-function artifactUrl() {
-  return `${artifactBase()}/artifact?v=${encodeURIComponent(state.revision)}&shared=1`;
-}
-
-function loadArtifact(preserveView) {
-  const iframe = frameFor(state.alias);
-  showFrame(iframe);
-  if (thumbsOpen()) loadThumbs();
-  if (state.loadedRevision === state.revision) return;
-  hideSelectionButton();
-  state.loadedRevision = state.revision;
-  const shown = iframe.contentDocument?.URL;
-  if (shown !== undefined && shown !== "about:blank") {
-    updateDeck(iframe, preserveView);
-    return;
-  }
-  keepView(iframe, preserveView);
-  iframe.dataset.revision = String(state.revision);
-  delete iframe.dataset.settled;
-  showInFrame(iframe, artifactUrl());
-}
-
-// A view not yet put back is kept. A hidden tab runs no animation frames, and a second
-// edit made while the reader was in another tab read the top of the document loaded for
-// the first, which sent them back to page 1. The slide show keeps its own page.
-function keepView(iframe, preserveView) {
-  if (!preserveView || state.slideShow || state.pendingViews[state.alias] !== undefined) return;
-  if (iframe.id !== "artifact-frame" || iframe.contentDocument?.body == null) return;
-  const place = readingPlace();
-  if (place !== null) state.pendingViews[state.alias] = { page: artifactPages().indexOf(place.page), y: place.y };
-}
-
-// A deck on screen takes a revision by changing the pages that differ, see updateFrame, at
-// the reader's place, and is set up as a deck shown again is.
-function updateDeck(frame, preserveView) {
-  const alias = frame.dataset.artifact;
-  const revision = state.revision;
-  const whole = () => {
-    // The reader has gone to another artifact meanwhile: the frame forgets what it shows,
-    // and is brought up to date when they come back.
-    if (state.alias !== alias) {
-      delete frame.dataset.revision;
-      return;
-    }
-    keepView(frame, preserveView);
-    loadBehind(frame, artifactUrl());
-  };
-  // Only a document this page set up takes pages: a browser may put back the address a frame
-  // last showed when the review page is reloaded, and a document loaded that way was never
-  // set up, so its pages changed and the reader's place was never put back.
-  const canPatch = () => state.framesBehind[alias] === undefined && frame.contentDocument?.readyState === "complete"
-    && frame.contentDocument.documentElement.dataset.htmlMcpRevision !== undefined;
-  if (!canPatch()) {
-    whole();
-    return;
-  }
-  updateFrame(frame, artifactUrl(), canPatch, (doc, shown, next) => {
-    const active = frame.id === "artifact-frame";
-    const place = active && !state.slideShow ? readingPlace() : null;
-    const change = changePages(doc, shown, next);
-    if (change === null) return false;
-    frame.dataset.revision = String(revision);
-    delete frame.dataset.settled;
-    doc.documentElement.dataset.htmlMcpRevision = String(revision);
-    // A frame of an artifact the reader has left is set up when they come back to it.
-    if (!active) return true;
-    if (state.slideShow) {
-      const pages = artifactPages();
-      state.currentPage = Math.min(state.currentPage || 1, pages.length);
-      for (const [index, page] of pages.entries()) {
-        page.classList.toggle("html-mcp-current-page", index + 1 === state.currentPage);
-      }
-      updatePresentationControls();
-    }
-    updatePageScale();
-    // The page the reader was on, or the page that took its place.
-    const page = place === null ? undefined
-      : place.page.isConnected ? place.page : change.added[change.removed.indexOf(place.page)];
-    if (page?.matches("body > main.pages > section.page")) keepReadingPlace({ page, y: place.y });
-    showLoadedArtifact(frame);
-    doc.fonts.ready.then(scheduleLayoutCheck);
-    for (const node of change.added) {
-      for (const img of node.querySelectorAll("img")) {
-        if (!img.complete) {
-          img.addEventListener("load", scheduleLayoutCheck, { once: true });
-          img.addEventListener("error", scheduleLayoutCheck, { once: true });
-        }
-      }
-    }
-    return true;
-  }, whole);
-}
-
-// An edit changes a page or a few. The pages of the new revision that differ from those of
-// the document a frame shows are put in their place, and the rest of the document is left
-// as it is. Loading the whole deck again parsed and drew every page and ran the deck's
-// scripts over all of them, on the thread the review page runs on: the page, scrolling
-// included, was held for seconds on every edit, and twice with the previews open. A change
-// outside the pages (the head, the deck's scripts), or a document whose scripts do not say
-// how they set up one page, loads the whole document as before. One update runs at a time
-// in a frame, and one with a later revision waiting behind it is passed over.
-function updateFrame(frame, url, canPatch, patch, whole) {
-  frame.htmlMcpWanted = url;
-  frame.htmlMcpUpdate = (frame.htmlMcpUpdate ?? Promise.resolve()).then(async () => {
-    if (frame.htmlMcpWanted !== url) return;
-    const doc = frame.contentDocument;
-    // A document served without its digest, by a server on earlier code, cannot be read back.
-    if (doc?.documentElement.dataset.htmlMcpServed === undefined) {
-      whole();
-      return;
-    }
-    let patched = false;
-    try {
-      const [shown, next] = await Promise.all([shownSource(doc, url), sourceAt(url)]);
-      if (frame.htmlMcpWanted !== url) return;
-      patched = canPatch() && frame.contentDocument === doc && patch(doc, shown, next);
-    } catch (error) {
-      console.error(error);
-    }
-    if (!patched) whole();
-  });
-}
-
-// The documents served to this page, read for comparing, by the digest the server gives
-// each: the pages, each with the speaker script block after it, and the rest of the document.
-const sources = new Map();
-
-async function readSource(url) {
-  const response = await fetch(url);
-  if (!response.ok) return null;
-  const doc = new DOMParser().parseFromString(await response.text(), "text/html");
-  const holder = doc.querySelector("body > main.pages");
-  const served = doc.documentElement.dataset.htmlMcpServed;
-  if (holder === null || served === undefined) return null;
-  doc.documentElement.removeAttribute("data-html-mcp-served");
-  const units = Array.from(holder.children);
-  for (const unit of units) unit.remove();
-  const source = { served, outside: doc.documentElement.outerHTML, html: units.map((unit) => unit.outerHTML) };
-  sources.set(served, source);
-  // What the deck and the column show, and the revisions coming.
-  while (sources.size > 4) sources.delete(sources.keys().next().value);
-  return source;
-}
-
-// Each revision is read once, though the deck and the column both ask for it.
-const sourceRequests = new Map();
-
-function sourceAt(url) {
-  if (!sourceRequests.has(url)) {
-    sourceRequests.set(url, readSource(url));
-    while (sourceRequests.size > 2) sourceRequests.delete(sourceRequests.keys().next().value);
-  }
-  return sourceRequests.get(url);
-}
-
-function shownSource(doc, url) {
-  const served = doc.documentElement.dataset.htmlMcpServed;
-  return sources.get(served) ?? sourceAt(`${url.split("?")[0]}?served=${served}&shared=1`);
-}
-
-// Puts the pages of `next` that differ from those of `shown` into `doc`, the document made
-// from `shown`, and sets each up with the document's own scripts. Null, with the document
-// untouched, when it has to be loaded whole.
-function changePages(doc, shown, next) {
-  if (shown === null || next === null || shown.outside !== next.outside) return null;
-  const holder = doc.querySelector("body > main.pages");
-  const live = holder === null ? [] : Array.from(holder.children);
-  const setups = doc.defaultView.htmlMcpPageSetup;
-  if (live.length !== shown.html.length || (doc.scripts.length > 0 && !Array.isArray(setups))) return null;
-  let start = 0;
-  while (start < shown.html.length && start < next.html.length && shown.html[start] === next.html[start]) start += 1;
-  let end = 0;
-  while (end < shown.html.length - start && end < next.html.length - start
-         && shown.html[shown.html.length - 1 - end] === next.html[next.html.length - 1 - end]) end += 1;
-  const template = doc.createElement("template");
-  template.innerHTML = next.html.slice(start, next.html.length - end).join("\n");
-  // A script put in by script does not run: the page needs the document loaded whole.
-  if (template.content.querySelector("script") !== null) return null;
-  const removed = live.slice(start, live.length - end);
-  const added = Array.from(template.content.children);
-  const before = removed[0] ?? live[live.length - end] ?? null;
-  for (const node of added) holder.insertBefore(node, before);
-  for (const node of removed) node.remove();
-  doc.documentElement.dataset.htmlMcpServed = next.served;
-  for (const node of added) {
-    for (const setup of setups ?? []) setup(node);
-  }
-  return { removed, added };
-}
-
-// A revision of a deck already on screen loads into a frame of its own under it, and the
-// frame on screen stays in view until the new document is set up at the reader's place.
-// Loaded into the frame on screen, the deck went blank while the document loaded and then
-// showed its first page until the scroll was put back, on every edit the agent made.
-// The new frame is given its address as it is made, and a frame still loading is not sent
-// elsewhere: WebKit dropped a second address given to a new frame before its first had
-// loaded, and the deck stayed on the earlier revision under the later one's number while
-// agents' edits came in bursts. The latest address waits on the frame for its load to end.
-function loadBehind(shown, url) {
-  const alias = shown.dataset.artifact;
-  let next = state.framesBehind[alias];
-  if (next === undefined) {
-    next = document.createElement("iframe");
-    next.className = "artifact-frame";
-    next.title = shown.title;
-    next.tabIndex = -1;
-    next.toggleAttribute("inert", true);
-    next.dataset.artifact = alias;
-    next.src = url;
-    shown.after(next);
-    const frame = next;
-    // The swap runs first, so the setup that follows finds this frame on screen.
-    frame.addEventListener("load", () => { if (frame.contentDocument?.URL !== "about:blank") revealBehind(frame); });
-    frame.addEventListener("load", () => { if (frame.id === "artifact-frame") attachArtifactEvents(frame); });
-    state.framesBehind[alias] = next;
-  }
-  next.dataset.revision = String(state.revision);
-  next.dataset.wanted = new URL(url, location.href).href;
-  delete next.dataset.settled;
-}
-
-// The new frame takes the place of the one on screen at once, so the page is set up on it,
-// while the old one covers it until the deck's fonts are in and two frames have been drawn
-// at the reader's place. A frame for a tab the reader has left replaces the old one unseen,
-// and is set up when the reader comes back.
-async function revealBehind(next) {
-  if (next.contentDocument.URL !== next.dataset.wanted) {
-    showInFrame(next, next.dataset.wanted);
-    return;
-  }
-  const alias = next.dataset.artifact;
-  delete state.framesBehind[alias];
-  const old = state.frames[alias];
-  state.frames[alias] = next;
-  if (state.alias !== alias) {
-    old.remove();
-    delete next.dataset.revision;
-    return;
-  }
-  old.classList.remove("active");
-  old.removeAttribute("id");
-  old.toggleAttribute("inert", true);
-  old.classList.add("covering");
-  showFrame(next);
-  const win = next.contentWindow;
-  await next.contentDocument.fonts.ready;
-  await new Promise((done) => win.requestAnimationFrame(() => win.requestAnimationFrame(done)));
-  old.remove();
-  // Safari draws a frame come back from underneath as it last drew it, or not at all, until
-  // it is scrolled: the deck showed the new document's first page, drawn while it loaded at
-  // the top, over the reader's place it had been scrolled to beneath the old one.
-  if (next.id === "artifact-frame") scrollToRepaint(win);
-}
-
-// Each revision replaces the frame's history entry rather than adding one: setting src added
-// an entry to the review page's history for every edit the agent made.
-function showInFrame(frame, url) {
-  frame.contentWindow.location.replace(url);
-}
-
-// A reload starts the deck again from its first page: the deck's frame is filled by script,
-// so the browser has no scroll of its own to put back. Readers were sent back to page 1 by
-// their own refresh and by the reload for newer viewer code. The page at the top of the
-// window and the point on it go through any reload in this tab's session storage. In the
-// full-screen slide show the page being shown is kept, from its top. They are saved when
-// the tab is hidden as well as when it is left: a browser that discards a background tab
-// to free memory loads it again on return, and the discarded page ran no pagehide.
-// While an edit's view waits to be put back, the place saved is that view's: the deck on
-// screen may be the new document still at its top. Skipped instead, a reload for newer viewer
-// code that came while an edit was loading saved nothing, and the deck opened on page 1.
-const READING_PLACE = "htmlMcpReadingPlace";
-
-function rememberReadingPlace() {
-  try {
-    if (state.alias === null || frameDocument() === null) return;
-    const held = state.slideShow ? state.currentPage || 1 : state.leftSlideShowAt;
-    const pending = state.pendingViews[state.alias];
-    if (held === null && pending !== undefined) {
-      sessionStorage.setItem(READING_PLACE, JSON.stringify({ artifact: state.alias, page: pending.page, y: pending.y }));
-      return;
-    }
-    const shown = held === null ? undefined : artifactPages()[held - 1];
-    const place = held === null ? readingPlace() : (shown === undefined ? null : { page: shown, y: 0 });
-    if (place === null) return;
-    sessionStorage.setItem(READING_PLACE, JSON.stringify(
-      { artifact: state.alias, page: artifactPages().indexOf(place.page), y: place.y }));
-  } catch {
-    // Storage refused, as a private window may: the reload starts at the top as before.
-  }
-}
-
-function recalledReadingPlace() {
-  let saved = null;
-  try {
-    saved = JSON.parse(sessionStorage.getItem(READING_PLACE) ?? "null");
-    sessionStorage.removeItem(READING_PLACE);
-  } catch {
-    return null;
-  }
-  if (saved === null || saved.artifact !== state.alias) return null;
-  const page = artifactPages()[saved.page];
-  return page === undefined ? null : { page, y: saved.y };
-}
-
-// The tag of the code this page was built with, stamped into it by the server.
-const servedStatic = () => document.querySelector('meta[name="html-mcp-static"]')?.content ?? null;
-
-// A state from a server serving other code than this page runs: the page reloads and
-// gets that code, since the modules it loaded stay what they were however the server
-// changes. Every state, whether asked for or sent, passes through here.
-function adoptProject(project) {
-  if ((project.static ?? null) !== servedStatic()) {
-    rememberReadingPlace();
-    location.reload();
-    return false;
-  }
-  state.project = project;
-  return true;
-}
-
-async function refreshState() {
-  if (!adoptProject(await fetchJson("/state"))) return;
-  const ids = Object.keys(state.project.artifacts);
-  // ?artifact= names the artifact to open: a shareable link, and how the server's own
-  // headless browser is pointed at the artifact whose layout it has to check.
-  const asked = new URLSearchParams(location.search).get("artifact");
-  const remembered = asked !== null ? asked : localStorage.getItem("htmlMcpArtifact");
-  state.alias = remembered !== null && ids.includes(remembered) ? remembered : ids[0];
-  state.artifact = state.project.artifacts[state.alias];
-  state.revision = state.artifact.revision;
-  renderArtifactTabs();
-  updateArtifactLinks();
-  updateLayoutUi();
-}
-
-// ----- Comment panel -----
-// The list of comments, the row above it, its search, its cards and its keys are shared with
-// the other review pages, in shared/comment-panel.js. What is this page's own goes in by the
-// hooks below: the artifact shown, its pages and frames, and the editor.
-
-// What a comment is on, as its card names it.
-function anchorLabel(anchor) {
-  switch (anchor.kind) {
-    case "artifact": return "artifact";
-    case "text": return "text";
-    case "page": return `p${anchor.number}`;
-    case "area": return `p${anchor.number} area`;
-    case "source": return `${anchor.file}:${anchor.line_start}${anchor.line_end === anchor.line_start ? "" : `-${anchor.line_end}`}`;
-    default: throw new Error(`unknown anchor kind: ${anchor.kind}`);
-  }
-}
-
-// The words a comment is on, which its card quotes once opened: the page's title for a page
-// or a box on one, which a comment the agent made may not carry itself, and nothing for the
-// artifact as a whole.
-function anchorQuote(anchor) {
-  if (anchor.kind === "artifact") return "";
-  if (anchor.kind === "text" || anchor.kind === "source") return anchor.quote;
-  if (anchor.title) return anchor.title;
-  const page = frameDocument()?.body ? artifactPages()[anchor.number - 1] : undefined;
-  return page === undefined ? "" : pageTitle(page, anchor.number - 1);
-}
-
-// What the new comment dialog says the comment is on.
-function composeAnchorText(anchor) {
-  if (anchor.kind === "text") return anchor.quote;
-  if (anchor.kind === "page") return `Page ${anchor.number}: ${anchor.title}`;
-  if (anchor.kind === "area") return `A box on page ${anchor.number}: ${anchor.title}`;
-  if (anchor.kind === "source") return `${anchor.file}:${anchor.line_start}\n${anchor.quote}`;
-  return "Whole artifact";
-}
-
-// The new comment dialog on *anchor*. A comment on the source goes with the revision its words
-// were selected in, which the server checks against the file.
-function commentOn(anchor) {
-  openCompose(anchor, composeAnchorText(anchor), anchor.kind === "source" ? { source_revision: state.sourceRevision } : {});
-}
-
+// The list of comments, the row above it, its search, its cards and its keys are shared with the
+// other review pages, in shared/comment-panel.js. What is this page's own goes in by the hooks
+// below: the artifact shown, its pages and frames, and the editor.
 const panel = createCommentPanel({
-  state,
-  prefix: PREFIX,
   settings,
   // The comments of the artifact shown.
-  base: () => (state.alias === null ? null : artifactBase()),
+  base: () => project.base(),
   label: anchorLabel,
-  quote: (comment) => anchorQuote(comment.anchor),
-  // Words the page no longer finds, as the highlights last found them, or a selection in the
-  // source the server no longer finds.
-  stale: (comment) => state.unattached.has(comment.id) || Boolean(comment.stale),
+  quote: commentQuote,
+  // Words the page no longer finds, as the marks last found them, or a selection in the source
+  // the server no longer finds.
+  stale: (comment) => marks.lost(comment.id) || Boolean(comment.stale),
   // An opened card shows whole, and the page or the source shows where the comment is.
-  showPlace: (commentId) => {
-    if (state.expanded.has(commentId)) revealCard(commentId);
-    jumpToComment(commentId).catch((error) => console.error(error));
+  showPlace: (comment) => {
+    if (panel.isOpen(comment.id)) room.reveal(comment.id);
+    places.showComment(comment).catch((error) => console.error(error));
   },
-  // K takes the keys to a comment's words in the source. Words on the page take no keys from
-  // here: the page shows them, and the keys stay with the list.
-  enterPlace: (comment) => {
-    if (comment.anchor.kind === "source") {
-      openSourceLocation(comment.anchor).catch((error) => alert(`Could not open source: ${error.message}`));
-    } else {
-      jumpToComment(comment.id).catch((error) => console.error(error));
-    }
-  },
+  // K takes the keys to a comment's words in the source.
+  enterPlace: (comment) => places.enterComment(comment),
   marked: (comments) => {
-    state.markedComments = comments;
-    renderHighlights();
-    syncSourceCommentMarkers();
+    markedComments = comments;
+    marks.render();
+    source.markComments();
   },
   whole: () => $("#artifact-comment-btn").click(),
   help: (page) => help.show(page),
-  // The bell (shared/agent-bell.js). A press goes to the session listening, or to the agent
-  // picked beside the bell with its model and effort.
+  // The bell (shared/agent-bell.js). A press goes to the session listening, or to the agent picked
+  // beside the bell with its model and effort.
   bell: {
     call: (lane) => fetchJson("/review-request", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(lane ?? {}),
     }),
   },
-  bringIntoView: (commentId) => revealCard(commentId),
+  bringIntoView: (id) => room.reveal(id),
   labels: { document: "artifact" },
   tabs: {
     comments: {
@@ -2686,33 +215,28 @@ const panel = createCommentPanel({
   compose: {
     // The selection the comment was written on goes.
     posted: (comment, body) => {
-      state.selectionAnchor = null;
-      if (body.anchor.kind === "source") {
-        state.editor?.clearSelection();
-      } else {
-        frameWindow().getSelection()?.removeAllRanges();
-        hideSelectionButton();
-      }
+      selection.forget();
+      if (body.anchor.kind === "source") source.clearSelection();
+      else selection.clear();
     },
   },
-  // Space shows where a comment is on the page or in the source, and K takes the keys to its
-  // words in the source. They rest while the artifact fills the screen, where the slide show has
-  // keys of its own.
+  // Space shows where a comment is on the page or in the source, and K takes the keys to its words
+  // in the source. They rest while the artifact fills the screen, where the slide show has keys of
+  // its own.
   keys: {
     rows: () => [
       { keys: ["K", "Ctrl+Alt+K"], does: "Jump to its text in the source and move keyboard focus there; press K (Ctrl+Alt+K without "
         + "Vim keys) to come back. A comment on the page shows its place there instead, and the keys stay here" },
     ],
-    rests: () => inFullscreen(),
+    rests: () => presentation.inFullscreen(),
   },
 });
-const { attach: attachCommentPanel, refreshComments, renderComments, openCompose, reset: resetCommentPanel } = panel;
 
 // The sidebar's tabs: Pages, Comments, which the panel fills, and Problems.
 const strip = createTabStrip({ shown: (name, clicked) => panel.showTab(name, clicked) });
 
-// Help, with the artifact's own Start here, search story and keys.
-// The Search page's terms in a deck's words, as its example about a chart's legend is.
+// Help, with the artifact's own Start here, search story and keys. The Search page's terms in a
+// deck's words, as its example about a chart's legend is.
 const help = createHelp({ prefix: PREFIX, pages: [], keys: panel.keys, words: {
   both: ["legend", "color"], either: ["chart", "table"], phrase: "title slide", without: "backup" } });
 
@@ -2723,128 +247,83 @@ const update = createUpdate({
   how: "https://github.com/MiiKiyoshi/html-mcp-web/blob/main/INSTALL.md",
 });
 
-// A card opened at the foot of the list unfolds below the fold, and the reader had to
-// scroll after every open to read what they had just asked for. The list scrolls by
-// what the card overhangs, so the whole of it shows; a card taller than the list is
-// brought to the top instead, which is as much of it as there is room for.
-// The opened card is brought into the list's box: its foot at the box's foot when it
-// fits, its head at the box's head when it does not. Done at once, then again a frame
-// later and once more shortly after: the measurement taken inside the click is not
-// always the one the engine paints (Safari laid the list out again after the click),
-// and the reader was left to scroll after opening the last card of the list.
-function revealCard(commentId) {
-  const settle = () => {
-    const list = $("#comments-list");
-    const card = Array.from(list.querySelectorAll("[data-comment-id]")).find(
-      (node) => node.dataset.commentId === commentId);
-    if (card === undefined || !state.expanded.has(commentId)) return;
-    const margin = 8;
-    growPanelFor(card.getBoundingClientRect().height + margin * 2);
-    const listBox = list.getBoundingClientRect();
-    const cardBox = card.getBoundingClientRect();
-    const overhang = cardBox.bottom - (listBox.bottom - margin);
-    const above = listBox.top + margin - cardBox.top;
-    if (cardBox.height > listBox.height - margin * 2 || above > 0) {
-      list.scrollTop += cardBox.top - listBox.top - margin;
-    } else if (overhang > 0) {
-      list.scrollTop += overhang;
-    }
-    // On the record when the page is traced, for a device that cannot be watched.
-    window.htmlMcpTrace?.(`reveal ${commentId} card=${Math.round(cardBox.top)}..${Math.round(cardBox.bottom)}`
-      + ` list=${Math.round(listBox.top)}..${Math.round(listBox.bottom)} over=${Math.round(overhang)}`
-      + ` scroll=${Math.round(list.scrollTop)}/${list.scrollHeight - list.clientHeight}`);
-  };
-  settle();
-  requestAnimationFrame(settle);
-  setTimeout(settle, 150);
-}
-
-// The comments' width beside the artifact and their height under it. A drag resizes the
-// artifact on every frame; measuring the fit of all pages and redrawing the highlight boxes
-// that often is the work that made the bar lag behind the finger, so the drag ends with one
-// of each, as the split's does.
+// The comments' width beside the artifact and their height under it. A drag resizes the artifact
+// on every frame; measuring the fit of all pages and redrawing the highlight boxes that often is
+// the work that made the bar lag behind the finger, so the drag ends with one of each, as the
+// split's does.
 const grips = attachPanelGrips({
   prefix: PREFIX,
   width: "--html-mcp-sidebar-width",
   height: "--html-mcp-panel-height",
-  split: () => state.split,
-  resizing: () => { state.draggingPanel = true; },
+  split: () => workspace.split,
+  resizing: () => workspace.drag(true),
   resized: () => {
-    state.draggingPanel = false;
-    updatePageScale();
-    scheduleHighlights();
-    scheduleLayoutCheck();
+    workspace.drag(false);
+    refit();
   },
 });
 
-// Under the artifact, the comments get a slice of a phone's screen, and a thread opened
-// there is usually taller than the slice: scrolling cannot show what does not fit, so
-// the reader was left scrolling after every open. The panel takes the room the card
-// needs instead, up to what the drag bar itself allows, and the artifact keeps the
-// rest. Beside the artifact it is already full height, so there is nothing to take.
-function growPanelFor(wanted) {
-  const layout = $(".layout");
-  const sidebar = $("#sidebar");
-  const list = $("#comments-list");
-  const stacked = Math.abs(sidebar.getBoundingClientRect().width
-    - layout.getBoundingClientRect().width) < 2;
-  if (!stacked) return;
-  const shortfall = wanted - list.getBoundingClientRect().height;
-  if (shortfall <= 0) return;
-  grips.setHeight(sidebar.getBoundingClientRect().height + shortfall);
+const room = createPanelRoom({ isOpen: (id) => panel.isOpen(id), setHeight: (pixels) => grips.setHeight(pixels) });
+
+// The server runs inside the agent's process. While it cannot be reached the bell says no agent
+// listens and the bar says the page is reconnecting.
+const socket = createSocket({
+  reconnect: 1500,
+  opened: () => {
+    announceArtifact();
+    layout.show();
+    // A server that comes back may be a new version's: the page asks which runs now.
+    update.read().catch((error) => console.error(error));
+    // The comments may have changed while the page could not hear the server, or before it first
+    // could: the socket opens after the first reading and the artifact's load, and an agent's
+    // reply written in between was never shown.
+    panel.refreshComments().catch((error) => console.error(error));
+  },
+  heard: handleSocketMessage,
+  closed: () => {
+    panel.bell.show({ waiters: 0 });
+    $("#artifact-status").textContent = "reconnecting";
+  },
+});
+
+// The pages fitted again to the room the Preview was given, and what is drawn over them.
+function refit() {
+  zoom.fit();
+  marks.schedule();
+  layout.schedule();
 }
 
-// Where a comment is, shown from the comments: the page scrolls to it, or the source selects
-// its words, and the keys stay with the comments, where the reader clicked or pressed Space.
-async function jumpToComment(commentId) {
-  const comment = state.comments.find((value) => value.id === commentId);
-  if (comment === undefined) return;
-  if (comment.anchor.kind === "source") {
-    await openSourceLocation(comment.anchor, false);
-  } else if (comment.anchor.kind === "page") {
-    artifactPages()[comment.anchor.number - 1]?.scrollIntoView({ behavior: "smooth", block: "start" });
-  } else if (comment.anchor.kind === "area") {
-    frameDocument().querySelector(`.html-mcp-area[data-comment-id="${CSS.escape(commentId)}"]`)
-      ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    flashMarks(commentId);
-  } else if (comment.anchor.kind === "text") {
-    const range = resolveAnchor(comment.anchor);
-    // A comment whose text is gone is not stranded: the page carries a dashed mark where
-    // it was written, and the card opens there like any other.
-    const element = range === null
-      ? frameDocument().querySelector(`.html-mcp-lost[data-comment-id="${CSS.escape(commentId)}"]`)
-      : (range.startContainer.nodeType === Node.ELEMENT_NODE
-        ? range.startContainer
-        : range.startContainer.parentElement);
-    element?.scrollIntoView({ behavior: "smooth", block: "center" });
-    flashMarks(commentId);
-  }
-  // The keys come back to the list, unless a box in it took them while the jump went on, as r
-  // pressed right after Space opens the reply box.
-  if (!document.activeElement?.matches?.("#comments-list textarea")) {
-    $("#comments-list").focus({ preventScroll: true });
-  }
+// The new comment dialog on *anchor*. A comment on the source goes with the revision its words
+// were selected in, which the server checks against the file.
+function commentOn(anchor) {
+  panel.openCompose(anchor, composeAnchorText(anchor),
+    anchor.kind === "source" ? { source_revision: source.revision() } : {});
 }
 
-function flashMarks(commentId) {
-  setTimeout(() => {
-    const marks = frameDocument().querySelectorAll(`[data-comment-id="${CSS.escape(commentId)}"]`);
-    marks.forEach((mark) => mark.classList.add("flash"));
-    setTimeout(() => marks.forEach((mark) => mark.classList.remove("flash")), 1000);
-  }, 350);
+// The server is told which artifact the page shows.
+function announceArtifact() {
+  if (socket.open() && project.alias() !== null) socket.send({ type: "active_artifact", artifact: project.alias() });
 }
 
-// From its mark on a page or beside a line a card opens the same way it does from the list:
-// whole, and at the foot of the box when it sits at the foot of the list (revealCard). Centred,
-// a tall card at the foot was cut off below and the reader scrolled after every open. The
-// sidebar opens first, so the card is measured where it shows.
-function focusComment(commentId) {
-  const layout = $(".layout");
-  if (layout.classList.contains("sidebar-collapsed")) {
-    layout.classList.remove("sidebar-collapsed");
-    localStorage.setItem("htmlMcpSidebarCollapsed", "0");
-  }
-  return panel.showComment(commentId);
+// Another artifact shown, from its tab: its comments, its frame and its zoom, and its file in the
+// editor when the Source shows.
+async function selectArtifact(alias) {
+  if (alias === project.alias()) return;
+  if (!source.mayLeave()) return;
+  zoom.keep(project.alias());
+  project.choose(alias);
+  announceArtifact();
+  panel.reset();
+  marks.forget();
+  pages.setCurrent(null);
+  source.forget();
+  deck.open(alias);
+  zoom.restore(alias);
+  tabs.render();
+  layout.show();
+  await panel.refreshComments();
+  if (workspace.view() !== "preview") await source.load(true);
+  deck.showOrLoad();
 }
 
 async function handleSocketMessage(message) {
@@ -2853,14 +332,13 @@ async function handleSocketMessage(message) {
     return;
   }
   if (message.type === "state") {
-    if (!adoptProject(message)) return;
+    if (!project.adopt(message)) return;
     if (message.review !== undefined) panel.bell.show({ waiters: message.review.waiters, lanes: message.review.lanes });
-    const artifact = message.artifacts[state.alias];
-    if (artifact !== undefined && state.revision !== artifact.revision) {
-      state.artifact = artifact;
-      state.revision = artifact.revision;
-      updateLayoutUi();
-      loadArtifact(true);
+    const artifact = message.artifacts[project.alias()];
+    if (artifact !== undefined && project.revision() !== artifact.revision) {
+      project.take(artifact);
+      layout.show();
+      deck.load(true);
     }
     return;
   }
@@ -2874,312 +352,83 @@ async function handleSocketMessage(message) {
   }
   // The server finished its check of a revision: the review page shows that result.
   if (message.type === "layout_checked") {
-    if (!adoptProject(message)) return;
-    const artifact = state.project.artifacts[state.alias];
-    if (artifact !== undefined && artifact.revision === state.revision) {
-      state.artifact = artifact;
-      updateLayoutUi();
+    if (!project.adopt(message)) return;
+    const artifact = project.project().artifacts[project.alias()];
+    if (artifact !== undefined && artifact.revision === project.revision()) {
+      project.take(artifact);
+      layout.show();
     }
     return;
   }
   if (["artifacts_changed", "config_reloaded"].includes(message.type)) {
-    if (!adoptProject(message)) return;
+    if (!project.adopt(message)) return;
     // An edited configuration can name other agents beside the session listening.
     panel.bell.show({ lanes: message.review.lanes });
     // An artifact shown that the configuration no longer names gives way to the first, with its
     // comments.
-    const gone = state.project.artifacts[state.alias] === undefined;
+    const gone = project.project().artifacts[project.alias()] === undefined;
     if (gone) {
-      state.alias = Object.keys(state.project.artifacts)[0];
-      state.loadedRevision = null;
-      resetCommentPanel();
-      state.unattached.clear();
+      project.show(Object.keys(project.project().artifacts)[0]);
+      deck.forget();
+      panel.reset();
+      marks.forget();
     }
-    const artifact = state.project.artifacts[state.alias];
-    const changed = state.loadedRevision !== artifact.revision || state.revision !== artifact.revision;
-    state.artifact = artifact;
-    state.revision = artifact.revision;
-    renderArtifactTabs();
-    updateArtifactLinks();
-    updateLayoutUi();
-    if (gone) await refreshComments();
-    if (changed) loadArtifact(true);
-    if (message.type === "artifacts_changed" && message.path === state.sourcePath) {
-      if (state.sourceDirty) setSourceStatus("Changed on disk · reload", "conflict");
-      else if (state.view !== "preview") await loadSource(true);
-      else {
-        state.sourcePath = null;
-        state.sourceRevision = null;
-      }
-    }
+    const artifact = project.project().artifacts[project.alias()];
+    const changed = !deck.shows(artifact.revision) || project.revision() !== artifact.revision;
+    project.take(artifact);
+    tabs.render();
+    layout.show();
+    if (gone) await panel.refreshComments();
+    if (changed) deck.load(true);
+    if (message.type === "artifacts_changed") await source.changedOnDisk(message.path, workspace.view() !== "preview");
     return;
   }
   if (["comment_added", "comment_updated", "comments_updated", "comment_deleted"].includes(message.type)
-      && message.artifact === state.alias) {
-    await refreshComments();
+      && message.artifact === project.alias()) {
+    await panel.refreshComments();
   }
-}
-
-function connectWebSocket() {
-  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  const socket = new WebSocket(`${protocol}//${location.host}/ws`);
-  state.ws = socket;
-  socket.onopen = () => {
-    announceActiveArtifact();
-    updateLayoutUi();
-    // A server that comes back may be a new version's: the page asks which runs now.
-    update.read().catch((error) => console.error(error));
-    // The comments may have changed while the page could not hear the server, or before it
-    // first could: the socket opens after the first reading and the artifact's load, and an
-    // agent's reply written in between was never shown.
-    refreshComments().catch((error) => console.error(error));
-  };
-  socket.onmessage = (event) => {
-    handleSocketMessage(JSON.parse(event.data)).catch((error) => console.error(error));
-  };
-  socket.onclose = () => {
-    panel.bell.show({ waiters: 0 });
-    $("#artifact-status").textContent = "reconnecting";
-    setTimeout(connectWebSocket, 1500);
-  };
-}
-
-function announceActiveArtifact() {
-  if (state.ws?.readyState === WebSocket.OPEN && state.alias !== null) {
-    state.ws.send(JSON.stringify({ type: "active_artifact", artifact: state.alias }));
-  }
-}
-
-function attachSplitResize() {
-  const grip = $("#split-grip");
-  const workspace = $("#workspace");
-  const stacked = matchMedia("(max-width: 950px)");
-  let ratio = Number(localStorage.getItem("htmlMcpSplitRatio")) || 0.5;
-  const apply = (value) => {
-    ratio = Math.max(0.15, Math.min(0.85, value));
-    workspace.style.setProperty("--split-first", `${ratio}fr`);
-    workspace.style.setProperty("--split-second", `${1 - ratio}fr`);
-    grip.setAttribute("aria-valuenow", String(Math.round(ratio * 100)));
-    state.editor?.resize();
-  };
-  const finish = () => {
-    state.draggingPanel = false;
-    localStorage.setItem("htmlMcpSplitRatio", String(ratio));
-    state.editor?.resize();
-    updatePageScale();
-    scheduleHighlights();
-    scheduleLayoutCheck();
-  };
-  const orientation = () => {
-    grip.setAttribute("aria-orientation", stacked.matches ? "horizontal" : "vertical");
-    requestAnimationFrame(finish);
-  };
-  // With the panes stacked, the comments' bar under them changes the height the split
-  // divides, and a ratio kept through that drag carried the split's bar up the screen
-  // with it. The drag holds the bar where it was by moving the ratio instead.
-  state.split = {
-    holdable: () => stacked.matches && $(".layout").classList.contains("view-split"),
-    centerY: () => {
-      const box = grip.getBoundingClientRect();
-      return box.top + box.height / 2;
-    },
-    holdAt: (y) => {
-      const top = $("#artifact-pane").getBoundingClientRect().top;
-      const rows = workspace.getBoundingClientRect().bottom - top - 10;
-      apply((y - top - 5) / Math.max(1, rows));
-    },
-    keep: () => localStorage.setItem("htmlMcpSplitRatio", String(ratio)),
-  };
-  apply(ratio);
-  orientation();
-  stacked.addEventListener("change", orientation);
-  grip.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    state.draggingPanel = true;
-    grip.setPointerCapture(event.pointerId);
-    const move = (moved) => {
-      const rect = workspace.getBoundingClientRect();
-      const size = stacked.matches ? rect.height : rect.width;
-      const position = stacked.matches ? moved.clientY - rect.top : moved.clientX - rect.left;
-      apply((position - 5) / Math.max(1, size - 10));
-    };
-    const done = () => {
-      grip.removeEventListener("pointermove", move);
-      grip.removeEventListener("lostpointercapture", done);
-      finish();
-    };
-    grip.addEventListener("pointermove", move);
-    grip.addEventListener("lostpointercapture", done);
-  });
-  grip.addEventListener("keydown", (event) => {
-    const decrease = stacked.matches ? "ArrowUp" : "ArrowLeft";
-    const increase = stacked.matches ? "ArrowDown" : "ArrowRight";
-    if (![decrease, increase, "Home", "End"].includes(event.key)) return;
-    event.preventDefault();
-    apply(event.key === "Home" ? 0.15 : event.key === "End" ? 0.85
-      : ratio + (event.key === decrease ? -0.05 : 0.05));
-    finish();
-  });
 }
 
 function attachControls() {
-  attachSplitResize();
-  window.addEventListener("pagehide", rememberReadingPlace);
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") rememberReadingPlace();
-  });
-  window.addEventListener("beforeunload", (event) => {
-    if (!state.sourceDirty) return;
-    event.preventDefault();
-    event.returnValue = "";
-  });
-  $("#source-save-btn").addEventListener("click", () => {
-    saveSource().catch((error) => alert(`Could not save: ${error.message}`));
-  });
-  $("#source-reload-btn").addEventListener("click", () => {
-    loadSource(true).catch((error) => alert(`Could not reload: ${error.message}`));
-  });
-  $("#source-page-btn").addEventListener("click", () => {
-    showSourceSelectionOnPage().catch((error) => alert(`Could not show it in the Preview: ${error.message}`));
-  });
-  $("#source-font-smaller-btn").addEventListener("click", () => stepSourceFontSize(-1));
-  $("#source-font-larger-btn").addEventListener("click", () => stepSourceFontSize(1));
-  $("#source-wrap-btn").addEventListener("click", () => {
-    localStorage.setItem("htmlMcpSourceWrap", sourceWraps() ? "0" : "1");
-    applySourceWrap();
-  });
-  $("#source-vim-btn").addEventListener("click", () => {
-    localStorage.setItem("htmlMcpVimKeys", vimKeys() ? "0" : "1");
-    applyVimKeys();
-    state.editor?.focus();
-  });
-  applySourceWrap();
-  applyVimKeys();
-  $("#source-comment-btn").addEventListener("click", openSourceCommentCompose);
-  for (const button of document.querySelectorAll(".view-tab")) {
-    button.addEventListener("click", () => {
-      setWorkspaceView(button.dataset.view).catch((error) => alert(error.message));
-    });
-  }
-  $("#selection-comment-btn").addEventListener("click", () => {
-    if (state.selectionAnchor !== null) commentOn(state.selectionAnchor);
-  });
-  $("#selection-source-btn").addEventListener("click", () => {
-    openSelectionInSource().catch((error) => alert(`Could not open the source: ${error.message}`));
-  });
-  $("#area-btn").addEventListener("click", () => setAreaMode(!state.areaMode));
-  // Ctrl+[ does outside the editor what Escape does: Safari in full screen takes Escape to
-  // leave full screen, so a comment being written could not be dropped without it.
-  document.addEventListener("keydown", (event) => {
-    if (!event.ctrlKey || event.code !== "BracketLeft" || event.target.closest?.("#source-editor")) return;
-    event.preventDefault();
-    const dialog = document.querySelector("dialog[open]");
-    if (dialog === null) {
-      event.target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
-    } else if (dialog.querySelector("#compose-cancel")) {
-      dialog.querySelector("#compose-cancel").click();
-    } else {
-      dialog.close();
-    }
-  }, true);
-  const closeMore = () => {
-    $("#more-menu").hidden = true;
-    $("#more-btn").setAttribute("aria-expanded", "false");
-  };
-  $("#more-btn").addEventListener("click", (event) => {
-    event.stopPropagation();
-    const open = $("#more-menu").hidden;
-    $("#more-menu").hidden = !open;
-    $("#more-btn").setAttribute("aria-expanded", String(open));
-  });
-  // A choice in the menu closes it, but for an export, which shows its progress there.
-  document.addEventListener("click", (event) => {
-    if (!event.target.closest(".more")
-      || event.target.closest(".more-menu button:not(.download-btn)")) closeMore();
-  });
-  $("#settings-btn").addEventListener("click", () => settings.open());
-  $("#settings-menu-btn").addEventListener("click", () => settings.open());
-  // Each artifact and preview frame takes the theme as its document loads.
-  document.addEventListener("load", (event) => {
-    if (event.target instanceof HTMLIFrameElement) markFrameTheme(event.target);
-  }, true);
-  // On a touch screen the view tabs sit in the artifact's bar by the thumbs button, where a
-  // thumb reaches them; with a mouse, on the left of the top bar.
-  const touch = window.matchMedia("(pointer: coarse)");
-  const placeViewTabs = () => {
-    if (touch.matches) $("#thumbs-btn").after($(".view-tabs"));
-    else $("#artifact-tabs").before($(".view-tabs"));
-  };
-  touch.addEventListener("change", placeViewTabs);
-  placeViewTabs();
+  workspace.attach();
+  reloadPlace.attach();
+  source.attach();
+  selection.attach();
+  area.attach();
+  attachEscapeKey({ own: "#source-editor" });
+  attachMenu({ openSettings: () => settings.open() });
+  attachFrameTheme();
   $("#artifact-comment-btn").addEventListener("click", () => commentOn({ kind: "artifact" }));
-  $("#download-pdf-btn").addEventListener("click", (event) => download(event.currentTarget, "pdf"));
-  $("#download-pptx-btn").addEventListener("click", (event) => download(event.currentTarget, "pptx"));
-  $("#fullscreen-btn").addEventListener("click", () => {
-    // The slide show sizes the current page itself; a reader's zoom held from browsing
-    // would put the show off screen.
-    resetArtifactZoom();
-    toggleFullscreen().catch((error) => alert(`Could not enter full screen: ${error.message}`));
-  });
-  $("#presentation-prev-btn").addEventListener("click", () => movePresentationPage(-1));
-  $("#presentation-next-btn").addEventListener("click", () => movePresentationPage(1));
-  $("#presentation-exit-btn").addEventListener("click", () => {
-    toggleFullscreen().catch((error) => alert(`Could not exit full screen: ${error.message}`));
-  });
-  document.addEventListener("wheel", handlePresentationWheel, { passive: false });
-  document.addEventListener("wheel", handleViewerWheel, { passive: false });
-  for (const kind of ["gesturestart", "gesturechange", "gestureend"]) {
-    document.addEventListener(kind, handleViewerGesture, { passive: false });
-  }
-  document.addEventListener("fullscreenchange", syncFullscreenMode);
-  // A device that cannot be watched from where the code is written draws its own touch
-  // record over the page when the address carries ?trace.
-  if (new URLSearchParams(window.location.search).has("trace")) import("./trace.js");
-  attachCommentPanel();
-  $("#sidebar-toggle-btn").addEventListener("click", () => {
-    const collapsed = $(".layout").classList.toggle("sidebar-collapsed");
-    localStorage.setItem("htmlMcpSidebarCollapsed", collapsed ? "1" : "0");
-  });
-  $("#thumbs-btn").addEventListener("click", () => setThumbsOpen(!thumbsOpen()));
+  attachExport({ base: project.base });
+  presentation.attach();
+  zoom.attach();
+  // A device that cannot be watched from where the code is written draws its own touch record
+  // over the page when the address carries ?trace.
+  if (new URLSearchParams(window.location.search).has("trace")) import("./page/trace.js");
+  panel.attach();
+  thumbs.attach();
   search.attachControls();
-  $("#thumbs-frame").addEventListener("load", installThumbs);
-  $("#scripts-btn").addEventListener("click", () => {
-    localStorage.setItem("htmlMcpScriptsHidden", scriptsHidden() ? "0" : "1");
-    applyScriptVisibility();
-    search.refresh();
-  });
-  document.addEventListener("keydown", (event) => {
-    handlePresentationKeydown(event);
-    if (event.defaultPrevented) return;
-    if (event.key !== "\\" || event.metaKey || event.ctrlKey || event.altKey) return;
-    if (["TEXTAREA", "INPUT", "SELECT"].includes(event.target.tagName)) return;
-    event.preventDefault();
-    $("#sidebar-toggle-btn").click();
-  });
-  $("#zoom-reset-btn").addEventListener("click", () => {
-    resetArtifactZoom();
-  });
-  // On a phone the comments cover the artifact, so they start out of the way until asked
-  // for; a wide screen shows both and keeps whatever was chosen last.
-  const stored = localStorage.getItem("htmlMcpSidebarCollapsed");
-  const collapsed = stored === null ? window.innerWidth <= 560 : stored === "1";
-  if (collapsed) $(".layout").classList.add("sidebar-collapsed");
+  scripts.attach();
+  // On a phone the comments cover the artifact, so they start out of the way until asked for; a
+  // wide screen shows both and keeps whatever was chosen last.
+  attachSidebarToggle({ key: "htmlMcpSidebarCollapsed", closedUnder: 561 });
 }
 
 async function init() {
   holdZoomOnFields();
-  // The artifact zooms with a pinch: in its frame about the fingers, and anywhere else on the
-  // page about its middle (handleViewerWheel).
+  // The artifact zooms with a pinch: in its frame about the fingers, and anywhere else on the page
+  // about its middle (zoom.js).
   holdPinchOutside("#artifact-frame");
   attachControls();
-  await refreshState();
-  await refreshComments();
-  loadArtifact(false);
-  setThumbsOpen(localStorage.getItem("htmlMcpThumbsOpen") === "1");
-  const savedView = localStorage.getItem("htmlMcpWorkspaceView");
-  if (["source", "split"].includes(savedView)) await setWorkspaceView(savedView);
-  connectWebSocket();
+  if (await project.read()) {
+    tabs.render();
+    layout.show();
+  }
+  await panel.refreshComments();
+  deck.load(false);
+  thumbs.restore();
+  await workspace.restore();
+  socket.connect();
 }
 
 document.addEventListener("DOMContentLoaded", () => {

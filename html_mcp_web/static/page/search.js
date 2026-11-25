@@ -4,16 +4,18 @@
 // document's text is left as it is: comment anchors and the layout check read it unchanged.
 // The search opens from the toolbar or with Cmd+F or Ctrl+F while the deck or the previews
 // have the focus. Enter goes to the next match, Shift+Enter to the one before, Escape closes.
-export function createSearch(state, dependencies) {
-  const {
-    $,
-    artifactPages,
-    frameDocument,
-    frameWindow,
-    movePresentationPage,
-    pageFrameFor,
-    selectionRects,
-  } = dependencies;
+//
+// createSearch takes showing(), whether the slide show is on, and current(), the page it shows,
+// whose matches come first; movePage(delta), which steps the show to a match's page; and
+// frameOf(node), the page a node is on with its box and scale (page-marks.js). It gives
+// attachControls(); handleKeydown(event), Cmd+F or Ctrl+F in a document; and refresh(), the
+// matches found again in a document that changed.
+
+import { $ } from "../shared/dom.js";
+import { deckPages, frameDocument, frameWindow } from "./deck-dom.js";
+import { selectionRects } from "./selection-rects.js";
+
+export function createSearch({ showing, current: shownPage, movePage, frameOf }) {
 
   // Text the reader does not see as the page's words: KaTeX keeps a MathML copy of each
   // formula for screen readers, and the viewer's own layers carry badge numbers.
@@ -133,7 +135,7 @@ export function createSearch(state, dependencies) {
     const doc = frameDocument();
     const drawn = [];
     for (const match of found) {
-      const frame = pageFrameFor(match.range.startContainer);
+      const frame = frameOf(match.range.startContainer);
       if (frame === null) continue;
       const rects = selectionRects(match.range);
       if (rects.length === 0) continue;
@@ -177,8 +179,8 @@ export function createSearch(state, dependencies) {
     showCount();
     if (!reveal) return;
     const match = matches[current];
-    const number = artifactPages().indexOf(match.page) + 1;
-    if (state.slideShow && number > 0 && number !== state.currentPage) movePresentationPage(number - state.currentPage);
+    const number = deckPages().indexOf(match.page) + 1;
+    if (showing() && number > 0 && number !== shownPage()) movePage(number - shownPage());
     const win = frameWindow();
     const box = match.marks[0].getBoundingClientRect();
     if (box.top < 0 || box.bottom > win.innerHeight || box.left < 0 || box.right > win.innerWidth) {
@@ -194,9 +196,9 @@ export function createSearch(state, dependencies) {
     clearMarks();
     const doc = frameDocument();
     matches = doc === null || doc.body === null ? [] : draw(findAll(doc, input().value));
-    const pages = artifactPages();
-    const ahead = matches.findIndex((match) => (state.slideShow
-      ? pages.indexOf(match.page) + 1 >= (state.currentPage || 1)
+    const pages = deckPages();
+    const ahead = matches.findIndex((match) => (showing()
+      ? pages.indexOf(match.page) + 1 >= (shownPage() || 1)
       : match.top >= 0));
     select(ahead === -1 ? 0 : ahead, true);
   }
