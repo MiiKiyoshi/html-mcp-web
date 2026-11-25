@@ -1,5 +1,5 @@
 {
-  "source": "tex-mcp-web 0d2a19a",
+  "source": "tex-mcp-web 4cb907f",
   "files": {
     "agent-bell.css": "4c4474b0b75c4f41697df70dc22988067b3ae76da2bad550ef551338db713428",
     "agent-bell.js": "0047cfbe30dfe1d341d9bd324e5ec06f40b7dcd62c9828892db0f6a3ec4cac73",
@@ -26,10 +26,10 @@
     "page-zoom.js": "2c363d3fc3979267e40598b5ec9b31515c4465ee38a298f58dce65df1eb41b27",
     "panel-grips.css": "e379efd020c814766019680d6dedbb3b2c77b4199086700eb11386367627439a",
     "panel-grips.js": "8d83d19508bd8037ea50999fc000817efda7e2ebab42a99fc846991c8ed0c91d",
-    "pdf-marks.js": "c9d424f105d003520a2f72cbb81ced381d65936f270402693b7312c9172e7a68",
+    "pdf-marks.js": "61d9fdbd7f626a4fb08f380c60a3774113ec7b1af80e1e3ef4efdd420f0146b5",
     "pdf-theme.js": "eafb3093a6dc5067839a132f39c04a3cc9990bc439d64aba0c3596b0e397c999",
     "pdf-touch.js": "6e4f1fb8922997cc2a729a5341741647deacf4669666d699e6d216280355f8b0",
-    "pdf-view.js": "73d1eda8269f7dfb4410ed67c31faa23444fd2a6a1f59bed1a647bb4eebfd95f",
+    "pdf-view.js": "04091b2f81b8eab4910eade83ebaed9e781afba0cf105b4c222f1c13ef511256",
     "settings.js": "9fb2beabe4a079f32186d56da0c31c4b198bbb90efb4647c3044db7e5fe1cfee",
     "sidebar.js": "91a48be724c6364856f5b5583efb8c4ab7c45f7e73da6b484e4f1f9e8fa07253",
     "socket.js": "936a488f1dd6096060b5ef789795e54a6481e80a19274ae01f78c793a15aef50",
