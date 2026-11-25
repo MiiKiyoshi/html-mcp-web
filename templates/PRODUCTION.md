@@ -38,7 +38,7 @@ Size the figure's box for readable detail and the relationships it must show, wi
 
 ## Article 3. Check an edit
 
-3.1 **Read pages from `image()`, in order, never from the edit file.** A page counts as read only from its `image()` render. Reading the HTML, or a record that the page was checked, is not a check of the page. For a new or rebuilt document, and whenever the renders are no longer in your context, as in a new session or after compaction, call `image()` for every page from the first, in order, and read each one before judging any page or reporting on the document. For a smaller edit, render the affected pages with `image()`, with `grayscale=false` when colour is in question, and perform the content guideline's checks in the scope and order of neutral clauses 2.5, 2.8 and 3.6 (report Article 7).
+3.1 **Read pages from `image()`, in order, never from the edit file.** A page counts as read only from its `image()` render. Reading the HTML, or a record that the page was checked, is not a check of the page. For a new or rebuilt document, and whenever the renders are no longer in your context, as in a new session or after compaction, call `image()` for every page from the first, in order, and read each one before judging any page or reporting on the document. For a smaller edit, render the affected pages with `image()`, with `grayscale=false` when colour is in question, and perform the content guideline's checks in the scope and order of neutral clauses 2.4, 2.5, 2.8 and 3.6 (report Article 7).
 
 3.2 **Check affected pages for layout errors.** Use `layout(artifact=..., page=...)` to check each affected page's errors. Consult [layout check reports](KITS.md#article-11-layout-check-reports) to interpret the result. Read the returned blocks and free space only when the rendered page leaves a placement or spacing question unresolved.
 
@@ -46,10 +46,10 @@ Size the figure's box for readable detail and the relationships it must show, wi
 
 ## Article 4. Complete independent review
 
-4.1 **Run one independent review round before handoff.** Before handing off a new document or a revision across the document, run one independent review round. First bring all of the following to hold:
+4.1 **Run an independent review round when the requester asks.** A deck is reviewed by an independent reader only when the requester asks for it (neutral clause 2.7). A report is reviewed once before handing off a new document or a revision across the document. Before a round, bring all of the following to hold:
 
 1. `layout()` returns an empty `errors` list,
-2. the checks of neutral clauses 2.5, 2.8 and 3.6 (report Article 7) pass,
+2. the checks of neutral clauses 2.4, 2.5, 2.8 and 3.6 (report Article 7) pass,
 3. for work answering a review request, the requirements gathered under neutral clause 9.1 (report 8.1) are met.
 
 When one cannot be brought to hold, run the round anyway and report what remains under neutral clause 9.4 (report 9.1). Run another round only at the requester's direction.

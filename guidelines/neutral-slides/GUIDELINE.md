@@ -16,11 +16,13 @@ Articles 1 to 3 apply to every deck and every change to one. Articles 4 and 5 ap
 
 ## Article 2. The order of work
 
-2.1 **Audience.** In the notes file (10.1), write what the audience already knows and what they should be able to say after the talk. Count as known only what they use day to day. What they once heard, in an earlier lecture, an earlier talk or a paper they were given, is treated as forgotten: having attended is not knowing, and an audience forgets. A term that comes from such an occasion is connected or stated again on the page that uses it. Write the frames and the vocabulary they work in every day, such as a model, its parameters and an objective function for people who train models. Do not set the audience below where they are. Assuming that they know nothing is not a safe default: it protects the author from the charge of having skipped a step, makes the explanation longer, and treats the audience as slow. Write the requester's instructions in their own words.
+What 2.1 to 2.3 produce is not page text. Page text is written only after they exist, and every line of it comes from them.
 
-2.2 **Walk.** First try to say each part of the subject in one sentence inside a frame the audience already has, such as which model is fitted to which data with which objective function. When such a sentence holds, it is the walk for that part: give what each slot of the frame holds here, and stop. Build up in steps only what none of their frames covers. Starting from what the audience knows, write the explanation as steps. Each step is the question a listener has at that point and its answer in one sentence. For each answer, name where the listener got every object, word, value and relation it uses. Whatever they have not been given yet becomes an earlier step. Do not think in pages yet. Explain what the requester asked for, not an easier subject or one the material happens to cover.
+2.1 **Audience.** In the notes file (10.1), write what the audience already knows and what they should be able to say after the talk. Count as known only what they use day to day. What they once heard, in an earlier lecture, an earlier talk or a paper they were given, is treated as forgotten: having attended is not knowing, and an audience forgets. A term that comes from such an occasion is connected or stated again on the page that uses it. Write the frames and the vocabulary they work in every day, such as a model, its parameters and an objective function for people who train models. Do not set the audience below where they are. Assuming that they know nothing is not a safe default: it protects the author from the charge of having skipped a step, makes the explanation longer, and treats the audience as slow. Write the requester's instructions in their own words. When the request and the requester's own writing do not show which frames and words the audience uses, ask once, before anything else, whether the pages may use those terms as they are. Ask nothing else at this stage.
 
-2.3 **Pages.** Cut the walk into pages, one answer to a page, as many pages as the walk needs. Then plan each page before building it. List what the page will hold in the order the audience's eye meets it: the title, the line under it, the left column from top to bottom, then the right column, then the bottom line. Go down the list as someone who has seen only the items above and the earlier pages, and ask of every item, down to a single symbol, number or unit:
+2.2 **Deck program and word list.** In the notes file, write what the audience can say when the talk ends. Work backward from it: what must they have been given in order to say that, and what before that, until you reach what they have when they sit down (2.1). Each step becomes a page, written as one line: what the page takes, from the audience's head or from earlier pages, and what it gives. What a page must give is decided by the page that takes it, not by how much the material holds on the topic. Remove a page whose output no later page and no closing statement takes. A page that gives again what an earlier page already gave is answering the wrong question, however correct it is. Where a step fits a frame the audience already has, such as which model is fitted to which data with which objective function, write it as that frame with its slots filled, and stop; break into smaller steps only what none of their frames covers. Explain what the requester asked for, not an easier subject or one the material happens to cover. Beside the program keep a word list: for each thing the deck names, the one name the pages use (5.1, 5.5), its full name and its abbreviation when it has them, and the names that are not to be used for it. Take the names from the requester's words and from how the work itself is carried out, before taking them from the sources.
+
+2.3 **Pages.** One page of the deck program is one page of the deck, as many pages as the program needs. For each page, write its own program before any text: what is given, then the steps, each with what it takes and what it produces, then the result the page hands on. Every step takes something given or something produced above it. Then choose what the page shows: the fewest lines and drawings that together supply everything the page must give and explain every symbol and name that is visible on it. Remove a line when all of that is still supplied without it, however true and however well connected the line is. A line that supplies none of it has no place: a page has no slot for a remark, for the definition of a word the audience uses, or for a fact that is only related. Then list what the page will hold in the order the audience's eye meets it: the title, the line under it, the left column from top to bottom, then the right column, then the bottom line. Go down the list as someone who has seen only the items above and the earlier pages, and ask of every item, down to a single symbol, number or unit:
 
 - Does the audience already know this, or would they ask why it is written at all? Remove what they know: the definition of a word they use, a label for a role they can see, a restatement of the line above.
 - What is this called, by the name people use?
@@ -32,15 +34,23 @@ Articles 1 to 3 apply to every deck and every change to one. Articles 4 and 5 ap
 
 When an item fails, remove it, change the order or add what is missing, and go down the whole list again from the top. Rework the plan this way, discarding it and starting over when patching does not fix it, until no item fails. Build the page only then. You do not feel where a newcomer stops, so the questions have to be asked one by one; a page that only has no wrong statement has not been checked.
 
-2.4 **Draw, then write.** On each page show the thing itself and the relation the answer is about. Then add only the words the picture does not give.
+2.4 **Checks before the first draft is shown.** Run these on your own draft, in this order, and show nothing until they pass.
+
+1. Chain. Going down each page program, every step takes something given or produced earlier. Going back from the result, every step is used. The same holds for the pages of the deck program.
+2. Fewest lines. For each visible line, label and drawing, name the thing the page must give, or the visible symbol or name, that it supplies. Remove each one that supplies nothing, and each one whose part another line already supplies.
+3. Words. Every name on the pages is the word list's name for that thing, no name the list rules out appears, and each abbreviation carries its full name at its first appearance in reading order (5.4).
+4. Match. Each page holds exactly what 2.3 chose, in the planned order: nothing added while writing, nothing dropped.
+5. Rendered pages. Read them as 2.5 says.
+
+These checks give the explanation a pass or a fail of its own, as a build or a calculation has one. Without them only the material gets checked, and the work goes where the checking is.
 
 2.5 **Read from page one.** Render the deck and read it in order as someone who has seen only the earlier pages. Read the rendered pages themselves, every page, one after another from the first. The markup or source shows the words, but not what the eye meets first, what a figure shows or what stands beside what, so reading it is never reading the deck, whatever the hurry. A note or a summary saying that a page was read is not a reading either. When the rendered pages are no longer in front of you, as in a new session or after your context was compacted, render and read every page in order again before you judge a page, answer for the deck or hand it over. On each page read in the order of 2.3, one item at a time, asking the same questions of the rendered page. At each page, check first whether what the audience knew and what the earlier pages actually gave is enough to follow this page's answer. When it is not, fix the missing premise or relation, or the question the page took, before anything else: polishing the wording or layout of an explanation that does not connect only polishes the wrong explanation. Then fix wording, then layout. When the presenter knows less than the author, read each page also as the presenter, who must be able to find its question and answer on the page and explain every element.
 
 2.6 **Script.** Write each page's script while looking at the rendered page.
 
-2.7 **Cold reader.** Before handing over a new or rebuilt deck, have someone who did not build it read the rendered pages in order, knowing only what the audience knows, and report where they stop following.
+2.7 **A reader who did not build it.** Have one read the deck only when the requester asks for it. Give them the rendered pages in order and what the audience has (2.1). They report, for each page, which of the things the page must give they could not find or took wrongly. They do not propose text, and a wish for more explanation is not a finding unless one of those things is missing.
 
-2.8 **Done.** The work is done when, on every page, the audience has been given each thing the page uses, can get from those things to the page's one answer, and can do so at speaking pace. A clean build, a clean layout check, complete notes, a reviewer's pass, a reading of the source or a record of an earlier reading does not show that.
+2.8 **Done.** The work is done when the checks of 2.4 pass and, on every page, the audience has been given each thing the page uses, can get from those things to the page's one answer, and can do so at speaking pace. A clean build, a clean layout check, complete notes, a reviewer's pass, a reading of the source or a record of an earlier reading does not show that.
 
 ## Article 3. When this happens, do this
 
@@ -58,7 +68,7 @@ When an item fails, remove it, change the order or add what is missing, and go d
 
 3.7 **You move, add or remove a page.** Check that every later page still gets each thing it uses before it uses it, and update the page list in the notes file (10.1).
 
-3.8 **What you find contradicts the walk.** Change the answer and the steps that depend on it, in the walk and on the pages.
+3.8 **What you find contradicts the deck program.** Change the step and every page that takes from it, in the program and on the pages.
 
 3.9 **An instruction conflicts with a clause here, two clauses conflict, or what you observe conflicts with either.** Say so. Do not quietly change or drop one of them.
 
@@ -185,7 +195,9 @@ When an item fails, remove it, change the order or add what is missing, and go d
 10.1 **One file, kept current.** Keep one file beside the deck, in the deck's language, and keep it current:
 
 - what the audience knows at the start and should be able to say at the end,
-- the walk: each question and its one-sentence answer, in order,
+- the deck program: for each page, what it takes and what it gives, ending with what the audience can say after the talk,
+- the word list: for each thing, the name used, its full name and abbreviation, and the names not used,
+- each page's program and the lines chosen from it,
 - the requester's instructions in their words, and separately the choices you made from them,
 - the current page list,
 - what the presenter needs to know beyond the page and the script, when the presenter knows less than the author.
