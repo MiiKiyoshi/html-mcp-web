@@ -337,7 +337,9 @@ async function handleSocketMessage(message) {
   }
   if (message.type === "state") {
     if (!project.adopt(message)) return;
-    if (message.review !== undefined) panel.bell.show({ waiters: message.review.waiters, lanes: message.review.lanes });
+    if (message.review !== undefined) {
+      panel.bell.show({ waiters: message.review.waiters, queued: message.review.queued, lanes: message.review.lanes });
+    }
     const artifact = message.artifacts[project.alias()];
     if (artifact !== undefined && project.revision() !== artifact.revision) {
       project.take(artifact);

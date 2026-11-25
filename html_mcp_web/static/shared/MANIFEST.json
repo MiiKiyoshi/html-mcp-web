@@ -1,8 +1,8 @@
 {
-  "source": "tex-mcp-web 7bf801e",
+  "source": "tex-mcp-web f2d8562",
   "files": {
     "agent-bell.css": "4c4474b0b75c4f41697df70dc22988067b3ae76da2bad550ef551338db713428",
-    "agent-bell.js": "0047cfbe30dfe1d341d9bd324e5ec06f40b7dcd62c9828892db0f6a3ec4cac73",
+    "agent-bell.js": "86cb652b0cab21781af69c71794ce85b70ca432dbeee9a2da48989c0da4c5ce7",
     "comment-api.js": "da1e09cb7c9568a9da4718a5b5aa5657d9e76e3ab6208c60b9dacffe3fcb8a21",
     "comment-card.js": "fe9fc8f2c88557b096135207477caec95616a70f80527b40689c6afa7e1fc022",
     "comment-compose.js": "16cc5b75f2464671e99199cfbe7d80caa4965861911aba36f304471e7c241c1a",

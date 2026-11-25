@@ -540,7 +540,8 @@ class HtmlReviewServer:
             "project_dir": str(self.project_dir),
             "port": self.config.port,
             "review": {"calls": self.review.calls, "consumed": self.review.consumed,
-                       "waiters": self.review.waiters, "lanes": self.review.page_lanes()},
+                       "waiters": self.review.waiters, "queued": self.review.queued,
+                       "lanes": self.review.page_lanes()},
             "artifacts": artifacts,
             # Whether the layout can be checked at all: only the server checks it, in Chrome.
             "layout_checker": chrome.binary() is not None,

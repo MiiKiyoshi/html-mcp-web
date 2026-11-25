@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import os
 import queue
@@ -1006,13 +1007,13 @@ def test_listen(tmp_path: Path, monkeypatch, codex) -> None:
             assert line(15).startswith("[review]")
             time.sleep(1.0)
             assert waiter.poll() is None
-            assert review() == {"calls": 1, "consumed": 1, "waiters": 1, "lanes": {}}    # parked again
+            assert review() == {"calls": 1, "consumed": 1, "waiters": 1, "queued": False, "lanes": {}}    # parked again
             assert line(1.5) == ""                                           # and silent
             press()
             assert line(15).startswith("[review]")
             time.sleep(1.0)
             assert waiter.poll() is None
-            assert review() == {"calls": 2, "consumed": 2, "waiters": 1, "lanes": {}}
+            assert review() == {"calls": 2, "consumed": 2, "waiters": 1, "queued": False, "lanes": {}}
 
             # The server going away is not the end of the waiter: a reconnect of the MCP
             # client restarted it and the monitor died with "[gone]", to be started again
@@ -1129,6 +1130,61 @@ def test_a_session_with_the_plugin_listens_from_its_start(tmp_path: Path, monkey
                 process.kill()
                 process.wait()
         binding.stop()
+
+
+# A waiter that prints once every process of it has started, and then waits. Given 2, it runs as
+# two processes, as a waiter does on Windows from an environment's python.exe, a launcher that
+# runs the real Python under it.
+WAITER = """import subprocess, sys, time
+if sys.argv[1] == "2":
+    subprocess.run([sys.executable, sys.argv[0], "1"])
+else:
+    print("waiting", flush=True)
+    time.sleep(120)
+"""
+
+
+@pytest.mark.skipif(sys.platform == "darwin", reason="macOS has no way to end a process with the one that started it")
+@pytest.mark.parametrize("processes", [1, 2])
+def test_a_monitor_ended_outright_takes_its_waiter_with_it(tmp_path: Path, monkeypatch, processes: int) -> None:
+    """A monitor ended outright, as Claude Code may end it on a reload or a crash, runs no
+    cleanup, and the waiter it runs ends with it all the same: one left would keep taking presses
+    that reach no one."""
+    if processes == 2 and os.name != "nt":
+        pytest.skip("on Linux the kernel ends only the process the monitor starts, and a waiter is one process there")
+    cache = tmp_path / "cache"
+    monkeypatch.setattr(TOOL, "monitors", cache / "html-mcp-web" / "monitor")
+    # The session lives on while its monitor is ended.
+    session = _session()
+    monkeypatch.setattr(plugin_monitor, "claude_pid", lambda: session.pid)
+    monitor = subprocess.Popen([sys.executable, "-m", "html_mcp_web.monitor", str(session.pid)],
+                               stdout=subprocess.PIPE, text=True, encoding="utf-8",
+                               env={**os.environ, "XDG_CACHE_HOME": str(cache)})
+    below: list[psutil.Process] = []
+    try:
+        deadline = time.monotonic() + 10
+        while plugin_monitor.monitored_session(TOOL) != session.pid:
+            assert time.monotonic() < deadline, "the monitor did not record itself"
+            time.sleep(0.05)
+        waiter = tmp_path / "waiter.py"
+        waiter.write_text(WAITER, encoding="utf-8")
+        python = shlex.quote(Path(sys.executable).as_posix())
+        assert plugin_monitor.hand_over(TOOL, f"{python} {shlex.quote(waiter.as_posix())} {processes}")
+        assert Lines(monitor.stdout).next(15) == "waiting"
+        below = psutil.Process(monitor.pid).children(recursive=True)
+        assert len(below) >= processes
+        # SIGKILL, or TerminateProcess on Windows: the monitor's own cleanup never runs.
+        monitor.kill()
+        monitor.wait()
+        assert psutil.wait_procs(below, timeout=10)[1] == []
+    finally:
+        for process in below:
+            with contextlib.suppress(psutil.Error):
+                process.kill()
+        for process in (monitor, session):
+            if process.poll() is None:
+                process.kill()
+            process.wait()
 
 
 def test_listen_from_a_client_of_a_named_agent_waits_in_its_lane(tmp_path: Path, monkeypatch) -> None:

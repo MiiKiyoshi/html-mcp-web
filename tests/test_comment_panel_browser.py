@@ -387,6 +387,50 @@ def test_the_line_above_the_list_says_how_comments_reach_the_agent(tmp_path: Pat
 
 
 @needs_browser
+def test_a_call_taken_while_the_page_cannot_hear_its_server_is_not_said_to_wait(tmp_path: Path, monkeypatch) -> None:
+    """An agent may take a queued press while the page's socket is closed, as when the server
+    starts again or the computer sleeps, and the page then hears no waiter come or go. Once its
+    socket opens again it hears that nothing is queued, and the note that the call is queued
+    goes."""
+    import asyncio
+    import threading
+
+    from html_mcp_web.server import HtmlReviewServer
+
+    # The page's socket opens only while the test lets it.
+    letting, served = threading.Event(), []
+    letting.set()
+    serve_socket = HtmlReviewServer.websocket
+
+    async def held(self, request):
+        served.append(self)
+        while not letting.is_set():
+            await asyncio.sleep(0.05)
+        return await serve_socket(self, request)
+
+    monkeypatch.setattr(HtmlReviewServer, "websocket", held)
+    with review_page(tmp_path) as (browser, base):
+        script = lambda code: browser.execute_script(code)
+        note = 'const note = document.querySelector("#call-agent-why"); return note.hidden ? null : note.textContent'
+        script('document.querySelector("#call-agent-btn").click()')
+        wait_until(lambda: script(note) == "No agent is listening yet, so the call is queued until one listens.")
+        letting.clear()
+        server = served[0]
+
+        async def drop() -> None:
+            for page in list(server.websockets):
+                await page.close()
+
+        asyncio.run_coroutine_threadsafe(drop(), SERVERS[base].loop).result(5)
+        wait_until(lambda: not server.websockets)
+        with urllib.request.urlopen(f"{base}/wait-review?listener=one&pid={os.getpid()}", timeout=10) as waited:
+            assert waited.read().startswith(b"[review]")
+        assert not server.websockets
+        letting.set()
+        wait_until(lambda: server.websockets and script(note) is None)
+
+
+@needs_browser
 def test_the_bell_calls_an_agent_the_configuration_names(tmp_path: Path) -> None:
     """With agents in the configuration, the reviewer picks beside the bell which agent it
     calls, with the effort that agent lists. Naming them while the page is open brings the
