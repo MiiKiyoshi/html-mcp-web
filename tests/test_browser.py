@@ -2156,15 +2156,18 @@ def test_a_narrow_screen_puts_the_comments_under_the_artifact(tmp_path: Path) ->
         # A phone that enlarges text on its own doubled the labels inside the drawings while
         # the drawings kept their size, which put the numbers off the wires they name. The
         # page is drawn at one size and asks to keep it, down to the text in an svg: none,
-        # which Chrome gives as 100%, the size as set.
+        # which Chrome gives as 100%, the size as set. A browser that knows no such property,
+        # as Safari on a Mac, never enlarges text on its own, so there is nothing to keep.
         adjust = browser.execute_script('''
           const doc = document.querySelector("#artifact-frame").contentDocument;
           const label = doc.querySelector("svg#chart text");
           const read = (el) => getComputedStyle(el).getPropertyValue("-webkit-text-size-adjust");
-          return {root: read(doc.documentElement), label: label ? read(label) : null};
+          return {root: read(doc.documentElement), label: label ? read(label) : null,
+                  adjusts: CSS.supports("-webkit-text-size-adjust", "none") || CSS.supports("text-size-adjust", "none")};
         ''')
-        assert adjust["root"] in ("none", "100%")
-        assert adjust["label"] in ("none", "100%")
+        kept = ("none", "100%") if adjust["adjusts"] else ("",)
+        assert adjust["root"] in kept, adjust
+        assert adjust["label"] in kept, adjust
     finally:
         if browser is not None:
             browser.quit()
