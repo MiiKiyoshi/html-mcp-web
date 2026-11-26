@@ -17,10 +17,10 @@ BUILD_ENV = {**os.environ, "PYTHONPATH": str(REPO)}
 
 def test_init_creates_documented_config(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
-    assert main(["init", "--layout", "slides", "--main", "brief.html", "--port", "9010"]) == 0
+    assert main(["init", "--name", "talk", "--layout", "slides", "--main", "brief.html", "--port", "9010"]) == 0
     text = (tmp_path / ".html-mcp-web.yaml").read_text(encoding="utf-8")
     assert "artifacts:" in text
-    assert "  slides:" in text
+    assert "  talk:" in text
     assert "    layout: slides" in text
     assert "    main: brief.html" in text
     assert "port: 9010" in text
@@ -28,10 +28,10 @@ def test_init_creates_documented_config(tmp_path: Path, monkeypatch) -> None:
 
 def test_init_declares_template_pair(tmp_path: Path, monkeypatch, capsys) -> None:
     monkeypatch.chdir(tmp_path)
-    assert main(["init", "--layout", "slides", "--main", "slides.html", "--template", "neutral-slides"]) == 1
+    assert main(["init", "--name", "talk", "--layout", "slides", "--main", "slides.html", "--template", "neutral-slides"]) == 1
     assert "together" in capsys.readouterr().err
     assert not (tmp_path / ".html-mcp-web.yaml").exists()
-    assert main(["init", "--layout", "slides", "--main", "slides.html",
+    assert main(["init", "--name", "talk", "--layout", "slides", "--main", "slides.html",
                  "--template", "neutral-slides", "--content", "content.html"]) == 0
     text = (tmp_path / ".html-mcp-web.yaml").read_text(encoding="utf-8")
     assert "    template: neutral-slides" in text
@@ -47,7 +47,7 @@ def test_init_and_config_accept_a_named_guideline(tmp_path: Path, monkeypatch) -
     monkeypatch.setattr(config_module, "USER_CONFIG_DIR", user_config)
     monkeypatch.chdir(tmp_path)
 
-    assert main(["init", "--layout", "slides", "--guideline", "first"]) == 0
+    assert main(["init", "--name", "talk", "--layout", "slides", "--guideline", "first"]) == 0
     assert "guideline: first" in (tmp_path / ".html-mcp-web.yaml").read_text(encoding="utf-8")
     assert main(["config", "guideline", "second"]) == 0
     assert "guideline: second" in (tmp_path / ".html-mcp-web.yaml").read_text(encoding="utf-8")
@@ -55,7 +55,7 @@ def test_init_and_config_accept_a_named_guideline(tmp_path: Path, monkeypatch) -
 
 def test_config_changes_port(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
-    assert main(["init", "--layout", "report"]) == 0
+    assert main(["init", "--name", "talk", "--layout", "report"]) == 0
     assert main(["config", "port", "9020"]) == 0
     assert "port: 9020" in (tmp_path / ".html-mcp-web.yaml").read_text(encoding="utf-8")
 
@@ -64,6 +64,14 @@ def test_init_requires_layout(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     with pytest.raises(SystemExit):
         main(["init"])
+
+
+def test_init_requires_a_name(tmp_path: Path, monkeypatch) -> None:
+    # The artifact goes by the name the user chose: the review page's tab shows it.
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit):
+        main(["init", "--layout", "slides"])
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_mcp_command_starts_without_project_config(tmp_path: Path, monkeypatch) -> None:
@@ -196,7 +204,7 @@ def test_a_missing_mcp_import_is_reported_as_it_failed(monkeypatch, capsys) -> N
 def test_init_creates_a_viewable_plain_document(tmp_path, monkeypatch, layout, width, height):
     from html_mcp_web.template_content import ContentParser, Element
     monkeypatch.chdir(tmp_path)
-    assert main(["init", "--layout", layout, "--main", "html/brief.html"]) == 0
+    assert main(["init", "--name", "talk", "--layout", layout, "--main", "html/brief.html"]) == 0
     text = (tmp_path / "html/brief.html").read_text(encoding="utf-8")
     parser = ContentParser()
     parser.feed(text)
@@ -215,7 +223,7 @@ def test_init_creates_a_viewable_plain_document(tmp_path, monkeypatch, layout, w
 def test_init_builds_missing_template_output(tmp_path, monkeypatch, layout):
     from html_mcp_web.template_content import parse_template_content
     monkeypatch.chdir(tmp_path)
-    assert main(["init", "--layout", layout, "--main", "output/main.html",
+    assert main(["init", "--name", "talk", "--layout", layout, "--main", "output/main.html",
                  "--template", f"neutral-{layout}", "--content", "source/content.html"]) == 0
     parsed = parse_template_content(tmp_path / "source/content.html")
     assert len(parsed.sections) == 1
@@ -232,11 +240,11 @@ def test_init_preserves_existing_sources_and_outputs(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     main_file = tmp_path / "main.html"
     main_file.write_bytes(b"existing main")
-    assert main(["init", "--layout", "slides", "--main", "main.html"]) == 0
+    assert main(["init", "--name", "talk", "--layout", "slides", "--main", "main.html"]) == 0
     assert main_file.read_bytes() == b"existing main"
     (tmp_path / ".html-mcp-web.yaml").unlink()
     (tmp_path / "content.html").write_bytes(b"existing content")
-    assert main(["init", "--layout", "slides", "--main", "main.html",
+    assert main(["init", "--name", "talk", "--layout", "slides", "--main", "main.html",
                  "--template", "neutral-slides", "--content", "content.html"]) == 0
     assert main_file.read_bytes() == b"existing main"
     assert (tmp_path / "content.html").read_bytes() == b"existing content"
@@ -245,7 +253,7 @@ def test_init_preserves_existing_sources_and_outputs(tmp_path, monkeypatch):
 def test_init_refuses_to_pair_new_content_with_existing_output(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "main.html").write_text("existing main", encoding="utf-8")
-    assert main(["init", "--layout", "slides", "--main", "main.html",
+    assert main(["init", "--name", "talk", "--layout", "slides", "--main", "main.html",
                  "--template", "neutral-slides", "--content", "content.html"]) == 1
     assert not (tmp_path / ".html-mcp-web.yaml").exists()
     assert not (tmp_path / "content.html").exists()
@@ -254,7 +262,7 @@ def test_init_refuses_to_pair_new_content_with_existing_output(tmp_path, monkeyp
 
 def test_init_rejects_missing_template_before_creating_files(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    assert main(["init", "--layout", "slides", "--template", "missing-template",
+    assert main(["init", "--name", "talk", "--layout", "slides", "--template", "missing-template",
                  "--content", "content.html"]) == 1
     assert list(tmp_path.iterdir()) == []
 

@@ -168,8 +168,8 @@ def load_config(path: Path | None = None) -> Config:
     if config_path is None:
         raise FileNotFoundError(
             f"{DEFAULT_CONFIG_NAME} was not found. In the project directory, run: "
-            "html-mcp-web init --layout slides --main artifacts/talk/slides.html --port 8765 "
-            "(use report for A4 and replace the file and port with the requested values)"
+            "html-mcp-web init --name talk --layout slides --main artifacts/talk/slides.html --port 8765 "
+            "(with the name, layout, file and port the user chose)"
         )
     loaded = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     if not isinstance(loaded, dict):
@@ -182,6 +182,7 @@ def load_config(path: Path | None = None) -> Config:
 
 
 def create_config(
+    name: str,
     layout: LayoutMode,
     main: str = "artifact.html",
     watch: list[str] | None = None,
@@ -195,14 +196,13 @@ def create_config(
     target = output_path if output_path is not None else Path.cwd() / DEFAULT_CONFIG_NAME
     if target.exists():
         raise FileExistsError(f"{target} already exists")
-    alias = layout
     artifact: dict[str, Any] = {"layout": layout, "main": main}
     if template is not None or content is not None:
         artifact["template"] = template
         artifact["content"] = content
     config = Config.from_dict(
         {
-            "artifacts": {alias: artifact},
+            "artifacts": {name: artifact},
             **({"guideline": guideline} if guideline is not None else {}),
             "watch": list(watch) if watch is not None else list(DEFAULT_WATCH),
             "ignore": list(ignore) if ignore is not None else [],

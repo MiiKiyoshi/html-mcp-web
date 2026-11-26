@@ -24,20 +24,20 @@ def cmd_init(args: argparse.Namespace) -> int:
     target = Path.cwd() / DEFAULT_CONFIG_NAME
     try:
         if args.template is not None and args.content is not None:
-            proposed = Config.from_dict({"artifacts": {args.layout: {
+            proposed = Config.from_dict({"artifacts": {args.name: {
                 "layout": args.layout, "main": args.main,
                 "template": args.template, "content": args.content,
             }}}, config_path=target)
-            builder = get_template_dir(proposed, args.layout) / "build.py"
+            builder = get_template_dir(proposed, args.name) / "build.py"
             if not builder.is_file():
                 raise FileNotFoundError(f"template builder not found: {builder}")
             if Path(args.main).exists() and not Path(args.content).exists():
                 raise ValueError("existing main file requires an existing template content file")
-        created = create_config(layout=args.layout, main=args.main, port=args.port, output_path=target,
+        created = create_config(name=args.name, layout=args.layout, main=args.main, port=args.port, output_path=target,
                                 template=args.template, content=args.content, guideline=args.guideline)
         config = load_config(created)
-        main = get_main_file(config, args.layout)
-        content = get_content_file(config, args.layout)
+        main = get_main_file(config, args.name)
+        content = get_content_file(config, args.name)
         source = content if content is not None else main
         main.parent.mkdir(parents=True, exist_ok=True)
         source.parent.mkdir(parents=True, exist_ok=True)
@@ -150,6 +150,7 @@ def build_parser() -> argparse.ArgumentParser:
     subcommands = parser.add_subparsers(dest="command")
 
     init = subcommands.add_parser("init")
+    init.add_argument("--name", required=True, help="the artifact's name, which the review page's tab and the tools use")
     init.add_argument("--layout", required=True, choices=["slides", "report"])
     init.add_argument("--main", default="artifact.html")
     init.add_argument("--port", type=int, default=8765)

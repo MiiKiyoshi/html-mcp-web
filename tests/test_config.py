@@ -17,7 +17,7 @@ from html_mcp_web.config import (
 
 def test_missing_config_explains_project_setup(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
-    with pytest.raises(FileNotFoundError, match="html-mcp-web init --layout slides"):
+    with pytest.raises(FileNotFoundError, match="html-mcp-web init --name talk --layout slides"):
         load_config()
 
 
@@ -28,25 +28,25 @@ def artifact(layout: str = "slides", main: str = "artifact.html", **values) -> d
 def test_create_and_find_config_from_child(tmp_path: Path) -> None:
     main = tmp_path / "artifact.html"
     main.write_text("<p>artifact</p>", encoding="utf-8")
-    config_path = create_config(layout="slides", main="artifact.html", port=9001,
+    config_path = create_config(name="talk", layout="slides", main="artifact.html", port=9001,
                                 output_path=tmp_path / ".html-mcp-web.yaml")
     child = tmp_path / "nested"
     child.mkdir()
 
     assert find_config(child) == config_path
     config = load_config(config_path)
-    assert list(config.artifacts) == ["slides"]
-    assert config.artifacts["slides"].layout == "slides"
-    assert config.artifacts["slides"].main == "artifact.html"
+    assert list(config.artifacts) == ["talk"]
+    assert config.artifacts["talk"].layout == "slides"
+    assert config.artifacts["talk"].main == "artifact.html"
     assert config.port == 9001
-    assert get_main_file(config, "slides") == main
+    assert get_main_file(config, "talk") == main
 
 
 def test_create_refuses_to_overwrite(tmp_path: Path) -> None:
     target = tmp_path / ".html-mcp-web.yaml"
     target.write_text("artifacts: {}\n", encoding="utf-8")
     with pytest.raises(FileExistsError):
-        create_config(layout="report", output_path=target)
+        create_config(name="talk", layout="report", output_path=target)
 
 
 def test_config_requires_artifacts() -> None:

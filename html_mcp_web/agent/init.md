@@ -10,13 +10,12 @@ the MCP process is restarted.
 A subfolder requested for the document belongs in main and content, which are resolved
 relative to the config's directory and name files in it or its subfolders. A document outside
 the startup directory is served by a config in a folder that holds both, found from the
-startup directory as its parent. The artifact's folder is the user's to choose, and setup
-asks for it unless the user already named it. The recommended place is a folder of its own
-under an `artifacts` folder of the project, `artifacts/<name>/`, holding its main, its content
-and its floorplan. Two artifacts never keep their main or content in one folder: the
-configuration stops on it. Inspect first and confirm any choices the user has not
-already authorized. Setup is complete only when the current MCP connection resolves the
-intended document.
+startup directory as its parent. A project's artifacts are gathered in one folder the user
+chooses, `artifacts/` by default, and each has a folder of its own in it named after the
+artifact, `artifacts/<name>/`, holding its main, its content and its floorplan. Two artifacts
+never keep their main or content in one folder: the configuration stops on it. Inspect first,
+then ask the user every choice in section 2 before writing anything. Setup is complete only
+when the current MCP connection resolves the intended document.
 
 These steps set up the current MCP session. If the user explicitly requests setup for another
 session, use that session's intended startup directory and report its verification status
@@ -36,7 +35,7 @@ separately.
   parent config. If a config already exists in the setup directory, do not run init over it.
   Resolve any requested changes to that config first.
 - HTML files already in the setup directory or the subfolder the user named: `ls *.html *.htm`.
-- Port: the first free one from 8765 (`ss -ltn`, or `lsof -iTCP -sTCP:LISTEN -P -n` on macOS), also skipping the port in a
+- Port to recommend: the first free one from 8765 (`ss -ltn`, or `lsof -iTCP -sTCP:LISTEN -P -n` on macOS), also skipping the port in a
   `.tex-mcp-web.yaml` in this folder, since both tools default to 8765.
 - List templates and guidelines from the same installation and user directories that the
   running MCP uses, as reported by `setup_info()`. Inspect each directory's absolute path and
@@ -46,31 +45,41 @@ separately.
 
 ## 2. Confirm
 
-Show one short choice list in the user's language, using the available choices found in
-section 1. Explain each choice in one line and mark the defaults. For the included choices, use
-this form:
+Six choices are the user's to make: the artifact's name, the folder the project's artifacts
+are gathered in, the layout, the template, the guideline and the page's port. Write nothing
+until the user has answered every one of them. A request to set up, such as "do html init" or
+"do it yourself", answers none of them. A choice the user has named, in this request or
+earlier, or "use the defaults", settles what it covers, and a settled choice is not asked
+again.
 
+Recommend a value for each: a short name for the artifact taken from the user's request,
+`artifacts/` for the folder, the layout the request implies, that layout's default template
+and guideline, and the free port found in section 1. The artifact's own folder is then
+`<folder>/<name>/`.
+
+When your client has a tool that lets the user pick among options, ask every choice with it,
+the recommended value first, in as few calls as the tool allows. Where there are more entries
+than the tool takes, offer the recommended one and the user's own first, and name the rest in
+the question. Ask the name, the folder and the port with it only when the tool also takes an
+answer the user types; otherwise ask them in plain chat with their recommended values.
+Without such a tool, show every choice in one short list in the user's language and wait for
+the answer:
+
+    Name      : talk  (the page's tab and the tools call the artifact by it)
+    Folder    : artifacts/  (the project's artifacts, each in a folder named after it: artifacts/talk/)
     Layout    : slides, 16:9 (default), or report, A4
     Template  : neutral-slides, plain slides without organization marks (slide default)
                 neutral-report, a two-column paper (report default)
     Guideline : neutral-slides, writing rules the agent follows for slides (slide default)
                 neutral-report, writing rules the agent follows for a paper (report default)
-    Folder    : artifacts/talk/ (recommended), or another folder you name
-    File      : slides.html (to be created)
+    Port      : 8765  (the page opens at http://localhost:8765)
+    File      : artifacts/talk/slides.html (to be created)
 
-Adapt the selected choices and filename to the user's request and existing files. Show whether
-the document file will be created or reused. Include available user templates and guidelines
-beside the included choices, without grouping them by directory. If a user copy replaces an
-included choice of the same name, say only "uses your version" beside it.
-
-Tell the user they can accept the defaults or name what to change. Ask only about choices they
-have not already authorized. Apply explicit choices or a request for defaults without asking
-again. Do not treat silence as agreement.
-
-Always ask for the folder, with `artifacts/<name>/` as the recommended answer, unless the user
-already named it. Keep configuration paths beyond that folder, source directories, content and
-build details, ports, and watch patterns out of the summary. Handle an occupied port by
-selecting a free one as in section 1, without asking the user.
+Show whether the document file will be created or reused. Include available user templates
+and guidelines beside the included choices, without grouping them by directory. If a user copy
+replaces an included choice of the same name, say only "uses your version" beside it. Keep the
+config path, content and build details and watch patterns out of the choices. A port the user
+names must be free: if it is taken, say so and recommend the first free one.
 
 If a documented default is missing or unusable, check the installation, lookup paths, and
 overrides before presenting the list as complete or writing the configuration. If a problem
@@ -85,10 +94,10 @@ working directory. Keep the document's subfolder in `--main` and `--content` ins
 running init from that subfolder. Changing the shell's working directory does not change the
 MCP process's startup directory.
 
-    html-mcp-web init --layout <slides|report> --main <file> --port <port> \
+    html-mcp-web init --name <name> --layout <slides|report> --main <file> --port <port> \
       [--template <name> --content <file>] [--guideline <name>]
 
-For example, `--main artifacts/talk/slides.html --content artifacts/talk/content.html`.
+For example, `--name talk --main artifacts/talk/slides.html --content artifacts/talk/content.html`.
 
 ## 4. Verify
 

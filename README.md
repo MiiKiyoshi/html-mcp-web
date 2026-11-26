@@ -43,12 +43,14 @@ Once per folder, start the agent in the folder that holds (or will hold) your ar
 do html init
 ```
 
-Choose slides (16:9) or a report (A4). Slides default to the `neutral-slides` template, plain
-slides without organization marks, and the `neutral-slides` guideline, writing rules the agent
-follows for slides. Reports default to the `neutral-report` template, a two-column paper, and
-the `neutral-report` guideline, writing rules for a paper. The agent
-shows the choices and the document file it will create or reuse. Accept the defaults or name
-what to change.
+The agent asks what is yours to choose and writes nothing until you answer: the artifact's
+name, which the page's tab shows; the folder your artifacts are gathered in, `artifacts/` by
+default, where each gets a folder named after it; slides (16:9) or a report (A4); the template;
+the guideline; and the page's port, the first free one from 8765 by default. Slides default to
+the `neutral-slides` template, plain slides without organization marks, and the
+`neutral-slides` guideline, writing rules the agent follows for slides. Reports default to the
+`neutral-report` template, a two-column paper, and the `neutral-report` guideline, writing
+rules for a paper. Accept the defaults or name what to change.
 
 ## Listen
 
@@ -166,9 +168,9 @@ Edit `.html-mcp-web.yaml` in the project folder. A saved change applies at once,
 
 ```yaml
 artifacts:
-  slides:
+  talk:
     layout: slides
-    main: slides.html
+    main: artifacts/talk/slides.html
 watch:
 - '*.html'
 - '*.css'

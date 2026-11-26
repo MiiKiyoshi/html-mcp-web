@@ -763,7 +763,7 @@ def test_guide_for_a_templated_artifact_names_its_content_file_and_template_note
 ) -> None:
     from html_mcp_web.cli import main
     monkeypatch.chdir(tmp_path)
-    assert main(["init", "--layout", "slides", "--template", "neutral-slides",
+    assert main(["init", "--name", "slides", "--layout", "slides", "--template", "neutral-slides",
                  "--content", "content.html", "--port", str(available_port())]) == 0
     binding = ProjectBinding(tmp_path)
     try:
