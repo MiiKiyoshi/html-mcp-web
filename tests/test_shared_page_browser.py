@@ -6,6 +6,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+from tests.chrome import not_in_safari
 from tests.test_comment_panel_browser import needs_browser, review_page, wait_until
 
 # A browser that says it is an iPhone, the one that zooms into a field as it takes the cursor.
@@ -104,6 +105,7 @@ def test_a_pinch_outside_the_artifact_leaves_the_page_at_its_size(tmp_path: Path
             sandbox=None) == [False, True, False, True]
 
 
+@not_in_safari("its pointer cannot be made a finger")
 @needs_browser
 def test_a_finger_on_a_field_keeps_an_iphone_from_zooming_into_it(tmp_path: Path) -> None:
     """An iPhone zooms the page into a field whose text is under 16px as it takes the cursor.

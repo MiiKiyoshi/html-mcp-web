@@ -19,7 +19,7 @@ import yaml
 from html_mcp_web.comments import ArtifactAnchor, CommentStore, PageAnchor, SourceAnchor, SuggestedEdit
 from html_mcp_web.config import load_config
 from html_mcp_web.project_server import SharedProjectServer
-from tests.chrome import MOD, MOD_ALT
+from tests.chrome import KIND, MOD, MOD_ALT, not_in_safari
 from tests.html_chrome import launch, needs_browser
 
 DECK = ('<!doctype html><html><head><meta charset="utf-8"><title>Slides</title></head><body><main class="pages">'
@@ -966,12 +966,15 @@ def test_the_ring_holds_a_third_of_the_way_down_and_an_opened_card_shows_its_end
         assert shown["id"] == ids[-1] and shown["below"] <= 0
         assert "Thought number 5 on the last request." in script(
             'return document.querySelector("#comments-list .cmt.is-focused .cmt-thread").textContent')
-        # Shift+Space opens every card, and again closes them all.
-        every = 'return document.querySelectorAll("#comments-list .cmt .cmt-actions").length'
-        chord(browser, SHIFT, " ")
-        assert script(every) == 12
-        chord(browser, SHIFT, " ")
-        assert script(every) == 0
+        # Shift+Space opens every card, and again closes them all. Safari's driver sends
+        # Shift+Space as a dead key under a Korean input source, where a real one reaches the
+        # page, so this step runs in Chrome.
+        if KIND == "chrome":
+            every = 'return document.querySelectorAll("#comments-list .cmt .cmt-actions").length'
+            chord(browser, SHIFT, " ")
+            assert script(every) == 12
+            chord(browser, SHIFT, " ")
+            assert script(every) == 0
         press(browser, "g", "g", *["j"] * 5)
         script('document.querySelector("#comments-list").scrollTop = 0;')
         script("window.confirm = () => true;")
@@ -983,6 +986,7 @@ def test_the_ring_holds_a_third_of_the_way_down_and_an_opened_card_shows_its_end
             script('document.querySelector("#comments-list").scrollTop = 0;')
 
 
+@not_in_safari("a page's full screen cannot be taken away")
 @needs_browser
 def test_the_slides_and_their_previews_keep_their_keys(tmp_path: Path) -> None:
     """The slide show takes its keys on the page itself as in the artifact, where the comment
