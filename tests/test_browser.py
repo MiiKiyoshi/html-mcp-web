@@ -2208,6 +2208,7 @@ def test_slide_previews_open_from_the_first_button_and_lead_to_a_page(tmp_path: 
               shown: getComputedStyle(document.querySelector("#thumbs-pane")).display !== "none",
               frameLeft: frame.left - pane.getBoundingClientRect().left,
               previews: thumbs ? thumbs.querySelectorAll("main.pages > section.page").length : 0,
+              scaled: thumbs ? thumbs.documentElement.style.getPropertyValue("--html-mcp-page-scale") !== "" : false,
               scrolls: thumbs ? thumbs.documentElement.scrollHeight > thumbs.documentElement.clientHeight : false};
     '''
     try:
@@ -2225,7 +2226,9 @@ def test_slide_previews_open_from_the_first_button_and_lead_to_a_page(tmp_path: 
         assert not closed["open"] and not closed["shown"] and abs(closed["frameLeft"]) <= 1, closed
 
         browser.find_element("css selector", "#thumbs-btn").click()
-        opened = wait_until(lambda: (lambda now: now if now["previews"] == 15 else None)(
+        # The column takes clicks once its frame has loaded and its previews are set up, which
+        # scales them: its pages are in the frame before that.
+        opened = wait_until(lambda: (lambda now: now if now["previews"] == 15 and now["scaled"] else None)(
             browser.execute_script(geometry)))
         assert opened["open"] and opened["shown"] and abs(opened["frameLeft"] - 200) <= 1, opened
         assert opened["scrolls"], opened
