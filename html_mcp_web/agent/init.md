@@ -115,8 +115,9 @@ or failed before binding does not by itself require a restart.
 
 ## 5. Tell the user
 
-Report setup as ready only after the current MCP connection passes the guide check. If
+Report setup as ready only after the current MCP connection passes the guide check. Then
+call `listen()` and follow its `how`, so that the user's first Call agent press reaches you
+without anything more being said, and give the user the review page's address. If
 restarting the MCP process remains necessary, say that the files are prepared but this session
-is not ready yet, and state the remaining action. Saying "do html listen" starts the review
-page. With the plugin, Claude Code started in the folder later listens on its own. Start
-listening only when the user asks for it.
+is not ready yet, and state the remaining action. With the plugin, a Claude Code session
+started in the folder later listens on its own.

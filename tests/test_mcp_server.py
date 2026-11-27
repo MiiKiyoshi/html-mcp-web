@@ -1132,6 +1132,42 @@ def test_a_session_with_the_plugin_listens_from_its_start(tmp_path: Path, monkey
         binding.stop()
 
 
+def test_a_session_started_before_init_listens_once_its_config_is_written(tmp_path: Path, monkeypatch) -> None:
+    """A session started in a folder with no config runs the plugin's monitor with nothing to
+    hand it. The first tool call after init comes to the project and hands it the waiter, so
+    the reviewer's first Call agent reaches the session without anything more being said."""
+    from html_mcp_web.mcp_server import _listen_in_background
+
+    cache = tmp_path / "cache"
+    monkeypatch.setattr(TOOL, "monitors", cache / "html-mcp-web" / "monitor")
+    session = _session()
+    monkeypatch.setattr(plugin_monitor, "claude_pid", lambda: session.pid)
+    monitor = subprocess.Popen(
+        ["sh", str(Path(__file__).parents[1] / "plugin" / "monitors" / "review.sh"), str(session.pid)],
+        stdout=subprocess.PIPE, text=True, encoding="utf-8", env={**os.environ, "XDG_CACHE_HOME": str(cache)})
+    folder = tmp_path / "project"
+    folder.mkdir()
+    binding = ProjectBinding(folder, on_serve=_listen_in_background)
+    try:
+        assert binding.connect() is None
+        project(folder)
+        port = binding.require_client().shared.port
+        handed = TOOL.monitors / f"{session.pid}.command"
+        deadline = time.monotonic() + 30
+        while not handed.exists():
+            assert time.monotonic() < deadline, "the monitor was never handed a waiter"
+            time.sleep(0.1)
+        relayed = Lines(monitor.stdout)
+        urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/review-request", method="POST"))
+        assert relayed.next(15).startswith("[review] reviewer called (press #1)")
+    finally:
+        for process in (session, monitor):
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+        binding.stop()
+
+
 # A waiter that prints once every process of it has started, and then waits. Given 2, it runs as
 # two processes, as a waiter does on Windows from an environment's python.exe, a launcher that
 # runs the real Python under it.

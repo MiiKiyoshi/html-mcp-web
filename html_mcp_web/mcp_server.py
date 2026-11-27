@@ -39,7 +39,7 @@ try:
     from mcp.server.fastmcp.exceptions import ToolError
     from pydantic import Field
 
-    from .mcp_client import INIT_GUIDE, ProjectBinding, ProjectSetupError
+    from .mcp_client import INIT_GUIDE, ProjectBinding, ProjectClient, ProjectSetupError
 
     def _compact_schema(node: Any, in_properties: bool = False) -> None:
         """Drop pydantic's generated titles and null defaults. A field that is itself
@@ -635,11 +635,16 @@ def _listen_from_start(port: int) -> None:
     plugin_monitor.hand_over(TOOL, waiter.command(TOOL, port, LISTENER))
 
 
-def _listen_in_background(port: int) -> None:
-    try:
-        _listen_from_start(port)
-    except (OSError, KeyError, ValueError) as error:
-        print(f"html-mcp did not start listening: {error}", file=sys.stderr)
+def _listen_in_background(client: "ProjectClient") -> None:
+    """Listen from the start beside whatever came to the project, the session's start or a
+    tool call after init, which waiting for the monitor must not hold up."""
+    def listen() -> None:
+        try:
+            _listen_from_start(client.shared.port)
+        except (OSError, KeyError, ValueError) as error:
+            print(f"html-mcp did not start listening: {error}", file=sys.stderr)
+
+    threading.Thread(target=listen, daemon=True).start()
 
 
 def _stop_on_sigterm(binding: ProjectBinding, number: int, frame) -> None:
@@ -657,16 +662,12 @@ def _stop_on_sigterm(binding: ProjectBinding, number: int, frame) -> None:
 
 def main(start_dir: Path) -> None:
     _check_dependencies()
-    binding = ProjectBinding(start_dir)
+    binding = ProjectBinding(start_dir, on_serve=_listen_in_background)
     signal.signal(signal.SIGTERM, functools.partial(_stop_on_sigterm, binding))
     try:
-        client = binding.connect()
+        binding.connect()
     except ProjectSetupError as error:
         print(f"html-mcp project is not ready: {error}", file=sys.stderr)
-    else:
-        # Beside the client's handshake, which waiting for the monitor must not hold up.
-        if client is not None:
-            threading.Thread(target=_listen_in_background, args=(client.shared.port,), daemon=True).start()
     server = create_server(binding)
     try:
         server.run(transport="stdio")

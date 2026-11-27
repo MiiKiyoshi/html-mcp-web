@@ -3,7 +3,7 @@
 import sys
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 import yaml
@@ -66,10 +66,15 @@ class ProjectClient:
 
 
 class ProjectBinding:
-    """Bind one MCP process to the project discovered from its startup directory."""
+    """Bind one MCP process to the project discovered from its startup directory.
 
-    def __init__(self, start_dir: Path):
+    *on_serve* runs with the client once this process first comes to the project: at the
+    session's start when a config is there, or at the first tool call that finds one written
+    since, as init writes it."""
+
+    def __init__(self, start_dir: Path, on_serve: Callable[["ProjectClient"], None] | None = None):
         self.start_dir = start_dir.resolve()
+        self.on_serve = on_serve
         self._lock = threading.Lock()
         self._shared: SharedProjectServer | None = None
         self._client: ProjectClient | None = None
@@ -93,8 +98,10 @@ class ProjectBinding:
             except (OSError, RuntimeError, TypeError, ValueError, yaml.YAMLError) as error:
                 raise ProjectSetupError(config_path, error) from error
             self._shared = shared
-            self._client = ProjectClient(shared)
-            return self._client
+            self._client = client = ProjectClient(shared)
+        if self.on_serve is not None:
+            self.on_serve(client)
+        return client
 
     def require_client(self) -> ProjectClient:
         client = self.connect()
