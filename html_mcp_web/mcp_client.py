@@ -68,9 +68,10 @@ class ProjectClient:
 class ProjectBinding:
     """Bind one MCP process to the project discovered from its startup directory.
 
-    *on_serve* runs with the client once this process first comes to the project: at the
-    session's start when a config is there, or at the first tool call that finds one written
-    since, as init writes it."""
+    *on_serve* runs with the client each time this process comes to the project afresh: at
+    the session's start when a config is there, at the first tool call that finds one written
+    since, as init writes it, and whenever it starts the server again because the process
+    that served the project went away."""
 
     def __init__(self, start_dir: Path, on_serve: Callable[["ProjectClient"], None] | None = None):
         self.start_dir = start_dir.resolve()
@@ -87,19 +88,22 @@ class ProjectBinding:
     def connect(self) -> ProjectClient | None:
         with self._lock:
             if self._client is not None:
-                return self._client
-            config_path = find_config(self.start_dir)
-            if config_path is None:
-                return None
-            try:
-                config = load_config(config_path)
-                shared = SharedProjectServer(config)
-                shared.ensure()
-            except (OSError, RuntimeError, TypeError, ValueError, yaml.YAMLError) as error:
-                raise ProjectSetupError(config_path, error) from error
-            self._shared = shared
-            self._client = client = ProjectClient(shared)
-        if self.on_serve is not None:
+                client = self._client
+                afresh = client.shared.ensure()
+            else:
+                config_path = find_config(self.start_dir)
+                if config_path is None:
+                    return None
+                try:
+                    config = load_config(config_path)
+                    shared = SharedProjectServer(config)
+                    shared.ensure()
+                except (OSError, RuntimeError, TypeError, ValueError, yaml.YAMLError) as error:
+                    raise ProjectSetupError(config_path, error) from error
+                self._shared = shared
+                self._client = client = ProjectClient(shared)
+                afresh = True
+        if afresh and self.on_serve is not None:
             self.on_serve(client)
         return client
 

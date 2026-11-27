@@ -1,15 +1,16 @@
 {
-  "source": "tex-mcp-web 438a345",
+  "source": "tex-mcp-web 060e345",
   "files": {
     "__init__.py": "0365c718d5d29085d77f2efe813b4f6152fd0963af5aa4cdd8c84118a0123774",
     "agents.py": "7a8a6741bd251458ca8c7ec4107c285413583b6998f47ee57d6277149f1da23c",
     "calls.py": "4fd00b7996b870cf509ee906100d7ea087705dc86c544a8621f6c76a5766368f",
     "filelock.py": "fce37f9bfd5f0f31b497d6833ba459e85247831e16fafd5d4312d5444514c902",
+    "listening.py": "8486ad013f7667475e3831830561188a1bd6229a14311c41b1055299e9ea13e0",
     "monitor.py": "b1b53ba600e866f5ab15d3c0299e6cb912782286da3d863ba04379bae4633baf",
     "plugin_monitor.py": "82e3dbf459fe862a945ddf219d6e5b6fce6f083cbfdfdddaa5119017995c4f5c",
     "shared_file.py": "6da5267dc743b5b568ae31749f7f094ab85dbc2db3a25dfbaf30f1f42979292c",
     "tied.py": "c3c4c77009f541d50b3c8baaf253141341970444b8ff67e7b45267292bbc4bf8",
-    "tool.py": "57b6af0acd5248ef178c76b7a355ea667b09f666da3c7c98224b4f5bfb4b4a1e",
+    "tool.py": "b66f70a6de2eb2b9db085a7063f512af334d54e9f7a319676e1ef8e22f9e5c13",
     "update.py": "251bee89668c73332dc628b6458c59cf06b84fe80306a43f3c772b4a74db147a",
     "waiter.py": "235ea56b921bdb9c8ac281d574760a5dfcdca6bc832241a8b1e0548133ccf443"
   }

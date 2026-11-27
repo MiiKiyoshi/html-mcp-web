@@ -23,10 +23,11 @@ from html_mcp_web import config as config_module
 from html_mcp_web.config import load_config
 from html_mcp_web.mcp_client import CLI, INIT_GUIDE, ProjectBinding
 from html_mcp_web.mcp_contract import agent_comment, agent_comment_summary, revision_of, short_time
-from html_mcp_web.mcp_server import _listen_from_start, create_server
+from html_mcp_web.mcp_server import create_server
 from html_mcp_web.project_server import SharedProjectServer
 from html_mcp_web.server import HtmlReviewServer
 from html_mcp_web.shared import plugin_monitor
+from html_mcp_web.shared.listening import listen_from_start
 from html_mcp_web.tool import TOOL
 from tests.html_chrome import needs_browser
 
@@ -1057,7 +1058,7 @@ def test_listen_hands_the_waiter_to_the_plugin_monitor(tmp_path: Path, monkeypat
             clientInfo=SimpleNamespace(name="claude-code"))))
         monkeypatch.setattr(mcp, "get_context", lambda: context)
         told = answer(mcp.call_tool("listen", {}))
-        assert "plugin's monitor now runs the command" in told["how"]
+        assert "plugin's monitor runs the command" in told["how"]
         assert "Monitor(" not in told["how"] and "On [review]" in told["how"]
         handed = (TOOL.monitors / f"{session.pid}.command").read_text(encoding="utf-8").splitlines()
         assert handed[1] == told["command"]
@@ -1101,14 +1102,14 @@ def test_a_session_with_the_plugin_listens_from_its_start(tmp_path: Path, monkey
 
         handed = TOOL.monitors / f"{session.pid}.command"
         assert post("/wait-review/listen?listener=other")["listening"]
-        _listen_from_start(port)
+        listen_from_start(TOOL, port)
         assert not handed.exists()
         # The other session's waiter ends: this one listens in its place.
         post("/review-request")
         with urllib.request.urlopen(f"{base}/wait-review?listener=other&pid={ended.pid}") as reply:
             assert reply.headers["X-Press"] == "1"
         post("/wait-review/ack?upto=1")
-        _listen_from_start(port)
+        listen_from_start(TOOL, port)
         assert shlex.split(handed.read_text(encoding="utf-8").splitlines()[1])[1:3] == ["-m", "html_mcp_web.waiter"]
         post("/review-request")
         relayed = Lines(monitor.stdout)
@@ -1118,7 +1119,7 @@ def test_a_session_with_the_plugin_listens_from_its_start(tmp_path: Path, monkey
         context = SimpleNamespace(session=SimpleNamespace(client_params=SimpleNamespace(
             clientInfo=SimpleNamespace(name="claude-code"))))
         monkeypatch.setattr(mcp, "get_context", lambda: context)
-        assert "plugin's monitor now runs the command" in answer(mcp.call_tool("listen", {}))["how"]
+        assert "plugin's monitor runs the command" in answer(mcp.call_tool("listen", {}))["how"]
         post("/review-request")
         assert relayed.next(15).startswith("[review] reviewer called (press #3)")
         session.kill()
@@ -1165,6 +1166,24 @@ def test_a_session_started_before_init_listens_once_its_config_is_written(tmp_pa
             if process.poll() is None:
                 process.kill()
                 process.wait()
+        binding.stop()
+
+
+def test_a_binding_comes_afresh_when_the_server_it_came_to_has_gone(tmp_path: Path) -> None:
+    """The process serving the project can go, as when the session that started it ends. The
+    next tool call starts the server again here and the binding says so, so this session
+    listens in the place of the one that went, as it does after init."""
+    project(tmp_path)
+    served = []
+    binding = ProjectBinding(tmp_path, on_serve=served.append)
+    try:
+        client = binding.connect()
+        assert binding.connect() is client
+        assert served == [client]
+        client.shared.stop()
+        assert binding.connect() is client
+        assert served == [client, client]
+    finally:
         binding.stop()
 
 

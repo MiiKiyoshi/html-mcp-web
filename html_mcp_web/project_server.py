@@ -97,16 +97,18 @@ class SharedProjectServer:
             # frees it when its cleanup is done, and nobody has to wait for that.
             self._release_lock()
 
-    def ensure(self) -> None:
+    def ensure(self) -> bool:
+        """Serve the project here unless a process serves it already. True when this call
+        started it here."""
         identity = self._remote_identity()
         if identity is not None:
             if Path(identity).resolve() != self.config_path:
                 raise RuntimeError(
                     f"port {self.port} serves {identity}, not {self.config_path}; change one project's port")
-            return
+            return False
         if self.thread is not None and self.thread.is_alive():
             if self.ready.is_set() and self.start_error is None:
-                return
+                return False
             # A start given up on earlier is still winding down; a second thread on top of
             # it is how a slow project once piled up a hundred of them.
             if not self.ready.wait(timeout=self.START_TIMEOUT):
@@ -135,7 +137,7 @@ class SharedProjectServer:
                         handle.close()
                         raise RuntimeError(f"port {self.port} is used by another project: {identity}")
                     handle.close()
-                    return
+                    return False
                 # The holder can die mid-poll; its lock dies with it, and the takeover is
                 # ours rather than an error naming a pid that no longer exists.
                 try:
@@ -182,6 +184,7 @@ class SharedProjectServer:
             error = self.start_error
             self.stop()
             raise RuntimeError(f"project server failed to start: {error}")
+        return True
 
     def stop(self) -> None:
         if self.loop is not None:

@@ -4,19 +4,16 @@ import asyncio
 import functools
 import json
 import os
-import secrets
 import signal
 import sys
 import threading
-import time
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.parse import quote, urlencode
 
 from .config import alias_file_name, artifact_address, load_config
-from .shared import agents, plugin_monitor, shared_file, waiter
+from .shared import listening, shared_file
 from .tool import TOOL
 from .mcp_contract import (
     LIST_LIMIT,
@@ -107,57 +104,6 @@ def check(start_dir: Path) -> list[str]:
     return sorted(tool.name for tool in asyncio.run(server.list_tools()))
 
 
-def _wait_method(ctx: "Context", command: str, lane: str | None = None) -> str:
-    name = ctx.session.client_params.clientInfo.name.casefold()
-    if lane is not None:
-        return (
-            "Run <command> as a background shell command, then end the turn and do not poll. "
-            f"It shows {lane} as waiting on the review page and ends as soon as the reviewer "
-            f"presses Call agent for {lane}, printing the [review] line, which may end with "
-            "[model=M effort=E], the model and effort the reviewer picked. After handling "
-            "that press, start the command again; otherwise leave it stopped and tell the user "
-            "in one line. Stop a running one when the review is finished or the user asks."
-        )
-    if "claude" in name:
-        if plugin_monitor.hand_over(TOOL, command):
-            return (
-                "The html-mcp plugin's monitor now runs the command for this session and turns each "
-                "line it prints into a notification, for as long as the session lasts. Do not "
-                "start it yourself, and end the turn."
-            )
-        return (
-            'Run the command with Monitor(command=<command>, description="html-mcp review", '
-            "timeout_ms=1800000), then end the turn. When it expires, leave it stopped and tell the "
-            "user in one line that listening stopped and that asking again resumes it. Nothing is "
-            "lost while it is stopped: new "
-            "comments wait for read_comments(new=True), and a Call agent press waits for the next "
-            "waiter. Stop an active Monitor when the review is finished or the user asks. "
-            "Start another copy only after the previous process has ended."
-        )
-    if "codex" in name:
-        return (
-            'Run <command> --codex "$CODEX_THREAD_ID" with '
-            'exec_command(yield_time_ms=1000, sandbox_permissions="require_escalated", '
-            'justification="Allow the HTML review waiter to deliver events to this Codex thread?"). '
-            "Once running, end the turn; do not poll. "
-            "The waiter uses codex queue to deliver events as labeled user messages, "
-            "including while idle. Delivery may take about 10 seconds. "
-            "Requires codex queue on PATH and CODEX_THREAD_ID in the agent shell. "
-            "Run one waiter at a time. "
-            "Stop its process when the review is finished or the user asks. "
-            "Start another copy only after the previous process has ended."
-        )
-    return (
-        "Run the command with your shell tool and read its output. If the tool returns a "
-        "running session, read what follows with the tool that reads subsequent output. "
-        "After handling an event, stop it; listening resumes when the user asks again. "
-        "Start another copy only after the previous process has ended."
-    )
-
-
-# The id this process's session listens by. One per process, so a session asked to listen
-# again restarts its waiter without that waiter hearing that another session took over.
-LISTENER = secrets.token_hex(8)
 
 
 def _revisions(result: dict[str, Any]) -> list[dict[str, str]]:
@@ -546,29 +492,16 @@ def create_server(binding: "ProjectBinding") -> "FastMCP":
                 f"{error}. If another project holds the port, propose a free port to the user, "
                 "edit port in that config after they agree, and call listen() again."
             ) from error
-        state = await client.request_json("GET", "/state")
-        port = state["port"]
-        lane = agents.lane_of(ctx.session.client_params.clientInfo.name, load_config(client.shared.config_path).agents)
-        if lane is not None:
-            # An agent the configuration names waits in a lane of its own and takes no presses
-            # from the listening session.
-            command = waiter.lane_command(TOOL, port, lane)
-        else:
-            session = plugin_monitor.claude_pid()
-            await client.request_json("POST", f"/wait-review/listen?listener={LISTENER}"
-                                      + (f"&session={session}" if session is not None else ""))
-            command = waiter.command(TOOL, port, LISTENER)
+        port = client.shared.port
+        name = ctx.session.client_params.clientInfo.name
+        configured = load_config(client.shared.config_path).agents
+        command, lane = await asyncio.to_thread(listening.command, TOOL, port, name, configured)
         return {
             "command": command,
-            "how": (
-                _wait_method(ctx, command, lane)
-                + " On [review], call read_comments(new=True) for the reported artifact and handle the review. "
-                "[gone] means the review server is unreachable; the waiter keeps retrying. "
-                "[back] means it is reachable again. [moved] means a newer waiter took over "
-                "listening, in another session or in this one as the line says, and this waiter has ended. "
-                f"Once listening is active, give the user the full review page address, http://localhost:{port}, "
-                "and ask them to open it in their browser."
-            ),
+            "how": listening.how(TOOL, name, command, lane)
+            + " On [review], call read_comments(new=True) for the reported artifact and handle the review. "
+            f"Once listening is active, give the user the full review page address, http://localhost:{port}, "
+            "and ask them to open it in their browser.",
         }
 
     @mcp.tool(structured_output=False)
@@ -613,38 +546,8 @@ def write_cursor(project_dir: Path, artifact: str, at: str) -> None:
     shared_file.replace(staging, path)
 
 
-# How long the startup waits for the plugin's monitor, which Claude Code starts beside it.
-MONITOR_START = 30.0
-
-
-def _listen_from_start(port: int) -> None:
-    """In a session the plugin's monitor serves, listen from the start, unless another
-    session listens to this project already."""
-    if plugin_monitor.claude_pid() is None:
-        return
-    deadline = time.monotonic() + MONITOR_START
-    while (session := plugin_monitor.monitored_session(TOOL)) is None:
-        if time.monotonic() > deadline:
-            return
-        time.sleep(1)
-    request = urllib.request.Request(
-        f"http://127.0.0.1:{port}/wait-review/listen?listener={LISTENER}&if_free=1&session={session}", method="POST")
-    with urllib.request.urlopen(request, timeout=10) as response:
-        if not json.loads(response.read())["listening"]:
-            return
-    plugin_monitor.hand_over(TOOL, waiter.command(TOOL, port, LISTENER))
-
-
 def _listen_in_background(client: "ProjectClient") -> None:
-    """Listen from the start beside whatever came to the project, the session's start or a
-    tool call after init, which waiting for the monitor must not hold up."""
-    def listen() -> None:
-        try:
-            _listen_from_start(client.shared.port)
-        except (OSError, KeyError, ValueError) as error:
-            print(f"html-mcp did not start listening: {error}", file=sys.stderr)
-
-    threading.Thread(target=listen, daemon=True).start()
+    listening.listen_in_background(TOOL, client.shared.port)
 
 
 def _stop_on_sigterm(binding: ProjectBinding, number: int, frame) -> None:
